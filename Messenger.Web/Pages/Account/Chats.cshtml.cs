@@ -12,6 +12,24 @@ namespace Messenger.Web.Pages.Account
     public class ChatsModel : PageModel
     {
         private readonly ApiHelper _api;
+        private static readonly Dictionary<string, string> RoleDisplayNames = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["ROLE_ENTRANT"] = "Абитуриент",
+            ["ROLE_STUDENT"] = "Студент",
+            ["ROLE_TEACHER"] = "Преподаватель",
+            ["ROLE_EMPLOYEE"] = "Сотрудник",
+            ["ROLE_ADMIN"] = "Администратор",
+            ["ROLE_USER"] = "Пользователь"
+        };
+        private static readonly string[] RolePriority =
+        [
+            "ROLE_ADMIN",
+            "ROLE_TEACHER",
+            "ROLE_EMPLOYEE",
+            "ROLE_STUDENT",
+            "ROLE_ENTRANT",
+            "ROLE_USER"
+        ];
 
         public string? UserId { get; set; }
         public string? UserName { get; set; } = string.Empty;
@@ -29,6 +47,25 @@ namespace Messenger.Web.Pages.Account
             _api = api;
         }
 
+        private static string GetDisplayRole(ClaimsPrincipal user)
+        {
+            var userRoles = user.FindAll(ClaimTypes.Role)
+                .Select(c => c.Value)
+                .Where(r => r.StartsWith("ROLE_", StringComparison.OrdinalIgnoreCase))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var role in RolePriority)
+            {
+                if (userRoles.Contains(role) && RoleDisplayNames.TryGetValue(role, out var displayName))
+                    return displayName;
+            }
+
+            var firstRole = userRoles.FirstOrDefault();
+            return firstRole != null && RoleDisplayNames.TryGetValue(firstRole, out var name)
+                ? name
+                : "Пользователь";
+        }
+
         public async Task<IActionResult> OnGetAsync()
         {
             if (User.Identity?.IsAuthenticated != true && !TokenSaved)
@@ -38,22 +75,15 @@ namespace Messenger.Web.Pages.Account
             {
                 var accessToken = await HttpContext.GetTokenAsync("access_token");
 
-                var externalId = User.FindFirstValue("sub")
-                              ?? User.FindFirstValue("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier")
-                              ?? User.FindFirstValue("http://schemas.microsoft.com/identity/claims/objectidentifier")
-                              ?? User.FindFirst("sub")?.Value;
+                var externalId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
                 var user = await _api.GetAsync<User>($"users/{Uri.EscapeDataString(externalId ?? "")}", accessToken);
 
                 UserId = user?.UserId.ToString() ?? externalId;
 
-                UserName = User.FindFirstValue("name")
-                        ?? User.FindFirstValue("preferred_username")
-                        ?? "Пользователь";
+                UserName = User.FindFirstValue("name") ?? User.FindFirstValue("preferred_username");
 
-                UserRole = User.FindFirstValue("role")
-                        ?? User.FindFirstValue("roles")
-                        ?? "Пользователь";
+                UserRole = GetDisplayRole(User);
 
                 if (!string.IsNullOrEmpty(accessToken))
                     HttpContext.Session.SetString("ACCESS_TOKEN", accessToken);
