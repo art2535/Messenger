@@ -1,5 +1,6 @@
 ﻿using Messenger.Core.Interfaces;
 using Messenger.Core.Models;
+using Messenger.Core.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
@@ -13,12 +14,15 @@ namespace Messenger.Core.Hubs
         private readonly IUserService _userService;
         private readonly IUserStatusService _userStatusService;
         private readonly ILogger<ChatHub> _logger;
+        private readonly TypingRateLimiterService _typingLimiter;
 
-        public ChatHub(IUserService userService, IUserStatusService userStatusService, ILogger<ChatHub> logger)
+        public ChatHub(IUserService userService, IUserStatusService userStatusService, ILogger<ChatHub> logger,
+            TypingRateLimiterService typingLimiter)
         {
             _userService = userService;
             _userStatusService = userStatusService;
             _logger = logger;
+            _typingLimiter = typingLimiter;
         }
 
         public async Task JoinChat(Guid chatId)
@@ -215,6 +219,11 @@ namespace Messenger.Core.Hubs
             if (string.IsNullOrEmpty(externalId))
                 return;
 
+            if (!await _typingLimiter.TryAcquireAsync(externalId))
+            {
+                return;
+            }
+
             var user = await _userService.GetUserByExternalIdAsync(externalId);
             if (user == null)
                 return;
@@ -233,6 +242,11 @@ namespace Messenger.Core.Hubs
                 ?? Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(externalId)) 
                 return;
+
+            if (!await _typingLimiter.TryAcquireAsync(externalId))
+            {
+                return;
+            }
 
             var user = await _userService.GetUserByExternalIdAsync(externalId);
             if (user == null) 
