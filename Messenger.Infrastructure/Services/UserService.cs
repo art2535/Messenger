@@ -15,7 +15,17 @@ namespace Messenger.Infrastructure.Services
         private readonly GuapMessengerContext _context;
         private readonly IConfiguration _configuration;
 
-        public UserService(UserRepository userRepository, GuapMessengerContext context, 
+        private static readonly Dictionary<string, string> RoleDisplayNames = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["ROLE_ENTRANT"] = "Абитуриент",
+            ["ROLE_STUDENT"] = "Студент",
+            ["ROLE_TEACHER"] = "Преподаватель",
+            ["ROLE_EMPLOYEE"] = "Сотрудник",
+            ["ROLE_ADMIN"] = "Администратор",
+            ["ROLE_USER"] = "Пользователь"
+        };
+
+        public UserService(UserRepository userRepository, GuapMessengerContext context,
             IConfiguration configuration)
         {
             _userRepository = userRepository;
@@ -51,94 +61,6 @@ namespace Messenger.Infrastructure.Services
         public async Task<User?> GetUserByIdAsync(Guid id, CancellationToken token = default)
         {
             return await _userRepository.GetUserByIdAsync(id, token);
-        }
-
-        public async Task<(string token, Guid userId, string role)> LoginAsync(string login, CancellationToken token = default)
-        {
-            var user = await _context.Users
-                .AsNoTracking()
-                .FirstOrDefaultAsync(u => u.Login == login, token)
-                ?? throw new UnauthorizedAccessException($"Пользователь с логином {login} не найден");
-
-            if (!string.IsNullOrEmpty(user.ExternalId))
-            {
-                Console.WriteLine("External login — пароль пропущен!");
-            }
-
-            string role = await _userRepository.GetRoleByUserIdAsync(user.UserId, token) ?? "Пользователь";
-
-            string jwtToken = await new JwtService(_configuration, _context)
-                .GenerateJwtTokenAsync(user, token);
-
-            return (jwtToken, user.UserId, role);
-        }
-
-        public async Task<(User? user, string? token, string? role)> RegisterAsync(string login, string firstName, 
-            string lastName, Guid? roleId = null, CancellationToken token = default)
-        {
-            var existingUser = await _context.Users
-                .Include(u => u.Roles)
-                .FirstOrDefaultAsync(u => u.Login == login, token);
-
-            if (existingUser != null)
-            {
-                return (existingUser, null, null);
-            }
-
-            login = ValidationService.ValidateEmail(login);
-
-            var userId = Guid.NewGuid();
-            var user = new User
-            {
-                UserId = userId,
-                Login = login,
-                FirstName = firstName,
-                LastName = lastName,
-                RegistrationDate = DateOnly.FromDateTime(DateTime.UtcNow),
-                Account = new AccountSetting
-                {
-                    SettingId = Guid.NewGuid(),
-                    AccountId = userId
-                },
-                UserStatus = new UserStatus
-                {
-                    UserId = userId,
-                    Online = true
-                }
-            };
-
-            await _userRepository.AddUserAsync(user, token);
-
-            if (roleId.HasValue)
-            {
-                await _userRepository.AssignUserRoleAsync(userId, roleId.Value, token);
-            }
-
-            Guid roleToAssign;
-
-            if (roleId.HasValue)
-            {
-                roleToAssign = roleId.Value;
-            }
-            else
-            {
-                var defaultRole = await _context.Roles
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(r => r.Name == "Пользователь", token)
-                    ?? throw new InvalidOperationException("Роль по умолчанию 'Пользователь' не найдена в базе данных");
-
-                roleToAssign = defaultRole.RoleId;
-            }
-
-            await _userRepository.AssignUserRoleAsync(userId, roleToAssign, token);
-
-            string jwtToken = await new JwtService(_configuration, _context)
-                .GenerateJwtTokenAsync(user, token);
-
-            var userRoleName = await _userRepository.GetRoleByUserIdAsync(userId, token)
-                ?? "Пользователь";
-
-            return (user, jwtToken, userRoleName);
         }
 
         public async Task<string> UploadAvatarAsync(Guid userId, IFormFile file, CancellationToken token = default)
@@ -265,7 +187,7 @@ namespace Messenger.Infrastructure.Services
                 .ToListAsync(token);
         }
 
-        public async Task UpdateProfileAsync(Guid userId, UpdateUserProfileRequest request, 
+        public async Task UpdateProfileAsync(Guid userId, UpdateUserProfileRequest request,
             string? avatarUrl = null, CancellationToken token = default)
         {
             var user = await _context.Users
@@ -301,7 +223,8 @@ namespace Messenger.Infrastructure.Services
                 .FirstOrDefaultAsync(u => u.ExternalId == externalId);
         }
 
-        public async Task<User> RegisterExternalUserAsync(string externalId, string email, string firstName, string lastName)
+        public async Task<User> RegisterExternalUserAsync(string externalId, string email, string firstName,
+            string lastName, IEnumerable<string>? tokenRoles = null)
         {
             var existing = await GetUserByExternalIdAsync(externalId);
             if (existing != null)
@@ -332,15 +255,41 @@ namespace Messenger.Infrastructure.Services
             await _context.Users.AddAsync(user);
             await _context.SaveChangesAsync();
 
-            var defaultRole = await _context.Roles
-                .FirstOrDefaultAsync(r => r.Name == "Пользователь");
-
-            if (defaultRole != null)
-            {
-                await AssignRoleAsync(userId, defaultRole.RoleId);
-            }
+            await AssignRolesFromTokenAsync(userId, tokenRoles);
 
             return user;
+        }
+
+        private async Task AssignRolesFromTokenAsync(Guid userId, IEnumerable<string>? tokenRoles)
+        {
+            var rolesToAssign = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            if (tokenRoles != null)
+            {
+                foreach (var tokenRole in tokenRoles)
+                {
+                    if (RoleDisplayNames.TryGetValue(tokenRole, out var displayName))
+                    {
+                        rolesToAssign.Add(displayName);
+                    }
+                }
+            }
+
+            if (rolesToAssign.Count == 0)
+            {
+                rolesToAssign.Add("Пользователь");
+            }
+
+            foreach (var roleName in rolesToAssign)
+            {
+                var role = await _context.Roles
+                    .FirstOrDefaultAsync(r => r.Name == roleName);
+
+                if (role != null)
+                {
+                    await AssignRoleAsync(userId, role.RoleId);
+                }
+            }
         }
     }
 }

@@ -5,6 +5,7 @@ using Messenger.Core.Hubs;
 using Messenger.Web.Helpers;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.SignalR;
@@ -14,6 +15,8 @@ using System.Security.Claims;
 
 namespace Messenger.Web.Pages.Authorization
 {
+    [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
+    [AllowAnonymous]
     public class AuthorizationModel : PageModel
     {
         private readonly ApiHelper _api;
@@ -46,12 +49,13 @@ namespace Messenger.Web.Pages.Authorization
                     var response = await LoginAsync(loginRequest);
                     if (!response.IsSuccessStatusCode)
                     {
-                        ErrorMessage = "Ошибка записи входа в аккаунт";
-                        _logger.LogError("Ошибка записи входа в аккаунт при авто-редиректе");
-                        return Page();
+                        _logger.LogWarning("Не удалось записать вход, но пользователь аутентифицирован. Продолжаем.");
+                    }
+                    else
+                    {
+                        await SendToSignalRAsync(accessToken, new UpdateStatusRequest { Online = true });
                     }
 
-                    await SendToSignalRAsync(accessToken, new UpdateStatusRequest { Online = true });
                     HttpContext.Session.SetString("ACCESS_TOKEN", accessToken);
                 }
 
@@ -101,7 +105,7 @@ namespace Messenger.Web.Pages.Authorization
 
         public async Task<IActionResult> OnGetCallbackAsync()
         {
-            var externalId = User.FindFirst("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier")?.Value;
+            var externalId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
             if (string.IsNullOrEmpty(externalId))
             {
@@ -109,9 +113,10 @@ namespace Messenger.Web.Pages.Authorization
                 return RedirectToPage("/Authorization/Authorization", new { error = "Нет externalId" });
             }
 
-            var firstName = User.FindFirst("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname")?.Value ?? "ЕТА";
-            var lastName = User.FindFirst("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname")?.Value ?? "Пользователь";
-            var email = User.FindFirst("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress")?.Value ?? "";
+            var firstName = User.FindFirst(ClaimTypes.GivenName)?.Value ?? "ЕТА";
+            var lastName = User.FindFirst(ClaimTypes.Surname)?.Value ?? "Пользователь";
+            var email = User.FindFirst(ClaimTypes.Email)?.Value ?? "";
+            var roles = ExtractRolesFromClaims(User);
 
             try
             {
@@ -129,9 +134,7 @@ namespace Messenger.Web.Pages.Authorization
                     Email = email,
                     FirstName = firstName,
                     LastName = lastName,
-                    MiddleName = "",
-                    IpAddress = GetLocalIPv4(),
-                    FakePasswordForInternalUse = $"external_{externalId.Substring(0, 8)}"
+                    Roles = roles
                 };
 
                 var authResponse = await _api.PostRawAsync("authorization/external/callback", request, accessToken);
@@ -170,6 +173,43 @@ namespace Messenger.Web.Pages.Authorization
             }
 
             return RedirectToPage("/Account/Chats", new { tokenSaved = true });
+        }
+
+        private List<string> ExtractRolesFromClaims(ClaimsPrincipal user)
+        {
+            var roles = new List<string>();
+
+            roles.AddRange(user.FindAll(ClaimTypes.Role).Select(c => c.Value));
+            roles.AddRange(user.FindAll("role").Select(c => c.Value));
+
+            var realmAccessClaim = user.FindFirst("realm_access")?.Value;
+            if (!string.IsNullOrEmpty(realmAccessClaim))
+            {
+                try
+                {
+                    using var doc = System.Text.Json.JsonDocument.Parse(realmAccessClaim);
+                    if (doc.RootElement.TryGetProperty("roles", out var rolesElement) &&
+                        rolesElement.ValueKind == System.Text.Json.JsonValueKind.Array)
+                    {
+                        foreach (var role in rolesElement.EnumerateArray())
+                        {
+                            var roleValue = role.GetString();
+                            if (!string.IsNullOrEmpty(roleValue))
+                                roles.Add(roleValue);
+                        }
+                    }
+                }
+                catch
+                {
+                    _logger.LogError("Ошибка получения роли");
+                }
+            }
+
+            return roles
+                .Where(r => !string.IsNullOrWhiteSpace(r))
+                .Where(r => r.StartsWith("ROLE_", StringComparison.OrdinalIgnoreCase))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
         }
 
         public async Task<HttpResponseMessage> LoginAsync(CreateLoginRequest request, CancellationToken token = default)
