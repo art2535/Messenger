@@ -29,29 +29,65 @@ namespace Messenger.Web.Pages.Authorization
             _hubContext = hubContext;
         }
 
+        public async Task<IActionResult> OnGetAsync()
+        {
+            if (User.Identity?.IsAuthenticated == true)
+            {
+                var accessToken = await HttpContext.GetTokenAsync("access_token");
+
+                if (!string.IsNullOrEmpty(accessToken))
+                {
+                    var loginRequest = new CreateLoginRequest
+                    {
+                        Token = accessToken,
+                        IpAddress = GetLocalIPv4()
+                    };
+
+                    var response = await LoginAsync(loginRequest);
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        ErrorMessage = "Ошибка записи входа в аккаунт";
+                        _logger.LogError("Ошибка записи входа в аккаунт при авто-редиректе");
+                        return Page();
+                    }
+
+                    await SendToSignalRAsync(accessToken, new UpdateStatusRequest { Online = true });
+                    HttpContext.Session.SetString("ACCESS_TOKEN", accessToken);
+                }
+
+                return RedirectToPage("/Account/Chats", new { tokenSaved = true });
+            }
+
+            return Page();
+        }
+
         public async Task<IActionResult> OnGetEtaLoginAsync()
         {
             if (User.Identity?.IsAuthenticated == true)
             {
                 var accessToken = await HttpContext.GetTokenAsync("access_token");
 
-                var loginRequest = new CreateLoginRequest
+                if (!string.IsNullOrEmpty(accessToken))
                 {
-                    Token = accessToken,
-                    IpAddress = GetLocalIPv4()
-                };
+                    var loginRequest = new CreateLoginRequest
+                    {
+                        Token = accessToken,
+                        IpAddress = GetLocalIPv4()
+                    };
 
-                var response = await LoginAsync(loginRequest);
-                if (!response.IsSuccessStatusCode)
-                {
-                    ErrorMessage = "Ошибка записи входа в аккаунт";
-                    _logger.LogError("Ошибка записи входа в аккаунт");
-                    return Page();
+                    var response = await LoginAsync(loginRequest);
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        ErrorMessage = "Ошибка записи входа в аккаунт";
+                        _logger.LogError("Ошибка записи входа в аккаунт");
+                        return Page();
+                    }
+
+                    await SendToSignalRAsync(accessToken, new UpdateStatusRequest { Online = true });
+
+                    HttpContext.Session.SetString("ACCESS_TOKEN", accessToken!);
                 }
-
-                await SendToSignalRAsync(accessToken, new UpdateStatusRequest { Online = true });
-
-                HttpContext.Session.SetString("ACCESS_TOKEN", accessToken!);
+                
                 return RedirectToPage("/Account/Chats", new { tokenSaved = true });
             }
 
