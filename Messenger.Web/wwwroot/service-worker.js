@@ -1,4 +1,4 @@
-﻿const CACHE_NAME = 'guap-messenger-v0.3.7';
+﻿const CACHE_NAME = 'guap-messenger-v0.10';
 
 let API_BASE_URL = null;
 
@@ -11,7 +11,6 @@ self.addEventListener('message', event => {
 
 const STATIC_ASSETS = [
     '/',
-    '/Authorization/Authorization',
     '/Account/Chats',
     '/manifest.json',
     '/css/site.css',
@@ -39,6 +38,15 @@ self.addEventListener('fetch', event => {
     const url = new URL(event.request.url);
 
     if (url.pathname.includes('/hubs/') || url.pathname.includes('/api/')) {
+        return;
+    }
+
+    if (url.pathname.startsWith('/Authorization')) {
+        event.respondWith(
+            fetch(event.request).catch(() => {
+                return new Response('Нет сети', { status: 503 });
+            })
+        );
         return;
     }
 
