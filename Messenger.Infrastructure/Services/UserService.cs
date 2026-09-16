@@ -201,9 +201,6 @@ namespace Messenger.Infrastructure.Services
             user.LastName = request.LastName;
             user.Login = request.Login;
 
-            if (!string.IsNullOrEmpty(request.Theme) && user.Account != null)
-                user.Account.Theme = request.Theme;
-
             if (!string.IsNullOrEmpty(avatarUrl) && user.Account != null)
                 user.Account.Avatar = avatarUrl;
 

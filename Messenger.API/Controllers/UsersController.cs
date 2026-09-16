@@ -257,7 +257,6 @@ namespace Messenger.API.Controllers
                     Account = currentUser.Account != null ? new
                     {
                         Avatar = currentUser.Account.Avatar,
-                        Theme = currentUser.Account.Theme ?? "light"
                     } : null
                 };
 
