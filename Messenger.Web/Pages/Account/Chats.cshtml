@@ -10,7 +10,26 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>@ViewData["Title"]</title>
+    <script>
+            (function() {
+                const saved = localStorage.getItem('theme');
+                const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                if (saved === 'dark' || (!saved && prefersDark)) {
+                    document.documentElement.classList.add('dark');
+                } else {
+                    document.documentElement.classList.remove('dark');
+                }
+            })();
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+            tailwind.config = {
+                darkMode: 'class',
+                theme: {
+                    extend: {}
+                }
+            }
+    </script>
     <script src="https://unpkg.com/feather-icons"></script>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
@@ -31,8 +50,67 @@
                 background-color: #f3f4f6;
             }
 
+            .dark .chat-item:hover {
+                background-color: #374151 !important;
+            }
+
             .chat-item.active {
                 background-color: #e5e7eb;
+            }
+
+            .dark .chat-item.active {
+                background-color: #4b5563 !important;
+            }
+
+            .dark .chat-item {
+                color: #f3f4f6;
+            }
+
+                .dark .chat-item h3,
+                .dark .chat-item .font-medium,
+                .dark .chat-item .font-semibold {
+                    color: #f3f4f6 !important;
+                }
+
+                .dark .chat-item .text-gray-500,
+                .dark .chat-item .text-gray-400,
+                .dark .chat-item .text-sm {
+                    color: #9ca3af !important;
+                }
+
+            .dark .hover\:bg-gray-50:hover,
+            .dark .hover\:bg-gray-100:hover {
+                background-color: #374151 !important;
+            }
+
+            .dark .bg-gray-50 {
+                background-color: #374151 !important;
+            }
+
+            .dark .bg-white {
+                background-color: #1f2937 !important;
+            }
+
+            .dark .border-gray-200 {
+                border-color: #374151 !important;
+            }
+
+            .dark .text-gray-800,
+            .dark .text-gray-900,
+            .dark .text-gray-700 {
+                color: #f3f4f6 !important;
+            }
+
+            .dark .text-gray-600 {
+                color: #d1d5db !important;
+            }
+
+            .dark .text-gray-500 {
+                color: #9ca3af !important;
+            }
+
+            .dark .file-attachment {
+                background: rgba(255,255,255,0.08);
             }
 
             .modal {
@@ -186,13 +264,22 @@
                 display: none;
             }
 
-                #user-search-results.show {
-                    display: block;
-                }
+            .dark #user-search-results {
+                background: #1f2937;
+                border-color: #374151;
+            }
+
+            #user-search-results.show {
+                display: block;
+            }
 
             .chat-online-dot {
                 box-shadow: 0 0 0 2px rgba(255,255,255,0.9);
                 transition: all 0.2s ease;
+            }
+
+            .dark .chat-online-dot {
+                box-shadow: 0 0 0 2px #1f2937;
             }
 
             .typing-in-list {
@@ -260,6 +347,11 @@
                     user-select: none;
                 }
 
+            .dark .date-separator span {
+                background: #374151;
+                color: #d1d5db;
+            }
+
             .unread-badge {
                 min-width: 20px;
                 height: 20px;
@@ -294,48 +386,63 @@
                     border-radius: 16px 16px 16px 4px;
                 }
 
-                .message-bubble.outgoing::after {
-                    content: '';
-                    position: absolute;
-                    bottom: 0;
-                    right: -7px;
-                    width: 12px;
-                    height: 12px;
-                    background: #3b82f6;
-                    clip-path: polygon(0 0, 0 100%, 100% 100%);
-                }
+            .dark .message-bubble.incoming {
+                background: #374151;
+                color: #f3f4f6;
+            }
 
-                .message-bubble.incoming::after {
-                    content: '';
-                    position: absolute;
-                    bottom: 0;
-                    left: -7px;
-                    width: 12px;
-                    height: 12px;
-                    background: #f3f4f6;
-                    clip-path: polygon(100% 0, 0 100%, 100% 100%);
-                }
+            .message-bubble.outgoing::after {
+                content: '';
+                position: absolute;
+                bottom: 0;
+                right: -7px;
+                width: 12px;
+                height: 12px;
+                background: #3b82f6;
+                clip-path: polygon(0 0, 0 100%, 100% 100%);
+            }
+
+            .message-bubble.incoming::after {
+                content: '';
+                position: absolute;
+                bottom: 0;
+                left: -7px;
+                width: 12px;
+                height: 12px;
+                background: #f3f4f6;
+                clip-path: polygon(100% 0, 0 100%, 100% 100%);
+            }
+
+            .dark .message-bubble.incoming::after {
+                background: #374151;
+            }
     </style>
 </head>
-<body class="h-screen">
+<body class="h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
     <div class="flex h-full">
-        <div class="w-80 bg-white border-r border-gray-200 flex flex-col">
-            <div class="p-4 border-b border-gray-200 flex items-center justify-between">
+        <div class="w-80 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col">
+            <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
                 <div class="flex items-center space-x-3">
                     <div class="guap-gradient text-white w-10 h-10 rounded-full flex items-center justify-center">
                         <i data-feather="message-square" class="w-5 h-5"></i>
                     </div>
-                    <h1 class="font-bold text-lg">GUAP Messenger</h1>
+                    <h1 class="font-bold text-lg text-gray-900 dark:text-white">GUAP Messenger</h1>
                 </div>
-                <a asp-page="/Account/Settings" class="text-gray-500 hover:text-gray-700"><i data-feather="settings" class="w-5 h-5"></i></a>
+                <div class="flex items-center space-x-2">
+                    <button id="theme-toggle" type="button" class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition" title="Переключить тему">
+                        <i data-feather="moon" class="w-5 h-5 theme-icon-dark hidden"></i>
+                        <i data-feather="sun" class="w-5 h-5 theme-icon-light"></i>
+                    </button>
+                    <a asp-page="/Account/Settings" class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"><i data-feather="settings" class="w-5 h-5"></i></a>
+                </div>
             </div>
 
-            <div class="p-3 border-b border-gray-200 space-y-2">
+            <div class="p-3 border-b border-gray-200 dark:border-gray-700 space-y-2">
                 <div class="relative">
                     <input type="text" id="chat-search" placeholder="Поиск по чатам"
-                           class="w-full pl-10 pr-10 py-2 bg-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition">
+                           class="w-full pl-10 pr-10 py-2 bg-gray-100 dark:bg-gray-700 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white dark:focus:bg-gray-600 transition">
                     <i data-feather="search" class="absolute left-3 top-2.5 text-gray-400 w-5 h-5"></i>
-                    <button id="clear-search" class="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600 hidden">
+                    <button id="clear-search" class="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hidden">
                         <i data-feather="x" class="w-5 h-5"></i>
                     </button>
                 </div>
@@ -346,10 +453,10 @@
 
             <div class="flex-1 overflow-y-auto relative" id="chats-list">
                 <div id="chats-status-container" class="flex flex-col items-center justify-center">
-                    <div id="chats-loading" class="text-gray-500 p-4">Загрузка чатов...</div>
+                    <div id="chats-loading" class="text-gray-500 dark:text-gray-400 p-4">Загрузка чатов...</div>
 
-                    <div id="empty-state" class="hidden flex-col items-center justify-center p-8 text-center text-gray-500">
-                        <div class="bg-gray-100 p-4 rounded-full mb-4">
+                    <div id="empty-state" class="hidden flex-col items-center justify-center p-8 text-center text-gray-500 dark:text-gray-400">
+                        <div class="bg-gray-100 dark:bg-gray-700 p-4 rounded-full mb-4">
                             <i data-feather="message-square" class="w-8 h-8"></i>
                         </div>
                         <p class="text-lg font-medium">Чатов нет</p>
@@ -360,7 +467,7 @@
                 <div id="chats-container"></div>
             </div>
 
-            <div class="p-4 border-t border-gray-200">
+            <div class="p-4 border-t border-gray-200 dark:border-gray-700">
                 <div class="flex items-center space-x-3">
                     <div class="relative w-10 h-10">
                         @if (!string.IsNullOrEmpty(Model.AvatarUrl))
@@ -379,8 +486,8 @@
                         }
                     </div>
                     <div>
-                        <p class="font-medium">@Model.UserName</p>
-                        <p class="text-xs text-gray-500">@Model.UserRole</p>
+                        <p class="font-medium text-gray-900 dark:text-white">@Model.UserName</p>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">@Model.UserRole</p>
                     </div>
                     <div id="connection-status" class="relative ml-auto group">
                         <div id="status-dot" class="w-3 h-3 bg-gray-400 rounded-full"></div>
@@ -389,27 +496,27 @@
                         </div>
                     </div>
                     <form asp-page="/Authorization/Logout" method="post" class="ml-2">
-                        <button type="submit" class="text-gray-500 hover:text-red-600"><i data-feather="log-out" class="w-5 h-5"></i></button>
+                        <button type="submit" class="text-gray-500 dark:text-gray-400 hover:text-red-600"><i data-feather="log-out" class="w-5 h-5"></i></button>
                     </form>
                 </div>
             </div>
         </div>
 
-        <div class="flex-1 flex flex-col" id="right-panel">
+        <div class="flex-1 flex flex-col bg-white dark:bg-gray-900" id="right-panel">
             <div id="chat-header"
-                 class="hidden p-4 border-b border-gray-200 bg-white flex items-center justify-between cursor-pointer hover:bg-gray-50 transition">
+                 class="hidden p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex items-center justify-between cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-750 transition">
 
                 <div onclick="openChatInfo()" class="flex items-center space-x-3 flex-1 min-w-0 cursor-pointer">
                     <div class="relative">
                         <img id="chat-info-avatar"
                              src="https://novgorodskij-r49.gosweb.gosuslugi.ru/netcat_files/9/260/user_test.png"
-                             class="w-11 h-11 rounded-full object-cover ring-2 ring-white shadow">
+                             class="w-11 h-11 rounded-full object-cover ring-2 ring-white dark:ring-gray-700 shadow">
                         <span id="chat-online-indicator"
-                              class="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white hidden"></span>
+                              class="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white dark:border-gray-800 hidden"></span>
                     </div>
                     <div class="min-w-0">
-                        <h2 id="chat-title" class="font-semibold text-lg truncate">Чат</h2>
-                        <div id="chat-status-area" class="text-sm text-gray-500 truncate flex items-center gap-2">
+                        <h2 id="chat-title" class="font-semibold text-lg truncate text-gray-900 dark:text-white">Чат</h2>
+                        <div id="chat-status-area" class="text-sm text-gray-500 dark:text-gray-400 truncate flex items-center gap-2">
                             <span id="chat-subtitle"></span>
 
                             <div id="typing-indicator" class="typing-indicator hidden items-center gap-1">
@@ -423,68 +530,68 @@
                 <div class="flex items-center gap-2">
                     <button id="search-toggle-btn"
                             onclick="toggleMessageSearch()"
-                            class="w-9 h-9 flex items-center justify-center text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full transition">
+                            class="w-9 h-9 flex items-center justify-center text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition">
                         <i data-feather="search" class="w-5 h-5"></i>
                     </button>
 
-                    <div id="message-search-bar" class="hidden items-center bg-gray-100 rounded-3xl px-4 py-1.5 w-80 transition-all">
+                    <div id="message-search-bar" class="hidden items-center bg-gray-100 dark:bg-gray-700 rounded-3xl px-4 py-1.5 w-80 transition-all">
                         <i data-feather="search" class="w-4 h-4 text-gray-400 mr-2"></i>
                         <input type="text"
                                id="message-search-input"
-                               class="flex-1 bg-transparent outline-none text-sm placeholder-gray-400"
+                               class="flex-1 bg-transparent outline-none text-sm placeholder-gray-400 dark:text-gray-100 dark:placeholder-gray-400"
                                placeholder="Поиск по сообщениям"
                                onkeypress="if(event.key === 'Enter') performMessageSearch()">
 
                         <button onclick="clearMessageSearch(true)"
-                                class="ml-2 text-gray-400 hover:text-gray-600 text-xl leading-none">
+                                class="ml-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl leading-none">
                             ✕
                         </button>
                     </div>
 
-                    <button class="w-9 h-9 flex items-center justify-center text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full transition">
+                    <button class="w-9 h-9 flex items-center justify-center text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition">
                         <i data-feather="phone" class="w-5 h-5"></i>
                     </button>
                     <button onclick="openChatInfo()"
-                            class="w-9 h-9 flex items-center justify-center text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full transition">
+                            class="w-9 h-9 flex items-center justify-center text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition">
                         <i data-feather="more-vertical" class="w-5 h-5"></i>
                     </button>
                 </div>
             </div>
 
             <div id="messages-container"
-                 class="hidden flex-1 p-4 overflow-y-auto bg-gray-50">
+                 class="hidden flex-1 p-4 overflow-y-auto bg-gray-50 dark:bg-gray-900">
             </div>
 
             <div id="search-navigation" class="hidden fixed right-6 bottom-32 z-50 flex flex-col items-end gap-2 pointer-events-auto">
                 <div id="search-counter"
-                     class="hidden bg-white/95 backdrop-blur-md shadow-md border border-gray-200 text-xs font-medium text-gray-600 px-3.5 py-1.5 rounded-2xl mb-1">
+                     class="hidden bg-white/95 dark:bg-gray-800/95 backdrop-blur-md shadow-md border border-gray-200 dark:border-gray-600 text-xs font-medium text-gray-600 dark:text-gray-300 px-3.5 py-1.5 rounded-2xl mb-1">
                     <span id="current-count">1</span> из <span id="total-count">5</span>
                 </div>
 
                 <button onclick="navigateSearch(-1)"
-                        class="w-11 h-11 bg-white/95 backdrop-blur-md shadow-xl hover:shadow-2xl border border-gray-200 rounded-2xl flex items-center justify-center text-gray-700 hover:text-blue-600 transition-all active:scale-95">
+                        class="w-11 h-11 bg-white/95 dark:bg-gray-800/95 backdrop-blur-md shadow-xl hover:shadow-2xl border border-gray-200 dark:border-gray-600 rounded-2xl flex items-center justify-center text-gray-700 dark:text-gray-200 hover:text-blue-600 transition-all active:scale-95">
                     <i data-feather="chevron-up" class="w-6 h-6"></i>
                 </button>
 
                 <button onclick="navigateSearch(1)"
-                        class="w-11 h-11 bg-white/95 backdrop-blur-md shadow-xl hover:shadow-2xl border border-gray-200 rounded-2xl flex items-center justify-center text-gray-700 hover:text-blue-600 transition-all active:scale-95">
+                        class="w-11 h-11 bg-white/95 dark:bg-gray-800/95 backdrop-blur-md shadow-xl hover:shadow-2xl border border-gray-200 dark:border-gray-600 rounded-2xl flex items-center justify-center text-gray-700 dark:text-gray-200 hover:text-blue-600 transition-all active:scale-95">
                     <i data-feather="chevron-down" class="w-6 h-6"></i>
                 </button>
             </div>
 
-            <div id="chat-input-area" class="hidden p-3 border-t border-gray-200 bg-white">
+            <div id="chat-input-area" class="hidden p-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
                 <div id="input-section-container">
                     <div id="normal-input-ui">
                         <div class="flex items-center space-x-2">
-                            <label for="file-input" class="cursor-pointer text-gray-500 hover:text-gray-700">
+                            <label for="file-input" class="cursor-pointer text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
                                 <i data-feather="paperclip" class="w-5 h-5"></i>
                             </label>
                             <input id="file-input" type="file" class="hidden" multiple>
                             <input id="message-input"
                                    type="text"
                                    placeholder="Напишите сообщение..."
-                                   class="flex-1 px-4 py-2 bg-gray-100 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white">
-                            <button id="send-button" class="text-gray-500 hover:text-gray-700">
+                                   class="flex-1 px-4 py-2 bg-gray-100 dark:bg-gray-700 dark:text-gray-100 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white dark:focus:bg-gray-600 dark:placeholder-gray-400">
+                            <button id="send-button" class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
                                 <i data-feather="send" class="w-5 h-5"></i>
                             </button>
                         </div>
@@ -494,12 +601,12 @@
             </div>
 
             <div id="empty-right-panel"
-                 class="flex-1 flex flex-col items-center justify-center bg-gray-50 text-gray-400">
-                <div class="w-20 h-20 bg-white rounded-3xl shadow-sm flex items-center justify-center mb-6">
-                    <i data-feather="message-square" class="w-10 h-10"></i>
+                 class="flex-1 flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-900 text-gray-400 dark:text-gray-500">
+                <div class="w-20 h-20 bg-white dark:bg-gray-800 rounded-3xl shadow-sm flex items-center justify-center mb-6">
+                    <i data-feather="message-square" class="w-10 h-10 dark:text-gray-400"></i>
                 </div>
-                <p class="text-xl font-medium text-gray-600 mb-1">GUAP Messenger</p>
-                <p class="text-sm text-center max-w-[240px]">
+                <p class="text-xl font-medium text-gray-600 dark:text-gray-300 mb-1">GUAP Messenger</p>
+                <p class="text-sm text-center max-w-[240px] dark:text-gray-500">
                     Выберите чат из списка слева,<br>чтобы начать общение
                 </p>
             </div>
@@ -511,71 +618,71 @@
     </div>
 
     <div id="create-chat-modal" class="modal">
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 relative">
+        <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md p-8 relative">
             <div class="flex items-center justify-between mb-8">
-                <h3 class="text-2xl font-bold text-gray-900">Новый чат</h3>
-                <button id="close-modal" class="text-gray-400 hover:text-gray-600 transition"><i data-feather="x" class="w-7 h-7"></i></button>
+                <h3 class="text-2xl font-bold text-gray-900 dark:text-white">Новый чат</h3>
+                <button id="close-modal" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition"><i data-feather="x" class="w-7 h-7"></i></button>
             </div>
             <div class="grid grid-cols-2 gap-4 mb-8">
                 <label class="relative cursor-pointer">
                     <input type="radio" name="chat-type" value="private" checked class="sr-only peer">
-                    <div class="bg-gray-50 peer-checked:bg-blue-50 peer-checked:border-blue-500 border-2 border-gray-200 rounded-xl p-5 text-center transition-all hover:bg-gray-100">
-                        <i data-feather="user" class="w-10 h-10 mx-auto mb-3 text-gray-600 peer-checked:text-blue-600"></i>
-                        <span class="block text-sm font-medium text-gray-700">Приватный</span>
+                    <div class="bg-gray-50 dark:bg-gray-700 peer-checked:bg-blue-50 dark:peer-checked:bg-blue-900/40 peer-checked:border-blue-500 border-2 border-gray-200 dark:border-gray-600 rounded-xl p-5 text-center transition-all hover:bg-gray-100 dark:hover:bg-gray-600">
+                        <i data-feather="user" class="w-10 h-10 mx-auto mb-3 text-gray-600 dark:text-gray-300 peer-checked:text-blue-600"></i>
+                        <span class="block text-sm font-medium text-gray-700 dark:text-gray-200">Приватный</span>
                     </div>
                 </label>
                 <label class="relative cursor-pointer">
                     <input type="radio" name="chat-type" value="group" class="sr-only peer">
-                    <div class="bg-gray-50 peer-checked:bg-blue-50 peer-checked:border-blue-500 border-2 border-gray-200 rounded-xl p-5 text-center transition-all hover:bg-gray-100">
-                        <i data-feather="users" class="w-10 h-10 mx-auto mb-3 text-gray-600 peer-checked:text-blue-600"></i>
-                        <span class="block text-sm font-medium text-gray-700">Групповой</span>
+                    <div class="bg-gray-50 dark:bg-gray-700 peer-checked:bg-blue-50 dark:peer-checked:bg-blue-900/40 peer-checked:border-blue-500 border-2 border-gray-200 dark:border-gray-600 rounded-xl p-5 text-center transition-all hover:bg-gray-100 dark:hover:bg-gray-600">
+                        <i data-feather="users" class="w-10 h-10 mx-auto mb-3 text-gray-600 dark:text-gray-300 peer-checked:text-blue-600"></i>
+                        <span class="block text-sm font-medium text-gray-700 dark:text-gray-200">Групповой</span>
                     </div>
                 </label>
             </div>
             <div id="group-name-container" class="mb-6 hidden">
-                <label class="block text-sm font-medium text-gray-700 mb-2">Название группы</label>
-                <input type="text" id="chat-name" placeholder="Например: Друзья ГУАПа" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Название группы</label>
+                <input type="text" id="chat-name" placeholder="Например: Друзья ГУАПа" class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500">
             </div>
             <div class="mb-6">
-                <label class="block text-sm font-medium text-gray-700 mb-2">Добавить участников</label>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Добавить участников</label>
                 <div class="relative">
-                    <input type="text" id="user-search" placeholder="Поиск по имени..." autocomplete="off" class="w-full px-4 py-3 pl-11 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <input type="text" id="user-search" placeholder="Поиск по имени..." autocomplete="off" class="w-full px-4 py-3 pl-11 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500">
                     <i data-feather="search" class="absolute left-4 top-3.5 w-5 h-5 text-gray-400"></i>
                 </div>
                 <div id="user-search-results"></div>
             </div>
             <div id="selected-users" class="flex flex-wrap gap-2 mb-6"></div>
             <div class="flex justify-end gap-3">
-                <button id="cancel-create" class="px-6 py-3 text-gray-600 hover:text-gray-800 font-medium transition">Отмена</button>
+                <button id="cancel-create" class="px-6 py-3 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-white font-medium transition">Отмена</button>
                 <button id="confirm-create" class="px-8 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-medium shadow-lg transition transform hover:scale-105">Создать</button>
             </div>
         </div>
     </div>
 
     <div id="chat-info-modal" class="modal">
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-8 max-h-screen overflow-y-auto">
+        <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg p-8 max-h-screen overflow-y-auto text-gray-900 dark:text-gray-100">
             <div class="flex items-center justify-between mb-6">
-                <h3 class="text-2xl font-bold">Информация о чате</h3>
-                <button onclick="document.getElementById('chat-info-modal').classList.remove('show')" class="text-gray-400 hover:text-gray-600">
+                <h3 class="text-2xl font-bold dark:text-white">Информация о чате</h3>
+                <button onclick="document.getElementById('chat-info-modal').classList.remove('show')" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
                     <i data-feather="x" class="w-7 h-7"></i>
                 </button>
             </div>
 
             <div class="flex flex-col items-center mb-8">
                 <img id="modal-chat-avatar" src="https://novgorodskij-r49.gosweb.gosuslugi.ru/netcat_files/9/260/user_test.png" class="w-24 h-24 rounded-full object-cover mb-4">
-                <input type="text" id="modal-chat-name" class="text-2xl font-bold text-center bg-transparent border-b-2 border-transparent focus:border-blue-500 outline-none w-full" placeholder="Название чата">
-                <p id="modal-chat-type" class="text-sm text-gray-500 mt-2"></p>
+                <input type="text" id="modal-chat-name" class="text-2xl font-bold text-center bg-transparent border-b-2 border-transparent focus:border-blue-500 outline-none w-full dark:text-white" placeholder="Название чата">
+                <p id="modal-chat-type" class="text-sm text-gray-500 dark:text-gray-400 mt-2"></p>
             </div>
 
             <div class="mb-6">
                 <div class="flex items-center justify-between mb-3">
-                    <h4 class="font-semibold">Участники <span id="participants-count" class="text-gray-500"></span></h4>
-                    <button id="add-participant-btn" class="text-blue-600 text-sm font-medium hover:underline">+ Добавить</button>
+                    <h4 class="font-semibold dark:text-white">Участники <span id="participants-count" class="text-gray-500 dark:text-gray-400"></span></h4>
+                    <button id="add-participant-btn" class="text-blue-600 dark:text-blue-400 text-sm font-medium hover:underline">+ Добавить</button>
                 </div>
                 <div id="participants-list" class="space-y-2"></div>
             </div>
 
-            <div class="mt-8 pt-6 border-t border-gray-200">
+            <div class="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
                 <button id="delete-chat-btn" class="w-full px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-medium transition transform hover:scale-105">
                     Удалить чат
                 </button>
@@ -815,25 +922,25 @@
 
                     if (isImage) {
                         images.push(`
-                                    <img src="${displayUrl}"
-                                            class="image-preview cursor-zoom-in rounded-xl object-cover"
-                                            style="max-width: 220px; max-height: 220px;"
-                                            alt="${att.fileName || 'Изображение'}"
-                                            onclick="openLightbox('${displayUrl}')">
-                                `);
+                                                <img src="${displayUrl}"
+                                                        class="image-preview cursor-zoom-in rounded-xl object-cover"
+                                                        style="max-width: 220px; max-height: 220px;"
+                                                        alt="${att.fileName || 'Изображение'}"
+                                                        onclick="openLightbox('${displayUrl}')">
+                                            `);
                     } else {
                         files.push(`
-                                    <div class="file-attachment ${bgColor} mt-1">
-                                        <i data-feather="file" class="w-5 h-5 flex-shrink-0"></i>
-                                        <a href="${downloadUrl}"
-                                            target="_blank"
-                                            class="${textColor} hover:underline font-medium truncate max-w-[180px]"
-                                            title="${att.fileName || fileNameFromUrl}">
-                                            ${att.fileName || fileNameFromUrl}
-                                            ${size ? `<span class="text-xs opacity-70 ml-1">(${size})</span>` : ''}
-                                        </a>
-                                    </div>
-                                `);
+                                                <div class="file-attachment ${bgColor} mt-1">
+                                                    <i data-feather="file" class="w-5 h-5 flex-shrink-0"></i>
+                                                    <a href="${downloadUrl}"
+                                                        target="_blank"
+                                                        class="${textColor} hover:underline font-medium truncate max-w-[180px]"
+                                                        title="${att.fileName || fileNameFromUrl}">
+                                                        ${att.fileName || fileNameFromUrl}
+                                                        ${size ? `<span class="text-xs opacity-70 ml-1">(${size})</span>` : ''}
+                                                    </a>
+                                                </div>
+                                            `);
                     }
                 });
 
@@ -896,19 +1003,19 @@
                     : '';
 
                 div.innerHTML = `
-                            <div class="flex flex-col ${isMyMessage ? 'items-end' : 'items-start'} max-w-[75%] lg:max-w-md">
-                                ${senderNameHtml}
-                                <div class="message-bubble ${isMyMessage ? 'outgoing' : 'incoming'} px-3.5 py-2 shadow-sm">
-                                    ${displayText ? `<p class="break-words whitespace-pre-wrap leading-relaxed text-[15px]">${displayText.replace(/\n/g, '<br>')}</p>` : ''}
-                                    ${renderAttachments(msg.attachments || [], isMyMessage)}
-                                    <div class="text-[11px] mt-1 ${isMyMessage ? 'text-blue-100 text-right' : 'text-gray-500 text-right'} opacity-80 flex items-center justify-end gap-1">
-                                        ${time}
-                                        ${statusHtml}
-                                        ${isGroupChat && isMyMessage ? ' · Вы' : ''}
-                                    </div>
-                                </div>
-                            </div>
-                        `;
+                                        <div class="flex flex-col ${isMyMessage ? 'items-end' : 'items-start'} max-w-[75%] lg:max-w-md">
+                                            ${senderNameHtml}
+                                            <div class="message-bubble ${isMyMessage ? 'outgoing' : 'incoming'} px-3.5 py-2 shadow-sm">
+                                                ${displayText ? `<p class="break-words whitespace-pre-wrap leading-relaxed text-[15px]">${displayText.replace(/\n/g, '<br>')}</p>` : ''}
+                                                ${renderAttachments(msg.attachments || [], isMyMessage)}
+                                                <div class="text-[11px] mt-1 ${isMyMessage ? 'text-blue-100 text-right' : 'text-gray-500 text-right'} opacity-80 flex items-center justify-end gap-1">
+                                                    ${time}
+                                                    ${statusHtml}
+                                                    ${isGroupChat && isMyMessage ? ' · Вы' : ''}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    `;
 
                 messagesContainer.appendChild(div);
                 feather.replace();
@@ -989,18 +1096,18 @@
 
                 if (s === 'read') {
                     return `<span class="msg-status read" title="Прочитано">
-                                        <i data-feather="check" class="w-3.5 h-3.5"></i>
-                                        <i data-feather="check" class="w-3.5 h-3.5 -ml-2"></i>
-                                    </span>`;
+                                                    <i data-feather="check" class="w-3.5 h-3.5"></i>
+                                                    <i data-feather="check" class="w-3.5 h-3.5 -ml-2"></i>
+                                                </span>`;
                 }
                 if (s === 'delivered' || s === 'sent') {
                     return `<span class="msg-status sent" title="Доставлено">
-                                        <i data-feather="check" class="w-3.5 h-3.5"></i>
-                                    </span>`;
+                                                    <i data-feather="check" class="w-3.5 h-3.5"></i>
+                                                </span>`;
                 }
                 return `<span class="msg-status pending">
-                                    <i data-feather="clock" class="w-3 h-3"></i>
-                                </span>`;
+                                                <i data-feather="clock" class="w-3 h-3"></i>
+                                            </span>`;
             }
 
             const MONTHS_RU = [
@@ -1098,8 +1205,8 @@
                 sep.className = 'date-separator';
                 sep.dataset.dateKey = key;
                 sep.innerHTML = `
-                            <span>${formatDateLabel(date)}</span>
-                        `;
+                                        <span>${formatDateLabel(date)}</span>
+                                    `;
                 messagesContainer.appendChild(sep);
             }
 
@@ -1261,11 +1368,11 @@
                             return `<img src="${url}" class="w-20 h-20 object-cover rounded-lg mt-1" style="max-width:180px;">`;
                         } else {
                             return `
-                                        <div class="file-attachment bg-blue-500/30 mt-1 text-blue-100">
-                                            <i data-feather="file" class="w-4 h-4"></i>
-                                            <span class="truncate max-w-[140px]">${file.name}</span>
-                                        </div>
-                                    `;
+                                                    <div class="file-attachment bg-blue-500/30 mt-1 text-blue-100">
+                                                        <i data-feather="file" class="w-4 h-4"></i>
+                                                        <span class="truncate max-w-[140px]">${file.name}</span>
+                                                    </div>
+                                                `;
                         }
                     }).join('');
 
@@ -1277,16 +1384,16 @@
                 }
 
                 div.innerHTML = `
-                            <div class="flex flex-col items-end max-w-[75%] lg:max-w-md">
-                                <div class="message-bubble outgoing px-3.5 py-2 relative">
-                                    ${content}
-                                    <div id="status-${tempId}" class="message-status flex items-center gap-1.5 text-[11px] mt-1.5 text-blue-100 opacity-80 justify-end">
-                                        <i data-feather="loader" class="w-3 h-3 animate-spin"></i>
-                                        <span>Отправляется...</span>
-                                    </div>
-                                </div>
-                            </div>
-                        `;
+                                        <div class="flex flex-col items-end max-w-[75%] lg:max-w-md">
+                                            <div class="message-bubble outgoing px-3.5 py-2 relative">
+                                                ${content}
+                                                <div id="status-${tempId}" class="message-status flex items-center gap-1.5 text-[11px] mt-1.5 text-blue-100 opacity-80 justify-end">
+                                                    <i data-feather="loader" class="w-3 h-3 animate-spin"></i>
+                                                    <span>Отправляется...</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    `;
 
                 messagesContainer.appendChild(div);
                 feather.replace();
@@ -1354,9 +1461,9 @@
                         const fileDiv = document.createElement('div');
                         fileDiv.className = 'w-24 h-24 bg-gray-100 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center text-gray-600 p-1';
                         fileDiv.innerHTML = `
-                                    <i data-feather="file-text" class="w-8 h-8 mb-1"></i>
-                                    <span class="text-xs text-center truncate w-full px-1">${file.name.length > 14 ? file.name.slice(0, 11) + '...' : file.name}</span>
-                                `;
+                                                <i data-feather="file-text" class="w-8 h-8 mb-1"></i>
+                                                <span class="text-xs text-center truncate w-full px-1">${file.name.length > 14 ? file.name.slice(0, 11) + '...' : file.name}</span>
+                                            `;
                         wrapper.appendChild(fileDiv);
                         feather.replace();
                     }
@@ -1408,9 +1515,9 @@
                             el.classList.remove('sent');
                             el.classList.add('read');
                             el.innerHTML = `
-                                        <i data-feather="check" class="w-3.5 h-3.5"></i>
-                                        <i data-feather="check" class="w-3.5 h-3.5 -ml-2"></i>
-                                    `;
+                                                    <i data-feather="check" class="w-3.5 h-3.5"></i>
+                                                    <i data-feather="check" class="w-3.5 h-3.5 -ml-2"></i>
+                                                `;
                             el.title = 'Прочитано';
                         });
                         feather.replace();
@@ -1773,12 +1880,12 @@
                         userDiv.dataset.userId = user.id;
 
                         userDiv.innerHTML = `
-                                    <div class="d-flex align-items-center">
-                                        <img src="/avatars/${user.avatarPath || 'default.png'}"
-                                             class="rounded-circle me-2" width="32" height="32">
-                                        <span>${user.fullName}</span>
-                                    </div>
-                                `;
+                                                <div class="d-flex align-items-center">
+                                                    <img src="/avatars/${user.avatarPath || 'default.png'}"
+                                                         class="rounded-circle me-2" width="32" height="32">
+                                                    <span>${user.fullName}</span>
+                                                </div>
+                                            `;
 
                         userDiv.onclick = () => {
                             toggleUserSelection(user.id, user.fullName);
@@ -1815,15 +1922,15 @@
                         div.className = 'p-4 chat-item flex items-center space-x-3 cursor-pointer hover:bg-gray-100 transition rounded-lg mx-2';
                         div.dataset.chatId = chat.chatId;
                         div.innerHTML = `
-                                    <div class="relative">
-                                        <img src="${displayAvatar}" class="w-12 h-12 rounded-full object-cover">
-                                        <span class="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></span>
-                                    </div>
-                                    <div class="flex-1 min-w-0">
-                                        <h3 class="font-medium truncate">${displayName}</h3>
-                                        <p class="text-sm text-gray-500 truncate">Чат создан</p>
-                                    </div>
-                                `;
+                                                <div class="relative">
+                                                    <img src="${displayAvatar}" class="w-12 h-12 rounded-full object-cover">
+                                                    <span class="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></span>
+                                                </div>
+                                                <div class="flex-1 min-w-0">
+                                                    <h3 class="font-medium truncate">${displayName}</h3>
+                                                    <p class="text-sm text-gray-500 truncate">Чат создан</p>
+                                                </div>
+                                            `;
 
                         div.onclick = () => openChat(div);
 
@@ -1902,18 +2009,18 @@
                             div.className = 'flex items-center justify-between p-4 bg-gray-50 rounded-xl';
                             div.dataset.userId = user.id;
                             div.innerHTML = `
-                                        <div class="flex items-center gap-4">
-                                            <img src="${user.avatar || 'https://novgorodskij-r49.gosweb.gosuslugi.ru/netcat_files/9/260/user_test.png'}"
-                                                 class="w-12 h-12 rounded-full object-cover">
-                                            <div>
-                                                <p class="font-semibold">${addedName}</p>
-                                            </div>
-                                        </div>
-                                        <button type="button" class="text-red-600 hover:bg-red-100 rounded-full p-2 transition"
-                                                onclick="removeParticipantFromChat('${user.id}', this)">
-                                            <i data-feather="x" class="w-5 h-5"></i>
-                                        </button>
-                                    `;
+                                                    <div class="flex items-center gap-4">
+                                                        <img src="${user.avatar || 'https://novgorodskij-r49.gosweb.gosuslugi.ru/netcat_files/9/260/user_test.png'}"
+                                                             class="w-12 h-12 rounded-full object-cover">
+                                                        <div>
+                                                            <p class="font-semibold">${addedName}</p>
+                                                        </div>
+                                                    </div>
+                                                    <button type="button" class="text-red-600 hover:bg-red-100 rounded-full p-2 transition"
+                                                            onclick="removeParticipantFromChat('${user.id}', this)">
+                                                        <i data-feather="x" class="w-5 h-5"></i>
+                                                    </button>
+                                                `;
                             list.appendChild(div);
                             feather.replace();
 
@@ -1945,9 +2052,9 @@
                         currentChatId = null;
                         currentChatInfo = null;
                         messagesContainer.innerHTML = `
-                                    <div class="flex items-center justify-center h-full text-gray-500">
-                                        <p>Чат был удалён</p>
-                                    </div>`;
+                                                <div class="flex items-center justify-center h-full text-gray-500">
+                                                    <p>Чат был удалён</p>
+                                                </div>`;
                         document.getElementById('chat-title').textContent = 'Выберите чат';
                     }
 
@@ -2189,11 +2296,11 @@
                 toast.classList.add(colors[type] || 'bg-blue-600');
 
                 toast.innerHTML = `
-                            <div class="flex-1">${message}</div>
-                            <button class="ml-4 text-white/70 hover:text-white">
-                                <i data-feather="x" class="w-5 h-5"></i>
-                            </button>
-                        `;
+                                        <div class="flex-1">${message}</div>
+                                        <button class="ml-4 text-white/70 hover:text-white">
+                                            <i data-feather="x" class="w-5 h-5"></i>
+                                        </button>
+                                    `;
 
                 toastContainer.insertBefore(toast, toastContainer.firstChild);
 
@@ -2380,9 +2487,9 @@
                                 el.classList.remove('sent');
                                 el.classList.add('read');
                                 el.innerHTML = `
-                                    <i data-feather="check" class="w-3.5 h-3.5"></i>
-                                    <i data-feather="check" class="w-3.5 h-3.5 -ml-2"></i>
-                                `;
+                                                <i data-feather="check" class="w-3.5 h-3.5"></i>
+                                                <i data-feather="check" class="w-3.5 h-3.5 -ml-2"></i>
+                                            `;
                             });
                         feather.replace();
                     }
@@ -2482,23 +2589,23 @@
                         }
 
                         div.innerHTML = `
-                                    <div class="relative flex-shrink-0">
-                                        <img src="${displayAvatar}" class="w-12 h-12 rounded-full object-cover">
-                                        <span class="chat-online-dot absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white hidden"></span>
-                                    </div>
-                                    <div class="flex-1 min-w-0">
-                                        <div class="flex items-center justify-between gap-2">
-                                            <h3 class="font-medium truncate">${displayName}</h3>
-                                            <span class="unread-badge hidden flex-shrink-0"></span>
-                                        </div>
-                                        <div class="text-sm text-gray-500 truncate flex items-center gap-1.5 last-message-preview">
-                                            ${renderLastMessagePreview(chat.lastMessage)}
-                                        </div>
-                                        <div class="typing-in-list hidden text-xs text-blue-600 font-medium mt-0.5">
-                                            <span class="typing-name"></span> печатает...
-                                        </div>
-                                    </div>
-                                `;
+                                                <div class="relative flex-shrink-0">
+                                                    <img src="${displayAvatar}" class="w-12 h-12 rounded-full object-cover">
+                                                    <span class="chat-online-dot absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white hidden"></span>
+                                                </div>
+                                                <div class="flex-1 min-w-0">
+                                                    <div class="flex items-center justify-between gap-2">
+                                                        <h3 class="font-medium truncate">${displayName}</h3>
+                                                        <span class="unread-badge hidden flex-shrink-0"></span>
+                                                    </div>
+                                                    <div class="text-sm text-gray-500 truncate flex items-center gap-1.5 last-message-preview">
+                                                        ${renderLastMessagePreview(chat.lastMessage)}
+                                                    </div>
+                                                    <div class="typing-in-list hidden text-xs text-blue-600 font-medium mt-0.5">
+                                                        <span class="typing-name"></span> печатает...
+                                                    </div>
+                                                </div>
+                                            `;
 
                         if (partnerId) div.dataset.partnerId = partnerId;
 
@@ -2652,11 +2759,11 @@
 
                     if (messages.length === 0) {
                         container.innerHTML = `
-                                    <div class="flex-1 flex flex-col items-center justify-center text-gray-400 py-12">
-                                        <i data-feather="message-square" class="w-12 h-12 mb-4 opacity-30"></i>
-                                        <p class="text-lg">Сообщений пока нет</p>
-                                        <p class="text-sm mt-1">Напишите первое сообщение</p>
-                                    </div>`;
+                                                <div class="flex-1 flex flex-col items-center justify-center text-gray-400 py-12">
+                                                    <i data-feather="message-square" class="w-12 h-12 mb-4 opacity-30"></i>
+                                                    <p class="text-lg">Сообщений пока нет</p>
+                                                    <p class="text-sm mt-1">Напишите первое сообщение</p>
+                                                </div>`;
                     } else {
                         messages.forEach(msg => appendMessage(msg));
                         setupHistoryObserver(chatId);
@@ -2668,11 +2775,11 @@
                 } catch (err) {
                     console.error('Ошибка загрузки сообщений:', err);
                     container.innerHTML = `
-                                <div class="flex flex-col items-center justify-center h-full text-red-500 text-center px-4">
-                                    <i data-feather="alert-triangle" class="w-12 h-12 mb-4"></i>
-                                    <p class="font-medium">Не удалось загрузить сообщения</p>
-                                    <p class="text-sm mt-2">Проверьте подключение или попробуйте обновить страницу</p>
-                                </div>`;
+                                            <div class="flex flex-col items-center justify-center h-full text-red-500 text-center px-4">
+                                                <i data-feather="alert-triangle" class="w-12 h-12 mb-4"></i>
+                                                <p class="font-medium">Не удалось загрузить сообщения</p>
+                                                <p class="text-sm mt-2">Проверьте подключение или попробуйте обновить страницу</p>
+                                            </div>`;
                 }
             }
 
@@ -2949,10 +3056,10 @@
                 lastQuery = query;
 
                 results.innerHTML = `
-                            <div class="p-4 text-center text-gray-500">
-                                <i data-feather="loader" class="w-5 h-5 animate-spin inline"></i> Поиск...
-                            </div>
-                        `;
+                                        <div class="p-4 text-center text-gray-500">
+                                            <i data-feather="loader" class="w-5 h-5 animate-spin inline"></i> Поиск...
+                                        </div>
+                                    `;
                 results.classList.add('show');
                 feather.replace();
 
@@ -2984,9 +3091,9 @@
                         const div = document.createElement('div');
                         div.className = 'p-3 hover:bg-gray-50 cursor-pointer flex items-center gap-3 transition rounded-lg';
                         div.innerHTML = `
-                                    <img src="${user.avatar || 'https://novgorodskij-r49.gosweb.gosuslugi.ru/netcat_files/9/260/user_test.png'}" class="w-10 h-10 rounded-full object-cover">
-                                    <span class="font-medium">${user.name || 'Без имени'}</span>
-                                `;
+                                                <img src="${user.avatar || 'https://novgorodskij-r49.gosweb.gosuslugi.ru/netcat_files/9/260/user_test.png'}" class="w-10 h-10 rounded-full object-cover">
+                                                <span class="font-medium">${user.name || 'Без имени'}</span>
+                                            `;
 
                         div.onclick = () => {
                             if (selectedUserIds.includes(user.id)) return;
@@ -3002,11 +3109,11 @@
                             const tag = document.createElement('div');
                             tag.className = 'inline-flex items-center gap-2 px-3 py-2 rounded-full bg-blue-100 text-blue-800 text-sm font-medium';
                             tag.innerHTML = `
-                                        ${user.name || 'Пользователь'}
-                                        <button type="button" class="ml-2 hover:bg-blue-200 rounded-full p-0.5 transition">
-                                            <i data-feather="x" class="w-4 h-4"></i>
-                                        </button>
-                                    `;
+                                                    ${user.name || 'Пользователь'}
+                                                    <button type="button" class="ml-2 hover:bg-blue-200 rounded-full p-0.5 transition">
+                                                        <i data-feather="x" class="w-4 h-4"></i>
+                                                    </button>
+                                                `;
 
                             tag.querySelector('button').onclick = (e) => {
                                 e.stopPropagation();
@@ -3093,19 +3200,19 @@
                 div.dataset.userId = userId;
 
                 div.innerHTML = `
-                            <div class="flex items-center gap-4">
-                                <img src="${userAvatar || 'https://novgorodskij-r49.gosweb.gosuslugi.ru/netcat_files/9/260/user_test.png'}"
-                                     class="w-12 h-12 rounded-full object-cover">
-                                <div>
-                                    <p class="font-semibold">${userName}</p>
-                                </div>
-                            </div>
-                            ${currentChatInfo.type === 'group' ? `
-                            <button type="button" class="text-red-600 hover:bg-red-100 rounded-full p-2 transition"
-                                    onclick="removeParticipantFromChat('${userId}', this)">
-                                <i data-feather="x" class="w-5 h-5"></i>
-                            </button>` : ''}
-                        `;
+                                        <div class="flex items-center gap-4">
+                                            <img src="${userAvatar || 'https://novgorodskij-r49.gosweb.gosuslugi.ru/netcat_files/9/260/user_test.png'}"
+                                                 class="w-12 h-12 rounded-full object-cover">
+                                            <div>
+                                                <p class="font-semibold">${userName}</p>
+                                            </div>
+                                        </div>
+                                        ${currentChatInfo.type === 'group' ? `
+                                        <button type="button" class="text-red-600 hover:bg-red-100 rounded-full p-2 transition"
+                                                onclick="removeParticipantFromChat('${userId}', this)">
+                                            <i data-feather="x" class="w-5 h-5"></i>
+                                        </button>` : ''}
+                                    `;
                 list.appendChild(div);
                 feather.replace();
 
@@ -3142,15 +3249,15 @@
                 container.className = 'mb-4 relative';
 
                 container.innerHTML = `
-                            <div class="relative">
-                                <input type="text" id="chat-info-search-input" placeholder="Введите имя пользователя..."
-                                       class="w-full px-4 py-3 pl-11 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
-                                       autocomplete="off">
-                                <i data-feather="search" class="absolute left-4 top-3.5 w-5 h-5 text-gray-400 pointer-events-none"></i>
-                                <div id="chat-info-search-results"
-                                     class="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-64 overflow-y-auto z-20 hidden"></div>
-                            </div>
-                        `;
+                                        <div class="relative">
+                                            <input type="text" id="chat-info-search-input" placeholder="Введите имя пользователя..."
+                                                   class="w-full px-4 py-3 pl-11 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+                                                   autocomplete="off">
+                                            <i data-feather="search" class="absolute left-4 top-3.5 w-5 h-5 text-gray-400 pointer-events-none"></i>
+                                            <div id="chat-info-search-results"
+                                                 class="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-64 overflow-y-auto z-20 hidden"></div>
+                                        </div>
+                                    `;
 
                 document.querySelector('#participants-list').before(container);
                 feather.replace();
@@ -3201,12 +3308,12 @@
                                 const item = document.createElement('div');
                                 item.className = 'flex items-center gap-3 p-3 hover:bg-gray-50 cursor-pointer transition';
                                 item.innerHTML = `
-                                            <img src="${user.avatar || 'https://novgorodskij-r49.gosweb.gosuslugi.ru/netcat_files/9/260/user_test.png'}"
-                                                 class="w-10 h-10 rounded-full object-cover flex-shrink-0">
-                                            <div class="min-w-0 flex-1">
-                                                <p class="font-medium truncate">${user.name || 'Без имени'}</p>
-                                            </div>
-                                        `;
+                                                        <img src="${user.avatar || 'https://novgorodskij-r49.gosweb.gosuslugi.ru/netcat_files/9/260/user_test.png'}"
+                                                             class="w-10 h-10 rounded-full object-cover flex-shrink-0">
+                                                        <div class="min-w-0 flex-1">
+                                                            <p class="font-medium truncate">${user.name || 'Без имени'}</p>
+                                                        </div>
+                                                    `;
 
                                 item.addEventListener('click', () => {
                                     addParticipantToChat(user.id, user.name || 'Пользователь', user.avatar);
@@ -3321,27 +3428,27 @@
                 overlay.id = 'delete-confirm-overlay';
                 overlay.className = 'fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50';
                 overlay.innerHTML = `
-                            <div class="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl animate-in">
-                                <div class="text-center mb-8">
-                                    <div class="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-5">
-                                        <i data-feather="trash-2" class="w-12 h-12 text-red-600"></i>
-                                    </div>
-                                    <h3 class="text-2xl font-bold text-gray-900">Удалить чат навсегда?</h3>
-                                    <p class="text-gray-600 mt-4 leading-relaxed">
-                                        Все сообщения и файлы будут удалены.<br>
-                                        Это действие <strong>нельзя отменить</strong>.
-                                    </p>
-                                </div>
-                                <div class="flex gap-4">
-                                    <button id="cancel-delete" class="flex-1 px-6 py-3 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-xl font-medium transition">
-                                        Отмена
-                                    </button>
-                                    <button id="confirm-delete" class="flex-1 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-medium transition">
-                                        Удалить чат
-                                    </button>
-                                </div>
-                            </div>
-                        `;
+                                        <div class="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl animate-in">
+                                            <div class="text-center mb-8">
+                                                <div class="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-5">
+                                                    <i data-feather="trash-2" class="w-12 h-12 text-red-600"></i>
+                                                </div>
+                                                <h3 class="text-2xl font-bold text-gray-900">Удалить чат навсегда?</h3>
+                                                <p class="text-gray-600 mt-4 leading-relaxed">
+                                                    Все сообщения и файлы будут удалены.<br>
+                                                    Это действие <strong>нельзя отменить</strong>.
+                                                </p>
+                                            </div>
+                                            <div class="flex gap-4">
+                                                <button id="cancel-delete" class="flex-1 px-6 py-3 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-xl font-medium transition">
+                                                    Отмена
+                                                </button>
+                                                <button id="confirm-delete" class="flex-1 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-medium transition">
+                                                    Удалить чат
+                                                </button>
+                                            </div>
+                                        </div>
+                                    `;
 
                 document.body.appendChild(overlay);
                 feather.replace();
@@ -3365,10 +3472,10 @@
 
                         currentChatId = null;
                         messagesContainer.innerHTML = `
-                                    <div class="flex items-center justify-center h-full text-gray-500">
-                                        <p>Выберите чат для просмотра сообщений</p>
-                                    </div>
-                                `;
+                                                <div class="flex items-center justify-center h-full text-gray-500">
+                                                    <p>Выберите чат для просмотра сообщений</p>
+                                                </div>
+                                            `;
                         document.getElementById('chat-title').textContent = 'Выберите чат';
                         document.getElementById('chat-subtitle').textContent = 'Нажмите, чтобы посмотреть информацию';
                         document.getElementById('chat-info-avatar').src = 'https://novgorodskij-r49.gosweb.gosuslugi.ru/netcat_files/9/260/user_test.png';
@@ -3461,10 +3568,10 @@
                     const div = document.createElement('div');
                     div.className = 'mb-6 flex justify-center system-kicked-message';
                     div.innerHTML = `
-                                <div class="bg-blue-50 border border-blue-200 text-blue-800 px-6 py-4 rounded-2xl text-center">
-                                    <p class="font-medium">${msg.messageText}</p>
-                                </div>
-                            `;
+                                            <div class="bg-blue-50 border border-blue-200 text-blue-800 px-6 py-4 rounded-2xl text-center">
+                                                <p class="font-medium">${msg.messageText}</p>
+                                            </div>
+                                        `;
                     messagesContainer.appendChild(div);
                     scrollToBottom();
                     return;
@@ -3501,25 +3608,25 @@
                     div.dataset.userId = userId;
 
                     div.innerHTML = `
-                                <div class="flex items-center gap-4">
-                                    <div class="relative">
-                                        <img src="${p.avatar || 'https://novgorodskij-r49.gosweb.gosuslugi.ru/netcat_files/9/260/user_test.png'}"
-                                             class="w-12 h-12 rounded-full object-cover">
-                                        ${info.type === 'group' ? `
-                                        <span class="chat-online-dot absolute bottom-0 right-0 w-4 h-4 bg-green-500 rounded-full border-2 border-white ${isOnline ? '' : 'hidden'}"></span>
-                                        ` : ''}
-                                    </div>
-                                    <div>
-                                        <p class="font-semibold">${p.fullName || p.name || 'Пользователь'}</p>
-                                        ${isYou ? '<p class="text-sm text-blue-600">Вы</p>' : ''}
-                                    </div>
-                                </div>
-                                ${info.type === 'group' && !isYou ? `
-                                <button type="button" class="text-red-600 hover:bg-red-100 rounded-full p-2 transition"
-                                        onclick="removeParticipantFromChat('${userId}', this)">
-                                    <i data-feather="x" class="w-5 h-5"></i>
-                                </button>` : ''}
-                            `;
+                                            <div class="flex items-center gap-4">
+                                                <div class="relative">
+                                                    <img src="${p.avatar || 'https://novgorodskij-r49.gosweb.gosuslugi.ru/netcat_files/9/260/user_test.png'}"
+                                                         class="w-12 h-12 rounded-full object-cover">
+                                                    ${info.type === 'group' ? `
+                                                    <span class="chat-online-dot absolute bottom-0 right-0 w-4 h-4 bg-green-500 rounded-full border-2 border-white ${isOnline ? '' : 'hidden'}"></span>
+                                                    ` : ''}
+                                                </div>
+                                                <div>
+                                                    <p class="font-semibold">${p.fullName || p.name || 'Пользователь'}</p>
+                                                    ${isYou ? '<p class="text-sm text-blue-600">Вы</p>' : ''}
+                                                </div>
+                                            </div>
+                                            ${info.type === 'group' && !isYou ? `
+                                            <button type="button" class="text-red-600 hover:bg-red-100 rounded-full p-2 transition"
+                                                    onclick="removeParticipantFromChat('${userId}', this)">
+                                                <i data-feather="x" class="w-5 h-5"></i>
+                                            </button>` : ''}
+                                        `;
 
                     list.appendChild(div);
                 });
@@ -3548,6 +3655,23 @@
 
             const observer = new MutationObserver(() => feather.replace());
             observer.observe(document.body, { childList: true, subtree: true });
+
+            function updateThemeIcons() {
+                const isDark = document.documentElement.classList.contains('dark');
+                document.querySelectorAll('.theme-icon-dark').forEach(el => el.classList.toggle('hidden', !isDark));
+                document.querySelectorAll('.theme-icon-light').forEach(el => el.classList.toggle('hidden', isDark));
+            }
+
+            function toggleTheme() {
+                const html = document.documentElement;
+                const isDark = html.classList.toggle('dark');
+                localStorage.setItem('theme', isDark ? 'dark' : 'light');
+                updateThemeIcons();
+                feather.replace();
+            }
+
+            document.getElementById('theme-toggle')?.addEventListener('click', toggleTheme);
+            updateThemeIcons();
     </script>
 </body>
 </html>
