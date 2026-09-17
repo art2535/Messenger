@@ -431,20 +431,22 @@
             @if (TempData["SuccessMessage"] != null)
             {
                 <script>
-                                window.__profileJustSaved = true;
-                                window.__savedAvatarUrl = @Html.Raw(hasAvatar && !string.IsNullOrEmpty(avatarUrl)
-                                                        ? $"'{avatarUrl.Replace("'", "\\'")}'"
-                                                        : "null");
-                                window.__savedDisplayName = @Html.Raw($"'{fullName.Replace("'", "\\'")}'");
-                                document.addEventListener('DOMContentLoaded', () => {
-                                    showToast('@TempData["SuccessMessage"]', 'success');
-                                });
+                    window.__profileJustSaved = true;
+                    window.__savedAvatarUrl = @Html.Raw(hasAvatar && !string.IsNullOrEmpty(avatarUrl)
+                                            ? $"'{avatarUrl.Replace("'", "\\'")}'"
+                                            : "null");
+                    window.__savedDisplayName = @Html.Raw($"'{fullName.Replace("'", "\\'")}'");
+                    document.addEventListener('DOMContentLoaded', () => {
+                        showToast('@TempData["SuccessMessage"]', 'success');
+                    });
                 </script>
             }
 
-            <h2 class="text-2xl sm:text-3xl font-bold text-gray-800 dark:text-white mb-6 sm:mb-8 hidden sm:block">
-                Настройки
-            </h2>
+            <div class="max-w-4xl mx-auto px-2 sm:px-0">
+                <h2 class="text-2xl sm:text-3xl font-bold text-gray-800 dark:text-white mb-6 sm:mb-8 hidden sm:block">
+                    Настройки аккаунта
+                </h2>
+            </div>
 
             <form method="post" enctype="multipart/form-data" asp-page-handler="Save" class="max-w-4xl mx-auto space-y-6 sm:space-y-8">
 
@@ -525,10 +527,25 @@
                 <section id="notifications" class="bg-white dark:bg-gray-800 rounded-2xl shadow-md p-5 sm:p-8">
                     <h3 class="text-xl sm:text-2xl font-semibold text-gray-800 dark:text-white mb-5 sm:mb-6">Уведомления</h3>
                     <div class="space-y-5">
+                        <div id="ios-push-hint" class="hidden rounded-xl border border-amber-200 dark:border-amber-700/50 bg-amber-50 dark:bg-amber-900/20 p-4 text-sm text-amber-900 dark:text-amber-100">
+                            <p class="font-medium mb-1.5">На iPhone / iPad push работают только из установленного приложения</p>
+                            <ol class="list-decimal list-inside space-y-1 text-amber-800 dark:text-amber-200/90">
+                                <li>Откройте сайт в <strong>Safari</strong></li>
+                                <li>Нажмите «Поделиться» → <strong>«На экран „Домой“»</strong></li>
+                                <li>Откройте GUAP Messenger с иконки на экране</li>
+                                <li>Включите push в настройках</li>
+                            </ol>
+                            <p class="mt-2 text-xs text-amber-700 dark:text-amber-300">Нужен iOS 16.4+. В обычной вкладке Safari push недоступны.</p>
+                        </div>
+
+                        <div id="push-unsupported-hint" class="hidden rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/40 p-4 text-sm text-gray-600 dark:text-gray-300">
+                            Этот браузер не поддерживает Web Push. Попробуйте Chrome / Edge на Android или Safari (как приложение) на iOS 16.4+.
+                        </div>
+
                         <div class="flex items-center justify-between py-3 border-t border-gray-100 dark:border-gray-700">
                             <div class="pr-4">
                                 <p class="font-medium text-gray-800 dark:text-gray-100">Push-уведомления</p>
-                                <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                                <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5" id="push-status-text">
                                     Получать уведомления даже когда приложение закрыто
                                 </p>
                             </div>
@@ -886,22 +903,99 @@
                 showToast('Аватар будет удалён после сохранения', 'info');
             };
 
+            function isIOS() {
+                return /iPad|iPhone|iPod/.test(navigator.userAgent)
+                    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+            }
+
+            function isStandalonePWA() {
+                return window.matchMedia('(display-mode: standalone)').matches
+                    || window.navigator.standalone === true
+                    || document.referrer.includes('android-app://');
+            }
+
+            function updatePushHints() {
+                const iosHint = document.getElementById('ios-push-hint');
+                const unsupportedHint = document.getElementById('push-unsupported-hint');
+                const statusText = document.getElementById('push-status-text');
+                const hasPush = ('PushManager' in window) && ('serviceWorker' in navigator);
+
+                if (!hasPush) {
+                    unsupportedHint?.classList.remove('hidden');
+                    iosHint?.classList.add('hidden');
+                    return;
+                }
+
+                unsupportedHint?.classList.add('hidden');
+
+                if (isIOS() && !isStandalonePWA()) {
+                    iosHint?.classList.remove('hidden');
+                    if (statusText) {
+                        statusText.textContent = 'Сначала установите приложение на экран «Домой»';
+                    }
+                } else {
+                    iosHint?.classList.add('hidden');
+                    if (statusText) {
+                        statusText.textContent = 'Получать уведомления даже когда приложение закрыто';
+                    }
+                }
+            }
+
+            async function ensureServiceWorker() {
+                if (!('serviceWorker' in navigator)) {
+                    throw new Error('Service Worker не поддерживается');
+                }
+
+                let reg = await navigator.serviceWorker.getRegistration();
+                if (reg) {
+                    await navigator.serviceWorker.ready;
+                    return reg;
+                }
+
+                const candidates = ['/service-worker.js', '/sw.js', '/js/sw.js'];
+                let lastError = null;
+                for (const path of candidates) {
+                    try {
+                        reg = await navigator.serviceWorker.register(path, { scope: '/' });
+                        await navigator.serviceWorker.ready;
+                        console.log('SW зарегистрирован:', path);
+                        return reg;
+                    } catch (e) {
+                        lastError = e;
+                    }
+                }
+                throw lastError || new Error('Не удалось зарегистрировать Service Worker');
+            }
+
             async function checkPushStatus() {
                 pushToggle = document.getElementById('push-toggle');
                 if (!pushToggle) return;
 
+                updatePushHints();
+
                 if (!('PushManager' in window) || !('serviceWorker' in navigator)) {
                     pushToggle.disabled = true;
                     const slider = document.getElementById('push-toggle-slider');
-                    if (slider) slider.classList.add('!bg-gray-400');
+                    if (slider) slider.classList.add('!bg-gray-400', 'cursor-not-allowed', 'opacity-60');
+                    return;
+                }
+
+                if (isIOS() && !isStandalonePWA()) {
+                    pushToggle.disabled = true;
+                    const slider = document.getElementById('push-toggle-slider');
+                    if (slider) slider.classList.add('!bg-gray-400', 'cursor-not-allowed', 'opacity-60');
                     return;
                 }
 
                 try {
-                    const registration = await navigator.serviceWorker.ready;
+                    const registration = await ensureServiceWorker();
                     currentSubscription = await registration.pushManager.getSubscription();
                     if (Notification.permission === 'denied') {
                         pushToggle.disabled = true;
+                        const statusText = document.getElementById('push-status-text');
+                        if (statusText) {
+                            statusText.textContent = 'Разрешение отклонено. Включите уведомления в настройках системы';
+                        }
                     }
                 } catch (e) {
                     console.error('Ошибка проверки статуса push:', e);
@@ -910,6 +1004,23 @@
 
             async function subscribeToPush() {
                 try {
+                    if (isIOS() && !isStandalonePWA()) {
+                        pushToggle.checked = false;
+                        document.getElementById('ios-push-hint')?.classList.remove('hidden');
+                        showToast('На iPhone откройте приложение с экрана «Домой»', 'error');
+                        return;
+                    }
+
+                    if (!('Notification' in window)) {
+                        throw new Error('Notification API недоступен');
+                    }
+
+                    if (Notification.permission === 'denied') {
+                        pushToggle.checked = false;
+                        showToast('Уведомления запрещены в настройках браузера/системы', 'error');
+                        return;
+                    }
+
                     if (Notification.permission === 'default') {
                         const permission = await Notification.requestPermission();
                         if (permission !== 'granted') {
@@ -919,9 +1030,10 @@
                         }
                     }
 
-                    const registration = await navigator.serviceWorker.ready;
+                    const registration = await ensureServiceWorker();
                     const keyRes = await fetch(`${API_URL}/push/vapid-public-key`);
-                    const vapidPublicKey = await keyRes.text();
+                    if (!keyRes.ok) throw new Error('Не удалось получить VAPID-ключ');
+                    const vapidPublicKey = (await keyRes.text()).trim();
 
                     let subscription = await registration.pushManager.getSubscription();
                     if (!subscription) {
@@ -941,8 +1053,8 @@
                         },
                         body: JSON.stringify({
                             endpoint: subscription.endpoint,
-                            p256dh: subJson.keys.p256dh,
-                            auth: subJson.keys.auth
+                            p256dh: subJson.keys?.p256dh,
+                            auth: subJson.keys?.auth
                         })
                     });
 
@@ -950,23 +1062,26 @@
                         currentSubscription = subscription;
                         showToast('Push-уведомления включены', 'success');
                     } else {
-                        throw new Error('Не удалось сохранить подписку на сервере');
+                        const errText = await res.text().catch(() => '');
+                        throw new Error(errText || 'Не удалось сохранить подписку на сервере');
                     }
                 } catch (err) {
                     console.error(err);
                     if (pushToggle) pushToggle.checked = false;
-                    showToast('Не удалось включить push-уведомления', 'error');
+                    const msg = (err && err.message) ? String(err.message) : 'Не удалось включить push-уведомления';
+                    showToast(msg.length > 120 ? 'Не удалось включить push-уведомления' : msg, 'error');
                 }
             }
 
             async function unsubscribeFromPush() {
                 try {
                     if (!currentSubscription) {
-                        const registration = await navigator.serviceWorker.ready;
+                        const registration = await ensureServiceWorker();
                         currentSubscription = await registration.pushManager.getSubscription();
                     }
 
                     if (currentSubscription) {
+                        const endpoint = currentSubscription.endpoint;
                         await currentSubscription.unsubscribe();
                         const token = getAuthToken();
                         await fetch(`${API_URL}/push/unsubscribe`, {
@@ -975,7 +1090,7 @@
                                 'Content-Type': 'application/json',
                                 'Authorization': token
                             },
-                            body: JSON.stringify(currentSubscription.endpoint)
+                            body: JSON.stringify(endpoint)
                         });
                         currentSubscription = null;
                         showToast('Push-уведомления отключены', 'info');
