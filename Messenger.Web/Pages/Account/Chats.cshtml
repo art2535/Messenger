@@ -4,14 +4,19 @@
     ViewData["Title"] = "Чаты";
     Layout = null;
 }
+
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru" class="h-full">
 <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#111827" media="(prefers-color-scheme: dark)" />
     <title>@ViewData["Title"]</title>
     <script>
-            (function() {
+            (function () {
                 const saved = localStorage.getItem('theme');
                 const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
                 if (saved === 'dark' || (!saved && prefersDark)) {
@@ -35,15 +40,146 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
     <partial name="_LayoutPWA" />
     <style>
-            body {
-                font-family: 'Roboto', sans-serif;
+            :root {
+                --safe-top: env(safe-area-inset-top, 0px);
+                --safe-bottom: env(safe-area-inset-bottom, 0px);
+                --safe-left: env(safe-area-inset-left, 0px);
+                --safe-right: env(safe-area-inset-right, 0px);
+            }
+
+            html, body {
+                height: 100%;
+                height: 100dvh;
+                font-family: 'Roboto', system-ui, -apple-system, sans-serif;
                 margin: 0;
                 padding: 0;
                 overflow: hidden;
+                -webkit-font-smoothing: antialiased;
+                -webkit-tap-highlight-color: transparent;
+                overscroll-behavior: none;
             }
 
             .guap-gradient {
                 background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+            }
+
+            #chats-sidebar {
+                width: 20rem;
+                flex-shrink: 0;
+            }
+
+            #mobile-back-btn {
+                display: none;
+            }
+
+            #message-search-bar {
+                max-width: 20rem;
+            }
+
+            @@media (max-width: 767.98px) {
+                #chats-sidebar {
+                    position: fixed;
+                    inset: 0;
+                    width: 100%;
+                    max-width: 100%;
+                    z-index: 40;
+                    border-right: none !important;
+                    padding-top: var(--safe-top);
+                    padding-bottom: var(--safe-bottom);
+                    padding-left: var(--safe-left);
+                    padding-right: var(--safe-right);
+                    transform: translateX(0);
+                    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+                }
+
+                body.mobile-chat-open #chats-sidebar {
+                    transform: translateX(-100%);
+                    pointer-events: none;
+                }
+
+                #right-panel {
+                    position: fixed;
+                    inset: 0;
+                    width: 100%;
+                    z-index: 30;
+                    padding-top: var(--safe-top);
+                    padding-bottom: var(--safe-bottom);
+                    padding-left: var(--safe-left);
+                    padding-right: var(--safe-right);
+                    display: flex;
+                    flex-direction: column;
+                    background: inherit;
+                }
+
+                body:not(.mobile-chat-open) #right-panel {
+                    visibility: hidden;
+                    pointer-events: none;
+                }
+
+                body.mobile-chat-open #right-panel {
+                    visibility: visible;
+                    pointer-events: auto;
+                }
+
+                #mobile-back-btn {
+                    display: flex !important;
+                    align-items: center;
+                    justify-content: center;
+                    width: 2.75rem;
+                    height: 2.75rem;
+                    flex-shrink: 0;
+                    margin-right: 0.25rem;
+                    border-radius: 0.75rem;
+                }
+
+                #chat-header {
+                    padding-top: 0.75rem;
+                    padding-bottom: 0.75rem;
+                    min-height: 3.5rem;
+                }
+
+                #chat-input-area {
+                    padding-bottom: calc(0.75rem + var(--safe-bottom));
+                }
+
+                #messages-container {
+                    -webkit-overflow-scrolling: touch;
+                }
+
+                #message-search-bar {
+                    position: absolute;
+                    left: 0.5rem;
+                    right: 0.5rem;
+                    width: auto;
+                    max-width: none;
+                    z-index: 10;
+                }
+
+                #search-navigation {
+                    right: 1rem;
+                    bottom: calc(6rem + var(--safe-bottom));
+                }
+
+                .modal > div {
+                    max-height: calc(100dvh - 2rem - var(--safe-top) - var(--safe-bottom));
+                    margin: 0.5rem;
+                    border-radius: 1rem;
+                }
+
+                .chat-item {
+                    min-height: 4.25rem;
+                }
+
+                #message-input {
+                    font-size: 16px;
+                    min-height: 2.75rem;
+                }
+            }
+
+            @@media (min-width: 768px) and (max-width: 1023.98px) {
+                #chats-sidebar {
+                    width: 18rem;
+                }
             }
 
             .chat-item:hover {
@@ -420,7 +556,7 @@
 </head>
 <body class="h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
     <div class="flex h-full">
-        <div class="w-80 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col">
+        <div id="chats-sidebar" class="w-80 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col">
             <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
                 <div class="flex items-center space-x-3">
                     <div class="guap-gradient text-white w-10 h-10 rounded-full flex items-center justify-center">
@@ -504,7 +640,14 @@
 
         <div class="flex-1 flex flex-col bg-white dark:bg-gray-900" id="right-panel">
             <div id="chat-header"
-                 class="hidden p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex items-center justify-between cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-750 transition">
+                 class="hidden p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex items-center justify-between cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-750 transition relative">
+
+                <button type="button" id="mobile-back-btn"
+                        class="text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+                        aria-label="Назад к списку чатов"
+                        onclick="event.stopPropagation(); closeCurrentChat();">
+                    <i data-feather="arrow-left" class="w-6 h-6"></i>
+                </button>
 
                 <div onclick="openChatInfo()" class="flex items-center space-x-3 flex-1 min-w-0 cursor-pointer">
                     <div class="relative">
@@ -810,7 +953,7 @@
                 return res && res.status === 429;
             }
 
-            fileInput.onchange = function() {
+            fileInput.onchange = function () {
                 const MAX_SIZE_MB = 10;
                 const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
 
@@ -922,25 +1065,25 @@
 
                     if (isImage) {
                         images.push(`
-                                                <img src="${displayUrl}"
-                                                        class="image-preview cursor-zoom-in rounded-xl object-cover"
-                                                        style="max-width: 220px; max-height: 220px;"
-                                                        alt="${att.fileName || 'Изображение'}"
-                                                        onclick="openLightbox('${displayUrl}')">
-                                            `);
+                            <img src="${displayUrl}"
+                                    class="image-preview cursor-zoom-in rounded-xl object-cover"
+                                    style="max-width: 220px; max-height: 220px;"
+                                    alt="${att.fileName || 'Изображение'}"
+                                    onclick="openLightbox('${displayUrl}')">
+                        `);
                     } else {
                         files.push(`
-                                                <div class="file-attachment ${bgColor} mt-1">
-                                                    <i data-feather="file" class="w-5 h-5 flex-shrink-0"></i>
-                                                    <a href="${downloadUrl}"
-                                                        target="_blank"
-                                                        class="${textColor} hover:underline font-medium truncate max-w-[180px]"
-                                                        title="${att.fileName || fileNameFromUrl}">
-                                                        ${att.fileName || fileNameFromUrl}
-                                                        ${size ? `<span class="text-xs opacity-70 ml-1">(${size})</span>` : ''}
-                                                    </a>
-                                                </div>
-                                            `);
+                            <div class="file-attachment ${bgColor} mt-1">
+                                <i data-feather="file" class="w-5 h-5 flex-shrink-0"></i>
+                                <a href="${downloadUrl}"
+                                    target="_blank"
+                                    class="${textColor} hover:underline font-medium truncate max-w-[180px]"
+                                    title="${att.fileName || fileNameFromUrl}">
+                                    ${att.fileName || fileNameFromUrl}
+                                    ${size ? `<span class="text-xs opacity-70 ml-1">(${size})</span>` : ''}
+                                </a>
+                            </div>
+                        `);
                     }
                 });
 
@@ -1003,19 +1146,19 @@
                     : '';
 
                 div.innerHTML = `
-                                        <div class="flex flex-col ${isMyMessage ? 'items-end' : 'items-start'} max-w-[75%] lg:max-w-md">
-                                            ${senderNameHtml}
-                                            <div class="message-bubble ${isMyMessage ? 'outgoing' : 'incoming'} px-3.5 py-2 shadow-sm">
-                                                ${displayText ? `<p class="break-words whitespace-pre-wrap leading-relaxed text-[15px]">${displayText.replace(/\n/g, '<br>')}</p>` : ''}
-                                                ${renderAttachments(msg.attachments || [], isMyMessage)}
-                                                <div class="text-[11px] mt-1 ${isMyMessage ? 'text-blue-100 text-right' : 'text-gray-500 text-right'} opacity-80 flex items-center justify-end gap-1">
-                                                    ${time}
-                                                    ${statusHtml}
-                                                    ${isGroupChat && isMyMessage ? ' · Вы' : ''}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    `;
+                    <div class="flex flex-col ${isMyMessage ? 'items-end' : 'items-start'} max-w-[75%] lg:max-w-md">
+                        ${senderNameHtml}
+                        <div class="message-bubble ${isMyMessage ? 'outgoing' : 'incoming'} px-3.5 py-2 shadow-sm">
+                            ${displayText ? `<p class="break-words whitespace-pre-wrap leading-relaxed text-[15px]">${displayText.replace(/\n/g, '<br>')}</p>` : ''}
+                            ${renderAttachments(msg.attachments || [], isMyMessage)}
+                            <div class="text-[11px] mt-1 ${isMyMessage ? 'text-blue-100 text-right' : 'text-gray-500 text-right'} opacity-80 flex items-center justify-end gap-1">
+                                ${time}
+                                ${statusHtml}
+                                ${isGroupChat && isMyMessage ? ' · Вы' : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
 
                 messagesContainer.appendChild(div);
                 feather.replace();
@@ -1096,18 +1239,18 @@
 
                 if (s === 'read') {
                     return `<span class="msg-status read" title="Прочитано">
-                                                    <i data-feather="check" class="w-3.5 h-3.5"></i>
-                                                    <i data-feather="check" class="w-3.5 h-3.5 -ml-2"></i>
-                                                </span>`;
+                        <i data-feather="check" class="w-3.5 h-3.5"></i>
+                        <i data-feather="check" class="w-3.5 h-3.5 -ml-2"></i>
+                    </span>`;
                 }
                 if (s === 'delivered' || s === 'sent') {
                     return `<span class="msg-status sent" title="Доставлено">
-                                                    <i data-feather="check" class="w-3.5 h-3.5"></i>
-                                                </span>`;
+                        <i data-feather="check" class="w-3.5 h-3.5"></i>
+                    </span>`;
                 }
                 return `<span class="msg-status pending">
-                                                <i data-feather="clock" class="w-3 h-3"></i>
-                                            </span>`;
+                    <i data-feather="clock" class="w-3 h-3"></i>
+                </span>`;
             }
 
             const MONTHS_RU = [
@@ -1205,8 +1348,8 @@
                 sep.className = 'date-separator';
                 sep.dataset.dateKey = key;
                 sep.innerHTML = `
-                                        <span>${formatDateLabel(date)}</span>
-                                    `;
+                    <span>${formatDateLabel(date)}</span>
+                `;
                 messagesContainer.appendChild(sep);
             }
 
@@ -1368,11 +1511,11 @@
                             return `<img src="${url}" class="w-20 h-20 object-cover rounded-lg mt-1" style="max-width:180px;">`;
                         } else {
                             return `
-                                                    <div class="file-attachment bg-blue-500/30 mt-1 text-blue-100">
-                                                        <i data-feather="file" class="w-4 h-4"></i>
-                                                        <span class="truncate max-w-[140px]">${file.name}</span>
-                                                    </div>
-                                                `;
+                                <div class="file-attachment bg-blue-500/30 mt-1 text-blue-100">
+                                    <i data-feather="file" class="w-4 h-4"></i>
+                                    <span class="truncate max-w-[140px]">${file.name}</span>
+                                </div>
+                            `;
                         }
                     }).join('');
 
@@ -1384,16 +1527,16 @@
                 }
 
                 div.innerHTML = `
-                                        <div class="flex flex-col items-end max-w-[75%] lg:max-w-md">
-                                            <div class="message-bubble outgoing px-3.5 py-2 relative">
-                                                ${content}
-                                                <div id="status-${tempId}" class="message-status flex items-center gap-1.5 text-[11px] mt-1.5 text-blue-100 opacity-80 justify-end">
-                                                    <i data-feather="loader" class="w-3 h-3 animate-spin"></i>
-                                                    <span>Отправляется...</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    `;
+                    <div class="flex flex-col items-end max-w-[75%] lg:max-w-md">
+                        <div class="message-bubble outgoing px-3.5 py-2 relative">
+                            ${content}
+                            <div id="status-${tempId}" class="message-status flex items-center gap-1.5 text-[11px] mt-1.5 text-blue-100 opacity-80 justify-end">
+                                <i data-feather="loader" class="w-3 h-3 animate-spin"></i>
+                                <span>Отправляется...</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
 
                 messagesContainer.appendChild(div);
                 feather.replace();
@@ -1461,9 +1604,9 @@
                         const fileDiv = document.createElement('div');
                         fileDiv.className = 'w-24 h-24 bg-gray-100 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center text-gray-600 p-1';
                         fileDiv.innerHTML = `
-                                                <i data-feather="file-text" class="w-8 h-8 mb-1"></i>
-                                                <span class="text-xs text-center truncate w-full px-1">${file.name.length > 14 ? file.name.slice(0, 11) + '...' : file.name}</span>
-                                            `;
+                            <i data-feather="file-text" class="w-8 h-8 mb-1"></i>
+                            <span class="text-xs text-center truncate w-full px-1">${file.name.length > 14 ? file.name.slice(0, 11) + '...' : file.name}</span>
+                        `;
                         wrapper.appendChild(fileDiv);
                         feather.replace();
                     }
@@ -1515,9 +1658,9 @@
                             el.classList.remove('sent');
                             el.classList.add('read');
                             el.innerHTML = `
-                                                    <i data-feather="check" class="w-3.5 h-3.5"></i>
-                                                    <i data-feather="check" class="w-3.5 h-3.5 -ml-2"></i>
-                                                `;
+                                <i data-feather="check" class="w-3.5 h-3.5"></i>
+                                <i data-feather="check" class="w-3.5 h-3.5 -ml-2"></i>
+                            `;
                             el.title = 'Прочитано';
                         });
                         feather.replace();
@@ -1880,12 +2023,12 @@
                         userDiv.dataset.userId = user.id;
 
                         userDiv.innerHTML = `
-                                                <div class="d-flex align-items-center">
-                                                    <img src="/avatars/${user.avatarPath || 'default.png'}"
-                                                         class="rounded-circle me-2" width="32" height="32">
-                                                    <span>${user.fullName}</span>
-                                                </div>
-                                            `;
+                            <div class="d-flex align-items-center">
+                                <img src="/avatars/${user.avatarPath || 'default.png'}"
+                                        class="rounded-circle me-2" width="32" height="32">
+                                <span>${user.fullName}</span>
+                            </div>
+                        `;
 
                         userDiv.onclick = () => {
                             toggleUserSelection(user.id, user.fullName);
@@ -1922,15 +2065,15 @@
                         div.className = 'p-4 chat-item flex items-center space-x-3 cursor-pointer hover:bg-gray-100 transition rounded-lg mx-2';
                         div.dataset.chatId = chat.chatId;
                         div.innerHTML = `
-                                                <div class="relative">
-                                                    <img src="${displayAvatar}" class="w-12 h-12 rounded-full object-cover">
-                                                    <span class="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></span>
-                                                </div>
-                                                <div class="flex-1 min-w-0">
-                                                    <h3 class="font-medium truncate">${displayName}</h3>
-                                                    <p class="text-sm text-gray-500 truncate">Чат создан</p>
-                                                </div>
-                                            `;
+                            <div class="relative">
+                                <img src="${displayAvatar}" class="w-12 h-12 rounded-full object-cover">
+                                <span class="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></span>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <h3 class="font-medium truncate">${displayName}</h3>
+                                <p class="text-sm text-gray-500 truncate">Чат создан</p>
+                            </div>
+                        `;
 
                         div.onclick = () => openChat(div);
 
@@ -2009,18 +2152,18 @@
                             div.className = 'flex items-center justify-between p-4 bg-gray-50 rounded-xl';
                             div.dataset.userId = user.id;
                             div.innerHTML = `
-                                                    <div class="flex items-center gap-4">
-                                                        <img src="${user.avatar || 'https://novgorodskij-r49.gosweb.gosuslugi.ru/netcat_files/9/260/user_test.png'}"
-                                                             class="w-12 h-12 rounded-full object-cover">
-                                                        <div>
-                                                            <p class="font-semibold">${addedName}</p>
-                                                        </div>
-                                                    </div>
-                                                    <button type="button" class="text-red-600 hover:bg-red-100 rounded-full p-2 transition"
-                                                            onclick="removeParticipantFromChat('${user.id}', this)">
-                                                        <i data-feather="x" class="w-5 h-5"></i>
-                                                    </button>
-                                                `;
+                                <div class="flex items-center gap-4">
+                                    <img src="${user.avatar || 'https://novgorodskij-r49.gosweb.gosuslugi.ru/netcat_files/9/260/user_test.png'}"
+                                            class="w-12 h-12 rounded-full object-cover">
+                                    <div>
+                                        <p class="font-semibold">${addedName}</p>
+                                    </div>
+                                </div>
+                                <button type="button" class="text-red-600 hover:bg-red-100 rounded-full p-2 transition"
+                                        onclick="removeParticipantFromChat('${user.id}', this)">
+                                    <i data-feather="x" class="w-5 h-5"></i>
+                                </button>
+                            `;
                             list.appendChild(div);
                             feather.replace();
 
@@ -2052,9 +2195,9 @@
                         currentChatId = null;
                         currentChatInfo = null;
                         messagesContainer.innerHTML = `
-                                                <div class="flex items-center justify-center h-full text-gray-500">
-                                                    <p>Чат был удалён</p>
-                                                </div>`;
+                                                            <div class="flex items-center justify-center h-full text-gray-500">
+                                                                <p>Чат был удалён</p>
+                                                            </div>`;
                         document.getElementById('chat-title').textContent = 'Выберите чат';
                     }
 
@@ -2206,7 +2349,7 @@
             });
 
             const originalSendMessage = sendMessage;
-            sendMessage = async function() {
+            sendMessage = async function () {
                 if (typingTimeout) {
                     clearTimeout(typingTimeout);
                     if (connection) {
@@ -2217,7 +2360,7 @@
             };
 
             const originalOpenChat = openChat;
-            openChat = function(item) {
+            openChat = function (item) {
                 originalOpenChat.call(this, item);
                 setTimeout(updateCurrentChatSubtitle, 300);
             };
@@ -2296,11 +2439,11 @@
                 toast.classList.add(colors[type] || 'bg-blue-600');
 
                 toast.innerHTML = `
-                                        <div class="flex-1">${message}</div>
-                                        <button class="ml-4 text-white/70 hover:text-white">
-                                            <i data-feather="x" class="w-5 h-5"></i>
-                                        </button>
-                                    `;
+                    <div class="flex-1">${message}</div>
+                    <button class="ml-4 text-white/70 hover:text-white">
+                        <i data-feather="x" class="w-5 h-5"></i>
+                    </button>
+                `;
 
                 toastContainer.insertBefore(toast, toastContainer.firstChild);
 
@@ -2395,6 +2538,19 @@
                     joinChat(currentChatId);
             }
 
+            function isMobileLayout() {
+                return window.matchMedia('(max-width: 767.98px)').matches;
+            }
+
+            function setMobileChatOpen(open) {
+                document.body.classList.toggle('mobile-chat-open', !!open);
+                if (open) {
+                    document.body.style.overflow = 'hidden';
+                } else {
+                    document.body.style.overflow = '';
+                }
+            }
+
             async function openChat(item) {
                 const chatId = item.dataset.chatId;
                 if (currentChatId === chatId) return;
@@ -2411,6 +2567,10 @@
                 document.getElementById('chat-header').classList.remove('hidden');
                 document.getElementById('messages-container').classList.remove('hidden');
                 document.getElementById('chat-input-area').classList.remove('hidden');
+
+                if (isMobileLayout()) {
+                    setMobileChatOpen(true);
+                }
 
                 const chatNameEl = item.querySelector('h3');
                 document.getElementById('chat-title').textContent = chatNameEl ? chatNameEl.textContent : 'Чат';
@@ -2478,7 +2638,7 @@
                     try {
                         const json = await res.clone().json();
                         updatedCount = json?.updatedCount ?? json?.UpdatedCount ?? 0;
-                    } catch { /* ignore */ }
+                    } catch { }
 
                     if (res.ok) {
                         clearUnread(chatId);
@@ -2487,9 +2647,9 @@
                                 el.classList.remove('sent');
                                 el.classList.add('read');
                                 el.innerHTML = `
-                                                <i data-feather="check" class="w-3.5 h-3.5"></i>
-                                                <i data-feather="check" class="w-3.5 h-3.5 -ml-2"></i>
-                                            `;
+                                                            <i data-feather="check" class="w-3.5 h-3.5"></i>
+                                                            <i data-feather="check" class="w-3.5 h-3.5 -ml-2"></i>
+                                                        `;
                             });
                         feather.replace();
                     }
@@ -2589,23 +2749,23 @@
                         }
 
                         div.innerHTML = `
-                                                <div class="relative flex-shrink-0">
-                                                    <img src="${displayAvatar}" class="w-12 h-12 rounded-full object-cover">
-                                                    <span class="chat-online-dot absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white hidden"></span>
-                                                </div>
-                                                <div class="flex-1 min-w-0">
-                                                    <div class="flex items-center justify-between gap-2">
-                                                        <h3 class="font-medium truncate">${displayName}</h3>
-                                                        <span class="unread-badge hidden flex-shrink-0"></span>
-                                                    </div>
-                                                    <div class="text-sm text-gray-500 truncate flex items-center gap-1.5 last-message-preview">
-                                                        ${renderLastMessagePreview(chat.lastMessage)}
-                                                    </div>
-                                                    <div class="typing-in-list hidden text-xs text-blue-600 font-medium mt-0.5">
-                                                        <span class="typing-name"></span> печатает...
-                                                    </div>
-                                                </div>
-                                            `;
+                            <div class="relative flex-shrink-0">
+                                <img src="${displayAvatar}" class="w-12 h-12 rounded-full object-cover">
+                                <span class="chat-online-dot absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white hidden"></span>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center justify-between gap-2">
+                                    <h3 class="font-medium truncate">${displayName}</h3>
+                                    <span class="unread-badge hidden flex-shrink-0"></span>
+                                </div>
+                                <div class="text-sm text-gray-500 truncate flex items-center gap-1.5 last-message-preview">
+                                    ${renderLastMessagePreview(chat.lastMessage)}
+                                </div>
+                                <div class="typing-in-list hidden text-xs text-blue-600 font-medium mt-0.5">
+                                    <span class="typing-name"></span> печатает...
+                                </div>
+                            </div>
+                        `;
 
                         if (partnerId) div.dataset.partnerId = partnerId;
 
@@ -2759,11 +2919,11 @@
 
                     if (messages.length === 0) {
                         container.innerHTML = `
-                                                <div class="flex-1 flex flex-col items-center justify-center text-gray-400 py-12">
-                                                    <i data-feather="message-square" class="w-12 h-12 mb-4 opacity-30"></i>
-                                                    <p class="text-lg">Сообщений пока нет</p>
-                                                    <p class="text-sm mt-1">Напишите первое сообщение</p>
-                                                </div>`;
+                            <div class="flex-1 flex flex-col items-center justify-center text-gray-400 py-12">
+                                <i data-feather="message-square" class="w-12 h-12 mb-4 opacity-30"></i>
+                                <p class="text-lg">Сообщений пока нет</p>
+                                <p class="text-sm mt-1">Напишите первое сообщение</p>
+                            </div>`;
                     } else {
                         messages.forEach(msg => appendMessage(msg));
                         setupHistoryObserver(chatId);
@@ -2775,11 +2935,11 @@
                 } catch (err) {
                     console.error('Ошибка загрузки сообщений:', err);
                     container.innerHTML = `
-                                            <div class="flex flex-col items-center justify-center h-full text-red-500 text-center px-4">
-                                                <i data-feather="alert-triangle" class="w-12 h-12 mb-4"></i>
-                                                <p class="font-medium">Не удалось загрузить сообщения</p>
-                                                <p class="text-sm mt-2">Проверьте подключение или попробуйте обновить страницу</p>
-                                            </div>`;
+                        <div class="flex flex-col items-center justify-center h-full text-red-500 text-center px-4">
+                            <i data-feather="alert-triangle" class="w-12 h-12 mb-4"></i>
+                            <p class="font-medium">Не удалось загрузить сообщения</p>
+                            <p class="text-sm mt-2">Проверьте подключение или попробуйте обновить страницу</p>
+                        </div>`;
                 }
             }
 
@@ -3011,7 +3171,7 @@
             });
 
             const originalOpenChatFunc = openChat;
-            openChat = function(item) {
+            openChat = function (item) {
                 clearMessageSearch(true);
                 originalOpenChatFunc.call(this, item);
             };
@@ -3056,10 +3216,10 @@
                 lastQuery = query;
 
                 results.innerHTML = `
-                                        <div class="p-4 text-center text-gray-500">
-                                            <i data-feather="loader" class="w-5 h-5 animate-spin inline"></i> Поиск...
-                                        </div>
-                                    `;
+                    <div class="p-4 text-center text-gray-500">
+                        <i data-feather="loader" class="w-5 h-5 animate-spin inline"></i> Поиск...
+                    </div>
+                `;
                 results.classList.add('show');
                 feather.replace();
 
@@ -3091,9 +3251,9 @@
                         const div = document.createElement('div');
                         div.className = 'p-3 hover:bg-gray-50 cursor-pointer flex items-center gap-3 transition rounded-lg';
                         div.innerHTML = `
-                                                <img src="${user.avatar || 'https://novgorodskij-r49.gosweb.gosuslugi.ru/netcat_files/9/260/user_test.png'}" class="w-10 h-10 rounded-full object-cover">
-                                                <span class="font-medium">${user.name || 'Без имени'}</span>
-                                            `;
+                            <img src="${user.avatar || 'https://novgorodskij-r49.gosweb.gosuslugi.ru/netcat_files/9/260/user_test.png'}" class="w-10 h-10 rounded-full object-cover">
+                            <span class="font-medium">${user.name || 'Без имени'}</span>
+                        `;
 
                         div.onclick = () => {
                             if (selectedUserIds.includes(user.id)) return;
@@ -3109,11 +3269,11 @@
                             const tag = document.createElement('div');
                             tag.className = 'inline-flex items-center gap-2 px-3 py-2 rounded-full bg-blue-100 text-blue-800 text-sm font-medium';
                             tag.innerHTML = `
-                                                    ${user.name || 'Пользователь'}
-                                                    <button type="button" class="ml-2 hover:bg-blue-200 rounded-full p-0.5 transition">
-                                                        <i data-feather="x" class="w-4 h-4"></i>
-                                                    </button>
-                                                `;
+                                ${user.name || 'Пользователь'}
+                                <button type="button" class="ml-2 hover:bg-blue-200 rounded-full p-0.5 transition">
+                                    <i data-feather="x" class="w-4 h-4"></i>
+                                </button>
+                            `;
 
                             tag.querySelector('button').onclick = (e) => {
                                 e.stopPropagation();
@@ -3200,19 +3360,19 @@
                 div.dataset.userId = userId;
 
                 div.innerHTML = `
-                                        <div class="flex items-center gap-4">
-                                            <img src="${userAvatar || 'https://novgorodskij-r49.gosweb.gosuslugi.ru/netcat_files/9/260/user_test.png'}"
-                                                 class="w-12 h-12 rounded-full object-cover">
-                                            <div>
-                                                <p class="font-semibold">${userName}</p>
-                                            </div>
-                                        </div>
-                                        ${currentChatInfo.type === 'group' ? `
-                                        <button type="button" class="text-red-600 hover:bg-red-100 rounded-full p-2 transition"
-                                                onclick="removeParticipantFromChat('${userId}', this)">
-                                            <i data-feather="x" class="w-5 h-5"></i>
-                                        </button>` : ''}
-                                    `;
+                    <div class="flex items-center gap-4">
+                        <img src="${userAvatar || 'https://novgorodskij-r49.gosweb.gosuslugi.ru/netcat_files/9/260/user_test.png'}"
+                                class="w-12 h-12 rounded-full object-cover">
+                        <div>
+                            <p class="font-semibold">${userName}</p>
+                        </div>
+                    </div>
+                    ${currentChatInfo.type === 'group' ? `
+                    <button type="button" class="text-red-600 hover:bg-red-100 rounded-full p-2 transition"
+                            onclick="removeParticipantFromChat('${userId}', this)">
+                        <i data-feather="x" class="w-5 h-5"></i>
+                    </button>` : ''}
+                `;
                 list.appendChild(div);
                 feather.replace();
 
@@ -3237,7 +3397,7 @@
                 saveBtn.classList.toggle('pointer-events-none', !hasChanges);
             }
 
-            document.getElementById('add-participant-btn').addEventListener('click', function() {
+            document.getElementById('add-participant-btn').addEventListener('click', function () {
                 const existing = document.getElementById('chat-info-search-container');
                 if (existing) {
                     existing.querySelector('input').focus();
@@ -3249,15 +3409,15 @@
                 container.className = 'mb-4 relative';
 
                 container.innerHTML = `
-                                        <div class="relative">
-                                            <input type="text" id="chat-info-search-input" placeholder="Введите имя пользователя..."
-                                                   class="w-full px-4 py-3 pl-11 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
-                                                   autocomplete="off">
-                                            <i data-feather="search" class="absolute left-4 top-3.5 w-5 h-5 text-gray-400 pointer-events-none"></i>
-                                            <div id="chat-info-search-results"
-                                                 class="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-64 overflow-y-auto z-20 hidden"></div>
-                                        </div>
-                                    `;
+                    <div class="relative">
+                        <input type="text" id="chat-info-search-input" placeholder="Введите имя пользователя..."
+                                class="w-full px-4 py-3 pl-11 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+                                autocomplete="off">
+                        <i data-feather="search" class="absolute left-4 top-3.5 w-5 h-5 text-gray-400 pointer-events-none"></i>
+                        <div id="chat-info-search-results"
+                                class="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-64 overflow-y-auto z-20 hidden"></div>
+                    </div>
+                `;
 
                 document.querySelector('#participants-list').before(container);
                 feather.replace();
@@ -3308,12 +3468,12 @@
                                 const item = document.createElement('div');
                                 item.className = 'flex items-center gap-3 p-3 hover:bg-gray-50 cursor-pointer transition';
                                 item.innerHTML = `
-                                                        <img src="${user.avatar || 'https://novgorodskij-r49.gosweb.gosuslugi.ru/netcat_files/9/260/user_test.png'}"
-                                                             class="w-10 h-10 rounded-full object-cover flex-shrink-0">
-                                                        <div class="min-w-0 flex-1">
-                                                            <p class="font-medium truncate">${user.name || 'Без имени'}</p>
-                                                        </div>
-                                                    `;
+                                    <img src="${user.avatar || 'https://novgorodskij-r49.gosweb.gosuslugi.ru/netcat_files/9/260/user_test.png'}"
+                                            class="w-10 h-10 rounded-full object-cover flex-shrink-0">
+                                    <div class="min-w-0 flex-1">
+                                        <p class="font-medium truncate">${user.name || 'Без имени'}</p>
+                                    </div>
+                                `;
 
                                 item.addEventListener('click', () => {
                                     addParticipantToChat(user.id, user.name || 'Пользователь', user.avatar);
@@ -3419,7 +3579,7 @@
                 chatNameChanged = false;
             };
 
-            document.getElementById('delete-chat-btn')?.addEventListener('click', function() {
+            document.getElementById('delete-chat-btn')?.addEventListener('click', function () {
                 if (!currentChatId) return;
 
                 document.getElementById('chat-info-modal').classList.remove('show');
@@ -3428,27 +3588,27 @@
                 overlay.id = 'delete-confirm-overlay';
                 overlay.className = 'fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50';
                 overlay.innerHTML = `
-                                        <div class="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl animate-in">
-                                            <div class="text-center mb-8">
-                                                <div class="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-5">
-                                                    <i data-feather="trash-2" class="w-12 h-12 text-red-600"></i>
-                                                </div>
-                                                <h3 class="text-2xl font-bold text-gray-900">Удалить чат навсегда?</h3>
-                                                <p class="text-gray-600 mt-4 leading-relaxed">
-                                                    Все сообщения и файлы будут удалены.<br>
-                                                    Это действие <strong>нельзя отменить</strong>.
-                                                </p>
-                                            </div>
-                                            <div class="flex gap-4">
-                                                <button id="cancel-delete" class="flex-1 px-6 py-3 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-xl font-medium transition">
-                                                    Отмена
-                                                </button>
-                                                <button id="confirm-delete" class="flex-1 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-medium transition">
-                                                    Удалить чат
-                                                </button>
-                                            </div>
-                                        </div>
-                                    `;
+                    <div class="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl animate-in">
+                        <div class="text-center mb-8">
+                            <div class="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-5">
+                                <i data-feather="trash-2" class="w-12 h-12 text-red-600"></i>
+                            </div>
+                            <h3 class="text-2xl font-bold text-gray-900">Удалить чат навсегда?</h3>
+                            <p class="text-gray-600 mt-4 leading-relaxed">
+                                Все сообщения и файлы будут удалены.<br>
+                                Это действие <strong>нельзя отменить</strong>.
+                            </p>
+                        </div>
+                        <div class="flex gap-4">
+                            <button id="cancel-delete" class="flex-1 px-6 py-3 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-xl font-medium transition">
+                                Отмена
+                            </button>
+                            <button id="confirm-delete" class="flex-1 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-medium transition">
+                                Удалить чат
+                            </button>
+                        </div>
+                    </div>
+                `;
 
                 document.body.appendChild(overlay);
                 feather.replace();
@@ -3472,10 +3632,10 @@
 
                         currentChatId = null;
                         messagesContainer.innerHTML = `
-                                                <div class="flex items-center justify-center h-full text-gray-500">
-                                                    <p>Выберите чат для просмотра сообщений</p>
-                                                </div>
-                                            `;
+                            <div class="flex items-center justify-center h-full text-gray-500">
+                                <p>Выберите чат для просмотра сообщений</p>
+                            </div>
+                        `;
                         document.getElementById('chat-title').textContent = 'Выберите чат';
                         document.getElementById('chat-subtitle').textContent = 'Нажмите, чтобы посмотреть информацию';
                         document.getElementById('chat-info-avatar').src = 'https://novgorodskij-r49.gosweb.gosuslugi.ru/netcat_files/9/260/user_test.png';
@@ -3500,7 +3660,7 @@
                 document.addEventListener('keydown', escHandler);
             });
 
-            document.addEventListener('keydown', function(e) {
+            document.addEventListener('keydown', function (e) {
                 if (e.key !== 'Escape') return;
 
                 const createModal = document.getElementById('create-chat-modal');
@@ -3557,10 +3717,12 @@
                 document.getElementById('message-input').value = '';
                 document.getElementById('attached-files').innerHTML = '';
                 selectedFiles = [];
+
+                setMobileChatOpen(false);
             }
 
             const originalAppendMessage = appendMessage;
-            appendMessage = function(msg) {
+            appendMessage = function (msg) {
                 if (msg.messageText && msg.messageText.includes("Вы были удалены из чата")) {
                     if (document.querySelectorAll('.system-kicked-message').length > 0) {
                         return;
@@ -3568,10 +3730,10 @@
                     const div = document.createElement('div');
                     div.className = 'mb-6 flex justify-center system-kicked-message';
                     div.innerHTML = `
-                                            <div class="bg-blue-50 border border-blue-200 text-blue-800 px-6 py-4 rounded-2xl text-center">
-                                                <p class="font-medium">${msg.messageText}</p>
-                                            </div>
-                                        `;
+                        <div class="bg-blue-50 border border-blue-200 text-blue-800 px-6 py-4 rounded-2xl text-center">
+                            <p class="font-medium">${msg.messageText}</p>
+                        </div>
+                    `;
                     messagesContainer.appendChild(div);
                     scrollToBottom();
                     return;
@@ -3608,25 +3770,25 @@
                     div.dataset.userId = userId;
 
                     div.innerHTML = `
-                                            <div class="flex items-center gap-4">
-                                                <div class="relative">
-                                                    <img src="${p.avatar || 'https://novgorodskij-r49.gosweb.gosuslugi.ru/netcat_files/9/260/user_test.png'}"
-                                                         class="w-12 h-12 rounded-full object-cover">
-                                                    ${info.type === 'group' ? `
-                                                    <span class="chat-online-dot absolute bottom-0 right-0 w-4 h-4 bg-green-500 rounded-full border-2 border-white ${isOnline ? '' : 'hidden'}"></span>
-                                                    ` : ''}
-                                                </div>
-                                                <div>
-                                                    <p class="font-semibold">${p.fullName || p.name || 'Пользователь'}</p>
-                                                    ${isYou ? '<p class="text-sm text-blue-600">Вы</p>' : ''}
-                                                </div>
-                                            </div>
-                                            ${info.type === 'group' && !isYou ? `
-                                            <button type="button" class="text-red-600 hover:bg-red-100 rounded-full p-2 transition"
-                                                    onclick="removeParticipantFromChat('${userId}', this)">
-                                                <i data-feather="x" class="w-5 h-5"></i>
-                                            </button>` : ''}
-                                        `;
+                        <div class="flex items-center gap-4">
+                            <div class="relative">
+                                <img src="${p.avatar || 'https://novgorodskij-r49.gosweb.gosuslugi.ru/netcat_files/9/260/user_test.png'}"
+                                        class="w-12 h-12 rounded-full object-cover">
+                                ${info.type === 'group' ? `
+                                <span class="chat-online-dot absolute bottom-0 right-0 w-4 h-4 bg-green-500 rounded-full border-2 border-white ${isOnline ? '' : 'hidden'}"></span>
+                                ` : ''}
+                            </div>
+                            <div>
+                                <p class="font-semibold">${p.fullName || p.name || 'Пользователь'}</p>
+                                ${isYou ? '<p class="text-sm text-blue-600">Вы</p>' : ''}
+                            </div>
+                        </div>
+                        ${info.type === 'group' && !isYou ? `
+                        <button type="button" class="text-red-600 hover:bg-red-100 rounded-full p-2 transition"
+                                onclick="removeParticipantFromChat('${userId}', this)">
+                            <i data-feather="x" class="w-5 h-5"></i>
+                        </button>` : ''}
+                    `;
 
                     list.appendChild(div);
                 });
@@ -3672,6 +3834,21 @@
 
             document.getElementById('theme-toggle')?.addEventListener('click', toggleTheme);
             updateThemeIcons();
+
+            window.addEventListener('resize', () => {
+                if (!isMobileLayout()) {
+                    setMobileChatOpen(false);
+                } else if (currentChatId) {
+                    setMobileChatOpen(true);
+                }
+            });
+
+            if (window.visualViewport) {
+                window.visualViewport.addEventListener('resize', () => {
+                    const vv = window.visualViewport;
+                    document.documentElement.style.setProperty('--vv-height', vv.height + 'px');
+                });
+            }
     </script>
 </body>
 </html>
