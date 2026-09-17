@@ -504,6 +504,14 @@
                 box-shadow: 0 1px 3px rgba(59, 130, 246, 0.4);
             }
 
+            .chat-list-message-meta { min-width: 0; }
+            .chat-list-status { display: inline-flex; align-items: center; flex-shrink: 0; margin-right: 3px; vertical-align: middle; }
+            .chat-list-status.sent { color: #9ca3af; }
+            .chat-list-status.read { color: #3b82f6; }
+            .chat-list-status.pending { color: #9ca3af; opacity: .75; }
+            .chat-list-time { flex-shrink: 0; margin-left: auto; font-size: 11px; color: #9ca3af; white-space: nowrap; }
+            .dark .chat-list-time { color: #9ca3af; }
+
             .message-bubble {
                 position: relative;
                 max-width: 100%;
@@ -1036,7 +1044,7 @@
                 document.getElementById('clear-search').classList.toggle('hidden', query === '');
                 allChatItems.forEach(item => {
                     const title = (item.querySelector('h3')?.textContent || '').toLowerCase();
-                    const lastMsg = (item.querySelector('p')?.textContent || '').toLowerCase();
+                    const lastMsg = (item.querySelector('.last-message-preview')?.textContent || item.querySelector('p')?.textContent || '').toLowerCase();
                     item.style.display = (title.includes(query) || lastMsg.includes(query)) ? '' : 'none';
                 });
             }
@@ -1114,7 +1122,8 @@
                     msg.messageText || '',
                     msg.attachments || [],
                     msg.sentAt || msg.sentTime,
-                    isMyMessage
+                    isMyMessage,
+                    msg.status || msg.deliveryStatus || msg.messageStatus || 'sent'
                 );
 
                 removeEmptyStateIfNeeded();
@@ -1365,7 +1374,7 @@
                 const tempId = 'temp-' + Date.now();
 
                 appendOptimisticMessage(text, selectedFiles, tempId);
-                updateChatLastMessagePreview(currentChatId, text, selectedFiles);
+                updateChatLastMessagePreview(currentChatId, text, selectedFiles, new Date(), true, 'pending');
 
                 try {
                     const formData = new FormData();
@@ -1441,50 +1450,55 @@
                 updateUnreadBadge(chatId, 0);
             }
 
-            function updateChatLastMessagePreview(chatId, messageText, attachments = [], sentAt = null, isMyMessage = false) {
-                const chatItem = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
-                if (!chatItem) return;
+            function renderChatListStatus(status) {
+                const s = String(status || 'sent').toLowerCase();
+                if (s === 'read') return `<span class="chat-list-status read" title="Прочитано"><i data-feather="check" class="w-3.5 h-3.5"></i><i data-feather="check" class="w-3.5 h-3.5 -ml-2"></i></span>`;
+                if (s === 'pending' || s === 'sending') return `<span class="chat-list-status pending" title="Отправляется"><i data-feather="clock" class="w-3 h-3"></i></span>`;
+                return `<span class="chat-list-status sent" title="Доставлено"><i data-feather="check" class="w-3.5 h-3.5"></i></span>`;
+            }
 
-                const lastMessageEl = chatItem.querySelector('.text-sm.text-gray-500');
-                if (!lastMessageEl) return;
-
+            function renderChatListMessageMeta(messageText, attachments = [], sentAt = null, isMyMessage = false, status = null) {
                 let previewHTML = '';
-
-                if (messageText && messageText.trim() !== '') {
-                    const shortText = messageText.trim().length > 45
-                        ? messageText.trim().substring(0, 42) + '...'
-                        : messageText.trim();
-
-                    previewHTML = shortText;
-                }
-                else if (attachments && attachments.length > 0) {
+                if (messageText && String(messageText).trim() !== '') {
+                    const text = String(messageText).trim();
+                    previewHTML = text.length > 45 ? text.substring(0, 42) + '...' : text;
+                } else if (attachments && attachments.length > 0) {
                     const imageCount = attachments.filter(a => a.fileType?.startsWith('image/')).length;
-
-                    if (imageCount > 0) {
-                        previewHTML = `<i data-feather="image" class="w-4 h-4 inline"></i> Фото`;
-                    } else {
-                        previewHTML = `<i data-feather="paperclip" class="w-4 h-4 inline"></i> Вложение`;
-                    }
-                }
-                else {
+                    previewHTML = imageCount > 0
+                        ? `<i data-feather="image" class="w-4 h-4"></i> Фото${imageCount > 1 ? ` (${imageCount})` : ''}`
+                        : `<i data-feather="paperclip" class="w-4 h-4"></i> Вложение`;
+                } else {
                     previewHTML = 'Новое сообщение';
                 }
-
-                if (attachments && attachments.length > 0 && messageText && messageText.trim() !== '') {
-                    const shortText = messageText.trim().length > 35
-                        ? messageText.trim().substring(0, 32) + '...'
-                        : messageText.trim();
-
-                    previewHTML = `<i data-feather="paperclip" class="w-4 h-4 inline"></i> Вложение: ${shortText}`;
+                if (attachments && attachments.length > 0 && messageText && String(messageText).trim() !== '') {
+                    const text = String(messageText).trim();
+                    const shortText = text.length > 35 ? text.substring(0, 32) + '...' : text;
+                    previewHTML = `<i data-feather="paperclip" class="w-4 h-4"></i> Вложение: ${shortText}`;
                 }
+                return {
+                    previewHTML: `<div class="flex items-center min-w-0 gap-1 last-message-preview">${isMyMessage ? renderChatListStatus(status || 'sent') : ''}<span class="truncate">${previewHTML}</span></div>`,
+                    time: sentAt ? formatTimeOnly(sentAt) : ''
+                };
+            }
 
-                lastMessageEl.innerHTML = previewHTML;
+            function updateChatLastMessagePreview(chatId, messageText, attachments = [], sentAt = null, isMyMessage = false, status = null) {
+                const chatItem = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
+                if (!chatItem) return;
+                const lastMessageEl = chatItem.querySelector('.last-message-preview');
+                const timeEl = chatItem.querySelector('.chat-list-time');
+                if (!lastMessageEl) return;
+                const meta = renderChatListMessageMeta(messageText, attachments, sentAt || new Date(), isMyMessage, status);
+                lastMessageEl.outerHTML = meta.previewHTML;
+                if (timeEl && meta.time) timeEl.textContent = meta.time;
+                feather.replace();
+            }
 
-                const chatsContainer = document.getElementById('chats-container');
-                if (chatsContainer) {
-                    chatsContainer.prepend(chatItem);
-                }
-
+            function updateChatListStatus(chatId, status) {
+                const chatItem = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
+                if (!chatItem) return;
+                const statusEl = chatItem.querySelector('.chat-list-status');
+                if (!statusEl) return;
+                statusEl.outerHTML = renderChatListStatus(status);
                 feather.replace();
             }
 
@@ -1651,8 +1665,15 @@
                 connection.on('MessagesRead', (data) => {
                     if (!data?.chatId) return;
 
-                    if (String(data.chatId) === String(currentChatId) &&
-                        String(data.readerId) !== String(me)) {
+                    const chatId = String(data.chatId);
+                    const readerId = data.readerId ?? data.ReaderId;
+
+                    if (String(readerId) !== String(me)) {
+                        updateChatListStatus(chatId, 'read');
+                    }
+
+                    if (chatId === String(currentChatId) &&
+                        String(readerId) !== String(me)) {
 
                         document.querySelectorAll('.message-bubble.outgoing .msg-status.sent').forEach(el => {
                             el.classList.remove('sent');
@@ -1910,6 +1931,8 @@
                     if (element) {
                         if (status === 'sent' || status === 'delivered') {
                             updateMessageStatus(msgId, 'sent');
+                            const statusChatId = element.closest('.chat-item')?.dataset?.chatId || currentChatId;
+                            if (statusChatId) updateChatListStatus(statusChatId, status === 'delivered' ? 'sent' : 'sent');
                             console.log(`[Status] Обновлено на Sent для ${msgId}`);
                         } else if (status === 'failed') {
                             updateMessageStatus(msgId, 'failed', reason || 'Ошибка');
@@ -1945,8 +1968,15 @@
                         msg.messageText || '',
                         msg.attachments || [],
                         msg.sentAt || msg.sentTime,
-                        isMyMessage
+                        isMyMessage,
+                        msg.status || msg.deliveryStatus || msg.messageStatus || 'sent'
                     );
+
+                    const chatsContainer = document.getElementById('chats-container');
+                    const receivedChatItem = document.querySelector(`.chat-item[data-chat-id="${msg.chatId}"]`);
+                    if (chatsContainer && receivedChatItem) {
+                        chatsContainer.prepend(receivedChatItem);
+                    }
 
                     if (!isCurrentChat) {
                         if (!isMyMessage) {
@@ -2064,14 +2094,19 @@
                         const div = document.createElement('div');
                         div.className = 'p-4 chat-item flex items-center space-x-3 cursor-pointer hover:bg-gray-100 transition rounded-lg mx-2';
                         div.dataset.chatId = chat.chatId;
+                        const newChatMeta = renderChatListMessageMeta('Чат создан', [], new Date(), false);
+
                         div.innerHTML = `
                             <div class="relative">
                                 <img src="${displayAvatar}" class="w-12 h-12 rounded-full object-cover">
                                 <span class="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></span>
                             </div>
                             <div class="flex-1 min-w-0">
-                                <h3 class="font-medium truncate">${displayName}</h3>
-                                <p class="text-sm text-gray-500 truncate">Чат создан</p>
+                                <div class="flex items-center gap-2">
+                                    <h3 class="font-medium truncate flex-1 min-w-0">${displayName}</h3>
+                                    <span class="chat-list-time">${newChatMeta.time}</span>
+                                </div>
+                                <div class="text-sm text-gray-500 truncate chat-list-message-meta">${newChatMeta.previewHTML}</div>
                             </div>
                         `;
 
@@ -2642,15 +2677,6 @@
 
                     if (res.ok) {
                         clearUnread(chatId);
-                        document.querySelectorAll(`[data-mid]:not([data-mid^="temp-"]) .msg-status.sent`)
-                            .forEach(el => {
-                                el.classList.remove('sent');
-                                el.classList.add('read');
-                                el.innerHTML = `
-                                                            <i data-feather="check" class="w-3.5 h-3.5"></i>
-                                                            <i data-feather="check" class="w-3.5 h-3.5 -ml-2"></i>
-                                                        `;
-                            });
                         feather.replace();
                     }
 
@@ -2700,6 +2726,69 @@
                 setTimeout(refreshVisiblePresence, 2000);
             }, 300);
 
+            async function hydrateChatListStatuses(chats) {
+                if (!Array.isArray(chats) || !chats.length) return;
+
+                const jobs = chats.map(async chat => {
+                    const chatId = chat?.chatId || chat?.id;
+                    if (!chatId) return;
+
+                    const chatItem = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
+                    if (!chatItem) return;
+
+                    try {
+                        const res = await fetchWithAuth(`${API_BASE}/messages/${chatId}?limit=1`, {
+                            headers: { 'Authorization': `Bearer ${token}` }
+                        });
+                        if (!res || !res.ok) return;
+
+                        const json = await res.json();
+                        const messages = Array.isArray(json?.data) ? json.data : (Array.isArray(json) ? json : []);
+                        if (!messages.length) return;
+
+                        const latest = [...messages].sort((a, b) => {
+                            const sa = Number(a?.sequenceNumber ?? -1);
+                            const sb = Number(b?.sequenceNumber ?? -1);
+                            if (sa >= 0 || sb >= 0) return sb - sa;
+                            const da = parseMessageDate(a?.sentAt || a?.sentTime || a?.createdAt)?.getTime() || 0;
+                            const db = parseMessageDate(b?.sentAt || b?.sentTime || b?.createdAt)?.getTime() || 0;
+                            return db - da;
+                        })[0];
+
+                        const senderId = latest?.senderId ?? latest?.userId ?? latest?.fromUserId;
+                        const isMine = senderId != null && String(senderId) === String(me);
+                        const sentAt = latest?.sentAt ?? latest?.sentTime ?? latest?.createdAt;
+                        const status = latest?.status ?? latest?.deliveryStatus ?? latest?.messageStatus
+                            ?? (latest?.isRead ? 'read' : null)
+                            ?? (latest?.isDelivered ? 'delivered' : null)
+                            ?? 'sent';
+
+                        const meta = renderChatListMessageMeta(
+                            latest?.messageText || '',
+                            latest?.attachments || [],
+                            sentAt,
+                            isMine,
+                            status
+                        );
+
+                        const preview = chatItem.querySelector('.last-message-preview');
+                        const time = chatItem.querySelector('.chat-list-time');
+                        if (preview) preview.outerHTML = meta.previewHTML;
+                        if (time) time.textContent = meta.time || '';
+
+                        chatItem.dataset.lastMessageId = latest?.messageId || '';
+                        chatItem.dataset.lastMessageStatus = String(status || 'sent').toLowerCase();
+                        chatItem.dataset.lastMessageSenderId = senderId != null ? String(senderId) : '';
+
+                        feather.replace();
+                    } catch (e) {
+                        console.warn(`[ChatList] Не удалось получить последнее сообщение для ${chatId}`, e);
+                    }
+                });
+
+                await Promise.allSettled(jobs);
+            }
+
             async function loadChats() {
                 const container = document.getElementById('chats-container');
                 const loading = document.getElementById('chats-loading');
@@ -2748,18 +2837,29 @@
                             }
                         }
 
+                        const lastMessage = chat.lastMessage && typeof chat.lastMessage === 'object' ? chat.lastMessage : null;
+                        const lastMessageSenderId = lastMessage?.senderId ?? lastMessage?.userId ?? lastMessage?.fromUserId;
+                        const lastMessageIsMine = lastMessageSenderId != null && String(lastMessageSenderId) === String(me);
+                        const lastMessageTime = lastMessage?.sentAt ?? lastMessage?.sentTime ?? lastMessage?.createdAt ?? chat.lastMessageSentAt ?? chat.lastMessageTime ?? chat.lastMessageAt ?? chat.updatedAt;
+                        const lastMessageStatus = lastMessage?.status ?? lastMessage?.deliveryStatus ?? lastMessage?.messageStatus ?? (lastMessage?.isRead ? 'read' : null) ?? (lastMessage?.isDelivered ? 'delivered' : null) ?? 'sent';
+                        const initialMeta = renderChatListMessageMeta(
+                            typeof chat.lastMessage === 'string' ? chat.lastMessage : (lastMessage?.messageText || ''),
+                            lastMessage?.attachments || [], lastMessageTime, lastMessageIsMine, lastMessageStatus
+                        );
+
                         div.innerHTML = `
                             <div class="relative flex-shrink-0">
                                 <img src="${displayAvatar}" class="w-12 h-12 rounded-full object-cover">
                                 <span class="chat-online-dot absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white hidden"></span>
                             </div>
                             <div class="flex-1 min-w-0">
-                                <div class="flex items-center justify-between gap-2">
-                                    <h3 class="font-medium truncate">${displayName}</h3>
+                                <div class="flex items-center gap-2">
+                                    <h3 class="font-medium truncate flex-1 min-w-0">${displayName}</h3>
+                                    <span class="chat-list-time">${initialMeta.time}</span>
                                     <span class="unread-badge hidden flex-shrink-0"></span>
                                 </div>
-                                <div class="text-sm text-gray-500 truncate flex items-center gap-1.5 last-message-preview">
-                                    ${renderLastMessagePreview(chat.lastMessage)}
+                                <div class="text-sm text-gray-500 truncate chat-list-message-meta">
+                                    ${initialMeta.previewHTML}
                                 </div>
                                 <div class="typing-in-list hidden text-xs text-blue-600 font-medium mt-0.5">
                                     <span class="typing-name"></span> печатает...
@@ -2782,6 +2882,8 @@
                     cacheChatItems();
                     filterChats();
                     feather.replace();
+
+                    await hydrateChatListStatuses(json.data);
 
                     setTimeout(updateAllOnlineIndicators, 300);
                 } catch (err) {
