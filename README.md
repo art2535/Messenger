@@ -13,8 +13,8 @@
 [![.NET](https://img.shields.io/badge/.NET-10.0-blueviolet)](https://dotnet.microsoft.com/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-blue)](https://www.postgresql.org/)
 [![License](https://img.shields.io/badge/License-Не%20определена-lightgrey)](LICENSE)
-[![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2088FF)](https://github.com/art2535/GUAP_Messenger/actions)
-[![Методология](https://img.shields.io/badge/Методология-Waterfall-orange)](https://github.com/art2535/GUAP_Messenger/wiki/%D0%9F%D1%80%D0%BE%D1%86%D0%B5%D1%81%D1%81%D1%8B)
+[![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2088FF)](https://github.com/art2535/Messenger/actions)
+[![Методология](https://img.shields.io/badge/Методология-Waterfall-orange)](https://github.com/art2535/Messenger/wiki/%D0%9F%D1%80%D0%BE%D1%86%D0%B5%D1%81%D1%81%D1%8B)
 
 **GUAP Messenger** — современное веб-приложение для обмена сообщениями в реальном времени, разработанное специально для сообщества **Государственного университета аэрокосмического приборостроения (ГУАП)**.
 
@@ -34,7 +34,7 @@
 - Синхронизация профиля из SSO-claims
 - Policy-based авторизация
 - Шифрование чувствительных данных (**AES**)
-- **Push-уведомления (VAPID)**
+- **Push-уведомления (VAPID)** с улучшенной работой на мобильных устройствах
 - **RabbitMQ** + MassTransit (Outbox-паттерн для надёжной доставки сообщений и уведомлений)
 - API-версионирование (`/api/v{version}/...`)
 - Документация API через **Scalar UI**
@@ -42,9 +42,15 @@
 - **Индексы БД** для быстрой выборки сообщений по чату
 - **Rate Limiting** (защита API, отправки сообщений и typing)
 - **Redis backplane** для SignalR (горизонтальное масштабирование)
+- **Автоматическая очистка сессий** при долгом бездействии (фоновый сервис + клиентская логика)
+- Корректная очистка сессии при выходе из системы
+- Автоматический редирект на чаты при активном session token
+- Полноценная поддержка мобильных телефонов и планшетов (**Android / iOS**) + PWA
+- Поддержка **тёмной темы**
+- Улучшенный адаптивный интерфейс чатов и главной страницы
 
 ### В активной разработке
-- Улучшение UI/UX и отзывчивости интерфейса
+- Дальнейшее улучшение UI/UX и отзывчивости интерфейса
 - Расширение функционала групповых чатов
 - Подготовка к переходу хранения файлов на MinIO/S3
 - Автоматизация сборки установщиков и дальнейшее развитие CI/CD
@@ -53,7 +59,7 @@
 
 | Компонент            | Технология                                      | Описание                                          |
 |----------------------|-------------------------------------------------|---------------------------------------------------|
-| **Frontend**         | ASP.NET Razor Pages + SignalR Client + PWA      | Серверный рендеринг + реальное время              |
+| **Frontend**         | ASP.NET Razor Pages + SignalR Client + PWA      | Серверный рендеринг + реальное время + мобильная адаптация |
 | **Real-time**        | ASP.NET Core SignalR + Redis backplane          | Сообщения, typing, online, уведомления            |
 | **Backend**          | ASP.NET Core Web API (.NET 10)                  | REST API + SignalR Hubs + версионирование         |
 | **Архитектура**      | **Clean Architecture**                          | Core / Infrastructure / API / Web                 |
@@ -61,8 +67,9 @@
 | **Messaging**        | RabbitMQ + MassTransit 8.5                      | Outbox-паттерн                                    |
 | **Кэш / Scale-out**  | Redis (StackExchange.Redis)                     | SignalR backplane                                 |
 | **Rate Limiting**    | ASP.NET Core Rate Limiting                      | Fixed-window лимиты для API и хабов               |
+| **Session Cleanup**  | BackgroundService + клиентский JS               | Автозакрытие сессий при бездействии               |
 | **API Docs**         | Scalar.AspNetCore                               | Современный UI для OpenAPI                        |
-| **Push**             | VAPID                                           | Браузерные push-уведомления                       |
+| **Push**             | VAPID                                           | Браузерные push-уведомления (в т.ч. мобильные)    |
 | **Аутентификация**   | OIDC                                            | SSO ГУАП                                          |
 | **Шифрование**       | AES                                             | Мастер-ключ в конфигурации                        |
 | **CI/CD**            | GitHub Actions                                  | Сборка, тесты, релиз                              |
@@ -71,7 +78,7 @@
 ## Установка и запуск (локально)
 
 ### Требования
-- **.NET SDK 10.0+**
+- .NET SDK 10.0+
 - PostgreSQL 17
 - RabbitMQ
 - Redis (опционально, для SignalR backplane в multi-instance режиме)
@@ -82,8 +89,8 @@
 
 1. **Клонирование**
    ```bash
-   git clone https://github.com/art2535/GUAP_Messenger.git
-   cd GUAP_Messenger
+   git clone https://github.com/art2535/Messenger.git
+   cd Messenger
    ```
 
 2. **Восстановление пакетов**
@@ -95,6 +102,14 @@
 3. **Настройка конфигурации**  
 Рекомендуется использовать `dotnet user-secrets` или `appsettings.Development.json`  
 (строка подключения к PostgreSQL, Redis, URL-ы, ключи шифрования, VAPID, OIDC и т.д.).
+
+   Пример секции для очистки сессий:
+   ```json
+   "SessionCleanup": {
+     "IdleMinutes": 30,
+     "IntervalMinutes": 5
+   }
+   ```
 
 4. **Применение миграций**
 
@@ -117,7 +132,7 @@
 
 В режиме Development документация API доступна через **Scalar UI**.
 
-Подробная инструкция → [**Инструкции по запуску**](https://github.com/art2535/GUAP_Messenger/wiki/Инструкции)
+Подробная инструкция → [**Инструкции по запуску**](https://github.com/art2535/Messenger/wiki/Инструкции)
 
 ## CI/CD
 
@@ -131,14 +146,14 @@
 
 * `Messenger.Core` — доменная модель и бизнес-логика
 * `Messenger.Infrastructure` — EF Core, репозитории, RabbitMQ/MassTransit
-* `Messenger.API` — REST API + SignalR Hubs + Scalar + API Versioning + Rate Limiting
-* `Messenger.Web` — Razor Pages + клиент
+* `Messenger.API` — REST API + SignalR Hubs + Scalar + API Versioning + Rate Limiting + Session Cleanup
+* `Messenger.Web` — Razor Pages + клиент (PWA, тёмная тема, мобильная адаптация)
 * `Messenger.Tests` — юнит-тесты (xUnit v3)
 * `Deployment/` — файлы для Windows Installer
 
 ## Документация
 
-Полная документация доступна в [**GitHub Wiki**](https://github.com/art2535/GUAP_Messenger/wiki).
+Полная документация доступна в [**GitHub Wiki**](https://github.com/art2535/Messenger/wiki).
 
 ## Как внести вклад
 
