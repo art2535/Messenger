@@ -1328,6 +1328,33 @@
                 return `${hours}:${minutes}`;
             }
 
+            function formatChatListTime(dateValue) {
+                const date = parseMessageDate(dateValue);
+                if (!date) return '—';
+
+                const now = new Date();
+                const dateKey = getDateKey(date);
+                const todayKey = getDateKey(now);
+
+                const yesterday = new Date(now);
+                yesterday.setDate(yesterday.getDate() - 1);
+                const yesterdayKey = getDateKey(yesterday);
+
+                if (dateKey === todayKey) {
+                    return formatTimeOnly(date);
+                }
+
+                if (dateKey === yesterdayKey) {
+                    return 'вчера';
+                }
+
+                const day = String(date.getDate()).padStart(2, '0');
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const year = date.getFullYear();
+
+                return `${day}.${month}.${year}`;
+            }
+
             function formatDateTime(dateValue) {
                 if (!dateValue) return '—';
 
@@ -1343,7 +1370,7 @@
                 const hours = String(date.getHours()).padStart(2, '0');
                 const minutes = String(date.getMinutes()).padStart(2, '0');
 
-                return `${day}.${month}.${year} ${hours}:${minutes}`;
+                return `${day}.${month}.${year} в ${hours}:${minutes}`;
             }
 
             function appendDateSeparatorIfNeeded(dateValue) {
@@ -1477,7 +1504,7 @@
                 }
                 return {
                     previewHTML: `<div class="flex items-center min-w-0 gap-1 last-message-preview">${isMyMessage ? renderChatListStatus(status || 'sent') : ''}<span class="truncate">${previewHTML}</span></div>`,
-                    time: sentAt ? formatTimeOnly(sentAt) : ''
+                    time: sentAt ? formatChatListTime(sentAt) : ''
                 };
             }
 
@@ -2075,6 +2102,7 @@
                     if (!existing) {
                         let displayName = chat.name || 'Новый чат';
                         let displayAvatar = chat.avatar || 'https://novgorodskij-r49.gosweb.gosuslugi.ru/netcat_files/9/260/user_test.png';
+                        let partnerId = null;
 
                         if (chat.type === 'private' || chat.isPrivate) {
                             const currentUserId = '@Model.UserId'.toLowerCase();
@@ -2087,6 +2115,7 @@
                                 if (interlocutor) {
                                     displayName = interlocutor.fullName || interlocutor.name || displayName;
                                     displayAvatar = interlocutor.avatar || interlocutor.avatarPath || displayAvatar;
+                                    partnerId = interlocutor.id || interlocutor.userId;
                                 }
                             }
                         }
@@ -2094,19 +2123,26 @@
                         const div = document.createElement('div');
                         div.className = 'p-4 chat-item flex items-center space-x-3 cursor-pointer hover:bg-gray-100 transition rounded-lg mx-2';
                         div.dataset.chatId = chat.chatId;
+                        if (partnerId) div.dataset.partnerId = String(partnerId);
                         const newChatMeta = renderChatListMessageMeta('Чат создан', [], new Date(), false);
 
                         div.innerHTML = `
-                            <div class="relative">
+                            <div class="relative flex-shrink-0">
                                 <img src="${displayAvatar}" class="w-12 h-12 rounded-full object-cover">
-                                <span class="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></span>
+                                <span class="chat-online-dot absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white hidden"></span>
                             </div>
                             <div class="flex-1 min-w-0">
                                 <div class="flex items-center gap-2">
                                     <h3 class="font-medium truncate flex-1 min-w-0">${displayName}</h3>
                                     <span class="chat-list-time">${newChatMeta.time}</span>
+                                    <span class="unread-badge hidden flex-shrink-0"></span>
                                 </div>
-                                <div class="text-sm text-gray-500 truncate chat-list-message-meta">${newChatMeta.previewHTML}</div>
+                                <div class="text-sm text-gray-500 truncate chat-list-message-meta">
+                                    ${newChatMeta.previewHTML}
+                                </div>
+                                <div class="typing-in-list hidden text-xs text-blue-600 font-medium mt-0.5">
+                                    <span class="typing-name"></span> печатает...
+                                </div>
                             </div>
                         `;
 
@@ -2230,9 +2266,9 @@
                         currentChatId = null;
                         currentChatInfo = null;
                         messagesContainer.innerHTML = `
-                                                            <div class="flex items-center justify-center h-full text-gray-500">
-                                                                <p>Чат был удалён</p>
-                                                            </div>`;
+                            <div class="flex items-center justify-center h-full text-gray-500">
+                                <p>Чат был удалён</p>
+                            </div>`;
                         document.getElementById('chat-title').textContent = 'Выберите чат';
                     }
 
@@ -2349,15 +2385,23 @@
                     return `${diffHours} ч назад`;
                 }
 
-                const day = date.getDate().toString().padStart(2, '0');
-                const month = (date.getMonth() + 1).toString().padStart(2, '0');
-                const year = date.getFullYear();
+                const yesterday = new Date(now);
+                yesterday.setDate(yesterday.getDate() - 1);
+                const isYesterday =
+                    date.getFullYear() === yesterday.getFullYear() &&
+                    date.getMonth() === yesterday.getMonth() &&
+                    date.getDate() === yesterday.getDate();
+
                 const hours = date.getHours().toString().padStart(2, '0');
                 const minutes = date.getMinutes().toString().padStart(2, '0');
 
-                if (year === now.getFullYear()) {
-                    return `${day}.${month} в ${hours}:${minutes}`;
+                if (isYesterday) {
+                    return `вчера в ${hours}:${minutes}`;
                 }
+
+                const day = date.getDate().toString().padStart(2, '0');
+                const month = (date.getMonth() + 1).toString().padStart(2, '0');
+                const year = date.getFullYear();
 
                 return `${day}.${month}.${year} в ${hours}:${minutes}`;
             }
@@ -2419,37 +2463,45 @@
                 if (!chatItem) return;
 
                 const typingBlock = chatItem.querySelector('.typing-in-list');
-                const lastMsgBlock = chatItem.querySelector('.last-message-preview');
+                const lastMsgBlock = chatItem.querySelector('.chat-list-message-meta') ||
+                                     chatItem.querySelector('.last-message-preview');
 
-                if (!typingBlock || !lastMsgBlock) return;
+                if (!typingBlock) return;
 
                 const myId = String(me || '@Model.UserId' || "").trim();
                 const typingUserId = String(userId).trim();
 
                 if (typingUserId === myId) {
                     typingBlock.classList.add('hidden');
-                    lastMsgBlock.classList.remove('hidden');
+                    if (lastMsgBlock) lastMsgBlock.classList.remove('hidden');
                     return;
                 }
 
                 if (isTyping) {
                     loadUserName(typingUserId).then(name => {
+                        const currentItem = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
+                        if (!currentItem) return;
+                        const tBlock = currentItem.querySelector('.typing-in-list');
+                        const mBlock = currentItem.querySelector('.chat-list-message-meta') ||
+                                       currentItem.querySelector('.last-message-preview');
+                        if (!tBlock) return;
+
                         console.log(`[TYPING LIST] Показываем в списке: "${name}" печатает...`);
 
-                        let nameEl = typingBlock.querySelector('.typing-name');
+                        let nameEl = tBlock.querySelector('.typing-name');
                         if (!nameEl) {
-                            typingBlock.innerHTML = `<span class="typing-name"></span> печатает...`;
-                            nameEl = typingBlock.querySelector('.typing-name');
+                            tBlock.innerHTML = `<span class="typing-name"></span> печатает...`;
+                            nameEl = tBlock.querySelector('.typing-name');
                         }
 
                         if (nameEl) nameEl.textContent = name || "Собеседник";
 
-                        typingBlock.classList.remove('hidden');
-                        lastMsgBlock.classList.add('hidden');
+                        tBlock.classList.remove('hidden');
+                        if (mBlock) mBlock.classList.add('hidden');
                     });
                 } else {
                     typingBlock.classList.add('hidden');
-                    lastMsgBlock.classList.remove('hidden');
+                    if (lastMsgBlock) lastMsgBlock.classList.remove('hidden');
                 }
             }
 
