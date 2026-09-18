@@ -13,6 +13,28 @@ namespace Messenger.Infrastructure.Repositories
             _context = context;
         }
 
+        public async Task<IReadOnlyList<UserStatus>> GetInactiveOnlineStatusesAsync(DateTime olderThan,
+            CancellationToken cancellationToken = default)
+        {
+            return await _context.UserStatuses
+                .Where(us => us.Online && us.LastActivity != null && us.LastActivity < olderThan)
+                .ToListAsync(cancellationToken);
+        }
+
+        public async Task SetOfflineBatchAsync(IEnumerable<Guid> userIds, CancellationToken cancellationToken = default)
+        {
+            var ids = userIds.ToList();
+            if (ids.Count == 0)
+                return;
+
+            await _context.UserStatuses
+                .Where(us => ids.Contains(us.UserId) && us.Online)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(us => us.Online, false)
+                    .SetProperty(us => us.LastActivity, DateTime.UtcNow),
+                    cancellationToken);
+        }
+
         public async Task UpdateUserStatusAsync(UserStatus userStatus, CancellationToken cancellationToken = default)
         {
             var rowsAffected = await _context.UserStatuses

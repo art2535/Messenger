@@ -13,6 +13,9 @@ namespace Messenger.Infrastructure.Services
             _loginRepository = loginRepository;
         }
 
+        public Task CloseActiveLoginsForUsersAsync(IEnumerable<Guid> userIds, CancellationToken cancellationToken = default)
+            => _loginRepository.CloseActiveLoginsForUsersAsync(userIds, cancellationToken);
+
         public async Task AddLoginAsync(Login login, CancellationToken cancellationToken = default)
         {
             await _loginRepository.AddLoginAsync(login, cancellationToken);

@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.RateLimiting;
+﻿using System.Security.Claims;
 using System.Threading.RateLimiting;
 
 namespace Messenger.API.Extensions
@@ -13,25 +13,39 @@ namespace Messenger.API.Extensions
                 {
                     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
-                    options.AddFixedWindowLimiter("api", opt =>
+                    options.AddPolicy("api", httpContext =>
                     {
-                        opt.PermitLimit = 120;
-                        opt.Window = TimeSpan.FromMinutes(1);
-                        opt.QueueLimit = 20;
-                        opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+                        var userId = GetUserId(httpContext);
+                        return RateLimitPartition.GetFixedWindowLimiter(userId, _ => new FixedWindowRateLimiterOptions
+                        {
+                            PermitLimit = 120,
+                            Window = TimeSpan.FromMinutes(1),
+                            QueueLimit = 20,
+                            QueueProcessingOrder = QueueProcessingOrder.OldestFirst
+                        });
                     });
 
-                    options.AddFixedWindowLimiter("send-message", opt =>
+                    options.AddPolicy("send-message", httpContext =>
                     {
-                        opt.PermitLimit = 30;
-                        opt.Window = TimeSpan.FromMinutes(1);
-                        opt.QueueLimit = 5;
+                        var userId = GetUserId(httpContext);
+                        return RateLimitPartition.GetFixedWindowLimiter(userId, _ => new FixedWindowRateLimiterOptions
+                        {
+                            PermitLimit = 30,
+                            Window = TimeSpan.FromMinutes(1),
+                            QueueLimit = 5,
+                            QueueProcessingOrder = QueueProcessingOrder.OldestFirst
+                        });
                     });
 
-                    options.AddFixedWindowLimiter("typing", opt =>
+                    options.AddPolicy("typing", httpContext =>
                     {
-                        opt.PermitLimit = 60;
-                        opt.Window = TimeSpan.FromMinutes(1);
+                        var userId = GetUserId(httpContext);
+                        return RateLimitPartition.GetFixedWindowLimiter(userId, _ => new FixedWindowRateLimiterOptions
+                        {
+                            PermitLimit = 60,
+                            Window = TimeSpan.FromMinutes(1),
+                            QueueLimit = 0
+                        });
                     });
 
                     options.OnRejected = async (context, ct) =>
@@ -44,6 +58,17 @@ namespace Messenger.API.Extensions
 
                 return services;
             }
+        }
+
+        private static string GetUserId(HttpContext httpContext)
+        {
+            var sub = httpContext.User.FindFirst("sub")?.Value
+                   ?? httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            if (!string.IsNullOrEmpty(sub))
+                return sub;
+
+            return httpContext.Connection.RemoteIpAddress?.ToString() ?? "anonymous";
         }
     }
 }

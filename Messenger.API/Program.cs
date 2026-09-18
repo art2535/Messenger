@@ -23,6 +23,7 @@ namespace Messenger.API
             builder.Services.AddHttpClient();
             builder.Services.AddEtaApiAuthentication(builder.Configuration, !builder.Environment.IsDevelopment());
             builder.Services.AddMessengerRateLimiting();
+            builder.Services.AddSessionCleanup(builder.Configuration);
 
             builder.Services.AddCors(options =>
             {

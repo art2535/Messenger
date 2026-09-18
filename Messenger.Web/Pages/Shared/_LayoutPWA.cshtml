@@ -1,5 +1,40 @@
-﻿<link rel="manifest" href="~/manifest.json" />
+﻿<link rel="manifest" href="~/manifest.json" asp-append-version="true" />
 <meta name="theme-color" content="#1976d2" />
+<meta name="mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
-<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="GUAP Messenger" />
+<link rel="apple-touch-icon" href="~/images/web-app-manifest-192x192.png" asp-append-version="true" />
 <link rel="icon" type="image/png" href="~/images/favicon.ico" asp-append-version="true" />
+
+<script>
+    (function () {
+        if (!('serviceWorker' in navigator)) return;
+
+        window.addEventListener('load', function () {
+            navigator.serviceWorker.register('/service-worker.js', { scope: '/' })
+                .then(function (reg) {
+                    console.log('[PWA] Service Worker зарегистрирован:', reg.scope);
+
+                    if (window.API_BASE_URL && reg.active) {
+                        reg.active.postMessage({
+                            type: 'SET_CONFIG',
+                            apiBaseUrl: window.API_BASE_URL
+                        });
+                    } else if (window.API_BASE_URL) {
+                        navigator.serviceWorker.ready.then(function (readyReg) {
+                            if (readyReg.active) {
+                                readyReg.active.postMessage({
+                                    type: 'SET_CONFIG',
+                                    apiBaseUrl: window.API_BASE_URL
+                                });
+                            }
+                        });
+                    }
+                })
+                .catch(function (err) {
+                    console.warn('[PWA] Ошибка регистрации Service Worker:', err);
+                });
+        });
+    })();
+</script>

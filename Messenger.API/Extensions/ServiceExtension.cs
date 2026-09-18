@@ -1,5 +1,8 @@
-﻿using Messenger.API.Providers;
+﻿using Messenger.API.Options;
+using Messenger.API.Providers;
+using Messenger.API.Services;
 using Messenger.Core.Interfaces;
+using Messenger.Core.Services;
 using Messenger.Infrastructure.Services;
 using Microsoft.AspNetCore.SignalR;
 using StackExchange.Redis;
@@ -24,7 +27,15 @@ namespace Messenger.API.Extensions
                 services.AddScoped<IMessageService, MessageService>();
                 services.AddSingleton<WebPushClient>();
                 services.AddScoped<IPushSubscriptionService, PushSubscriptionService>();
+                services.AddSingleton<TypingRateLimiterService>();
 
+                return services;
+            }
+
+            public IServiceCollection AddSessionCleanup(IConfiguration configuration)
+            {
+                services.Configure<SessionCleanupOptions>(configuration.GetSection(SessionCleanupOptions.SectionName));
+                services.AddHostedService<SessionCleanupBackgroundService>();
                 return services;
             }
 

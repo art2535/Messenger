@@ -1,4 +1,5 @@
 ﻿@page
+@using System.Text.Json;
 @model Messenger.Web.Pages.Authorization.AuthorizationModel
 @{
     ViewData["Title"] = "Вход в систему";
@@ -6,91 +7,163 @@
 }
 
 <script src="https://cdn.tailwindcss.com"></script>
+<script>
+    tailwind.config = { darkMode: 'class' }
+</script>
 <script src="https://unpkg.com/feather-icons"></script>
 <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
-<partial name="_LayoutPWA"/>
+<partial name="_LayoutPWA" />
 
 <style>
+    :root {
+        --safe-top: env(safe-area-inset-top, 0px);
+        --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
     html, body {
         height: 100%;
+        height: 100dvh;
         margin: 0;
-        font-family: 'Roboto', sans-serif;
-        background-color: #f8fafc;
+        font-family: 'Roboto', system-ui, -apple-system, sans-serif;
+        background-color: #f1f5f9;
         overflow: hidden;
+        -webkit-font-smoothing: antialiased;
+        -webkit-tap-highlight-color: transparent;
     }
+
+        html.dark, html.dark body {
+            background-color: #0f172a !important;
+        }
 
     .guap-gradient {
         background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
     }
 
     .auth-wrapper {
-        position: absolute;
-        top: 170px;
-        left: 0;
-        width: 100%;
-        height: calc(100vh - 160px);
+        position: fixed;
+        inset: 0;
+        top: calc(64px + var(--safe-top));
         display: flex;
         justify-content: center;
-        align-items: start;
+        align-items: center;
+        padding: 1.25rem;
+        padding-bottom: calc(1.25rem + var(--safe-bottom));
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    @@media (max-width: 767.98px) {
+        .auth-wrapper {
+            top: calc(56px + var(--safe-top));
+            align-items: flex-start;
+            padding-top: 2rem;
+        }
     }
 
     .auth-card {
         width: 100%;
-        max-width: 380px;
+        max-width: 400px;
         background-color: white;
-        border-radius: 1rem;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-        padding: 2.5rem 1.75rem;
+        border-radius: 1.25rem;
+        box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.12);
+        padding: 2.25rem 1.75rem;
+        transition: background-color 0.25s ease, box-shadow 0.25s ease;
     }
+
+    html.dark .auth-card {
+        background-color: #1e293b;
+        box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.5);
+        color: #e2e8f0;
+    }
+
+        html.dark .auth-card h1 {
+            color: #f1f5f9 !important;
+        }
+
+        html.dark .auth-card p {
+            color: #94a3b8 !important;
+        }
+
+        html.dark .auth-card .logo-border {
+            border-color: #334155 !important;
+        }
 
     .big-button {
         transition: all 0.2s ease;
+        min-height: 52px;
     }
 
         .big-button:hover {
             transform: translateY(-2px);
-            box-shadow: 0 10px 25px -5px rgba(59, 130, 246, 0.4);
+            box-shadow: 0 12px 28px -6px rgba(59, 130, 246, 0.45);
         }
+
+        .big-button:active {
+            transform: translateY(0);
+        }
+
+    @@media (max-width: 380px) {
+        .auth-card {
+            padding: 1.75rem 1.25rem;
+        }
+
+            .auth-card h1 {
+                font-size: 1.5rem;
+            }
+    }
 </style>
 
 <div class="auth-wrapper">
     <div class="auth-card space-y-8 text-center">
         <div>
-            <div class="w-24 h-24 rounded-full overflow-hidden mx-auto mb-5 border-4 border-blue-100">
-                <img src="~/images/logo.png" alt="GUAP Messenger Logo" class="w-full h-full object-cover">
+            <div class="w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden mx-auto mb-5 border-4 border-blue-100 logo-border shadow-md">
+                <img src="~/images/logo.png"
+                     alt="GUAP Messenger"
+                     class="w-full h-full object-cover">
             </div>
-            <h1 class="text-3xl font-bold text-gray-800 mb-2">GUAP Messenger</h1>
-            <p class="text-gray-600 text-lg">Войдите через систему ЕТА ГУАП</p>
+            <h1 class="text-2xl sm:text-3xl font-bold text-gray-800 mb-2">
+                GUAP Messenger
+            </h1>
+            <p class="text-gray-600 text-base sm:text-lg">
+                Войдите через систему ЕТА ГУАП
+            </p>
         </div>
 
-        <div class="pt-4">
+        <div class="pt-2">
             <a href="/Authorization/Authorization?handler=EtaLogin"
-               class="big-button w-full flex justify-center items-center py-3 px-5 border border-transparent rounded-xl shadow-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 font-medium text-base transition-all">
-                <i data-feather="log-in" class="w-5 h-5 mr-3"></i>
-                Войти через ЕТА ГУАП
+               class="big-button w-full flex justify-center items-center py-3.5 px-5 border border-transparent rounded-xl shadow-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 font-medium text-base transition-all active:scale-[0.98]">
+                <i data-feather="log-in" class="w-5 h-5 mr-3 flex-shrink-0"></i>
+                <span>Войти через ЕТА ГУАП</span>
             </a>
         </div>
+
+        <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400 pt-2">
+            Используйте корпоративную учётную запись ГУАП
+        </p>
     </div>
 </div>
 
 <script>
-    document.addEventListener("DOMContentLoaded", function() {
+    document.addEventListener("DOMContentLoaded", function () {
         feather.replace();
 
         const errors = [];
         @if (!string.IsNullOrEmpty(Model.ErrorMessage))
         {
-            <text>errors.push(@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.ErrorMessage)));</text>
+            <text>errors.push(@Html.Raw(JsonSerializer.Serialize(Model.ErrorMessage))); </text>
         }
+
         @foreach (var key in ViewData.ModelState.Keys)
         {
             var state = ViewData.ModelState[key];
             foreach (var error in state.Errors)
             {
-                <text>errors.push(@Html.Raw(System.Text.Json.JsonSerializer.Serialize(error.ErrorMessage)));</text>
+                <text>errors.push(@Html.Raw(JsonSerializer.Serialize(error.ErrorMessage))); </text>
             }
         }
-        if (errors.length > 0) {
+
+        if (errors.length > 0)
+        {
             alert(errors.join("\n"));
         }
     });

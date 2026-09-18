@@ -10,6 +10,7 @@ using Messenger.Core.Models;
 using Messenger.Infrastructure.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
 using System.ComponentModel;
 
@@ -98,6 +99,7 @@ namespace Messenger.API.Controllers
         /// Отправить сообщение в чат
         /// </summary>
         [HttpPost("{chatId}")]
+        [EnableRateLimiting("send-message")]
         [EndpointName("SendMessage")]
         [EndpointSummary("Отправить сообщение в чат")]
         [EndpointDescription("Отправляет текстовое сообщение и/или файлы (вложения) в указанный чат. " +

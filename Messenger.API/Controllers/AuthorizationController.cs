@@ -43,7 +43,7 @@ namespace Messenger.API.Controllers
                 var user = await _userService.GetUserByExternalIdAsync(request.ExternalId);
 
                 user ??= await _userService.RegisterExternalUserAsync(request.ExternalId, request.Email, request.FirstName,
-                        request.LastName);
+                        request.LastName, request.Roles);
 
                 var fullName = string.Join(" ", new[] { user.FirstName, user.LastName }
                     .Where(s => !string.IsNullOrEmpty(s)));

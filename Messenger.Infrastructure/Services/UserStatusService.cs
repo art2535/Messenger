@@ -13,6 +13,13 @@ namespace Messenger.Infrastructure.Services
             _userStatusRepository = userStatusRepository;
         }
 
+        public Task<IReadOnlyList<UserStatus>> GetInactiveOnlineStatusesAsync(DateTime olderThan,
+            CancellationToken cancellationToken = default) 
+            => _userStatusRepository.GetInactiveOnlineStatusesAsync(olderThan, cancellationToken);
+
+        public Task SetOfflineBatchAsync(IEnumerable<Guid> userIds, CancellationToken cancellationToken = default)
+            => _userStatusRepository.SetOfflineBatchAsync(userIds, cancellationToken);
+
         public async Task UpdateStatusAsync(UserStatus userStatus, CancellationToken cancellationToken = default)
         {
             await _userStatusRepository.UpdateUserStatusAsync(userStatus, cancellationToken);

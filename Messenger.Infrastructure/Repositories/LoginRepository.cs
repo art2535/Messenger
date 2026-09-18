@@ -13,6 +13,21 @@ namespace Messenger.Infrastructure.Repositories
             _context = context;
         }
 
+        public async Task CloseActiveLoginsForUsersAsync(IEnumerable<Guid> userIds, CancellationToken cancellationToken = default)
+        {
+            var ids = userIds.ToList();
+            if (ids.Count == 0)
+                return;
+
+            await _context.Logins
+                .Where(l => ids.Contains(l.UserId) && l.Active)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(l => l.Active, false)
+                    .SetProperty(l => l.LogoutTime, DateTime.UtcNow)
+                    .SetProperty(l => l.Token, string.Empty),
+                    cancellationToken);
+        }
+
         public async Task AddLoginAsync(Login login, CancellationToken cancellationToken = default)
         {
             await _context.Logins.AddAsync(login, cancellationToken);

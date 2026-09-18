@@ -6,9 +6,6 @@ namespace Messenger.Core.Interfaces
 {
     public interface IUserService
     {
-        Task<(User? user, string? token, string? role)> RegisterAsync(string login, string firstName, string lastName, 
-            Guid? roleId = null, CancellationToken token = default);
-        Task<(string token, Guid userId, string role)> LoginAsync(string login, CancellationToken token = default);
         Task<User?> GetUserByIdAsync(Guid id, CancellationToken token = default);
         Task<bool> IsBlockedByAsync(Guid blockerId, Guid blockedId, CancellationToken token = default);
         Task<IEnumerable<User>> GetBlockedUsersAsync(Guid userId, CancellationToken token = default);
@@ -24,6 +21,7 @@ namespace Messenger.Core.Interfaces
         Task<IEnumerable<Role>> GetRolesAsync(CancellationToken token = default);
         Task<IEnumerable<UserSearch>> SearchUsersAsync(string query, CancellationToken token = default);
         Task<User?> GetUserByExternalIdAsync(string externalId);
-        Task<User> RegisterExternalUserAsync(string externalId, string email, string firstName, string lastName);
+        Task<User> RegisterExternalUserAsync(string externalId, string email, string firstName, 
+            string lastName, IEnumerable<string>? tokenRoles = null);
     }
 }

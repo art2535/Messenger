@@ -1,24 +1,75 @@
-﻿<!DOCTYPE html>
+﻿@{
+    var currentPath = Context.Request.Path.Value ?? "";
+    bool isIndexPage = currentPath.Equals("/", StringComparison.OrdinalIgnoreCase) || 
+                       currentPath.Equals("/Index", StringComparison.OrdinalIgnoreCase);
+}
+
+<!DOCTYPE html>
 <html lang="ru" class="h-full">
 <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)" />
     <title>@ViewData["Title"]</title>
+
+    <script>
+        (function () {
+            const saved = localStorage.getItem('theme');
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            if (saved === 'dark' || (!saved && prefersDark)) {
+                document.documentElement.classList.add('dark');
+            }
+        })();
+    </script>
 
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/Messenger.Web.styles.css" asp-append-version="true" />
-
     <partial name="_LayoutPWA" />
 
     <style>
+        :root {
+            --header-height: 64px;
+            --safe-area-top: env(safe-area-inset-top, 0px);
+            --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+            --safe-area-left: env(safe-area-inset-left, 0px);
+            --safe-area-right: env(safe-area-inset-right, 0px);
+            --bg-light: #f1f5f9;
+            --bg-dark: #0f172a;
+            --card-light: #ffffff;
+            --card-dark: #1e293b;
+            --text-light: #0f172a;
+            --text-dark: #f1f5f9;
+            --muted-light: #64748b;
+            --muted-dark: #94a3b8;
+            --border-light: #e2e8f0;
+            --border-dark: #334155;
+            --primary: #3b82f6;
+        }
+
         html, body {
             height: 100%;
+            height: 100dvh;
             margin: 0;
-            background-color: #f8fafc;
+            background-color: var(--bg-light);
+            color: var(--text-light);
             display: flex;
             flex-direction: column;
-            overflow: hidden;
+            overflow-x: hidden;
+            overflow-y: auto;
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            transition: background-color 0.25s ease, color 0.25s ease;
+            -webkit-font-smoothing: antialiased;
+            -webkit-tap-highlight-color: transparent;
+            overscroll-behavior: none;
+        }
+
+        html.dark, html.dark body {
+            background-color: var(--bg-dark);
+            color: var(--text-dark);
         }
 
         header {
@@ -26,49 +77,332 @@
             top: 0;
             left: 0;
             width: 100%;
+            min-height: calc(var(--header-height) + var(--safe-area-top));
+            height: auto;
+            padding-top: var(--safe-area-top);
             z-index: 1030;
-            background-color: #fff;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            background-color: var(--card-light);
+            border-bottom: 1px solid var(--border-light);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            transition: background-color 0.25s ease, border-color 0.25s ease;
+        }
+
+        html.dark header {
+            background-color: var(--card-dark);
+            border-bottom-color: var(--border-dark);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+        }
+
+        .navbar {
+            min-height: var(--header-height);
+            height: auto;
+            padding: 0;
+            flex-wrap: wrap;
+        }
+
+        #mobileNav {
+            display: none;
+        }
+
+        #mobileNav.show {
+            display: block !important;
+        }
+
+        .navbar-brand {
+            font-weight: 600;
+            font-size: 1.15rem;
+            color: var(--text-light) !important;
+            gap: 0.6rem;
+            padding: 0;
+        }
+
+        html.dark .navbar-brand {
+            color: var(--text-dark) !important;
+        }
+
+        .logo-img {
+            height: 38px;
+            width: 38px;
+            object-fit: cover;
+            border-radius: 10px;
+            transition: transform 0.2s ease;
+        }
+
+        .navbar-brand:hover .logo-img {
+            transform: scale(1.05);
+        }
+
+        html.dark .logo-img {
+            filter: invert(1) hue-rotate(180deg);
+        }
+
+        .nav-link {
+            font-weight: 500;
+            color: var(--muted-light) !important;
+            padding: 0.55rem 0.9rem !important;
+            border-radius: 10px;
+            transition: all 0.2s ease;
+            min-height: 44px;
+            display: flex;
+            align-items: center;
+            white-space: nowrap;
+        }
+
+        .nav-link:hover,
+        .nav-link:active {
+            color: var(--primary) !important;
+            background-color: rgba(59, 130, 246, 0.1);
+        }
+
+        html.dark .nav-link {
+            color: var(--muted-dark) !important;
+        }
+
+        html.dark .nav-link:hover,
+        html.dark .nav-link:active {
+            color: #93c5fd !important;
+            background-color: rgba(59, 130, 246, 0.18);
+        }
+
+        #theme-toggle-layout {
+            width: 44px;
+            height: 44px;
+            min-width: 44px;
+            min-height: 44px;
+            border-radius: 12px;
+            display: inline-flex !important;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.35rem;
+            line-height: 1;
+            color: var(--muted-light);
+            background: transparent;
+            border: none;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+            cursor: pointer;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        #theme-toggle-layout:hover,
+        #theme-toggle-layout:active {
+            background-color: rgba(0, 0, 0, 0.06);
+            color: var(--text-light);
+        }
+
+        html.dark #theme-toggle-layout {
+            color: var(--muted-dark);
+        }
+
+        html.dark #theme-toggle-layout:hover,
+        html.dark #theme-toggle-layout:active {
+            background-color: rgba(255, 255, 255, 0.1);
+            color: var(--text-dark);
+        }
+
+        .navbar-toggler {
+            width: 44px;
+            height: 44px;
+            min-width: 44px;
+            min-height: 44px;
+            padding: 0;
+            border: none;
+            border-radius: 12px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: transparent;
+            flex-shrink: 0;
+        }
+
+        .navbar-toggler:focus {
+            box-shadow: none;
+        }
+
+        html.dark .navbar-toggler-icon {
+            filter: invert(1);
+        }
+
+        .navbar .d-flex.align-items-center.ms-auto {
+            flex-shrink: 0;
+            gap: 0.25rem;
         }
 
         main {
             flex: 1;
-            margin-top: 76px;
+            margin-top: calc(var(--header-height) + var(--safe-area-top));
             overflow-y: auto;
-            padding: 20px 0;
+            overflow-x: hidden;
+            padding: 1.25rem 0;
+            padding-bottom: calc(1.25rem + var(--safe-area-bottom));
+            -webkit-overflow-scrolling: touch;
+            transition: margin-top 0.25s ease;
         }
 
         .container {
             max-width: 1200px;
+            padding-left: max(1rem, var(--safe-area-left));
+            padding-right: max(1rem, var(--safe-area-right));
+        }
+
+        html.dark .card {
+            background-color: var(--card-dark);
+            color: var(--text-dark);
+            border-color: var(--border-dark);
+        }
+
+        html.dark .text-muted {
+            color: var(--muted-dark) !important;
+        }
+
+        html.dark .bg-light {
+            background-color: #1e293b !important;
+            color: var(--text-dark) !important;
+        }
+
+        html.dark .text-dark {
+            color: var(--text-dark) !important;
+        }
+
+        html.dark h1, html.dark h2, html.dark h3,
+        html.dark h4, html.dark h5, html.dark h6 {
+            color: var(--text-dark);
+        }
+
+        html.dark .display-4 {
+            color: #60a5fa !important;
+        }
+
+        html.dark .border-bottom {
+            border-color: var(--border-dark) !important;
+        }
+
+        html.dark .shadow-sm {
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4) !important;
+        }
+
+        @@media (max-width: 767.98px) {
+            :root {
+                --header-height: 56px;
+            }
+
+            .navbar-brand span {
+                font-size: 1.05rem;
+            }
+
+            .logo-img {
+                height: 34px;
+                width: 34px;
+                border-radius: 9px;
+            }
+
+            main {
+                padding-top: 1rem;
+                padding-bottom: calc(1rem + var(--safe-area-bottom));
+            }
+
+            #mobileNav {
+                background-color: var(--card-light);
+                border-bottom: 1px solid var(--border-light);
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            }
+
+            html.dark #mobileNav {
+                background-color: var(--card-dark);
+                border-bottom-color: var(--border-dark);
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            }
+
+            #mobileNav .nav-link {
+                padding: 0.85rem 1rem !important;
+                font-size: 1.05rem;
+                border-radius: 12px;
+                margin-bottom: 0.25rem;
+            }
+        }
+
+        @@media (max-width: 380px) {
+            .navbar-brand span {
+                font-size: 0.95rem;
+            }
+
+            .logo-img {
+                height: 30px;
+                width: 30px;
+            }
+        }
+
+        @@media (max-height: 500px) and (orientation: landscape) {
+            :root {
+                --header-height: 48px;
+            }
+
+            .logo-img {
+                height: 28px;
+                width: 28px;
+            }
         }
     </style>
 </head>
 <body>
     <header>
-        <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow">
-            <div class="container">
+        <nav class="navbar">
+            <div class="container d-flex align-items-center justify-content-between h-100 px-3">
+
                 <a class="navbar-brand d-flex align-items-center" asp-area="" asp-page="/Index">
-                    <img src="~/images/logo.png" alt="Logo" class="me-2" style="height: 50px; width: 50px; object-fit: cover;">
-                    <span class="fw-semibold">GUAP Messenger</span>
+                    <img src="~/images/logo.png" alt="GUAP Messenger" class="logo-img">
+                    <span>GUAP Messenger</span>
                 </a>
 
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse"
-                        aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
+                <div class="d-flex align-items-center gap-2 ms-auto">
+                    @if (isIndexPage)
+                    {
+                        <div class="d-none d-md-flex align-items-center gap-2">
+                            <a class="nav-link" asp-area="" asp-page="/Authorization/Authorization">
+                                Личный кабинет
+                            </a>
+                            <a class="nav-link" href="https://pro.guap.ru/" target="_blank" rel="noopener">
+                                Сайт ГУАП
+                            </a>
+                        </div>
+                    }
 
-                <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
-                    <ul class="navbar-nav flex-grow-1">
+                    <button id="theme-toggle-layout" type="button" title="Переключить тему" aria-label="Переключить тему">
+                        <span class="theme-icon-layout-light">☀️</span>
+                        <span class="theme-icon-layout-dark" style="display: none;">🌙</span>
+                    </button>
+
+                    @if (isIndexPage)
+                    {
+                        <button class="navbar-toggler d-md-none ms-1" type="button"
+                                aria-controls="mobileNav" aria-expanded="false" aria-label="Открыть меню">
+                            <span class="navbar-toggler-icon"></span>
+                        </button>
+                    }
+                </div>
+            </div>
+        </nav>
+
+        @if (isIndexPage)
+        {
+            <div class="d-md-none" id="mobileNav">
+                <div class="container py-3 px-3">
+                    <ul class="navbar-nav w-100">
                         <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-page="/Authorization/Authorization">Личный кабинет</a>
+                            <a class="nav-link" asp-area="" asp-page="/Authorization/Authorization">
+                                Личный кабинет
+                            </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link text-dark" href="https://pro.guap.ru/" target="_blank">Сайт ГУАП</a>
+                            <a class="nav-link" href="https://pro.guap.ru/" target="_blank" rel="noopener">
+                                Сайт ГУАП
+                            </a>
                         </li>
                     </ul>
                 </div>
             </div>
-        </nav>
+        }
     </header>
 
     <main>
@@ -78,5 +412,91 @@
     </main>
 
     @RenderSection("Scripts", required: false)
+
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js" asp-append-version="true"></script>
+    <script>
+        (function () {
+            function updateLayoutThemeIcons() {
+                const isDark = document.documentElement.classList.contains('dark');
+                document.querySelectorAll('.theme-icon-layout-dark').forEach(el => {
+                    el.style.display = isDark ? 'inline' : 'none';
+                });
+                document.querySelectorAll('.theme-icon-layout-light').forEach(el => {
+                    el.style.display = isDark ? 'none' : 'inline';
+                });
+
+                const metaTheme = document.querySelector('meta[name="theme-color"]:not([media])')
+                    || document.querySelector('meta[name="theme-color"]');
+                if (metaTheme) {
+                    metaTheme.setAttribute('content', isDark ? '#0f172a' : '#ffffff');
+                }
+            }
+
+            function toggleTheme() {
+                const html = document.documentElement;
+                const isDark = html.classList.toggle('dark');
+                localStorage.setItem('theme', isDark ? 'dark' : 'light');
+                updateLayoutThemeIcons();
+            }
+
+            const themeBtn = document.getElementById('theme-toggle-layout');
+            if (themeBtn) {
+                themeBtn.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    toggleTheme();
+                });
+            }
+            updateLayoutThemeIcons();
+
+            const mobileNav = document.getElementById('mobileNav');
+            const toggler = document.querySelector('.navbar-toggler');
+            const mainEl = document.querySelector('main');
+            const headerEl = document.querySelector('header');
+
+            function updateMainMargin() {
+                if (mainEl && headerEl) {
+                    mainEl.style.marginTop = headerEl.offsetHeight + 'px';
+                }
+            }
+
+            function closeMobileNav() {
+                if (!mobileNav) return;
+                mobileNav.classList.remove('show');
+                if (toggler) toggler.setAttribute('aria-expanded', 'false');
+                updateMainMargin();
+            }
+
+            function toggleMobileNav() {
+                if (!mobileNav) return;
+                const willOpen = !mobileNav.classList.contains('show');
+                mobileNav.classList.toggle('show', willOpen);
+                if (toggler) toggler.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+                updateMainMargin();
+            }
+
+            if (toggler) {
+                toggler.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    toggleMobileNav();
+                });
+            }
+
+            if (mobileNav) {
+                mobileNav.querySelectorAll('.nav-link').forEach(link => {
+                    link.addEventListener('click', closeMobileNav);
+                });
+            }
+
+            document.addEventListener('click', function (e) {
+                if (mobileNav && mobileNav.classList.contains('show')) {
+                    if (!mobileNav.contains(e.target) && toggler && !toggler.contains(e.target)) {
+                        closeMobileNav();
+                    }
+                }
+            });
+        })();
+    </script>
 </body>
 </html>

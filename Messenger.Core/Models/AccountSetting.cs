@@ -18,9 +18,6 @@ public partial class AccountSetting
 
     public string? Avatar { get; set; }
 
-    [StringLength(15)]
-    public string? Theme { get; set; }
-
     [Column("Push_Enabled")]
     public bool PushEnabled { get; set; } = true;
 

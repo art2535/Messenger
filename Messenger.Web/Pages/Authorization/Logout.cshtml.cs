@@ -2,6 +2,7 @@
 using Messenger.Core.Hubs;
 using Messenger.Web.Helpers;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.SignalR;
@@ -15,8 +16,6 @@ namespace Messenger.Web.Pages.Authorization
         private readonly ILogger<LogoutModel> _logger;
         private readonly IHubContext<ChatHub> _hubContext;
 
-        public string ErrorMessage { get; set; } = string.Empty;
-
         public LogoutModel(ApiHelper api, ILogger<LogoutModel> logger, IHubContext<ChatHub> hubContext)
         {
             _api = api;
@@ -24,7 +23,17 @@ namespace Messenger.Web.Pages.Authorization
             _hubContext = hubContext;
         }
 
+        public async Task<IActionResult> OnGetAsync()
+        {
+            return await PerformLogoutAsync();
+        }
+
         public async Task<IActionResult> OnPostAsync()
+        {
+            return await PerformLogoutAsync();
+        }
+
+        private async Task<IActionResult> PerformLogoutAsync()
         {
             var token = await HttpContext.GetTokenAsync("access_token");
 
@@ -60,9 +69,6 @@ namespace Messenger.Web.Pages.Authorization
                                 };
 
                                 await _hubContext.Clients.All.SendAsync("UserOnlineStatusChanged", payload);
-                                await _hubContext.Clients.User(userId.ToString())
-                                    .SendAsync("UserOnlineStatusChanged", payload);
-
                                 _logger.LogInformation("SignalR уведомление о выходе отправлено для пользователя {UserId}", userId);
                             }
                             catch (Exception ex)
@@ -79,6 +85,11 @@ namespace Messenger.Web.Pages.Authorization
             }
 
             HttpContext.Session.Clear();
+
+            await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+
+            Response.Cookies.Delete(".AspNetCore.Session");
+
             return RedirectToPage("/Authorization/Authorization");
         }
     }
