@@ -353,7 +353,7 @@ namespace Messenger.API.Controllers
                     return error;
 
                 var chat = await _chatService.GetChatByIdAsync(chatId, ct);
-                if (chat == null) 
+                if (chat == null)
                     return NotFound(new ErrorResponse { Error = "Чат не найден" });
 
                 if (!chat.ChatParticipants.Any(p => p.UserId == user!.UserId))
@@ -499,7 +499,7 @@ namespace Messenger.API.Controllers
                 }
 
                 var message = await _messageService.GetMessageByIdAsync(request.ChatId, messageId, ct);
-                if (message == null) 
+                if (message == null)
                 {
                     return NotFound(new ErrorResponse
                     {
@@ -507,21 +507,31 @@ namespace Messenger.API.Controllers
                         Error = "Сообщение не найдено"
                     });
                 }
-                if (message.SenderId != user!.UserId) 
-                { 
-                    return Forbid(); 
+                if (message.SenderId != user!.UserId)
+                {
+                    return Forbid();
                 }
 
                 message.MessageText = _encryptionService.Encrypt(request.MessageText);
                 await _messageService.UpdateMessageAsync(message, ct);
 
+                var updatedDto = new MessageDto
+                {
+                    MessageId = message.MessageId,
+                    ChatId = request.ChatId,
+                    SenderId = message.SenderId,
+                    MessageText = request.MessageText.Trim(),
+                    SentAt = message.SendTime,
+                    Status = "Sent"
+                };
+
                 await _hubContext.Clients.Group(request.ChatId.ToString())
-                    .SendAsync("ReceiveMessage", message);
+                    .SendAsync("ReceiveMessage", updatedDto, ct);
 
                 return Ok(new UpdateMessageSuccessResponse
                 {
-                    IsSuccess = true, 
-                    Message = "Сообщение обновлено" 
+                    IsSuccess = true,
+                    Message = "Сообщение обновлено"
                 });
             }
             catch (Exception ex)
@@ -556,31 +566,31 @@ namespace Messenger.API.Controllers
                 }
 
                 var message = await _messageService.GetMessageByIdAsync(chatId, messageId, ct);
-                if (message == null) 
-                { 
-                    return NotFound(); 
+                if (message == null)
+                {
+                    return NotFound();
                 }
                 if (message.SenderId != user!.UserId)
-                { 
-                    return Forbid(); 
+                {
+                    return Forbid();
                 }
 
                 await _messageService.DeleteMessageAsync(messageId, ct);
                 await _hubContext.Clients.Group(chatId.ToString())
-                    .SendAsync("MessageDeleted", new { messageId });
+                    .SendAsync("MessageDeleted", new { messageId, chatId });
 
                 return Ok(new DeleteMessageSuccessResponse
-                { 
-                    IsSuccess = true, 
-                    Message = "Сообщение удалено" 
+                {
+                    IsSuccess = true,
+                    Message = "Сообщение удалено"
                 });
             }
             catch (Exception ex)
             {
                 return StatusCode(500, new ErrorResponse
-                { 
-                    IsSuccess = false, 
-                    Error = ex.Message 
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
                 });
             }
         }
