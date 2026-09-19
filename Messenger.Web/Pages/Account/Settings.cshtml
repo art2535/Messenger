@@ -741,36 +741,7 @@
             }
 
             function showToast(message, type = 'info', duration = 4000) {
-                let toastContainer = document.getElementById('toast-container');
-                if (!toastContainer) {
-                    toastContainer = document.createElement('div');
-                    toastContainer.id = 'toast-container';
-                    document.body.appendChild(toastContainer);
-                }
-
-                const toast = document.createElement('div');
-                toast.className = `toast ${type}`;
-                toast.innerHTML = `
-                                        <div class="flex-1 text-sm sm:text-base">${message}</div>
-                                        <button class="ml-2 text-white/70 hover:text-white p-1">
-                                            <i data-feather="x" class="w-5 h-5"></i>
-                                        </button>
-                                    `;
-                toastContainer.insertBefore(toast, toastContainer.firstChild);
-                feather.replace();
-
-                requestAnimationFrame(() => toast.classList.add('show'));
-
-                const removeToast = () => {
-                    toast.classList.remove('show');
-                    toast.addEventListener('transitionend', () => toast.remove());
-                };
-
-                const timeoutId = setTimeout(removeToast, duration);
-                toast.querySelector('button').onclick = () => {
-                    clearTimeout(timeoutId);
-                    removeToast();
-                };
+                if (message) console.log('[toast:' + (type || 'info') + ']', message);
             }
 
             function openConfirm(title, message) {
