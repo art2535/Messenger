@@ -194,6 +194,15 @@
             background-color: #e5e7eb;
         }
 
+        .draft-preview-label {
+            color: #ef4444;
+            font-weight: 500;
+        }
+
+        .dark .draft-preview-label {
+            color: #f87171;
+        }
+
         .dark .chat-item.active {
             background-color: #4b5563 !important;
         }
@@ -1427,10 +1436,210 @@
         let contextMenuMessageId = null;
         let contextMenuMessageText = '';
 
-        // ========== Ответ на сообщение ==========
         const REPLY_PREFIX = '\u200BREPLY:';
         const REPLY_SUFFIX = '\u200B\n';
         let replyingTo = null;
+
+        const MESSAGE_DRAFTS_KEY = 'guap_message_drafts_v1_' + encodeURIComponent(String(me || 'anonymous'));
+        let draftsCache = null;
+        let draftSaveTimer = null;
+
+        function getDrafts() {
+            if (draftsCache) return draftsCache;
+            try {
+                const raw = localStorage.getItem(MESSAGE_DRAFTS_KEY);
+                const parsed = raw ? JSON.parse(raw) : {};
+                draftsCache = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+            } catch (e) {
+                console.warn('[Drafts] Не удалось прочитать черновики', e);
+                draftsCache = {};
+            }
+            return draftsCache;
+        }
+
+        function saveDrafts() {
+            try {
+                localStorage.setItem(MESSAGE_DRAFTS_KEY, JSON.stringify(getDrafts()));
+            } catch (e) {
+                console.warn('[Drafts] Не удалось сохранить черновики', e);
+            }
+        }
+
+        function getChatDraft(chatId) {
+            if (!chatId) return null;
+            const draft = getDrafts()[String(chatId)];
+            if (!draft || typeof draft !== 'object') return null;
+
+            const text = typeof draft.text === 'string' ? draft.text : '';
+            if (!text.trim()) return null;
+
+            return {
+                text,
+                reply: draft.reply && draft.reply.messageId
+                    ? {
+                        messageId: String(draft.reply.messageId),
+                        senderName: String(draft.reply.senderName || 'Сообщение'),
+                        preview: String(draft.reply.preview || '')
+                    }
+                    : null,
+                updatedAt: draft.updatedAt || null
+            };
+        }
+
+        function escapeDraftHtml(value) {
+            return String(value || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function getDraftPreviewText(draft) {
+            const text = stripReplyForPreview(draft?.text || '')
+                .replace(/\s+/g, ' ')
+                .trim();
+            if (!text) return 'Сообщение';
+            return text.length > 38 ? text.slice(0, 35) + '...' : text;
+        }
+
+        function renderDraftPreviewHTML(draft) {
+            return `
+                <div class="flex items-center min-w-0 gap-1 last-message-preview">
+                    <span class="draft-preview-label flex-shrink-0">Черновик:</span>
+                    <span class="truncate">${escapeDraftHtml(getDraftPreviewText(draft))}</span>
+                </div>`;
+        }
+
+        function renderChatListDraft(chatId) {
+            if (!chatId) return false;
+
+            const chatItem = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
+            if (!chatItem) return false;
+
+            const draft = getChatDraft(chatId);
+            const previewEl = chatItem.querySelector('.last-message-preview');
+
+            if (!draft) {
+                return false;
+            }
+
+            const html = renderDraftPreviewHTML(draft);
+            if (previewEl) {
+                previewEl.outerHTML = html;
+            } else {
+                const metaWrap = chatItem.querySelector('.chat-list-message-meta') ||
+                                 chatItem.querySelector('.text-sm.text-gray-500');
+                if (metaWrap) metaWrap.innerHTML = html;
+            }
+
+            return true;
+        }
+
+        function saveDraftForChat(chatId, text, reply = null) {
+            if (!chatId) return;
+
+            const id = String(chatId);
+            const value = String(text || '');
+            const drafts = getDrafts();
+
+            if (!value.trim()) {
+                delete drafts[id];
+                saveDrafts();
+                renderChatListDraft(id);
+                refreshChatListPreviewFromDom(id);
+                return;
+            }
+
+            drafts[id] = {
+                text: value,
+                reply: reply && reply.messageId
+                    ? {
+                        messageId: String(reply.messageId),
+                        senderName: String(reply.senderName || 'Сообщение'),
+                        preview: String(reply.preview || '').replace(/\s+/g, ' ').slice(0, 120)
+                    }
+                    : null,
+                updatedAt: new Date().toISOString()
+            };
+
+            saveDrafts();
+            renderChatListDraft(id);
+        }
+
+        function saveCurrentDraft() {
+            if (!currentChatId || editingMessageId) return;
+
+            clearTimeout(draftSaveTimer);
+            draftSaveTimer = null;
+
+            saveDraftForChat(
+                currentChatId,
+                messageInput?.value || '',
+                replyingTo
+            );
+        }
+
+        function scheduleCurrentDraftSave() {
+            if (!currentChatId || editingMessageId) return;
+
+            clearTimeout(draftSaveTimer);
+            draftSaveTimer = setTimeout(() => {
+                draftSaveTimer = null;
+                saveCurrentDraft();
+            }, 1000);
+        }
+
+        function clearChatDraft(chatId) {
+            if (!chatId) return;
+            const id = String(chatId);
+            const drafts = getDrafts();
+
+            if (!Object.prototype.hasOwnProperty.call(drafts, id)) {
+                return;
+            }
+
+            delete drafts[id];
+            saveDrafts();
+            renderChatListDraft(id);
+            refreshChatListPreviewFromDom(id);
+        }
+
+        function restoreDraftForChat(chatId) {
+            if (!chatId || !messageInput) return;
+
+            const draft = getChatDraft(chatId);
+            if (!draft) {
+                cancelReply();
+                return;
+            }
+
+            messageInput.value = draft.text || '';
+
+            if (draft.reply?.messageId) {
+                replyingTo = {
+                    messageId: draft.reply.messageId,
+                    senderName: draft.reply.senderName || 'Сообщение',
+                    preview: draft.reply.preview || 'Сообщение'
+                };
+
+                const bar = document.getElementById('reply-compose-bar');
+                const title = document.getElementById('reply-compose-title');
+                const prev = document.getElementById('reply-compose-preview');
+
+                if (title) title.textContent = 'Ответ: ' + replyingTo.senderName;
+                if (prev) prev.textContent = replyingTo.preview || 'Сообщение';
+                if (bar) bar.classList.add('show');
+            } else {
+                cancelReply();
+            }
+        }
+
+        function renderAllDraftPreviews() {
+            document.querySelectorAll('.chat-item[data-chat-id]').forEach(item => {
+                renderChatListDraft(item.dataset.chatId);
+            });
+        }
 
         function buildReplyPayload(reply, bodyText) {
             if (!reply || !reply.messageId) return bodyText || '';
@@ -1476,6 +1685,10 @@
             if (prev) prev.textContent = replyingTo.preview || 'Сообщение';
             if (bar) bar.classList.add('show');
             if (messageInput) messageInput.focus();
+
+            if (currentChatId && !editingMessageId && messageInput?.value?.trim()) {
+                scheduleCurrentDraftSave();
+            }
         }
 
         function cancelReply() {
@@ -2318,6 +2531,10 @@
         }
 
         function enterEditMode(messageId, text) {
+            if (!editingMessageId && currentChatId && messageInput?.value?.trim()) {
+                saveCurrentDraft();
+            }
+
             if (typeof cancelReply === 'function') cancelReply();
             editingMessageId = messageId;
             const parsedEdit = parseReplyPayload(text || '');
@@ -2344,6 +2561,10 @@
             feather.replace();
             const fileLabel = document.querySelector('label[for="file-input"]');
             if (fileLabel) fileLabel.style.display = '';
+
+            if (currentChatId) {
+                restoreDraftForChat(currentChatId);
+            }
         }
 
         async function submitEditMessage() {
@@ -2974,6 +3195,14 @@
         }
 
         function clearInputAfterSend() {
+            const sentChatId = currentChatId;
+            clearTimeout(draftSaveTimer);
+            draftSaveTimer = null;
+
+            if (sentChatId) {
+                clearChatDraft(sentChatId);
+            }
+
             messageInput.value = '';
             attachedFiles.innerHTML = '';
             selectedFiles = [];
@@ -3104,6 +3333,8 @@
                 if (sentAt && meta.time) timeEl.textContent = meta.time;
             }
             if (typeof feather !== 'undefined') feather.replace();
+
+            renderChatListDraft(chatId);
         }
 
         function updateChatListStatus(chatId, status) {
@@ -4091,6 +4322,10 @@
         let typingTimeout = null;
 
         messageInput.addEventListener('input', () => {
+            if (currentChatId && !editingMessageId) {
+                scheduleCurrentDraftSave();
+            }
+
             if (!connection || !currentChatId) return;
 
             const hasText = messageInput.value.trim().length > 0;
@@ -4282,6 +4517,8 @@
                 return;
             }
 
+            saveCurrentDraft();
+
             currentChatId = chatId;
             modalChatId = null;
 
@@ -4311,6 +4548,7 @@
             document.getElementById('message-input').value = '';
             document.getElementById('attached-files').innerHTML = '';
             selectedFiles = [];
+            restoreDraftForChat(chatId);
 
             const messagesContainer = document.getElementById('messages-container');
             messagesContainer.innerHTML = '<div class="flex items-center justify-center h-full text-gray-500">Загрузка сообщений...</div>';
@@ -4547,6 +4785,10 @@
                         typeof chat.lastMessage === 'string' ? chat.lastMessage : (lastMessage?.messageText || ''),
                         lastMessage?.attachments || [], lastMessageTime, lastMessageIsMine, lastMessageStatus
                     );
+                    const chatDraft = getChatDraft(div.dataset.chatId);
+                    const initialPreviewHTML = chatDraft
+                        ? renderDraftPreviewHTML(chatDraft)
+                        : initialMeta.previewHTML;
 
                     div.innerHTML = `
                         <div class="relative flex-shrink-0">
@@ -4560,7 +4802,7 @@
                                 <span class="unread-badge hidden flex-shrink-0"></span>
                             </div>
                             <div class="text-sm text-gray-500 truncate chat-list-message-meta">
-                                ${initialMeta.previewHTML}
+                                ${initialPreviewHTML}
                             </div>
                             <div class="typing-in-list hidden text-xs text-blue-600 font-medium mt-0.5">
                                 <span class="typing-name"></span> печатает...
@@ -4583,9 +4825,11 @@
                 cacheChatItems();
                 applyPinnedChatsOrder();
                 filterChats();
+                renderAllDraftPreviews();
                 feather.replace();
 
                 await hydrateChatListStatuses(json.data);
+                renderAllDraftPreviews();
 
                 setTimeout(updateAllOnlineIndicators, 300);
             } catch (err) {
@@ -5506,6 +5750,8 @@
         });
 
         function closeCurrentChat() {
+            saveCurrentDraft();
+
             if (currentChatId && connection?.state === 'Connected') {
                 leaveChat(currentChatId).catch(() => { });
             }
@@ -5865,6 +6111,7 @@
         document.getElementById('reply-compose-cancel')?.addEventListener('click', (e) => {
             e.preventDefault();
             cancelReply();
+            scheduleCurrentDraftSave();
         });
 
         document.getElementById('messages-container')?.addEventListener('dblclick', (e) => {
@@ -5988,6 +6235,16 @@
 
         document.getElementById('theme-toggle')?.addEventListener('click', toggleTheme);
         updateThemeIcons();
+
+        window.addEventListener('beforeunload', () => {
+            saveCurrentDraft();
+        });
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden') {
+                saveCurrentDraft();
+            }
+        });
 
         window.addEventListener('resize', () => {
             if (!isMobileLayout()) {
