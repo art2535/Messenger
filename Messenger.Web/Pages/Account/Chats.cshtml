@@ -73,7 +73,86 @@
         }
 
         #message-search-bar {
-            max-width: 20rem;
+            max-width: 22rem;
+            min-width: 0;
+        }
+
+        #message-search-filters {
+            flex: 0 0 auto;
+            border-bottom: 1px solid rgb(229 231 235 / 1);
+            background: rgb(255 255 255 / .98);
+            padding: .75rem 1rem 1rem;
+        }
+
+        .dark #message-search-filters {
+            border-bottom-color: rgb(55 65 81 / 1);
+            background: rgb(31 41 55 / .98);
+        }
+
+        #message-search-sender-results {
+            max-height: 11rem;
+            overflow-y: auto;
+        }
+
+        #messages-wrapper {
+            position: relative;
+            flex: 1 1 auto;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        #messages-wrapper.hidden {
+            display: none !important;
+        }
+
+        #messages-content-area {
+            position: relative;
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        #messages-content-area #messages-container,
+        #messages-content-area #global-search-results {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        #messages-content-area #global-search-results {
+            overflow-y: auto;
+        }
+
+        #messages-content-area #search-empty-state {
+            position: absolute;
+            inset: 0;
+            z-index: 10;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+            padding: 1rem;
+        }
+
+        #messages-content-area #search-empty-state:not(.hidden) {
+            display: flex;
+        }
+
+        .global-search-result:hover {
+            background: rgba(243, 244, 246, .8);
+        }
+
+        .dark .global-search-result:hover {
+            background: rgba(55, 65, 81, .8);
+        }
+
+        #search-navigation {
+            position: absolute;
+            right: 1rem;
+            bottom: 1rem;
+            z-index: 15;
         }
 
         @@media (max-width: 767.98px) {
@@ -192,15 +271,6 @@
 
         .chat-item.active {
             background-color: #e5e7eb;
-        }
-
-        .draft-preview-label {
-            color: #ef4444;
-            font-weight: 500;
-        }
-
-        .dark .draft-preview-label {
-            color: #f87171;
         }
 
         .dark .chat-item.active {
@@ -767,6 +837,336 @@
             transform: scale(0.98);
             transition: opacity 0.15s, transform 0.15s;
         }
+
+
+        /* ===== Mobile adaptation ===== */
+        @@media (max-width: 767.98px) {
+            :root {
+                --mobile-header-height: 4.25rem;
+                --mobile-input-height: 4.5rem;
+            }
+
+            html, body {
+                width: 100%;
+                min-width: 0;
+                max-width: 100vw;
+                overflow: hidden;
+                touch-action: manipulation;
+            }
+
+            body {
+                font-size: 15px;
+            }
+
+            #chats-sidebar {
+                height: 100dvh;
+                height: var(--vv-height, 100dvh);
+                overflow: hidden;
+                box-sizing: border-box;
+            }
+
+            #chats-sidebar > div:first-child {
+                padding-top: max(.75rem, var(--safe-top));
+            }
+
+            #chats-sidebar #chats-list {
+                min-height: 0;
+                -webkit-overflow-scrolling: touch;
+                overscroll-behavior: contain;
+            }
+
+            #chats-sidebar > div:last-child {
+                padding-bottom: max(.75rem, var(--safe-bottom));
+            }
+
+            #right-panel {
+                height: 100dvh;
+                height: var(--vv-height, 100dvh);
+                max-height: 100dvh;
+                min-height: 0;
+                overflow: hidden;
+                box-sizing: border-box;
+            }
+
+            #chat-header {
+                height: var(--mobile-header-height);
+                min-height: var(--mobile-header-height);
+                flex: 0 0 var(--mobile-header-height);
+                gap: .35rem;
+                padding-left: max(.5rem, var(--safe-left));
+                padding-right: max(.5rem, var(--safe-right));
+                box-sizing: border-box;
+            }
+
+            #chat-header > div:first-of-type {
+                min-width: 0;
+            }
+
+            #chat-header > div:last-child {
+                flex-shrink: 0;
+                gap: .125rem;
+            }
+
+            #chat-header #chat-info-avatar {
+                width: 2.5rem;
+                height: 2.5rem;
+            }
+
+            #chat-header #chat-title {
+                font-size: 1rem;
+                line-height: 1.2;
+            }
+
+            #chat-header #chat-status-area {
+                font-size: .75rem;
+                line-height: 1rem;
+                max-width: 42vw;
+            }
+
+            #mobile-back-btn {
+                width: 2.5rem;
+                height: 2.5rem;
+                margin-right: 0;
+            }
+
+            #search-toggle-btn,
+            #chat-header .w-9.h-9 {
+                width: 2.5rem;
+                height: 2.5rem;
+                flex-shrink: 0;
+            }
+
+            #message-search-bar {
+                position: absolute;
+                top: calc(var(--mobile-header-height) + .35rem);
+                left: .5rem;
+                right: .5rem;
+                width: auto;
+                max-width: none;
+                min-width: 0;
+                height: 3rem;
+                padding: .35rem .5rem .35rem .7rem;
+                border-radius: 1rem;
+                z-index: 50;
+                box-shadow: 0 8px 24px rgba(0,0,0,.12);
+                border: 1px solid rgb(229 231 235 / .9);
+            }
+
+            .dark #message-search-bar {
+                border-color: rgb(75 85 99 / .9);
+            }
+
+            #message-search-input {
+                min-width: 0;
+                width: 100%;
+                font-size: 16px;
+            }
+
+            #message-search-filters {
+                position: relative;
+                z-index: 30;
+                /* The mobile search bar is absolutely positioned below the header,
+                   so reserve its vertical space before showing the filters. */
+                margin-top: 3.7rem;
+                padding: .75rem .75rem .875rem;
+                max-height: min(48dvh, 25rem);
+                overflow-y: auto;
+                -webkit-overflow-scrolling: touch;
+                box-shadow: 0 6px 18px rgba(0,0,0,.08);
+            }
+
+            #message-search-filters.hidden {
+                margin-top: 0;
+            }
+
+            #message-search-filters .max-w-5xl {
+                max-width: none;
+            }
+
+            #message-search-filters .grid {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr);
+                gap: .625rem;
+            }
+
+            #message-search-filters .flex.flex-wrap {
+                display: flex;
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            #message-search-filters .flex.flex-wrap > label,
+            #message-search-filters .flex.flex-wrap > button {
+                width: 100%;
+                justify-content: flex-start;
+                min-height: 2.75rem;
+                box-sizing: border-box;
+            }
+
+            #message-search-filters .flex.flex-wrap > button {
+                justify-content: center;
+            }
+
+            #message-search-sender-results {
+                max-height: 10rem;
+                z-index: 40;
+            }
+
+            #messages-wrapper {
+                min-height: 0;
+                overflow: hidden;
+            }
+
+            #messages-content-area {
+                min-height: 0;
+            }
+
+            #messages-container,
+            #global-search-results {
+                padding: .75rem !important;
+                -webkit-overflow-scrolling: touch;
+                overscroll-behavior: contain;
+                scrollbar-width: thin;
+            }
+
+            .message-row {
+                max-width: 100%;
+            }
+
+            .message-bubble {
+                max-width: min(86vw, 30rem);
+                font-size: .95rem;
+                line-height: 1.35;
+            }
+
+            .date-separator {
+                margin: 10px 0 6px;
+            }
+
+            .date-separator span {
+                padding: 4px 11px;
+                font-size: 11px;
+            }
+
+            #search-empty-state {
+                padding: .75rem;
+            }
+
+            #search-empty-state > div {
+                max-width: min(90vw, 20rem);
+            }
+
+            #search-navigation {
+                right: max(.75rem, var(--safe-right));
+                bottom: calc(var(--mobile-input-height) + .75rem + var(--safe-bottom));
+            }
+
+            #chat-input-area {
+                flex: 0 0 auto;
+                min-height: var(--mobile-input-height);
+                padding: .5rem max(.5rem, var(--safe-right)) max(.5rem, var(--safe-bottom)) max(.5rem, var(--safe-left));
+                box-sizing: border-box;
+            }
+
+            #normal-input-ui .flex.items-center {
+                gap: .5rem;
+            }
+
+            #message-input {
+                min-width: 0;
+                width: 100%;
+                min-height: 2.75rem;
+                padding-top: .75rem;
+                padding-bottom: .75rem;
+                font-size: 16px;
+            }
+
+            #normal-input-ui label[for="file-input"],
+            #send-button {
+                width: 2.75rem;
+                height: 2.75rem;
+                min-width: 2.75rem;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                border-radius: 9999px;
+            }
+
+            #attached-files {
+                max-height: 6.5rem;
+                overflow-y: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            .preview-attachment {
+                max-width: calc(50vw - 1.5rem);
+            }
+
+            .image-preview {
+                max-width: min(46vw, 220px);
+                max-height: 220px;
+            }
+
+            .file-attachment {
+                max-width: 78vw;
+                word-break: break-word;
+            }
+
+            .modal {
+                align-items: flex-end;
+                justify-content: stretch;
+                padding: 0;
+            }
+
+            .modal > div {
+                width: 100%;
+                max-width: 100%;
+                max-height: calc(var(--vv-height, 100dvh) - var(--safe-top));
+                margin: 0;
+                border-radius: 1.25rem 1.25rem 0 0;
+                overflow: auto;
+                -webkit-overflow-scrolling: touch;
+                padding-bottom: max(.75rem, var(--safe-bottom));
+            }
+
+            .modal input,
+            .modal select,
+            .modal textarea,
+            .modal button {
+                min-height: 2.75rem;
+                font-size: 16px;
+            }
+
+            #chat-context-menu,
+            #message-context-menu {
+                max-height: min(70dvh, 32rem);
+                overflow-y: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            #chat-context-menu button,
+            #message-context-menu button {
+                min-height: 3rem;
+            }
+
+            #lightbox img {
+                max-width: 96vw;
+                max-height: 84dvh;
+                border-radius: 10px;
+            }
+
+            pre,
+            code,
+            .message-bubble,
+            .global-search-result {
+                overflow-wrap: anywhere;
+                word-break: break-word;
+            }
+
+            .global-search-result {
+                padding: .875rem .75rem !important;
+            }
+        }
         .message-bubble.outgoing,
         .chat-item {
             -webkit-touch-callout: none;
@@ -1128,17 +1528,26 @@
                         <i data-feather="search" class="w-5 h-5"></i>
                     </button>
 
-                    <div id="message-search-bar" class="hidden items-center bg-gray-100 dark:bg-gray-700 rounded-3xl px-4 py-1.5 w-80 transition-all">
-                        <i data-feather="search" class="w-4 h-4 text-gray-400 mr-2"></i>
+                    <div id="message-search-bar" class="hidden items-center bg-gray-100 dark:bg-gray-700 rounded-3xl px-3 py-1.5 w-80 transition-all">
+                        <i data-feather="search" class="w-4 h-4 text-gray-400 mr-2 flex-shrink-0"></i>
                         <input type="text"
                                id="message-search-input"
-                               class="flex-1 bg-transparent outline-none text-sm placeholder-gray-400 dark:text-gray-100 dark:placeholder-gray-400"
+                               class="flex-1 min-w-0 bg-transparent outline-none text-sm placeholder-gray-400 dark:text-gray-100 dark:placeholder-gray-400"
                                placeholder="Поиск по сообщениям"
-                               onkeypress="if(event.key === 'Enter') performMessageSearch()">
+                               autocomplete="off">
 
-                        <button onclick="clearMessageSearch(true)"
-                                class="ml-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl leading-none">
-                            ✕
+                        <button type="button" id="message-search-filter-btn"
+                                onclick="toggleMessageSearchFilters()"
+                                title="Фильтры поиска"
+                                class="ml-1 w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-gray-100 hover:bg-gray-200/60 dark:hover:bg-gray-600 transition">
+                            <i data-feather="sliders" class="w-4 h-4"></i>
+                        </button>
+
+                        <button type="button" id="message-search-close-btn"
+                                onclick="clearMessageSearch(true)"
+                                title="Закрыть поиск"
+                                class="ml-1 w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-200/60 dark:hover:bg-gray-600 transition">
+                            <i data-feather="x" class="w-4 h-4"></i>
                         </button>
                     </div>
 
@@ -1164,25 +1573,110 @@
                 </div>
 
 
-            <div id="messages-container"
-                 class="hidden flex-1 p-4 overflow-y-auto bg-gray-50 dark:bg-gray-900">
-            </div>
+            <div id="messages-wrapper">
+                <div id="message-search-filters" class="hidden">
+                    <div class="max-w-5xl mx-auto w-full">
+                        <div class="flex items-center justify-between gap-3 mb-3">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <div class="w-8 h-8 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 flex items-center justify-center flex-shrink-0">
+                                    <i data-feather="sliders" class="w-4 h-4"></i>
+                                </div>
+                                <div class="min-w-0">
+                                    <div class="text-sm font-semibold text-gray-900 dark:text-white">Фильтры поиска</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400 truncate">Можно искать по тексту, дате, отправителю и статусу</div>
+                                </div>
+                            </div>
+                            <button type="button" onclick="resetMessageSearchFilters(); performMessageSearch();"
+                                    class="text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 whitespace-nowrap">
+                                Сбросить
+                            </button>
+                        </div>
 
-            <div id="search-navigation" class="hidden fixed right-6 bottom-32 z-50 flex flex-col items-end gap-2 pointer-events-auto">
-                <div id="search-counter"
-                     class="hidden bg-white/95 dark:bg-gray-800/95 backdrop-blur-md shadow-md border border-gray-200 dark:border-gray-600 text-xs font-medium text-gray-600 dark:text-gray-300 px-3.5 py-1.5 rounded-2xl mb-1">
-                    <span id="current-count">1</span> из <span id="total-count">5</span>
+                        <div class="grid grid-cols-1 xl:grid-cols-12 gap-2.5">
+                            <div class="xl:col-span-3">
+                                <label class="block text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-1">Искать</label>
+                                <select id="message-search-scope"
+                                        class="w-full rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm outline-none text-gray-800 dark:text-gray-100 focus:ring-2 focus:ring-blue-500">
+                                    <option value="chat">В текущем чате</option>
+                                    <option value="global">Во всех чатах</option>
+                                </select>
+                            </div>
+
+                            <div class="xl:col-span-2">
+                                <label class="block text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-1">С даты</label>
+                                <input id="message-search-date-from" type="date"
+                                       class="w-full rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm outline-none text-gray-800 dark:text-gray-100 focus:ring-2 focus:ring-blue-500">
+                            </div>
+
+                            <div class="xl:col-span-2">
+                                <label class="block text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-1">По дату</label>
+                                <input id="message-search-date-to" type="date"
+                                       class="w-full rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm outline-none text-gray-800 dark:text-gray-100 focus:ring-2 focus:ring-blue-500">
+                            </div>
+
+                            <div class="xl:col-span-5 relative">
+                                <label class="block text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-1">Отправитель</label>
+                                <div class="relative">
+                                    <input id="message-search-sender" type="text" autocomplete="off" placeholder="Любой отправитель"
+                                           class="w-full rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 pr-9 text-sm outline-none text-gray-800 dark:text-gray-100 placeholder-gray-400 focus:ring-2 focus:ring-blue-500">
+                                    <button type="button" id="message-search-sender-clear"
+                                            class="hidden absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full text-gray-400 hover:text-gray-700 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-600">
+                                        <i data-feather="x" class="w-3.5 h-3.5 mx-auto"></i>
+                                    </button>
+                                </div>
+                                <input id="message-search-sender-id" type="hidden">
+                                <div id="message-search-sender-results" class="hidden absolute left-0 right-0 top-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl shadow-lg z-30"></div>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-wrap items-center gap-2 mt-2.5">
+                            <label class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 cursor-pointer text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 transition">
+                                <input id="message-search-has-attachments" type="checkbox" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                                <span>С вложениями</span>
+                            </label>
+                            <label class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 cursor-pointer text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 transition">
+                                <input id="message-search-unread-only" type="checkbox" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                                <span>Непрочитанные</span>
+                            </label>
+                            <div class="flex-1 min-w-4"></div>
+                            <button type="button" onclick="performMessageSearch()"
+                                    class="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-5 py-2.5 transition shadow-sm">
+                                <i data-feather="search" class="w-4 h-4"></i>
+                                Найти
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
-                <button onclick="navigateSearch(-1)"
-                        class="w-11 h-11 bg-white/95 dark:bg-gray-800/95 backdrop-blur-md shadow-xl hover:shadow-2xl border border-gray-200 dark:border-gray-600 rounded-2xl flex items-center justify-center text-gray-700 dark:text-gray-200 hover:text-blue-600 transition-all active:scale-95">
-                    <i data-feather="chevron-up" class="w-6 h-6"></i>
-                </button>
+                <div id="messages-content-area">
+                    <div id="messages-container" class="hidden p-4 overflow-y-auto bg-gray-50 dark:bg-gray-900"></div>
+                    <div id="global-search-results" class="hidden bg-gray-50 dark:bg-gray-900"></div>
 
-                <button onclick="navigateSearch(1)"
-                        class="w-11 h-11 bg-white/95 dark:bg-gray-800/95 backdrop-blur-md shadow-xl hover:shadow-2xl border border-gray-200 dark:border-gray-600 rounded-2xl flex items-center justify-center text-gray-700 dark:text-gray-200 hover:text-blue-600 transition-all active:scale-95">
-                    <i data-feather="chevron-down" class="w-6 h-6"></i>
-                </button>
+                    <div id="search-empty-state" class="hidden">
+                        <div class="bg-white/95 dark:bg-gray-800/95 border border-gray-200 dark:border-gray-700 shadow-sm rounded-2xl px-5 py-4 text-center max-w-sm">
+                            <i data-feather="search" class="w-7 h-7 mx-auto mb-2 text-gray-400 opacity-70"></i>
+                            <div id="search-empty-text" class="text-sm text-gray-500 dark:text-gray-400">Ничего не найдено</div>
+                        </div>
+                    </div>
+
+                    <div id="search-navigation" class="hidden flex flex-col items-end gap-2 pointer-events-auto">
+                        <div id="search-counter"
+                             class="hidden bg-white/95 dark:bg-gray-800/95 shadow-md border border-gray-200 dark:border-gray-600 text-xs font-medium text-gray-600 dark:text-gray-300 px-3 py-1.5 rounded-xl">
+                            <span id="current-count">1</span> из <span id="total-count">5</span>
+                        </div>
+
+                        <div class="flex items-center gap-1 bg-white/95 dark:bg-gray-800/95 shadow-md border border-gray-200 dark:border-gray-600 rounded-xl p-1">
+                            <button onclick="navigateSearch(-1)" title="Предыдущее"
+                                    class="w-9 h-9 rounded-lg flex items-center justify-center text-gray-700 dark:text-gray-200 hover:text-blue-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all">
+                                <i data-feather="chevron-up" class="w-5 h-5"></i>
+                            </button>
+                            <button onclick="navigateSearch(1)" title="Следующее"
+                                    class="w-9 h-9 rounded-lg flex items-center justify-center text-gray-700 dark:text-gray-200 hover:text-blue-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all">
+                                <i data-feather="chevron-down" class="w-5 h-5"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div id="chat-input-area" class="hidden p-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
@@ -1641,6 +2135,7 @@
             });
         }
 
+
         function buildReplyPayload(reply, bodyText) {
             if (!reply || !reply.messageId) return bodyText || '';
             const name = (reply.senderName || '').replace(/\|/g, ' ');
@@ -1685,10 +2180,6 @@
             if (prev) prev.textContent = replyingTo.preview || 'Сообщение';
             if (bar) bar.classList.add('show');
             if (messageInput) messageInput.focus();
-
-            if (currentChatId && !editingMessageId && messageInput?.value?.trim()) {
-                scheduleCurrentDraftSave();
-            }
         }
 
         function cancelReply() {
@@ -1906,6 +2397,7 @@
 
             document.getElementById('empty-right-panel').classList.remove('hidden');
             document.getElementById('chat-header').classList.add('hidden');
+            document.getElementById('messages-wrapper').classList.add('hidden');
             document.getElementById('messages-container').classList.add('hidden');
             document.getElementById('chat-input-area').classList.add('hidden');
         });
@@ -2534,7 +3026,6 @@
             if (!editingMessageId && currentChatId && messageInput?.value?.trim()) {
                 saveCurrentDraft();
             }
-
             if (typeof cancelReply === 'function') cancelReply();
             editingMessageId = messageId;
             const parsedEdit = parseReplyPayload(text || '');
@@ -2561,10 +3052,7 @@
             feather.replace();
             const fileLabel = document.querySelector('label[for="file-input"]');
             if (fileLabel) fileLabel.style.display = '';
-
-            if (currentChatId) {
-                restoreDraftForChat(currentChatId);
-            }
+            if (currentChatId) restoreDraftForChat(currentChatId);
         }
 
         async function submitEditMessage() {
@@ -3198,11 +3686,7 @@
             const sentChatId = currentChatId;
             clearTimeout(draftSaveTimer);
             draftSaveTimer = null;
-
-            if (sentChatId) {
-                clearChatDraft(sentChatId);
-            }
-
+            if (sentChatId) clearChatDraft(sentChatId);
             messageInput.value = '';
             attachedFiles.innerHTML = '';
             selectedFiles = [];
@@ -3333,7 +3817,6 @@
                 if (sentAt && meta.time) timeEl.textContent = meta.time;
             }
             if (typeof feather !== 'undefined') feather.replace();
-
             renderChatListDraft(chatId);
         }
 
@@ -4357,8 +4840,10 @@
 
         const originalOpenChat = openChat;
         openChat = function (item) {
-            originalOpenChat.call(this, item);
+            clearMessageSearch(true);
+            const result = originalOpenChat.call(this, item);
             setTimeout(updateCurrentChatSubtitle, 300);
+            return result;
         };
 
         function updateAllOnlineIndicators() {
@@ -4518,7 +5003,6 @@
             }
 
             saveCurrentDraft();
-
             currentChatId = chatId;
             modalChatId = null;
 
@@ -4530,6 +5014,7 @@
 
             document.getElementById('empty-right-panel').classList.add('hidden');
             document.getElementById('chat-header').classList.remove('hidden');
+            document.getElementById('messages-wrapper').classList.remove('hidden');
             document.getElementById('messages-container').classList.remove('hidden');
             document.getElementById('chat-input-area').classList.remove('hidden');
 
@@ -4579,6 +5064,8 @@
             }
 
             await loadMessages(chatId);
+
+            markChatAsRead(chatId);
             updatePinnedMessageBar();
             highlightPinnedMessageInView();
             joinChat(chatId);
@@ -4785,10 +5272,6 @@
                         typeof chat.lastMessage === 'string' ? chat.lastMessage : (lastMessage?.messageText || ''),
                         lastMessage?.attachments || [], lastMessageTime, lastMessageIsMine, lastMessageStatus
                     );
-                    const chatDraft = getChatDraft(div.dataset.chatId);
-                    const initialPreviewHTML = chatDraft
-                        ? renderDraftPreviewHTML(chatDraft)
-                        : initialMeta.previewHTML;
 
                     div.innerHTML = `
                         <div class="relative flex-shrink-0">
@@ -4802,7 +5285,7 @@
                                 <span class="unread-badge hidden flex-shrink-0"></span>
                             </div>
                             <div class="text-sm text-gray-500 truncate chat-list-message-meta">
-                                ${initialPreviewHTML}
+                                ${initialMeta.previewHTML}
                             </div>
                             <div class="typing-in-list hidden text-xs text-blue-600 font-medium mt-0.5">
                                 <span class="typing-name"></span> печатает...
@@ -4825,8 +5308,8 @@
                 cacheChatItems();
                 applyPinnedChatsOrder();
                 filterChats();
-                renderAllDraftPreviews();
                 feather.replace();
+                renderAllDraftPreviews();
 
                 await hydrateChatListStatuses(json.data);
                 renderAllDraftPreviews();
@@ -5030,19 +5513,202 @@
         let currentSearchQuery = "";
         let foundMessageElements = [];
         let currentHighlightIndex = -1;
+        let currentSearchScope = 'chat';
+        let currentSearchFilters = {};
+        let senderSearchTimer = null;
+        let globalSearchResults = [];
 
         function getSearchNav() {
             return document.getElementById('search-navigation');
         }
 
+        function getSearchEmptyState() {
+            return document.getElementById('search-empty-state');
+        }
+
+        function setSearchEmptyState(visible, text = 'Ничего не найдено') {
+            const el = getSearchEmptyState();
+            const textEl = document.getElementById('search-empty-text');
+            if (textEl) textEl.textContent = text;
+            if (el) el.classList.toggle('hidden', !visible);
+            if (visible && typeof feather !== 'undefined') feather.replace();
+        }
+
+        function getMessageTimestamp(msg) {
+            return msg?.sentAt
+                ?? msg?.SentAt
+                ?? msg?.sentTime
+                ?? msg?.SendTime
+                ?? msg?.sendTime
+                ?? msg?.createdAt
+                ?? msg?.CreatedAt
+                ?? msg?.date
+                ?? msg?.timestamp
+                ?? null;
+        }
+
+        function getMessageSenderId(msg) {
+            return msg?.senderId ?? msg?.SenderId ?? msg?.authorId ?? msg?.userId ?? msg?.UserId ?? null;
+        }
+
+        function getMessageSenderName(msg) {
+            return msg?.senderName
+                ?? msg?.SenderName
+                ?? msg?.sender?.name
+                ?? msg?.sender?.fullName
+                ?? msg?.authorName
+                ?? '';
+        }
+
+        function getSearchResultText(result) {
+            return result?.messageText ?? result?.MessageText ?? result?.text ?? result?.Text ?? result?.content ?? result?.Content ?? '';
+        }
+
+        function getSearchResultTime(result) {
+            return getMessageTimestamp(result);
+        }
+
+        function getSearchResultChatId(result) {
+            return result?.chatId ?? result?.ChatId ?? result?.conversationId ?? result?.conversationID
+                ?? result?.chat?.id ?? result?.chat?.chatId ?? null;
+        }
+
+        function getSearchResultChatName(result) {
+            return result?.chatName
+                ?? result?.ChatName
+                ?? result?.chat?.name
+                ?? result?.chat?.title
+                ?? result?.conversationName
+                ?? 'Чат';
+        }
+
+        function getSearchResultSenderName(result) {
+            return getMessageSenderName(result) || 'Пользователь';
+        }
+
+        function getSearchResultHasAttachments(result) {
+            const attachments = result?.attachments ?? result?.Attachments ?? result?.files ?? result?.Files;
+            return Array.isArray(attachments) && attachments.length > 0;
+        }
+
+        function isMessageUnread(msg) {
+            const unreadFields = ['isUnread', 'IsUnread', 'unread', 'Unread'];
+            for (const field of unreadFields) {
+                if (typeof msg?.[field] === 'boolean') return msg[field];
+            }
+
+            const readByMeFields = ['readByMe', 'ReadByMe', 'isReadByCurrentUser', 'IsReadByCurrentUser', 'readByCurrentUser'];
+            for (const field of readByMeFields) {
+                if (typeof msg?.[field] === 'boolean') return !msg[field];
+            }
+
+            const readFields = ['isRead', 'IsRead', 'read', 'Read'];
+            for (const field of readFields) {
+                if (typeof msg?.[field] === 'boolean') return !msg[field];
+            }
+
+            const status = String(
+                msg?.readStatus
+                ?? msg?.ReadStatus
+                ?? msg?.messageReadStatus
+                ?? msg?.MessageReadStatus
+                ?? msg?.readState
+                ?? msg?.ReadState
+                ?? ''
+            ).trim().toLowerCase();
+            if (['unread', 'new', 'notread', 'not_read'].includes(status)) return true;
+            if (['read', 'seen', 'viewed'].includes(status)) return false;
+
+            for (const field of ['isSeen', 'IsSeen', 'seen', 'Seen']) {
+                if (typeof msg?.[field] === 'boolean') return !msg[field];
+            }
+
+            if (Object.prototype.hasOwnProperty.call(msg || {}, 'readAt')) return !msg.readAt;
+            if (Object.prototype.hasOwnProperty.call(msg || {}, 'ReadAt')) return !msg.ReadAt;
+
+            return false;
+        }
+
+        function getLocalDateKey(dateValue) {
+            if (!dateValue) return '';
+
+            if (typeof dateValue === 'string') {
+                const raw = dateValue.trim();
+                const directDate = raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:$|T)/);
+                if (!directDate) return '';
+
+                const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw);
+                const date = hasTimezone ? new Date(raw) : new Date(raw.replace(' ', 'T'));
+                if (isNaN(date.getTime())) return `${directDate[1]}-${directDate[2]}-${directDate[3]}`;
+
+                const y = date.getFullYear();
+                const m = String(date.getMonth() + 1).padStart(2, '0');
+                const d = String(date.getDate()).padStart(2, '0');
+                return `${y}-${m}-${d}`;
+            }
+
+            return getLocalDateKey(new Date(dateValue).toISOString());
+        }
+
+        function getMessageSearchFilters() {
+            const senderId = document.getElementById('message-search-sender-id')?.value?.trim() || '';
+            const senderText = document.getElementById('message-search-sender')?.value?.trim() || '';
+            return {
+                scope: document.getElementById('message-search-scope')?.value || 'chat',
+                from: document.getElementById('message-search-date-from')?.value || '',
+                to: document.getElementById('message-search-date-to')?.value || '',
+                senderId,
+                senderName: senderId ? '' : senderText,
+                hasAttachments: !!document.getElementById('message-search-has-attachments')?.checked,
+                unreadOnly: !!document.getElementById('message-search-unread-only')?.checked
+            };
+        }
+
+        function buildSearchParams(query, filters = getMessageSearchFilters()) {
+            const params = new URLSearchParams();
+            if (query) params.set('query', query);
+            if (filters.from) params.set('from', filters.from);
+            if (filters.to) params.set('to', filters.to);
+            if (filters.senderId) params.set('senderId', filters.senderId);
+            else if (filters.senderName) params.set('senderName', filters.senderName);
+            if (filters.hasAttachments) params.set('hasAttachments', 'true');
+            if (filters.unreadOnly) params.set('unreadOnly', 'true');
+            params.set('limit', '100');
+            return params;
+        }
+
+        function toggleMessageSearchFilters() {
+            const filters = document.getElementById('message-search-filters');
+            if (!filters) return;
+            const willOpen = filters.classList.contains('hidden');
+            filters.classList.toggle('hidden', !willOpen);
+            if (willOpen) {
+                updateSearchScopeUi();
+                setTimeout(() => document.getElementById('message-search-sender')?.focus(), 40);
+            }
+        }
+
+        function updateSearchScopeUi() {
+            const scope = document.getElementById('message-search-scope')?.value || 'chat';
+            currentSearchScope = scope;
+            const input = document.getElementById('message-search-input');
+            if (input) input.placeholder = scope === 'global' ? 'Поиск по всем чатам' : 'Поиск по сообщениям';
+            const filters = document.getElementById('message-search-filters');
+            if (filters) filters.classList.toggle('ring-1', scope === 'global');
+        }
+
         function toggleMessageSearch() {
             const searchBar = document.getElementById('message-search-bar');
+            const searchToggle = document.getElementById('search-toggle-btn');
             const searchInput = document.getElementById('message-search-input');
+            if (!searchBar) return;
 
             if (searchBar.classList.contains('hidden')) {
                 searchBar.classList.remove('hidden');
                 searchBar.classList.add('flex');
-                searchInput.focus();
+                updateSearchScopeUi();
+                if (searchToggle) searchToggle.classList.add('hidden');
+                searchInput?.focus();
             } else {
                 clearMessageSearch(true);
             }
@@ -5053,114 +5719,320 @@
             searchDebounceTimer = setTimeout(() => performMessageSearch(query), 280);
         };
 
-        async function performMessageSearch(query) {
-            query = (query || "").trim();
-            currentSearchQuery = query;
+        function normalizeSearchResults(json) {
+            if (Array.isArray(json)) return json;
+            if (Array.isArray(json?.data)) return json.data;
+            if (Array.isArray(json?.data?.items)) return json.data.items;
+            if (Array.isArray(json?.items)) return json.items;
+            if (Array.isArray(json?.results)) return json.results;
+            return [];
+        }
 
-            if (!query || !currentChatId) {
+        function filterMessagesLocally(results, query, filters) {
+            const lowerQuery = (query || '').trim().toLowerCase();
+            const from = filters.from || '';
+            const to = filters.to || '';
+
+            return (Array.isArray(results) ? results : []).filter(msg => {
+                const text = getSearchResultText(msg);
+                if (lowerQuery && !String(text).toLowerCase().includes(lowerQuery)) return false;
+
+                const senderId = getMessageSenderId(msg);
+                const senderName = getSearchResultSenderName(msg);
+                if (filters.senderId && String(senderId ?? '') !== String(filters.senderId)) return false;
+                if (filters.senderName && !senderName.toLowerCase().includes(filters.senderName.toLowerCase())) return false;
+                if (filters.hasAttachments && !getSearchResultHasAttachments(msg)) return false;
+                if (filters.unreadOnly && !isMessageUnread(msg)) return false;
+
+                const dateKey = getLocalDateKey(getSearchResultTime(msg));
+                if (from && (!dateKey || dateKey < from)) return false;
+                if (to && (!dateKey || dateKey > to)) return false;
+
+                return true;
+            });
+        }
+
+        async function fetchChatMessagesForSearch(chatId) {
+            if (!chatId) return [];
+            try {
+                const res = await fetchWithAuth(`${API_BASE}/messages/${encodeURIComponent(chatId)}?limit=100`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res?.ok) return [];
+                const json = await res.json();
+                return normalizeSearchResults(json);
+            } catch (e) {
+                console.warn(`Не удалось загрузить сообщения чата ${chatId} для поиска`, e);
+                return [];
+            }
+        }
+
+        async function performMessageSearch(query) {
+            query = (query ?? document.getElementById('message-search-input')?.value ?? '').trim();
+            currentSearchQuery = query;
+            currentSearchFilters = getMessageSearchFilters();
+
+            const hasFilters = !!(
+                currentSearchFilters.from ||
+                currentSearchFilters.to ||
+                currentSearchFilters.senderId ||
+                currentSearchFilters.senderName ||
+                currentSearchFilters.hasAttachments ||
+                currentSearchFilters.unreadOnly
+            );
+
+            if (!query && !hasFilters) {
                 resetSearch();
                 return;
             }
 
-            try {
-                const res = await fetch(`${API_BASE}/messages/${currentChatId}/search?query=${encodeURIComponent(query)}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
+            setSearchEmptyState(false);
 
-                if (res.ok) {
-                    const json = await res.json();
-                    const results = json.data || json || [];
-                    processSearchResults(results, query);
-                    return;
-                }
-            } catch (e) {
-                console.warn("Серверный поиск не удался", e);
+            if (currentSearchFilters.scope === 'global') {
+                await performGlobalMessageSearch(query, currentSearchFilters);
+                return;
             }
 
-            const lowerQuery = query.toLowerCase();
-            const results = originalMessages.filter(msg => {
-                let text = msg.messageText || "";
-                return text.toLowerCase().includes(lowerQuery);
+            if (!currentChatId) {
+                resetSearch();
+                setSearchEmptyState(true, 'Сначала откройте чат');
+                return;
+            }
+
+            if (query) {
+                try {
+                    const params = buildSearchParams(query, currentSearchFilters);
+                    const res = await fetchWithAuth(`${API_BASE}/messages/${currentChatId}/search?${params.toString()}`);
+                    if (res?.ok) {
+                        const serverResults = filterMessagesLocally(normalizeSearchResults(await res.json()), query, currentSearchFilters);
+                        if (serverResults.length) {
+                            processSearchResults(serverResults, query);
+                            return;
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Серверный поиск в чате не удался', e);
+                }
+            }
+
+            let localResults = filterMessagesLocally(originalMessages, query, currentSearchFilters);
+
+            if (!localResults.length && (currentSearchFilters.from || currentSearchFilters.to || currentSearchFilters.unreadOnly || currentSearchFilters.hasAttachments || !query)) {
+                const fetched = await fetchChatMessagesForSearch(currentChatId);
+                localResults = filterMessagesLocally(fetched, query, currentSearchFilters);
+            }
+
+            processSearchResults(localResults, query);
+        }
+
+        async function performGlobalMessageSearch(query, filters) {
+            let results = [];
+
+            try {
+                const params = buildSearchParams(query, filters);
+                const res = await fetchWithAuth(`${API_BASE}/messages/search?${params.toString()}`);
+                if (res?.ok) results = filterMessagesLocally(normalizeSearchResults(await res.json()), query, filters);
+            } catch (e) {
+                console.warn('Глобальный API-поиск недоступен, выполняем поиск по чатам', e);
+            }
+
+            if (!results.length) {
+                const chatItems = Array.from(document.querySelectorAll('.chat-item[data-chat-id]'));
+                const batches = [];
+                for (let i = 0; i < chatItems.length; i += 6) {
+                    const batch = chatItems.slice(i, i + 6);
+                    const batchResults = await Promise.all(batch.map(async item => {
+                        const chatId = item.dataset.chatId;
+                        const chatName = item.querySelector('h3')?.textContent?.trim() || 'Чат';
+                        const messages = await fetchChatMessagesForSearch(chatId);
+                        return messages.map(msg => ({ ...msg, chatId, chatName }));
+                    }));
+                    batches.push(...batchResults.flat());
+                }
+                results = filterMessagesLocally(batches, query, filters);
+            }
+
+            const unique = new Map();
+            results.forEach(msg => {
+                const chatId = getSearchResultChatId(msg) || '';
+                const messageId = msg?.messageId ?? msg?.MessageId ?? msg?.id ?? msg?.Id;
+                const key = `${chatId}:${messageId ?? JSON.stringify([getSearchResultTime(msg), getSearchResultText(msg)])}`;
+                if (!unique.has(key)) unique.set(key, msg);
             });
 
-            processSearchResults(results, query);
+            globalSearchResults = Array.from(unique.values()).sort((a, b) => {
+                const da = parseMessageDate(getSearchResultTime(a))?.getTime() || 0;
+                const db = parseMessageDate(getSearchResultTime(b))?.getTime() || 0;
+                return db - da;
+            });
+
+            renderGlobalSearchResults(globalSearchResults, query);
+        }
+
+        function renderGlobalSearchResults(results, query = '', emptyText = 'Ничего не найдено') {
+            const global = document.getElementById('global-search-results');
+            if (!global) return;
+            document.getElementById('messages-container')?.classList.add('hidden');
+            global.classList.remove('hidden');
+            setSearchEmptyState(false);
+
+            if (!results.length) {
+                setSearchEmptyState(true, emptyText);
+                global.innerHTML = '';
+                return;
+            }
+
+            global.innerHTML = `
+                <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
+                    <div class="max-w-4xl mx-auto text-sm text-gray-500 dark:text-gray-400">
+                        Найдено: <span class="font-semibold text-gray-700 dark:text-gray-200">${results.length}</span>
+                    </div>
+                </div>
+                <div class="max-w-4xl mx-auto divide-y divide-gray-200 dark:divide-gray-700">
+                    ${results.map((result, index) => {
+                        const chatName = getSearchResultChatName(result);
+                        const sender = getSearchResultSenderName(result);
+                        const text = getSearchResultText(result);
+                        const dt = parseMessageDate(getSearchResultTime(result));
+                        const time = dt ? formatDateLabel(dt) + ' · ' + dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+                        const attachments = getSearchResultHasAttachments(result);
+                        const unread = isMessageUnread(result);
+                        return `<button type="button" class="global-search-result w-full text-left px-4 py-3 transition" data-global-index="${index}">
+                            <div class="flex items-center gap-2 mb-1">
+                                <span class="font-semibold text-gray-800 dark:text-gray-100 truncate">${escapeHtml(chatName)}</span>
+                                ${unread ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">Непрочитанное</span>' : ''}
+                                <span class="ml-auto text-xs text-gray-400 flex-shrink-0">${escapeHtml(time)}</span>
+                            </div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">${escapeHtml(sender)}${attachments ? ' · 📎 вложение' : ''}</div>
+                            <div class="text-sm text-gray-700 dark:text-gray-200 line-clamp-2">${highlightSearchText(text, query)}</div>
+                        </button>`;
+                    }).join('')}
+                </div>`;
+
+            global.querySelectorAll('.global-search-result').forEach(btn => {
+                btn.addEventListener('click', () => openGlobalSearchResult(Number(btn.dataset.globalIndex)));
+            });
+            if (typeof feather !== 'undefined') feather.replace();
+        }
+
+        async function openGlobalSearchResult(index) {
+            const result = globalSearchResults[index];
+            if (!result) return;
+            const chatId = getSearchResultChatId(result);
+            const messageId = result?.messageId ?? result?.MessageId ?? result?.id ?? result?.Id ?? null;
+            if (!chatId) return;
+
+            let item = document.querySelector(`.chat-item[data-chat-id="${CSS.escape(String(chatId))}"]`);
+            if (!item) {
+                await loadChats();
+                item = document.querySelector(`.chat-item[data-chat-id="${CSS.escape(String(chatId))}"]`);
+            }
+            if (!item) {
+                showToast('Чат найден, но открыть его не удалось', 'warning');
+                return;
+            }
+
+            const scopeEl = document.getElementById('message-search-scope');
+            if (scopeEl) scopeEl.value = 'chat';
+            updateSearchScopeUi();
+            await openChat(item);
+
+            if (messageId) {
+                setTimeout(() => scrollToMessageId(messageId), 350);
+                setTimeout(() => scrollToMessageId(messageId), 900);
+            }
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch]));
+        }
+
+        function highlightSearchText(text, query) {
+            const safe = escapeHtml(text);
+            if (!query) return safe;
+            const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            return safe.replace(new RegExp(`(${escaped})`, 'gi'), '<span class="bg-yellow-300 px-1 rounded text-gray-900">$1</span>');
         }
 
         function processSearchResults(results, query) {
-            resetHighlights();
+            const global = document.getElementById('global-search-results');
+            if (global) {
+                global.classList.add('hidden');
+                global.innerHTML = '';
+            }
+            const container = document.getElementById('messages-container');
+            if (container) container.classList.remove('hidden');
 
+            resetHighlights();
+            setSearchEmptyState(results.length === 0, 'Ничего не найдено');
             if (results.length === 0) return;
 
             foundMessageElements = [];
             currentHighlightIndex = -1;
 
             results.forEach(resultMsg => {
-                const elements = document.querySelectorAll(`[data-mid="${resultMsg.messageId}"]`);
+                const id = resultMsg.messageId ?? resultMsg.MessageId ?? resultMsg.id ?? resultMsg.Id;
+                if (!id) return;
+                const elements = document.querySelectorAll(`[data-mid="${CSS.escape(String(id))}"]`);
                 elements.forEach(el => {
                     highlightMessage(el, query);
                     foundMessageElements.push(el);
                 });
             });
 
-            if (foundMessageElements.length > 0) {
-                goToHighlight(0);
+            if (!foundMessageElements.length) {
+                setSearchEmptyState(true, 'Сообщения найдены, но не загружены в текущую историю');
+                return;
             }
+            goToHighlight(0);
         }
 
         function highlightMessage(element, query) {
             const textEl = element.querySelector('p');
             if (!textEl) return;
-
-            let html = textEl.innerHTML;
-            const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const regex = new RegExp(`(${escapedQuery})`, 'gi');
-            html = html.replace(regex, '<span class="bg-yellow-300 px-1.5 rounded">$1</span>');
-            textEl.innerHTML = html;
+            const source = textEl.textContent || '';
+            textEl.innerHTML = highlightSearchText(source, query);
         }
 
         function resetHighlights() {
             document.querySelectorAll('.bg-yellow-300').forEach(span => {
                 const parent = span.parentElement;
-                if (parent) {
-                    parent.innerHTML = parent.innerHTML.replace(/<span class="bg-yellow-300 px-1.5 rounded">(.+?)<\/span>/gi, '$1');
-                }
+                if (parent) parent.textContent = parent.textContent;
             });
-
             foundMessageElements = [];
             currentHighlightIndex = -1;
 
             const nav = getSearchNav();
             if (nav) nav.classList.add('hidden');
-
             const counter = document.getElementById('search-counter');
             if (counter) counter.classList.add('hidden');
         }
 
+        function resetSearch() {
+            resetHighlights();
+            setSearchEmptyState(false);
+            const global = document.getElementById('global-search-results');
+            if (global) {
+                global.classList.add('hidden');
+                global.innerHTML = '';
+            }
+            document.getElementById('messages-container')?.classList.remove('hidden');
+        }
+
         function goToHighlight(index) {
             if (index < 0 || index >= foundMessageElements.length) return;
-
+            setSearchEmptyState(false);
             currentHighlightIndex = index;
             const target = foundMessageElements[index];
-
-            if (target) {
-                target.scrollIntoView({
-                    behavior: "smooth",
-                    block: "center"
-                });
-            }
-
+            if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
             updateNavigationUI();
         }
 
         function updateNavigationUI() {
             const nav = getSearchNav();
             if (!nav) return;
-
             const total = foundMessageElements.length;
-            const showNav = total > 1;
-
-            nav.classList.toggle('hidden', !showNav);
-
+            nav.classList.toggle('hidden', total <= 1);
             const counter = document.getElementById('search-counter');
             if (counter) {
                 counter.classList.toggle('hidden', total <= 1);
@@ -5173,56 +6045,137 @@
 
         function navigateSearch(direction) {
             if (foundMessageElements.length === 0) return;
-
             let newIndex = currentHighlightIndex + direction;
             if (newIndex < 0) newIndex = foundMessageElements.length - 1;
             if (newIndex >= foundMessageElements.length) newIndex = 0;
-
             goToHighlight(newIndex);
         }
 
         function clearMessageSearch(hideBar = false) {
             clearTimeout(searchDebounceTimer);
-            currentSearchQuery = "";
+            clearTimeout(senderSearchTimer);
+            currentSearchQuery = '';
+            currentSearchFilters = {};
+            globalSearchResults = [];
 
             const searchInput = document.getElementById('message-search-input');
             const searchBar = document.getElementById('message-search-bar');
-
             if (searchInput) searchInput.value = '';
 
             if (hideBar && searchBar) {
                 searchBar.classList.add('hidden');
                 searchBar.classList.remove('flex');
+                document.getElementById('search-toggle-btn')?.classList.remove('hidden');
             }
+            document.getElementById('message-search-filters')?.classList.add('hidden');
+            resetMessageSearchFilters();
+            resetSearch();
+        }
 
-            resetHighlights();
+        function resetMessageSearchFilters() {
+            const fields = {
+                'message-search-scope': 'chat',
+                'message-search-date-from': '',
+                'message-search-date-to': '',
+                'message-search-sender': '',
+                'message-search-sender-id': ''
+            };
+            Object.entries(fields).forEach(([id, value]) => {
+                const el = document.getElementById(id);
+                if (el) el.value = value;
+            });
+            const a = document.getElementById('message-search-has-attachments');
+            const u = document.getElementById('message-search-unread-only');
+            if (a) a.checked = false;
+            if (u) u.checked = false;
+            document.getElementById('message-search-sender-clear')?.classList.add('hidden');
+            document.getElementById('message-search-sender-results')?.classList.add('hidden');
+            updateSearchScopeUi();
+        }
+
+        async function searchMessageSenders(query) {
+            const results = document.getElementById('message-search-sender-results');
+            if (!results) return;
+            query = (query || '').trim();
+            clearTimeout(senderSearchTimer);
+            if (query.length < 2) {
+                results.classList.add('hidden');
+                return;
+            }
+            senderSearchTimer = setTimeout(async () => {
+                try {
+                    const res = await fetchWithAuth(`${API_BASE}/users/search?query=${encodeURIComponent(query)}`);
+                    if (!res?.ok) throw new Error('sender search failed');
+                    const json = await res.json();
+                    const users = Array.isArray(json?.data) ? json.data : [];
+                    if (!users.length) {
+                        results.innerHTML = '<div class="p-3 text-xs text-gray-500">Ничего не найдено</div>';
+                        results.classList.remove('hidden');
+                        return;
+                    }
+                    results.innerHTML = users.slice(0, 8).map(user => `
+                        <button type="button" class="w-full text-left px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-xl" data-sender-id="${escapeHtml(user.id)}" data-sender-name="${escapeHtml(user.name || user.fullName || 'Пользователь')}">
+                            <div class="font-medium text-sm text-gray-800 dark:text-gray-100">${escapeHtml(user.name || user.fullName || 'Пользователь')}</div>
+                        </button>`).join('');
+                    results.querySelectorAll('[data-sender-id]').forEach(btn => {
+                        btn.addEventListener('click', () => {
+                            document.getElementById('message-search-sender').value = btn.dataset.senderName || '';
+                            document.getElementById('message-search-sender-id').value = btn.dataset.senderId || '';
+                            document.getElementById('message-search-sender-clear')?.classList.remove('hidden');
+                            results.classList.add('hidden');
+                            performMessageSearch();
+                        });
+                    });
+                    results.classList.remove('hidden');
+                } catch (e) {
+                    console.warn('Поиск отправителя не удался', e);
+                }
+            }, 250);
         }
 
         document.addEventListener('DOMContentLoaded', () => {
             const searchInput = document.getElementById('message-search-input');
             if (searchInput) {
-                searchInput.addEventListener('input', (e) => {
-                    const value = e.target.value.trim();
-                    if (value === "") {
-                        resetHighlights();
-                    }
-                    debouncedSearch(value);
-                });
-
-                searchInput.addEventListener('keydown', (e) => {
+                searchInput.addEventListener('input', e => debouncedSearch(e.target.value));
+                searchInput.addEventListener('keydown', e => {
                     if (e.key === 'Escape') {
                         e.preventDefault();
                         clearMessageSearch(true);
                     }
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        clearTimeout(searchDebounceTimer);
+                        performMessageSearch(e.target.value);
+                    }
                 });
             }
-        });
 
-        const originalOpenChatFunc = openChat;
-        openChat = function (item) {
-            clearMessageSearch(true);
-            originalOpenChatFunc.call(this, item);
-        };
+            document.getElementById('message-search-scope')?.addEventListener('change', () => {
+                updateSearchScopeUi();
+                performMessageSearch();
+            });
+
+            ['message-search-date-from', 'message-search-date-to', 'message-search-has-attachments', 'message-search-unread-only'].forEach(id => {
+                document.getElementById(id)?.addEventListener('change', () => performMessageSearch());
+            });
+
+            const sender = document.getElementById('message-search-sender');
+            sender?.addEventListener('input', e => {
+                document.getElementById('message-search-sender-id').value = '';
+                document.getElementById('message-search-sender-clear')?.classList.toggle('hidden', !e.target.value.trim());
+                searchMessageSenders(e.target.value);
+            });
+
+            document.getElementById('message-search-sender-clear')?.addEventListener('click', () => {
+                document.getElementById('message-search-sender').value = '';
+                document.getElementById('message-search-sender-id').value = '';
+                document.getElementById('message-search-sender-clear')?.classList.add('hidden');
+                document.getElementById('message-search-sender-results')?.classList.add('hidden');
+                performMessageSearch();
+            });
+
+            updateSearchScopeUi();
+        });
 
         function toggleChatNameField() {
             const isGroup = document.querySelector('input[name="chat-type"]:checked').value === 'group';
@@ -5750,8 +6703,6 @@
         });
 
         function closeCurrentChat() {
-            saveCurrentDraft();
-
             if (currentChatId && connection?.state === 'Connected') {
                 leaveChat(currentChatId).catch(() => { });
             }
@@ -5760,6 +6711,7 @@
             currentChatInfo = null;
 
             document.getElementById('chat-header').classList.add('hidden');
+            document.getElementById('messages-wrapper').classList.add('hidden');
             document.getElementById('messages-container').classList.add('hidden');
             document.getElementById('chat-input-area').classList.add('hidden');
             document.getElementById('empty-right-panel').classList.remove('hidden');
@@ -6111,7 +7063,6 @@
         document.getElementById('reply-compose-cancel')?.addEventListener('click', (e) => {
             e.preventDefault();
             cancelReply();
-            scheduleCurrentDraftSave();
         });
 
         document.getElementById('messages-container')?.addEventListener('dblclick', (e) => {
@@ -6236,16 +7187,6 @@
         document.getElementById('theme-toggle')?.addEventListener('click', toggleTheme);
         updateThemeIcons();
 
-        window.addEventListener('beforeunload', () => {
-            saveCurrentDraft();
-        });
-
-        document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'hidden') {
-                saveCurrentDraft();
-            }
-        });
-
         window.addEventListener('resize', () => {
             if (!isMobileLayout()) {
                 setMobileChatOpen(false);
@@ -6255,11 +7196,23 @@
         });
 
         if (window.visualViewport) {
-            window.visualViewport.addEventListener('resize', () => {
+            const updateViewportHeight = () => {
                 const vv = window.visualViewport;
                 document.documentElement.style.setProperty('--vv-height', vv.height + 'px');
-            });
+                document.documentElement.style.setProperty('--keyboard-offset', Math.max(0, window.innerHeight - vv.height) + 'px');
+            };
+            window.visualViewport.addEventListener('resize', updateViewportHeight);
+            window.visualViewport.addEventListener('scroll', updateViewportHeight);
+            updateViewportHeight();
         }
+
+        window.addEventListener('orientationchange', () => {
+            setTimeout(() => {
+                if (window.visualViewport) {
+                    document.documentElement.style.setProperty('--vv-height', window.visualViewport.height + 'px');
+                }
+            }, 250);
+        });
     </script>
     </div>
 </body>
