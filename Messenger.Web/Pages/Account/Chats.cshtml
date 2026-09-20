@@ -832,14 +832,205 @@
             from { opacity: 0; transform: translate(-50%, -50%) scale(0.94); }
             to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
         }
+
+        #messages-container.select-mode,
+        #messages-wrapper.select-mode-pad #messages-container,
+        body.select-mode-active #messages-container {
+            padding-bottom: 5.5rem !important;
+        }
+        body.select-mode-active #messages-content-area #messages-container,
+        body.select-mode-active #messages-wrapper #messages-container {
+            padding-bottom: 5.5rem !important;
+            scroll-padding-bottom: 5.5rem;
+        }
+
+        #messages-container.select-mode .message-row.outgoing-row {
+            cursor: pointer;
+            position: relative;
+            padding-left: 2.5rem;
+            transition: background 0.15s;
+        }
+        #messages-container.select-mode .message-row.outgoing-row::before {
+            content: '';
+            position: absolute;
+            left: 0.5rem;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            border: 2px solid #9ca3af;
+            background: transparent;
+            box-sizing: border-box;
+        }
+        .dark #messages-container.select-mode .message-row.outgoing-row::before {
+            border-color: #6b7280;
+        }
+        #messages-container.select-mode .message-row.outgoing-row.selected {
+            background: rgba(59, 130, 246, 0.12);
+        }
+        .dark #messages-container.select-mode .message-row.outgoing-row.selected {
+            background: rgba(59, 130, 246, 0.2);
+        }
+        #messages-container.select-mode .message-row.outgoing-row.selected::before {
+            border-color: #3b82f6;
+            background: #3b82f6;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E");
+            background-size: 14px 14px;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+        #messages-container.select-mode .message-row.outgoing-row:not(.selected):active {
+            background: rgba(0,0,0,0.04);
+        }
+        .dark #messages-container.select-mode .message-row.outgoing-row:not(.selected):active {
+            background: rgba(255,255,255,0.05);
+        }
+
+        #messages-container.select-mode .message-row.incoming-row {
+            cursor: default;
+            opacity: 0.55;
+            pointer-events: none;
+        }
+        #messages-container.select-mode .message-row.incoming-row::before {
+            display: none;
+        }
+
+        #selection-toolbar {
+            display: none;
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 40;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+            padding: 0.75rem 1rem;
+            padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+            background: #1e3a8a;
+            color: white;
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.15);
+            min-height: 3.5rem;
+            box-sizing: border-box;
+        }
+        #selection-toolbar.show {
+            display: flex;
+        }
+        .dark #selection-toolbar {
+            background: #1e40af;
+        }
+        #selection-toolbar .sel-count {
+            font-weight: 600;
+            font-size: 0.95rem;
+            flex: 1;
+            min-width: 0;
+        }
+        #selection-toolbar button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.35rem;
+            padding: 0.55rem 0.9rem;
+            border-radius: 9999px;
+            border: none;
+            font-size: 0.875rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.15s, transform 0.1s;
+            min-height: 44px;
+            min-width: 44px;
+        }
+        #selection-toolbar .sel-cancel {
+            background: rgba(255,255,255,0.15);
+            color: white;
+        }
+        #selection-toolbar .sel-cancel:hover {
+            background: rgba(255,255,255,0.25);
+        }
+        #selection-toolbar .sel-delete {
+            background: #dc2626;
+            color: white;
+        }
+        #selection-toolbar .sel-delete:hover {
+            background: #b91c1c;
+        }
+        #selection-toolbar .sel-delete:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        body.select-mode-active #chat-input-area {
+            visibility: hidden;
+            pointer-events: none;
+            height: 0 !important;
+            min-height: 0 !important;
+            overflow: hidden;
+            padding: 0 !important;
+            margin: 0 !important;
+            border: none !important;
+        }
+        body.select-mode-active #right-panel {
+            position: relative;
+        }
+
+        @@media (max-width: 767.98px) {
+            #export-chat-modal.modal {
+                align-items: center !important;
+                justify-content: center !important;
+                padding: 1rem !important;
+            }
+            #export-chat-modal .bg-white,
+            #export-chat-modal > div {
+                width: calc(100% - 1.5rem) !important;
+                max-width: 22rem !important;
+                margin: 0 auto !important;
+                border-radius: 1.25rem !important;
+                padding: 1.25rem !important;
+                max-height: min(85dvh, 32rem) !important;
+                padding-bottom: 1.25rem !important;
+            }
+            #export-chat-modal .grid {
+                gap: 0.75rem;
+            }
+            #export-chat-modal .export-modal-fmt-btn {
+                min-height: 5.5rem;
+                padding: 1rem !important;
+            }
+            #selection-toolbar {
+                padding: 0.85rem 1rem;
+                padding-bottom: max(0.85rem, env(safe-area-inset-bottom));
+            }
+            #selection-toolbar button {
+                min-height: 48px;
+                padding: 0.65rem 1rem;
+                font-size: 0.9rem;
+            }
+            body.select-mode-active #messages-container {
+                padding-bottom: 6rem !important;
+                scroll-padding-bottom: 6rem;
+            }
+            #messages-container.select-mode .message-row.outgoing-row {
+                padding-left: 2.75rem;
+                padding-top: 0.35rem;
+                padding-bottom: 0.35rem;
+            }
+            #messages-container.select-mode .message-row.outgoing-row::before {
+                width: 24px;
+                height: 24px;
+                left: 0.6rem;
+            }
+            #message-context-menu button {
+                min-height: 48px;
+            }
+        }
+
+
         .long-press-active {
             opacity: 0.75 !important;
             transform: scale(0.98);
             transition: opacity 0.15s, transform 0.15s;
         }
 
-
-        /* ===== Mobile adaptation ===== */
         @@media (max-width: 767.98px) {
             :root {
                 --mobile-header-height: 4.25rem;
@@ -920,7 +1111,40 @@
             #chat-header #chat-status-area {
                 font-size: .75rem;
                 line-height: 1rem;
-                max-width: 42vw;
+                max-width: none;
+                width: 100%;
+                min-width: 0;
+                overflow: hidden;
+            }
+            #chat-header #chat-subtitle {
+                display: inline-block;
+                min-width: 0;
+                max-width: none;
+                overflow: visible;
+                text-overflow: clip;
+                white-space: nowrap;
+                will-change: transform;
+            }
+            #chat-header #chat-subtitle.is-marquee {
+                animation: chatSubtitleMarquee 6s linear infinite alternate;
+            }
+            @@keyframes chatSubtitleMarquee {
+                0%, 15% { transform: translateX(0); }
+                85%, 100% { transform: translateX(var(--marquee-shift, 0px)); }
+            }
+            #chat-header > div.flex.items-center.space-x-3,
+            #chat-header > div[onclick*="openChatInfo"] {
+                flex: 1 1 0%;
+                min-width: 0;
+                overflow: hidden;
+            }
+            #chat-header > div[onclick*="openChatInfo"] > div.min-w-0 {
+                flex: 1 1 0%;
+                min-width: 0;
+                overflow: hidden;
+            }
+            #chat-header > div.flex.items-center.gap-2 {
+                flex-shrink: 0;
             }
 
             #mobile-back-btn {
@@ -965,8 +1189,6 @@
             #message-search-filters {
                 position: relative;
                 z-index: 30;
-                /* The mobile search bar is absolutely positioned below the header,
-                   so reserve its vertical space before showing the filters. */
                 margin-top: 3.7rem;
                 padding: .75rem .75rem .875rem;
                 max-height: min(48dvh, 25rem);
@@ -1510,8 +1732,8 @@
                     </div>
                     <div class="min-w-0">
                         <h2 id="chat-title" class="font-semibold text-lg truncate text-gray-900 dark:text-white">Чат</h2>
-                        <div id="chat-status-area" class="text-sm text-gray-500 dark:text-gray-400 truncate flex items-center gap-2">
-                            <span id="chat-subtitle"></span>
+                        <div id="chat-status-area" class="text-sm text-gray-500 dark:text-gray-400 min-w-0 w-full overflow-hidden flex items-center gap-2">
+                            <span id="chat-subtitle" class="min-w-0 whitespace-nowrap"></span>
 
                             <div id="typing-indicator" class="typing-indicator hidden items-center gap-1">
                                 <span id="typing-name" class="font-medium text-blue-600"></span>
@@ -1553,6 +1775,12 @@
 
                     <button class="w-9 h-9 flex items-center justify-center text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition">
                         <i data-feather="phone" class="w-5 h-5"></i>
+                    </button>
+                    <button type="button" id="export-chat-btn"
+                            onclick="event.stopPropagation(); openExportChatModal(currentChatId);"
+                            title="Экспорт чата"
+                            class="w-9 h-9 flex items-center justify-center text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition">
+                        <i data-feather="download" class="w-5 h-5"></i>
                     </button>
                     <button onclick="openChatInfo()"
                             class="w-9 h-9 flex items-center justify-center text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition">
@@ -1677,6 +1905,18 @@
                         </div>
                     </div>
                 </div>
+            </div>
+            
+            <div id="selection-toolbar">
+                <button type="button" class="sel-cancel" id="sel-cancel-btn" title="Отмена">
+                    <i data-feather="x" class="w-5 h-5"></i>
+                    <span>Отмена</span>
+                </button>
+                <span class="sel-count" id="sel-count-label">Выбрано: 0</span>
+                <button type="button" class="sel-delete" id="sel-delete-btn" title="Удалить" disabled>
+                    <i data-feather="trash-2" class="w-5 h-5"></i>
+                    <span>Удалить</span>
+                </button>
             </div>
 
             <div id="chat-input-area" class="hidden p-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
@@ -1805,7 +2045,19 @@
                 <div id="participants-list" class="space-y-2"></div>
             </div>
 
-            <div class="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
+            <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+                <h4 class="font-semibold dark:text-white mb-3 flex items-center gap-2">
+                    <i data-feather="download" class="w-4 h-4"></i>
+                    Экспорт истории
+                </h4>
+                <div class="grid grid-cols-2 gap-2">
+                    <button type="button" onclick="exportChat(currentChatId, 'txt')" class="export-fmt-btn px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition text-gray-800 dark:text-gray-100">TXT</button>
+                    <button type="button" onclick="exportChat(currentChatId, 'json')" class="export-fmt-btn px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition text-gray-800 dark:text-gray-100">JSON</button>
+                    <button type="button" onclick="exportChat(currentChatId, 'html')" class="export-fmt-btn px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition text-gray-800 dark:text-gray-100">HTML</button>
+                    <button type="button" onclick="exportChat(currentChatId, 'csv')" class="export-fmt-btn px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition text-gray-800 dark:text-gray-100">CSV</button>
+                </div>
+            </div>
+            <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
                 <button id="delete-chat-btn" class="w-full px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-medium transition transform hover:scale-105">
                     Удалить чат
                 </button>
@@ -1847,6 +2099,40 @@
     <script src="~/app.js"></script>
     <script src="~/js/session-cleanup.js"></script>
 
+    <div id="export-chat-modal" class="modal">
+        <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-6 text-gray-900 dark:text-white">
+            <div class="flex items-center justify-between mb-5">
+                <h3 class="text-lg font-semibold flex items-center gap-2">
+                    <i data-feather="download" class="w-5 h-5"></i>
+                    Экспорт чата
+                </h3>
+                <button type="button" onclick="closeExportChatModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                    <i data-feather="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Выберите формат файла:</p>
+            <div class="grid grid-cols-2 gap-3">
+                <button type="button" data-format="txt" class="export-modal-fmt-btn flex flex-col items-center gap-1 px-4 py-4 rounded-xl border border-gray-200 dark:border-gray-600 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition">
+                    <span class="text-2xl font-bold text-blue-600">TXT</span>
+                    <span class="text-xs text-gray-500">Текст</span>
+                </button>
+                <button type="button" data-format="json" class="export-modal-fmt-btn flex flex-col items-center gap-1 px-4 py-4 rounded-xl border border-gray-200 dark:border-gray-600 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition">
+                    <span class="text-2xl font-bold text-green-600">JSON</span>
+                    <span class="text-xs text-gray-500">Данные</span>
+                </button>
+                <button type="button" data-format="html" class="export-modal-fmt-btn flex flex-col items-center gap-1 px-4 py-4 rounded-xl border border-gray-200 dark:border-gray-600 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition">
+                    <span class="text-2xl font-bold text-orange-600">HTML</span>
+                    <span class="text-xs text-gray-500">Страница</span>
+                </button>
+                <button type="button" data-format="csv" class="export-modal-fmt-btn flex flex-col items-center gap-1 px-4 py-4 rounded-xl border border-gray-200 dark:border-gray-600 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition">
+                    <span class="text-2xl font-bold text-purple-600">CSV</span>
+                    <span class="text-xs text-gray-500">Таблица</span>
+                </button>
+            </div>
+            <p id="export-status" class="text-sm text-center text-gray-500 dark:text-gray-400 mt-4 hidden"></p>
+        </div>
+    </div>
+
     <div id="ctx-menu-backdrop" class="fixed inset-0 bg-black/40 z-[2999] hidden" style="touch-action: none;"></div>
 
     <div id="chat-context-menu">
@@ -1855,6 +2141,9 @@
         </button>
         <button type="button" id="chat-ctx-edit-btn"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ctx-icon"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
             <span>Изменить</span>
+        </button>
+        <button type="button" id="chat-ctx-export-btn"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ctx-icon"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+            <span>Экспорт чата</span>
         </button>
         <button type="button" id="chat-ctx-delete-btn" class="danger"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ctx-icon"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
             <span>Удалить</span>
@@ -1870,6 +2159,9 @@
         </button>
         <button type="button" id="ctx-edit-btn"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ctx-icon"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
             <span>Изменить</span>
+        </button>
+        <button type="button" id="ctx-select-btn"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ctx-icon"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+            <span>Выделить</span>
         </button>
         <button type="button" id="ctx-delete-btn" class="danger"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ctx-icon"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
             <span>Удалить</span>
@@ -1927,7 +2219,169 @@
         const editModeBar = document.getElementById('edit-mode-bar');
         let editingMessageId = null;
         let modalChatId = null;
-        let contextMenuMessageId = null;
+
+        window.addEventListener('resize', () => { if (typeof updateChatSubtitleMarquee === 'function') updateChatSubtitleMarquee(); });
+        function updateChatSubtitleMarquee() {
+            const el = document.getElementById('chat-subtitle');
+            const area = document.getElementById('chat-status-area');
+            if (!el || !area) return;
+            el.classList.remove('is-marquee');
+            el.style.removeProperty('--marquee-shift');
+            el.style.transform = '';
+            if (window.innerWidth >= 768) return;
+            requestAnimationFrame(() => {
+                const overflow = el.scrollWidth - area.clientWidth;
+                if (overflow > 4) {
+                    const sec = Math.min(12, Math.max(4, overflow / 25));
+                    el.style.animationDuration = sec + 's';
+                    el.style.setProperty('--marquee-shift', `-${overflow}px`);
+                    el.classList.add('is-marquee');
+                }
+            });
+        }
+
+        let selectMode = false;
+        const selectedMessageIds = new Set();
+
+        function enterSelectMode(initialMessageId) {
+            if (!currentChatId) return;
+            selectMode = true;
+            selectedMessageIds.clear();
+            const container = document.getElementById('messages-container');
+            container?.classList.add('select-mode');
+            document.body.classList.add('select-mode-active');
+            document.getElementById('selection-toolbar')?.classList.add('show');
+            hideMessageContextMenu();
+            hideChatContextMenu();
+            if (initialMessageId && !String(initialMessageId).startsWith('temp-')) {
+                const row = document.querySelector(`[data-mid="${CSS.escape(String(initialMessageId))}"]`);
+                if (row && isOwnMessageRow(row)) {
+                    toggleMessageSelection(initialMessageId, true);
+                } else {
+                    updateSelectionToolbar();
+                    if (row && !isOwnMessageRow(row)) {
+                        showToast('Можно удалять только свои сообщения — выберите свои', 'info');
+                    }
+                }
+            } else {
+                updateSelectionToolbar();
+            }
+            if (typeof feather !== 'undefined') feather.replace();
+        }
+
+        function exitSelectMode() {
+            selectMode = false;
+            selectedMessageIds.clear();
+            const container = document.getElementById('messages-container');
+            container?.classList.remove('select-mode');
+            container?.querySelectorAll('.message-row.selected').forEach(el => el.classList.remove('selected'));
+            document.body.classList.remove('select-mode-active');
+            document.getElementById('selection-toolbar')?.classList.remove('show');
+            updateSelectionToolbar();
+        }
+
+        function isOwnMessageRow(row) {
+            if (!row) return false;
+            if (row.classList.contains('outgoing-row')) return true;
+            if (row.querySelector('.message-bubble.outgoing')) return true;
+            return false;
+        }
+
+        function toggleMessageSelection(messageId, forceOn) {
+            if (!messageId || String(messageId).startsWith('temp-')) return;
+            const id = String(messageId);
+            const row = document.querySelector(`[data-mid="${CSS.escape(id)}"]`);
+            if (!row) return;
+            // Можно выделять и удалять только свои сообщения
+            if (!isOwnMessageRow(row)) {
+                showToast('Можно удалять только свои сообщения', 'warning');
+                return;
+            }
+
+            const isSelected = selectedMessageIds.has(id);
+            if (forceOn === true || !isSelected) {
+                selectedMessageIds.add(id);
+                row.classList.add('selected');
+            } else {
+                selectedMessageIds.delete(id);
+                row.classList.remove('selected');
+            }
+            updateSelectionToolbar();
+        }
+
+        function updateSelectionToolbar() {
+            const label = document.getElementById('sel-count-label');
+            const delBtn = document.getElementById('sel-delete-btn');
+            const n = selectedMessageIds.size;
+            if (label) label.textContent = n === 0 ? 'Выберите сообщения' : (n === 1 ? 'Выбрано: 1' : `Выбрано: ${n}`);
+            if (delBtn) delBtn.disabled = n === 0;
+        }
+
+        async function deleteSelectedMessages() {
+            if (!currentChatId || selectedMessageIds.size === 0) return;
+            const ids = [...selectedMessageIds];
+            const count = ids.length;
+            if (!confirm(count === 1 ? 'Удалить выбранное сообщение?' : `Удалить выбранные сообщения (${count})?`)) {
+                return;
+            }
+
+            const delBtn = document.getElementById('sel-delete-btn');
+            if (delBtn) delBtn.disabled = true;
+            showToast('Удаление…', 'info');
+
+            try {
+                const res = await fetchWithAuth(`${API_BASE}/messages/bulk-delete`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        chatId: currentChatId,
+                        messageIds: ids
+                    })
+                });
+
+                if (!res) throw new Error('Нет ответа');
+                if (!res.ok) {
+                    // fallback: sequential delete for own messages
+                    if (res.status === 404 || res.status === 405) {
+                        let ok = 0;
+                        for (const mid of ids) {
+                            try {
+                                const r = await fetchWithAuth(`${API_BASE}/messages/${mid}?chatId=${currentChatId}`, {
+                                    method: 'DELETE',
+                                    headers: { 'Authorization': `Bearer ${token}` }
+                                });
+                                if (r && (r.ok || r.status === 204)) {
+                                    removeMessageFromUI(mid, currentChatId);
+                                    ok++;
+                                }
+                            } catch (_) {}
+                        }
+                        exitSelectMode();
+                        showToast(ok ? `Удалено: ${ok}` : 'Не удалось удалить', ok ? 'success' : 'error');
+                        return;
+                    }
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.error || err.Error || `HTTP ${res.status}`);
+                }
+
+                const data = await res.json().catch(() => ({}));
+                const deletedIds = data.messageIds || data.MessageIds || ids;
+                (deletedIds || []).forEach(mid => removeMessageFromUI(mid, currentChatId));
+                exitSelectMode();
+                const n = data.deletedCount ?? data.DeletedCount ?? deletedIds.length;
+                showToast(n === 1 ? 'Сообщение удалено' : `Удалено сообщений: ${n}`, 'success');
+            } catch (err) {
+                console.error('Bulk delete error:', err);
+                showToast(err.message || 'Ошибка удаления', 'error');
+                if (delBtn) delBtn.disabled = selectedMessageIds.size === 0;
+            }
+        }
+
+
+                let contextMenuMessageId = null;
         let contextMenuMessageText = '';
 
         const REPLY_PREFIX = '\u200BREPLY:';
@@ -2835,6 +3289,96 @@
         }
 
 
+
+        let exportModalChatId = null;
+
+        function openExportChatModal(chatId) {
+            if (!chatId) {
+                showToast('Чат не выбран', 'warning');
+                return;
+            }
+            exportModalChatId = chatId;
+            hideChatContextMenu();
+            const modal = document.getElementById('export-chat-modal');
+            const status = document.getElementById('export-status');
+            if (status) {
+                status.classList.add('hidden');
+                status.textContent = '';
+            }
+            modal?.classList.add('show');
+            if (typeof feather !== 'undefined') feather.replace();
+        }
+
+        function closeExportChatModal() {
+            document.getElementById('export-chat-modal')?.classList.remove('show');
+            exportModalChatId = null;
+        }
+
+        async function exportChat(chatId, format) {
+            const id = chatId || exportModalChatId || currentChatId;
+            if (!id) {
+                showToast('Чат не выбран', 'warning');
+                return;
+            }
+            format = (format || 'txt').toLowerCase();
+            if (!['txt', 'json', 'html', 'csv'].includes(format)) format = 'txt';
+
+            const status = document.getElementById('export-status');
+            if (status) {
+                status.classList.remove('hidden');
+                status.textContent = 'Подготовка файла…';
+            }
+            showToast('Экспорт чата…', 'info');
+
+            try {
+                const url = `${API_BASE}/messages/${id}/export?format=${encodeURIComponent(format)}`;
+                const res = await fetch(url, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (res.status === 401 || res.status === 403) {
+                    window.location.href = "/Authorization/Authorization";
+                    return;
+                }
+                if (!res.ok) {
+                    let errMsg = 'Не удалось экспортировать чат';
+                    try {
+                        const body = await res.json();
+                        errMsg = body?.error || errMsg;
+                    } catch {}
+                    throw new Error(errMsg);
+                }
+
+                const blob = await res.blob();
+                let fileName = `chat-export.${format}`;
+                const cd = res.headers.get('Content-Disposition');
+                if (cd) {
+                    const m = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(cd);
+                    if (m && m[1]) fileName = m[1].replace(/['"]/g, '');
+                    const m2 = /filename\*=UTF-8''([^;]+)/i.exec(cd);
+                    if (m2 && m2[1]) fileName = decodeURIComponent(m2[1]);
+                }
+
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = fileName;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+
+                showToast(`Чат экспортирован (${format.toUpperCase()})`, 'success');
+                if (status) status.textContent = 'Готово!';
+                setTimeout(closeExportChatModal, 600);
+            } catch (err) {
+                console.error('Export error:', err);
+                showToast(err.message || 'Ошибка экспорта', 'error');
+                if (status) {
+                    status.textContent = err.message || 'Ошибка';
+                }
+            }
+        }
+
         let contextMenuChatId = null;
 
         function hideChatContextMenu() {
@@ -2844,7 +3388,6 @@
             const msgMenu = document.getElementById('message-context-menu');
             if (!msgMenu || !msgMenu.classList.contains('show')) hideContextBackdrop();
         }
-
 
         function positionContextMenu(menu, x, y) {
             const backdrop = document.getElementById('ctx-menu-backdrop');
@@ -2942,6 +3485,7 @@
                     if (title) title.textContent = 'Выберите чат';
                     const subtitle = document.getElementById('chat-subtitle');
                     if (subtitle) subtitle.textContent = 'Нажмите, чтобы посмотреть информацию';
+                    if (typeof updateChatSubtitleMarquee === 'function') updateChatSubtitleMarquee();
                     document.getElementById('chat-input-area')?.classList.add('hidden');
                     document.getElementById('empty-right-panel')?.classList.remove('hidden');
                     document.getElementById('right-panel')?.classList.add('hidden');
@@ -3017,8 +3561,10 @@
             const isMine = !!row?.querySelector('.message-bubble.outgoing');
             const editBtn = document.getElementById('ctx-edit-btn');
             const delBtn = document.getElementById('ctx-delete-btn');
+            const selBtn = document.getElementById('ctx-select-btn');
             if (editBtn) editBtn.style.display = isMine ? '' : 'none';
             if (delBtn) delBtn.style.display = isMine ? '' : 'none';
+            if (selBtn) selBtn.style.display = isMine ? '' : 'none';
             positionContextMenu(menu, x, y);
         }
 
@@ -3701,6 +4247,42 @@
             hideMessageContextMenu();
             enterEditMode(id, txt);
         });
+
+        document.getElementById('ctx-select-btn')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const id = contextMenuMessageId;
+            hideMessageContextMenu();
+            if (id) enterSelectMode(id);
+        });
+
+        document.getElementById('sel-cancel-btn')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            exitSelectMode();
+        });
+
+        document.getElementById('sel-delete-btn')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            deleteSelectedMessages();
+        });
+
+        document.getElementById('messages-container')?.addEventListener('click', (e) => {
+            if (!selectMode) return;
+            const row = e.target.closest('.message-row[data-mid]');
+            if (!row) return;
+            e.preventDefault();
+            e.stopPropagation();
+            if (!isOwnMessageRow(row)) {
+                showToast('Можно удалять только свои сообщения', 'warning');
+                return;
+            }
+            const mid = row.dataset.mid;
+            if (mid && !String(mid).startsWith('temp-')) {
+                toggleMessageSelection(mid);
+            }
+        }, true);
+
+
         document.getElementById('ctx-delete-btn')?.addEventListener('click', () => {
             if (!contextMenuMessageId) return;
             const id = contextMenuMessageId;
@@ -3725,9 +4307,11 @@
             if (e.key === 'Escape') {
                 hideMessageContextMenu();
                 hideChatContextMenu();
+                if (selectMode) exitSelectMode();
                 if (editingMessageId) exitEditMode();
                 if (replyingTo) cancelReply();
                 closeDeleteMessageConfirm();
+                closeExportChatModal();
                 document.getElementById('delete-chat-confirm-modal')?.classList.remove('show');
             }
         });
@@ -4048,6 +4632,7 @@
                     const subtitleEl = document.getElementById('chat-subtitle');
                     if (subtitleEl && currentChatInfo?.type === 'group') {
                         subtitleEl.textContent = `${newCount} участников`;
+                    if (typeof updateChatSubtitleMarquee === 'function') updateChatSubtitleMarquee();
                         console.log(`[PARTICIPANT COUNT] Обновлено в шапке чата: ${newCount} участников`);
                     }
 
@@ -4692,6 +5277,7 @@
 
             if (currentChatInfo.type !== 'private') {
                 if (subtitle) subtitle.textContent = `${currentChatInfo.participants?.length || 0} участников`;
+                    if (typeof updateChatSubtitleMarquee === 'function') updateChatSubtitleMarquee();
                 if (onlineDot) onlineDot.classList.add('hidden');
                 return;
             }
@@ -4737,12 +5323,15 @@
 
             if (isOnline) {
                 subtitle.textContent = "в сети";
+                    if (typeof updateChatSubtitleMarquee === 'function') updateChatSubtitleMarquee();
                 subtitle.classList.add('text-green-600', 'font-medium');
             } else if (lastActivity) {
                 subtitle.textContent = `был(а) ${formatLastSeen(lastActivity)}`;
+                    if (typeof updateChatSubtitleMarquee === 'function') updateChatSubtitleMarquee();
                 subtitle.classList.remove('text-green-600', 'font-medium');
             } else {
                 subtitle.textContent = "был(а) недавно";
+                    if (typeof updateChatSubtitleMarquee === 'function') updateChatSubtitleMarquee();
                 subtitle.classList.remove('text-green-600', 'font-medium');
             }
         }
@@ -4995,6 +5584,7 @@
         }
 
         async function openChat(item) {
+            if (typeof selectMode !== "undefined" && selectMode) exitSelectMode();
             const chatId = item.dataset.chatId;
             const onlyModal = modalChatId && String(modalChatId) === String(chatId) && String(currentChatId) !== String(chatId);
             if (String(currentChatId) === String(chatId) && !onlyModal) {
@@ -6641,6 +7231,8 @@
                     `;
                     document.getElementById('chat-title').textContent = 'Выберите чат';
                     document.getElementById('chat-subtitle').textContent = 'Нажмите, чтобы посмотреть информацию';
+                    if (typeof updateChatSubtitleMarquee === 'function') updateChatSubtitleMarquee();
+                    if (typeof updateChatSubtitleMarquee === "function") updateChatSubtitleMarquee();
                     document.getElementById('chat-info-avatar').src = 'https://novgorodskij-r49.gosweb.gosuslugi.ru/netcat_files/9/260/user_test.png';
 
                     if (!document.querySelector('.chat-item')) {
@@ -6703,6 +7295,7 @@
         });
 
         function closeCurrentChat() {
+            if (typeof selectMode !== "undefined" && selectMode) exitSelectMode();
             if (currentChatId && connection?.state === 'Connected') {
                 leaveChat(currentChatId).catch(() => { });
             }
@@ -7096,12 +7689,32 @@
             if (currentChatId) unpinMessage(currentChatId);
         });
 
+        document.getElementById('chat-ctx-export-btn')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const chatId = contextMenuChatId;
+            hideChatContextMenu();
+            if (chatId) openExportChatModal(chatId);
+        });
+
         document.getElementById('chat-ctx-delete-btn')?.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
             const chatId = contextMenuChatId;
             hideChatContextMenu();
             if (chatId) openDeleteChatConfirm(chatId);
+        });
+
+        document.querySelectorAll('.export-modal-fmt-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const fmt = btn.getAttribute('data-format') || 'txt';
+                exportChat(exportModalChatId || currentChatId, fmt);
+            });
+        });
+
+        document.getElementById('export-chat-modal')?.addEventListener('click', (e) => {
+            if (e.target.id === 'export-chat-modal') closeExportChatModal();
         });
 
         if (messagesContainer) {
@@ -7114,6 +7727,10 @@
                 if (!mid || String(mid).startsWith('temp-')) return;
                 e.preventDefault();
                 e.stopPropagation();
+                if (selectMode) {
+                    toggleMessageSelection(mid);
+                    return;
+                }
                 const textEl = bubble.querySelector('p');
                 const plainText = textEl ? (textEl.innerText || textEl.textContent || '') : '';
                 showMessageContextMenu(e.clientX, e.clientY, mid, plainText);
@@ -7131,6 +7748,10 @@
             if (!row) return;
             const mid = row.dataset.mid;
             if (!mid || String(mid).startsWith('temp-')) return;
+            if (selectMode) {
+                toggleMessageSelection(mid);
+                return;
+            }
             const textEl = bubble.querySelector('p');
             const plainText = textEl ? (textEl.innerText || textEl.textContent || '') : '';
             showMessageContextMenu(x, y, mid, plainText);

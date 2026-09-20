@@ -464,6 +464,79 @@ namespace Messenger.API.Controllers
         }
 
         /// <summary>
+        /// Экспорт истории чата в разных форматах
+        /// </summary>
+        [HttpGet("{chatId}/export")]
+        [EndpointName("ExportChat")]
+        [EndpointSummary("Экспорт истории чата")]
+        [EndpointDescription(
+            "Скачивает историю сообщений чата в одном из форматов: txt, json, html, csv. " +
+            "Доступно только участникам чата. Максимум 5000 сообщений.")]
+        [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> ExportChatAsync(
+            [Description("Идентификатор чата (GUID)")] Guid chatId,
+            [FromQuery, Description("Формат экспорта: txt | json | html | csv (по умолчанию txt)")] string format = "txt",
+            CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
+                if (error != null)
+                {
+                    return error;
+                }
+
+                var participants = await _chatService.GetChatParticipantsAsync(chatId, cancellationToken);
+                if (!participants.Any(p => p.UserId == user!.UserId))
+                {
+                    return StatusCode(StatusCodes.Status403Forbidden, new ErrorResponse
+                    {
+                        IsSuccess = false,
+                        Error = "Вы не являетесь участником этого чата"
+                    });
+                }
+
+                var chat = await _chatService.GetChatByIdAsync(chatId, cancellationToken);
+                if (chat == null)
+                {
+                    return NotFound(new ErrorResponse
+                    {
+                        IsSuccess = false,
+                        Error = "Чат не найден"
+                    });
+                }
+
+                var normalizedFormat = (format ?? "txt").Trim().ToLowerInvariant();
+                if (normalizedFormat is not ("txt" or "json" or "html" or "csv"))
+                {
+                    return BadRequest(new ErrorResponse
+                    {
+                        IsSuccess = false,
+                        Error = "Поддерживаемые форматы: txt, json, html, csv"
+                    });
+                }
+
+                var result = await _messageService.ExportChatAsync(chatId, normalizedFormat, chat.Name, cancellationToken);
+
+                return File(result.Content, result.ContentType, result.FileName);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка экспорта чата {ChatId}", chatId);
+                return StatusCode(500, new ErrorResponse
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
+        }
+
+        /// <summary>
         /// Редактировать сообщение
         /// </summary>
         [HttpPut("{messageId}")]
@@ -587,6 +660,94 @@ namespace Messenger.API.Controllers
             }
             catch (Exception ex)
             {
+                return StatusCode(500, new ErrorResponse
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
+        }
+
+        /// <summary>
+        /// Удалить несколько сообщений
+        /// </summary>
+        [HttpPost("bulk-delete")]
+        [EndpointName("BulkDeleteMessages")]
+        [EndpointSummary("Удалить несколько сообщений")]
+        [EndpointDescription("Удаляет указанные сообщения. Можно удалить только свои сообщения. Уведомления рассылаются через SignalR.")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> BulkDeleteMessagesAsync(
+            [FromBody] BulkDeleteMessagesRequest request,
+            CancellationToken ct = default)
+        {
+            try
+            {
+                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
+                if (error != null)
+                    return error;
+
+                if (request == null || request.MessageIds == null || request.MessageIds.Count == 0)
+                {
+                    return BadRequest(new ErrorResponse
+                    {
+                        IsSuccess = false,
+                        Error = "Не указаны сообщения для удаления"
+                    });
+                }
+
+                if (request.MessageIds.Count > 100)
+                {
+                    return BadRequest(new ErrorResponse
+                    {
+                        IsSuccess = false,
+                        Error = "За один раз можно удалить не более 100 сообщений"
+                    });
+                }
+
+                var chatId = request.ChatId;
+                var allowed = new List<Guid>();
+
+                foreach (var mid in request.MessageIds.Distinct())
+                {
+                    var message = await _messageService.GetMessageByIdAsync(chatId, mid, ct);
+                    if (message == null) 
+                        continue;
+                    if (message.SenderId != user!.UserId) 
+                        continue;
+                    allowed.Add(mid);
+                }
+
+                if (allowed.Count == 0)
+                {
+                    return StatusCode(StatusCodes.Status403Forbidden, new ErrorResponse
+                    {
+                        IsSuccess = false,
+                        Error = "Нет сообщений, которые можно удалить (только свои)"
+                    });
+                }
+
+                var deleted = await _messageService.DeleteMessagesAsync(allowed, ct);
+
+                foreach (var mid in allowed)
+                {
+                    await _hubContext.Clients.Group(chatId.ToString())
+                        .SendAsync("MessageDeleted", new { messageId = mid, chatId }, ct);
+                }
+
+                return Ok(new
+                {
+                    IsSuccess = true,
+                    DeletedCount = deleted,
+                    MessageIds = allowed
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка массового удаления сообщений");
                 return StatusCode(500, new ErrorResponse
                 {
                     IsSuccess = false,
