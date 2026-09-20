@@ -973,6 +973,7 @@
             position: relative;
         }
 
+        /* Mobile export modal — по центру экрана (не bottom-sheet) */
         @@media (max-width: 767.98px) {
             #export-chat-modal.modal {
                 align-items: center !important;
@@ -1126,7 +1127,7 @@
                 will-change: transform;
             }
             #chat-header #chat-subtitle.is-marquee {
-                animation: chatSubtitleMarquee 6s linear infinite alternate;
+                animation: chatSubtitleMarquee 2s linear infinite alternate;
             }
             @@keyframes chatSubtitleMarquee {
                 0%, 15% { transform: translateX(0); }
@@ -1906,7 +1907,7 @@
                     </div>
                 </div>
             </div>
-            
+
             <div id="selection-toolbar">
                 <button type="button" class="sel-cancel" id="sel-cancel-btn" title="Отмена">
                     <i data-feather="x" class="w-5 h-5"></i>
@@ -2062,9 +2063,16 @@
                     Удалить чат
                 </button>
             </div>
-            <div class="flex justify-end gap-3 mt-8">
-                <button onclick="document.getElementById('chat-info-modal').classList.remove('show')" class="px-6 py-3 text-gray-600 font-medium">Отмена</button>
-                <button id="save-chat-info" class="px-8 py-3 bg-blue-600 text-white rounded-xl font-medium opacity-0 pointer-events-none transition">Сохранить изменения</button>
+            <div id="chat-info-footer-actions" class="flex gap-3 mt-8 w-full">
+                <button type="button" id="chat-info-cancel-btn"
+                        onclick="if (typeof closeChatInfoModal === 'function') closeChatInfoModal(); else document.getElementById('chat-info-modal').classList.remove('show');"
+                        class="flex-1 px-6 py-3 text-gray-700 dark:text-gray-200 font-medium rounded-xl border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+                    Отмена
+                </button>
+                <button type="button" id="save-chat-info"
+                        class="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition hidden">
+                    Сохранить изменения
+                </button>
             </div>
         </div>
     </div>
@@ -2292,7 +2300,6 @@
             const id = String(messageId);
             const row = document.querySelector(`[data-mid="${CSS.escape(id)}"]`);
             if (!row) return;
-            // Можно выделять и удалять только свои сообщения
             if (!isOwnMessageRow(row)) {
                 showToast('Можно удалять только свои сообщения', 'warning');
                 return;
@@ -2344,7 +2351,6 @@
 
                 if (!res) throw new Error('Нет ответа');
                 if (!res.ok) {
-                    // fallback: sequential delete for own messages
                     if (res.status === 404 || res.status === 405) {
                         let ok = 0;
                         for (const mid of ids) {
@@ -3379,7 +3385,8 @@
             }
         }
 
-        let contextMenuChatId = null;
+
+                let contextMenuChatId = null;
 
         function hideChatContextMenu() {
             const menu = document.getElementById('chat-context-menu');
@@ -3388,6 +3395,7 @@
             const msgMenu = document.getElementById('message-context-menu');
             if (!msgMenu || !msgMenu.classList.contains('show')) hideContextBackdrop();
         }
+
 
         function positionContextMenu(menu, x, y) {
             const backdrop = document.getElementById('ctx-menu-backdrop');
@@ -6928,13 +6936,120 @@
         let removedParticipantIds = [];
         let addedParticipantIds = [];
 
+        const ADDED_BY_ME_KEY = 'guap_chat_added_by_me';
+
+        function loadAddedByMeMap() {
+            try {
+                return JSON.parse(localStorage.getItem(ADDED_BY_ME_KEY) || '{}') || {};
+            } catch {
+                return {};
+            }
+        }
+
+        function saveAddedByMeMap(map) {
+            try {
+                localStorage.setItem(ADDED_BY_ME_KEY, JSON.stringify(map));
+            } catch (_) {}
+        }
+
+        function getAddedByMeForChat(chatId) {
+            if (!chatId) return new Set();
+            const map = loadAddedByMeMap();
+            const arr = map[String(chatId)] || [];
+            return new Set(arr.map(String));
+        }
+
+        function markAddedByMe(chatId, userId) {
+            if (!chatId || !userId) return;
+            const map = loadAddedByMeMap();
+            const key = String(chatId);
+            const set = new Set((map[key] || []).map(String));
+            set.add(String(userId));
+            map[key] = [...set];
+            saveAddedByMeMap(map);
+        }
+
+        function unmarkAddedByMe(chatId, userId) {
+            if (!chatId || !userId) return;
+            const map = loadAddedByMeMap();
+            const key = String(chatId);
+            map[key] = (map[key] || []).map(String).filter(id => id !== String(userId));
+            saveAddedByMeMap(map);
+        }
+
+        function normalizeParticipantRole(role) {
+            return String(role || 'участник').trim().toLowerCase();
+        }
+
+        function isAdminOrOwnerRole(role) {
+            const r = normalizeParticipantRole(role);
+            return r === 'владелец' || r === 'owner' || r === 'admin' || r === 'админ'
+                || r === 'administrator' || r === 'модератор' || r === 'moderator';
+        }
+
+        function getMyRoleInChat(info) {
+            const parts = info?.participants || info?.Participants || [];
+            const myId = String(me || '').trim().toLowerCase();
+            const mine = parts.find(p => String(p.id || p.userId || '').trim().toLowerCase() === myId);
+            if (mine) return normalizeParticipantRole(mine.role || mine.Role);
+            const creatorId = String(info?.userId || info?.UserId || info?.creatorId || info?.CreatorId || '').trim().toLowerCase();
+            if (creatorId && creatorId === myId) return 'владелец';
+            return 'участник';
+        }
+
+        function canRemoveParticipant(targetUserId, targetRole, chatInfo) {
+            const tid = String(targetUserId || '').trim();
+            if (!tid) return false;
+            const myId = String(me || '').trim();
+            if (tid.toLowerCase() === myId.toLowerCase()) return false;
+
+            const info = chatInfo || currentChatInfo || window.__modalChatInfo || {};
+            const myRole = getMyRoleInChat(info);
+            const tRole = normalizeParticipantRole(targetRole);
+
+            if (isAdminOrOwnerRole(myRole)) {
+                if (myRole !== 'владелец' && myRole !== 'owner' && (tRole === 'владелец' || tRole === 'owner')) {
+                    return false;
+                }
+                return true;
+            }
+
+            if (isAdminOrOwnerRole(tRole)) return false;
+
+            const chatId = modalChatId || currentChatId || info.chatId || info.ChatId;
+            if (addedParticipantIds.map(String).includes(tid)) return true;
+            if (getAddedByMeForChat(chatId).has(tid)) return true;
+            return false;
+        }
+
+        function roleBadgeHtml(role) {
+            const r = normalizeParticipantRole(role);
+            if (r === 'владелец' || r === 'owner') {
+                return '<p class="text-xs text-amber-600 dark:text-amber-400 mt-0.5">Владелец</p>';
+            }
+            if (isAdminOrOwnerRole(r)) {
+                return '<p class="text-xs text-purple-600 dark:text-purple-400 mt-0.5">Админ</p>';
+            }
+            return '';
+        }
+
         function removeParticipantFromChat(userId, buttonElement) {
+            const row = buttonElement?.closest?.('[data-user-id]') || buttonElement?.closest?.('div');
+            const targetRole = row?.dataset?.role || 'участник';
+            const info = window.__modalChatInfo || currentChatInfo;
+
+            if (!canRemoveParticipant(userId, targetRole, info)) {
+                showToast('Нельзя удалить этого участника: только своих добавленных, админов удалять нельзя', 'error');
+                return;
+            }
+
             if (!confirm('Удалить участника из чата?')) return;
 
-            buttonElement.closest('div').remove();
+            row?.remove();
             if (!removedParticipantIds.includes(userId)) {
                 removedParticipantIds.push(userId);
             }
+            unmarkAddedByMe(modalChatId || currentChatId, userId);
             updateParticipantCount();
             toggleSaveButton();
         }
@@ -6950,6 +7065,7 @@
             div.className = 'flex items-center justify-between p-4 bg-gray-50 rounded-xl';
             div.dataset.userId = userId;
 
+            div.dataset.role = 'участник';
             div.innerHTML = `
                 <div class="flex items-center gap-4">
                     <img src="${userAvatar || 'https://novgorodskij-r49.gosweb.gosuslugi.ru/netcat_files/9/260/user_test.png'}"
@@ -6958,8 +7074,8 @@
                         <p class="font-semibold">${userName}</p>
                     </div>
                 </div>
-                ${currentChatInfo.type === 'group' ? `
-                <button type="button" class="text-red-600 hover:bg-red-100 rounded-full p-2 transition"
+                ${currentChatInfo?.type === 'group' ? `
+                <button type="button" class="text-red-600 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-full p-2 transition"
                         onclick="removeParticipantFromChat('${userId}', this)">
                     <i data-feather="x" class="w-5 h-5"></i>
                 </button>` : ''}
@@ -6970,6 +7086,7 @@
             if (!addedParticipantIds.includes(userId)) {
                 addedParticipantIds.push(userId);
             }
+            markAddedByMe(modalChatId || currentChatId, userId);
             updateParticipantCount();
             toggleSaveButton();
         }
@@ -6983,9 +7100,19 @@
 
         function toggleSaveButton() {
             const saveBtn = document.getElementById('save-chat-info');
+            const cancelBtn = document.getElementById('chat-info-cancel-btn');
             const hasChanges = chatNameChanged || removedParticipantIds.length > 0 || addedParticipantIds.length > 0;
-            saveBtn.classList.toggle('opacity-0', !hasChanges);
-            saveBtn.classList.toggle('pointer-events-none', !hasChanges);
+            if (!saveBtn) return;
+            if (hasChanges) {
+                saveBtn.classList.remove('hidden');
+                saveBtn.classList.remove('opacity-0', 'pointer-events-none');
+            } else {
+                saveBtn.classList.add('hidden');
+            }
+            if (cancelBtn) {
+                cancelBtn.classList.toggle('flex-1', true);
+            }
+            saveBtn.classList.toggle('flex-1', true);
         }
 
         document.getElementById('add-participant-btn').addEventListener('click', function () {
@@ -7130,6 +7257,9 @@
                 const allSuccess = responses.every(r => r.ok);
 
                 if (!allSuccess) throw new Error('Не все изменения сохранены');
+
+                addedParticipantIds.forEach(uid => markAddedByMe(targetChatId, uid));
+                removedParticipantIds.forEach(uid => unmarkAddedByMe(targetChatId, uid));
 
                 if (chatNameChanged && isGroup && newName) {
                     document.getElementById('chat-title').textContent = newName;
@@ -7361,13 +7491,24 @@
                     participants: info.participants || info.Participants || info.chatParticipants || info.ChatParticipants || [],
                     name: info.name || info.Name || info.title || ''
                 };
-                modalInfo.participants = modalInfo.participants.map(p => ({
-                    id: p.id || p.userId || p.UserId || p.user_id,
-                    userId: p.userId || p.UserId || p.id || p.user_id,
-                    fullName: p.fullName || p.FullName || p.name || p.Name || `${p.firstName || p.FirstName || ''} ${p.lastName || p.LastName || ''}`.trim(),
-                    name: p.name || p.Name || p.fullName,
-                    avatar: p.avatar || p.Avatar || p.avatarPath || p.AvatarPath
-                }));
+                const creatorId = String(info.userId || info.UserId || info.creatorId || info.CreatorId || '').trim().toLowerCase();
+                modalInfo.userId = creatorId || modalInfo.userId;
+                modalInfo.creatorId = creatorId;
+                modalInfo.participants = modalInfo.participants.map(p => {
+                    const pid = String(p.id || p.userId || p.UserId || p.user_id || '').trim();
+                    let role = p.role || p.Role || '';
+                    if (!role || !String(role).trim()) {
+                        role = (creatorId && pid.toLowerCase() === creatorId) ? 'владелец' : 'участник';
+                    }
+                    return {
+                        id: pid,
+                        userId: pid,
+                        fullName: p.fullName || p.FullName || p.name || p.Name || `${p.firstName || p.FirstName || ''} ${p.lastName || p.LastName || ''}`.trim(),
+                        name: p.name || p.Name || p.fullName,
+                        avatar: p.avatar || p.Avatar || p.avatarPath || p.AvatarPath,
+                        role
+                    };
+                });
 
                 if (String(currentChatId) === String(chatId)) {
                     currentChatInfo = modalInfo;
@@ -7394,7 +7535,10 @@
                     const isOnline = status?.isOnline === true;
                     const div = document.createElement('div');
                     div.className = 'flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-xl';
+                    const pRole = p.role || p.Role || 'участник';
                     div.dataset.userId = userId;
+                    div.dataset.role = pRole;
+                    const showRemove = modalInfo.type === 'group' && !isYou && canRemoveParticipant(userId, pRole, modalInfo);
                     div.innerHTML = `
                         <div class="flex items-center gap-4">
                             <div class="relative">
@@ -7407,10 +7551,11 @@
                             <div>
                                 <p class="font-semibold">${p.fullName || p.name || 'Пользователь'}</p>
                                 ${isYou ? '<p class="text-sm text-blue-600">Вы</p>' : ''}
+                                ${!isYou ? roleBadgeHtml(pRole) : ''}
                             </div>
                         </div>
-                        ${modalInfo.type === 'group' && !isYou ? `
-                        <button type="button" class="text-red-600 hover:bg-red-100 rounded-full p-2 transition"
+                        ${showRemove ? `
+                        <button type="button" class="text-red-600 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-full p-2 transition"
                                 onclick="removeParticipantFromChat('${userId}', this)">
                             <i data-feather="x" class="w-5 h-5"></i>
                         </button>` : ''}
@@ -7418,6 +7563,16 @@
                     list.appendChild(div);
                 });
                 document.getElementById('participants-count').textContent = `(${modalInfo.participants.length})`;
+
+                const addBtn = document.getElementById('add-participant-btn');
+                if (addBtn) {
+                    const isGroup = (modalInfo.type === 'group');
+                    addBtn.classList.toggle('hidden', !isGroup);
+                    addBtn.style.display = isGroup ? '' : 'none';
+                }
+                if (modalInfo.type !== 'group') {
+                    document.getElementById('chat-info-search-container')?.remove();
+                }
 
                 if (String(currentChatId) !== String(chatId)) {
                     window.__prevChatInfoBackup = currentChatInfo;
@@ -7474,7 +7629,10 @@
 
                 const div = document.createElement('div');
                 div.className = 'flex items-center justify-between p-4 bg-gray-50 rounded-xl';
+                const pRole2 = p.role || p.Role || 'участник';
                 div.dataset.userId = userId;
+                div.dataset.role = pRole2;
+                const showRemove2 = info.type === 'group' && !isYou && canRemoveParticipant(userId, pRole2, info);
 
                 div.innerHTML = `
                     <div class="flex items-center gap-4">
@@ -7488,10 +7646,11 @@
                         <div>
                             <p class="font-semibold">${p.fullName || p.name || 'Пользователь'}</p>
                             ${isYou ? '<p class="text-sm text-blue-600">Вы</p>' : ''}
+                            ${!isYou ? roleBadgeHtml(pRole2) : ''}
                         </div>
                     </div>
-                    ${info.type === 'group' && !isYou ? `
-                    <button type="button" class="text-red-600 hover:bg-red-100 rounded-full p-2 transition"
+                    ${showRemove2 ? `
+                    <button type="button" class="text-red-600 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-full p-2 transition"
                             onclick="removeParticipantFromChat('${userId}', this)">
                         <i data-feather="x" class="w-5 h-5"></i>
                     </button>` : ''}
@@ -7501,6 +7660,16 @@
             });
 
             document.getElementById('participants-count').textContent = `(${info.participants.length})`;
+
+            const addBtnOpen = document.getElementById('add-participant-btn');
+            if (addBtnOpen) {
+                const isGroup = (info.type === 'group');
+                addBtnOpen.classList.toggle('hidden', !isGroup);
+                addBtnOpen.style.display = isGroup ? '' : 'none';
+            }
+            if (info.type !== 'group') {
+                document.getElementById('chat-info-search-container')?.remove();
+            }
 
             chatNameChanged = false;
             removedParticipantIds = [];
