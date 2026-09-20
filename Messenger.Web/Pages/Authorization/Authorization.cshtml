@@ -36,27 +36,36 @@
         }
 
     .guap-gradient {
-        background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+        background: linear-gradient(135deg, #005aaa 0%, #006cb6 45%, #ab3a8d 100%);
     }
 
     .auth-wrapper {
         position: fixed;
         inset: 0;
-        top: calc(64px + var(--safe-top));
+        top: calc(var(--header-height, 64px) + var(--safe-top, env(safe-area-inset-top, 0px)));
         display: flex;
         justify-content: center;
         align-items: center;
         padding: 1.25rem;
-        padding-bottom: calc(1.25rem + var(--safe-bottom));
+        padding-bottom: calc(1.25rem + var(--safe-bottom, env(safe-area-inset-bottom, 0px)));
         overflow-y: auto;
         -webkit-overflow-scrolling: touch;
+        box-sizing: border-box;
     }
 
     @@media (max-width: 767.98px) {
         .auth-wrapper {
-            top: calc(56px + var(--safe-top));
+            top: calc(var(--header-height, 56px) + var(--safe-top, env(safe-area-inset-top, 0px)));
             align-items: flex-start;
-            padding-top: 2rem;
+            padding-top: 1.5rem;
+        }
+    }
+
+    @@media (max-height: 500px) and (orientation: landscape) {
+        .auth-wrapper {
+            top: calc(var(--header-height, 48px) + var(--safe-top, env(safe-area-inset-top, 0px)));
+            align-items: flex-start;
+            padding-top: 1rem;
         }
     }
 
