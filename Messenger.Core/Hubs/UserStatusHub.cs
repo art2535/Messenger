@@ -29,7 +29,7 @@ namespace Messenger.Core.Hubs
 
             var cancellationToken = Context.GetHttpContext()?.RequestAborted ?? CancellationToken.None;
 
-            await _userStatusService.UpdateStatusAsync(status, cancellationToken);
+            await _userStatusService.UpdateUserStatusAsync(status, cancellationToken);
             await Clients.All.SendAsync("UserOnline", userId);
 
             await base.OnConnectedAsync();
@@ -48,7 +48,7 @@ namespace Messenger.Core.Hubs
 
             var cancellationToken = Context.GetHttpContext()?.RequestAborted ?? CancellationToken.None;
 
-            await _userStatusService.UpdateStatusAsync(status, cancellationToken);
+            await _userStatusService.UpdateUserStatusAsync(status, cancellationToken);
             await Clients.All.SendAsync("UserOffline", userId);
 
             await base.OnDisconnectedAsync(exception);
@@ -60,11 +60,11 @@ namespace Messenger.Core.Hubs
 
             var cancellationToken = Context.GetHttpContext()?.RequestAborted ?? CancellationToken.None;
 
-            var status = await _userStatusService.GetStatusByUserIdAsync(userId, cancellationToken);
+            var status = await _userStatusService.GetUserStatusByUserIdAsync(userId, cancellationToken);
             if (status != null)
             {
                 status.LastActivity = DateTime.UtcNow;
-                await _userStatusService.UpdateStatusAsync(status, cancellationToken);
+                await _userStatusService.UpdateUserStatusAsync(status, cancellationToken);
             }
         }
     }

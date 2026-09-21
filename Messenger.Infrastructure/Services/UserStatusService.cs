@@ -1,34 +1,68 @@
-﻿using Messenger.Core.Interfaces;
+using Messenger.Core.Interfaces;
 using Messenger.Core.Models;
-using Messenger.Infrastructure.Repositories;
+using Messenger.Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
 
 namespace Messenger.Infrastructure.Services
 {
     public class UserStatusService : IUserStatusService
     {
-        private readonly UserStatusRepository _userStatusRepository;
+        private readonly GuapMessengerContext _context;
 
-        public UserStatusService(UserStatusRepository userStatusRepository)
+        public UserStatusService(GuapMessengerContext context)
         {
-            _userStatusRepository = userStatusRepository;
+            _context = context;
         }
 
-        public Task<IReadOnlyList<UserStatus>> GetInactiveOnlineStatusesAsync(DateTime olderThan,
-            CancellationToken cancellationToken = default) 
-            => _userStatusRepository.GetInactiveOnlineStatusesAsync(olderThan, cancellationToken);
-
-        public Task SetOfflineBatchAsync(IEnumerable<Guid> userIds, CancellationToken cancellationToken = default)
-            => _userStatusRepository.SetOfflineBatchAsync(userIds, cancellationToken);
-
-        public async Task UpdateStatusAsync(UserStatus userStatus, CancellationToken cancellationToken = default)
-        {
-            await _userStatusRepository.UpdateUserStatusAsync(userStatus, cancellationToken);
-        }
-
-        public async Task<UserStatus?> GetStatusByUserIdAsync(Guid userId, 
+        public async Task<IReadOnlyList<UserStatus>> GetInactiveOnlineStatusesAsync(DateTime olderThan,
             CancellationToken cancellationToken = default)
         {
-            return await _userStatusRepository.GetUserStatusByUserIdAsync(userId, cancellationToken);
+            return await _context.UserStatuses
+                .Where(us => us.Online && us.LastActivity != null && us.LastActivity < olderThan)
+                .ToListAsync(cancellationToken);
+        }
+
+        public async Task SetOfflineBatchAsync(IEnumerable<Guid> userIds, CancellationToken cancellationToken = default)
+        {
+            var ids = userIds.ToList();
+            if (ids.Count == 0)
+                return;
+
+            await _context.UserStatuses
+                .Where(us => ids.Contains(us.UserId) && us.Online)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(us => us.Online, false)
+                    .SetProperty(us => us.LastActivity, DateTime.UtcNow),
+                    cancellationToken);
+        }
+
+        public async Task UpdateUserStatusAsync(UserStatus userStatus, CancellationToken cancellationToken = default)
+        {
+            var rowsAffected = await _context.UserStatuses
+                .Where(us => us.UserId == userStatus.UserId)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(us => us.Online, userStatus.Online)
+                    .SetProperty(us => us.LastActivity, DateTime.Now),
+                    cancellationToken);
+
+            if (rowsAffected == 0)
+            {
+                var newStatus = new UserStatus
+                {
+                    UserId = userStatus.UserId,
+                    Online = userStatus.Online,
+                    LastActivity = DateTime.Now
+                };
+
+                _context.UserStatuses.Add(newStatus);
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+        }
+
+        public async Task<UserStatus?> GetUserStatusByUserIdAsync(Guid userId, CancellationToken cancellationToken = default)
+        {
+            return await _context.UserStatuses
+                .FirstOrDefaultAsync(us => us.UserId == userId, cancellationToken);
         }
     }
 }

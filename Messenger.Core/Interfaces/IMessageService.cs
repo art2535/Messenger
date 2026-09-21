@@ -1,5 +1,6 @@
 using Messenger.Core.DTOs;
 using Messenger.Core.DTOs.Messages;
+using Messenger.Core.Messages;
 using Messenger.Core.Models;
 using Microsoft.AspNetCore.Http;
 
@@ -19,5 +20,6 @@ namespace Messenger.Core.Interfaces
         Task<List<MessageDto>> SearchMessagesAsync(Guid chatId, string query, CancellationToken token = default);
         Task<int> MarkMessagesAsReadAsync(Guid chatId, Guid readerId, CancellationToken ct = default);
         Task<ChatExportResult> ExportChatAsync(Guid chatId, string format, string? chatName = null, CancellationToken token = default);
+        Task PublishChatMessageAsync(ChatMessageSent message, CancellationToken cancellationToken = default);
     }
 }

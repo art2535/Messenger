@@ -7,7 +7,6 @@ using Messenger.Core.Hubs;
 using Messenger.Core.Interfaces;
 using Messenger.Core.Messages;
 using Messenger.Core.Models;
-using Messenger.Infrastructure.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -34,13 +33,10 @@ namespace Messenger.API.Controllers
         private readonly IUserService _userService;
         private readonly IEncryptionService _encryptionService;
         private readonly ILogger<MessagesController> _logger;
-        private readonly IPublishEndpoint _publishEndpoint;
-        private readonly GuapMessengerContext _context;
 
         public MessagesController(IMessageService messageService, IConfiguration configuration,
             IHubContext<ChatHub> hubContext, IChatService chatService, IUserService userService,
-            IEncryptionService encryptionService, ILogger<MessagesController> logger,
-            IPublishEndpoint publishEndpoint, GuapMessengerContext context)
+            IEncryptionService encryptionService, ILogger<MessagesController> logger)
         {
             _messageService = messageService;
             _configuration = configuration;
@@ -49,8 +45,6 @@ namespace Messenger.API.Controllers
             _userService = userService;
             _encryptionService = encryptionService;
             _logger = logger;
-            _publishEndpoint = publishEndpoint;
-            _context = context;
         }
 
         /// <summary>
@@ -220,10 +214,9 @@ namespace Messenger.API.Controllers
                     ? null
                     : _encryptionService.Encrypt(messageText.Trim());
 
-                await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
                 try
                 {
-                    await _publishEndpoint.Publish(new ChatMessageSent
+                    await _messageService.PublishChatMessageAsync(new ChatMessageSent
                     {
                         MessageId = messageId,
                         ChatId = chatId,
@@ -234,21 +227,9 @@ namespace Messenger.API.Controllers
                         HasAttachments = attachmentsInfo.Count > 0,
                         Attachments = attachmentsInfo
                     }, cancellationToken);
-
-                    await _context.SaveChangesAsync(cancellationToken);
-                    await transaction.CommitAsync(cancellationToken);
                 }
                 catch (Exception ex)
                 {
-                    try
-                    {
-                        await transaction.RollbackAsync(cancellationToken);
-                    }
-                    catch (Exception rbEx)
-                    {
-                        _logger.LogWarning(rbEx, "Rollback не выполнен (транзакция уже завершена)");
-                    }
-
                     _logger.LogError(ex, "Ошибка при публикации сообщения в чат {ChatId}", chatId);
                     return StatusCode(500, new ErrorResponse
                     {

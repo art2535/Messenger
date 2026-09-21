@@ -2,13 +2,13 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
-using MassTransit;
 using Messenger.Core.DTOs;
 using Messenger.Core.DTOs.Messages;
 using Messenger.Core.Interfaces;
 using Messenger.Core.Models;
+using MassTransit;
+using Messenger.Core.Messages;
 using Messenger.Infrastructure.Data;
-using Messenger.Infrastructure.Repositories;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 
@@ -16,9 +16,9 @@ namespace Messenger.Infrastructure.Services
 {
     public class MessageService : IMessageService
     {
-        private readonly MessageRepository _repository;
         private readonly GuapMessengerContext _context;
         private readonly IEncryptionService _encryptionService;
+        private readonly IPublishEndpoint _publishEndpoint;
 
         private static readonly JsonSerializerOptions JsonOptions = new()
         {
@@ -27,11 +27,31 @@ namespace Messenger.Infrastructure.Services
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
         };
 
-        public MessageService(MessageRepository repository, GuapMessengerContext context, IEncryptionService encryptionService)
+        public MessageService(GuapMessengerContext context, IEncryptionService encryptionService,
+            IPublishEndpoint publishEndpoint)
         {
-            _repository = repository;
             _context = context;
             _encryptionService = encryptionService;
+            _publishEndpoint = publishEndpoint;
+        }
+
+        /// <summary>
+        /// Публикует ChatMessageSent в рамках EF Outbox (Publish + SaveChanges в одной транзакции).
+        /// </summary>
+        public async Task PublishChatMessageAsync(ChatMessageSent message, CancellationToken cancellationToken = default)
+        {
+            await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+            try
+            {
+                await _publishEndpoint.Publish(message, cancellationToken);
+                await _context.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+            }
+            catch
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                throw;
+            }
         }
 
         public async Task<List<MessageDto>> SearchMessagesAsync(Guid chatId, string query, CancellationToken token = default)
@@ -41,7 +61,7 @@ namespace Messenger.Infrastructure.Services
 
             query = query.Trim().ToLowerInvariant();
 
-            var (messages, _) = await _repository.GetMessagesByChatIdPagedAsync(chatId, beforeSequence: null, limit: 300, token);
+            var (messages, _) = await GetMessagesByChatIdPagedAsync(chatId, beforeSequence: null, limit: 300, token);
 
             var filtered = new List<MessageDto>();
 
@@ -79,14 +99,14 @@ namespace Messenger.Infrastructure.Services
 
         public async Task<IEnumerable<Message>> GetMessagesAsync(Guid chatId, CancellationToken token = default)
         {
-            var (items, _) = await _repository.GetMessagesByChatIdPagedAsync(chatId, null, 100, token);
+            var (items, _) = await GetMessagesByChatIdPagedAsync(chatId, null, 100, token);
             return items;
         }
 
         public async Task<(IReadOnlyList<Message> Items, bool HasMore)> GetMessagesPagedAsync(
             Guid chatId, long? beforeSequence = null, int limit = 50, CancellationToken token = default)
         {
-            return await _repository.GetMessagesByChatIdPagedAsync(chatId, beforeSequence, limit, token);
+            return await GetMessagesByChatIdPagedAsync(chatId, beforeSequence, limit, token);
         }
 
         public async Task<ServiceResult<Message>> SendMessageAsync(Guid messageId, Guid chatId, Guid senderId,
@@ -105,9 +125,9 @@ namespace Messenger.Infrastructure.Services
                     DeliveryStatus = MessageDeliveryStatus.Pending
                 };
 
-                await _repository.AddMessageAsync(message, token);
+                await AddMessageAsync(message, token);
 
-                var savedMessage = await _repository.GetMessageByIdAsync(chatId, message.MessageId, token);
+                var savedMessage = await GetMessageByIdAsync(chatId, message.MessageId, token);
 
                 return savedMessage != null
                     ? ServiceResult<Message>.Success(savedMessage)
@@ -121,17 +141,24 @@ namespace Messenger.Infrastructure.Services
 
         public async Task<Message?> GetMessageByIdAsync(Guid chatId, Guid messageId, CancellationToken token = default)
         {
-            return await _repository.GetMessageByIdAsync(chatId, messageId, token);
+            return await _context.Messages
+                .FirstOrDefaultAsync(m => m.ChatId == chatId && m.MessageId == messageId, token);
         }
 
         public async Task DeleteMessageAsync(Guid messageId, CancellationToken token = default)
         {
-            await _repository.DeleteMessageAsync(messageId, token);
+            var deletedMessage = await _context.Messages.FindAsync(new object[] { messageId }, token);
+            if (deletedMessage != null)
+            {
+                _context.Messages.Remove(deletedMessage);
+                await _context.SaveChangesAsync(token);
+            }
         }
 
         public async Task UpdateMessageAsync(Message message, CancellationToken token = default)
         {
-            await _repository.UpdateMessageAsync(message, token);
+            _context.Messages.Update(message);
+            await _context.SaveChangesAsync(token);
         }
 
         public async Task<ChatExportResult> ExportChatAsync(Guid chatId, string format, string? chatName = null, CancellationToken token = default)
@@ -148,7 +175,7 @@ namespace Messenger.Infrastructure.Services
 
             while (hasMore && allMessages.Count < maxMessages)
             {
-                var (batch, more) = await _repository.GetMessagesByChatIdPagedAsync(chatId, beforeSeq, pageSize, token);
+                var (batch, more) = await GetMessagesByChatIdPagedAsync(chatId, beforeSeq, pageSize, token);
                 if (batch.Count == 0)
                     break;
 
@@ -420,5 +447,68 @@ namespace Messenger.Infrastructure.Services
                 Reactions = reactionGroups
             };
         }
+        private async Task AddMessageAsync(Message message, CancellationToken token = default)
+        {
+            await using var transaction = await _context.Database.BeginTransactionAsync(token);
+            try
+            {
+                var lockKey = BitConverter.ToInt64(message.ChatId.ToByteArray(), 0);
+                await _context.Database.ExecuteSqlRawAsync(
+                    "SELECT pg_advisory_xact_lock({0})",
+                    new object[] { lockKey },
+                    token);
+
+                var lastSeq = await _context.Messages
+                    .Where(m => m.ChatId == message.ChatId)
+                    .MaxAsync(m => (long?)m.SequenceNumber, token) ?? 0L;
+
+                message.SequenceNumber = lastSeq + 1;
+                message.DeliveryStatus = MessageDeliveryStatus.Pending;
+
+                await _context.Messages.AddAsync(message, token);
+                await _context.SaveChangesAsync(token);
+                await transaction.CommitAsync(token);
+            }
+            catch
+            {
+                await transaction.RollbackAsync(token);
+                throw;
+            }
+        }
+
+        private async Task<(IReadOnlyList<Message> Items, bool HasMore)> GetMessagesByChatIdPagedAsync(Guid chatId,
+            long? beforeSequence = null, int limit = 50, CancellationToken token = default)
+        {
+            if (limit <= 0) limit = 50;
+            if (limit > 200) limit = 200;
+
+            var query = _context.Messages
+                .AsNoTracking()
+                .Where(m => m.ChatId == chatId);
+
+            if (beforeSequence.HasValue)
+                query = query.Where(m => m.SequenceNumber < beforeSequence.Value);
+
+            var batch = await query
+                .OrderByDescending(m => m.SequenceNumber)
+                .Take(limit + 1)
+                .Include(m => m.Sender)
+                .Include(m => m.Reactions)
+                    .ThenInclude(r => r.User)
+                .Include(m => m.Attachments)
+                .AsSplitQuery()
+                .ToListAsync(token);
+
+            var hasMore = batch.Count > limit;
+            if (hasMore)
+                batch = batch.Take(limit).ToList();
+
+            batch.Reverse();
+            return (batch, hasMore);
+        }
+
+
+
+
     }
 }

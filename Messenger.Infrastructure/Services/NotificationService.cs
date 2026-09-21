@@ -1,18 +1,23 @@
-﻿using Messenger.Core.Interfaces;
+using Messenger.Core.Interfaces;
 using Messenger.Core.Models;
-using Messenger.Infrastructure.Repositories;
+using Messenger.Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace Messenger.Infrastructure.Services
 {
     public class NotificationService : INotificationService
     {
-        private readonly NotificationRepository _repository;
+        private readonly GuapMessengerContext _context;
         private readonly IEncryptionService _encryptionService;
+        private readonly ILogger<NotificationService> _logger;
 
-        public NotificationService(NotificationRepository repository, IEncryptionService encryptionService)
+        public NotificationService(GuapMessengerContext context, IEncryptionService encryptionService,
+            ILogger<NotificationService> logger)
         {
-            _repository = repository;
+            _context = context;
             _encryptionService = encryptionService;
+            _logger = logger;
         }
 
         public async Task<Guid> CreateNotificationAsync(Guid userId, string text, CancellationToken token = default)
@@ -28,13 +33,17 @@ namespace Messenger.Infrastructure.Services
                 Read = false
             };
 
-            await _repository.AddNotificationAsync(notification, token);
+            await _context.Notifications.AddAsync(notification, token);
+            await _context.SaveChangesAsync(token);
             return notification.NotificationId;
         }
 
         public async Task<IEnumerable<Notification>> GetNotificationsAsync(Guid userId, CancellationToken token = default)
         {
-            var notifications = await _repository.GetNotificationsByUserIdAsync(userId, token);
+            var notifications = await _context.Notifications
+                .Where(notification => notification.UserId == userId)
+                .OrderByDescending(n => n.CreationDate)
+                .ToListAsync(token);
 
             foreach (var notification in notifications)
             {
@@ -43,15 +52,26 @@ namespace Messenger.Infrastructure.Services
 
             return notifications;
         }
-        
+
         public async Task MarkAsReadAsync(Guid notificationId, CancellationToken token = default)
         {
-            await _repository.MarkAsReadAsync(notificationId, token);
+            var updatedRows = await _context.Notifications
+                .Where(n => n.NotificationId == notificationId)
+                .ExecuteUpdateAsync(property => property
+                    .SetProperty(n => n.Read, true)
+                    .SetProperty(n => n.ReadAt, Notification.Now),
+                token);
+
+            if (updatedRows == 0)
+            {
+                _logger.LogWarning("Нет обновленных строк в таблице уведомлений");
+            }
         }
 
         public async Task<Notification?> GetNotificationAsync(Guid notificationId, CancellationToken token = default)
         {
-            var notification = await _repository.GetNotificationByIdAsync(notificationId, token);
+            var notification = await _context.Notifications
+                .FirstOrDefaultAsync(n => n.NotificationId == notificationId, token);
             if (notification != null)
             {
                 notification.Text = _encryptionService.TryDecryptSafe(notification.Text);

@@ -544,12 +544,6 @@ namespace Messenger.API.Controllers
                 static string NormRole(string? role) =>
                     string.IsNullOrWhiteSpace(role) ? "участник" : role.Trim().ToLowerInvariant();
 
-                static bool IsOwnerRole(string? role)
-                {
-                    var r = NormRole(role);
-                    return r is "владелец" or "owner";
-                }
-
                 static bool IsAdminOrOwnerRole(string? role)
                 {
                     var r = NormRole(role);

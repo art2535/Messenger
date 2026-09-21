@@ -1,35 +1,52 @@
-﻿using Messenger.Core.Interfaces;
+using Messenger.Core.Interfaces;
 using Messenger.Core.Models;
-using Messenger.Infrastructure.Repositories;
+using Messenger.Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
 
 namespace Messenger.Infrastructure.Services
 {
     public class LoginService : ILoginService
     {
-        private readonly LoginRepository _loginRepository;
+        private readonly GuapMessengerContext _context;
 
-        public LoginService(LoginRepository loginRepository)
+        public LoginService(GuapMessengerContext context)
         {
-            _loginRepository = loginRepository;
+            _context = context;
         }
 
-        public Task CloseActiveLoginsForUsersAsync(IEnumerable<Guid> userIds, CancellationToken cancellationToken = default)
-            => _loginRepository.CloseActiveLoginsForUsersAsync(userIds, cancellationToken);
+        public async Task CloseActiveLoginsForUsersAsync(IEnumerable<Guid> userIds, CancellationToken cancellationToken = default)
+        {
+            var ids = userIds.ToList();
+            if (ids.Count == 0)
+                return;
+
+            await _context.Logins
+                .Where(l => ids.Contains(l.UserId) && l.Active)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(l => l.Active, false)
+                    .SetProperty(l => l.LogoutTime, DateTime.UtcNow)
+                    .SetProperty(l => l.Token, string.Empty),
+                    cancellationToken);
+        }
 
         public async Task AddLoginAsync(Login login, CancellationToken cancellationToken = default)
         {
-            await _loginRepository.AddLoginAsync(login, cancellationToken);
+            await _context.Logins.AddAsync(login, cancellationToken);
+            await _context.SaveChangesAsync(cancellationToken);
         }
 
-        public async Task<IEnumerable<Login>> GetLoginsByUserIdAsync(Guid userId, 
+        public async Task<IEnumerable<Login>> GetLoginsByUserIdAsync(Guid userId,
             CancellationToken cancellationToken = default)
         {
-            return await _loginRepository.GetLoginByUserIdAsync(userId, cancellationToken);
+            return await _context.Logins
+                .Where(l => l.UserId == userId)
+                .ToListAsync(cancellationToken);
         }
 
         public async Task UpdateLoginAsync(Login login, CancellationToken cancellationToken = default)
         {
-            await _loginRepository.UpdateLoginAsync(login, cancellationToken);
+            _context.Logins.Update(login);
+            await _context.SaveChangesAsync(cancellationToken);
         }
     }
 }

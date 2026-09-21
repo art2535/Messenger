@@ -2,7 +2,6 @@
 using Messenger.Core.Interfaces;
 using Messenger.Core.Models;
 using Messenger.Infrastructure.Data;
-using Messenger.Infrastructure.Repositories;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -11,7 +10,6 @@ namespace Messenger.Infrastructure.Services
 {
     public class UserService : IUserService
     {
-        private readonly UserRepository _userRepository;
         private readonly GuapMessengerContext _context;
         private readonly IConfiguration _configuration;
 
@@ -25,42 +23,68 @@ namespace Messenger.Infrastructure.Services
             ["ROLE_USER"] = "Пользователь"
         };
 
-        public UserService(UserRepository userRepository, GuapMessengerContext context,
+        public UserService(GuapMessengerContext context,
             IConfiguration configuration)
         {
-            _userRepository = userRepository;
             _context = context;
             _configuration = configuration;
         }
 
         public async Task AssignRoleAsync(Guid userId, Guid roleId, CancellationToken token = default)
         {
-            await _userRepository.AssignUserRoleAsync(userId, roleId, token);
+            var exists = await _context.Set<Dictionary<string, object>>("UserRole")
+                .AnyAsync(ur => (Guid)ur["UserId"] == userId && (Guid)ur["RoleId"] == roleId, token);
+            if (!exists)
+            {
+                var entry = new Dictionary<string, object> { ["UserId"] = userId, ["RoleId"] = roleId };
+                _context.Set<Dictionary<string, object>>("UserRole").Add(entry);
+                await _context.SaveChangesAsync(token);
+            }
         }
 
         public async Task BlockUserAsync(Guid userId, Guid blockedUserId, CancellationToken token = default)
         {
-            await _userRepository.AddUserToBlacklistAsync(userId, blockedUserId, token);
+            bool alreadyExists = await _context.Blacklists
+                .AnyAsync(b => b.UserId == userId && b.BlockedUserId == blockedUserId, token);
+            if (!alreadyExists)
+            {
+                _context.Blacklists.Add(new Blacklist
+                {
+                    UserId = userId,
+                    BlockedUserId = blockedUserId,
+                    BlockDate = DateTime.Now
+                });
+                await _context.SaveChangesAsync(token);
+            }
         }
 
         public async Task DeleteAccountAsync(Guid userId, CancellationToken token = default)
         {
-            await _userRepository.DeleteUserAsync(userId, token);
+            var userToDelete = await _context.Users.FindAsync(userId);
+            if (userToDelete != null)
+            {
+                _context.Users.Remove(userToDelete);
+                await _context.SaveChangesAsync(token);
+            }
         }
 
         public async Task<IEnumerable<User>> GetAllUsersAsync(CancellationToken token = default)
         {
-            return await _userRepository.GetAllUsersAsync(token);
+            return await _context.Users.ToListAsync(token);
         }
 
         public async Task<IEnumerable<Role>> GetRolesAsync(CancellationToken token = default)
         {
-            return await _userRepository.GetUserRolesAsync(token);
+            return await _context.Roles.ToListAsync(token);
         }
 
         public async Task<User?> GetUserByIdAsync(Guid id, CancellationToken token = default)
         {
-            return await _userRepository.GetUserByIdAsync(id, token);
+            return await _context.Users
+                .Include(u => u.Account)
+                .Include(u => u.UserStatus)
+                .Include(u => u.Roles)
+                .FirstOrDefaultAsync(u => u.UserId == id, token);
         }
 
         public async Task<string> UploadAvatarAsync(Guid userId, IFormFile file, CancellationToken token = default)
@@ -140,7 +164,13 @@ namespace Messenger.Infrastructure.Services
 
         public async Task UnblockUserAsync(Guid userId, Guid blockedUserId, CancellationToken token = default)
         {
-            await _userRepository.RemoveUserFromBlacklistAsync(userId, blockedUserId, token);
+            var blockedUser = await _context.Blacklists
+                .FirstOrDefaultAsync(b => b.UserId == userId && b.BlockedUserId == blockedUserId, token);
+            if (blockedUser != null)
+            {
+                _context.Blacklists.Remove(blockedUser);
+                await _context.SaveChangesAsync(token);
+            }
         }
 
         public async Task<IEnumerable<UserSearch>> SearchUsersAsync(string search, CancellationToken token = default)

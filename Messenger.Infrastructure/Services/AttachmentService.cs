@@ -1,27 +1,31 @@
-﻿using Messenger.Core.Interfaces;
+using Messenger.Core.Interfaces;
 using Messenger.Core.Models;
-using Messenger.Infrastructure.Repositories;
+using Messenger.Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
 
 namespace Messenger.Infrastructure.Services
 {
     public class AttachmentService : IAttachmentService
     {
-        private AttachmentRepository _repository;
+        private readonly GuapMessengerContext _context;
 
-        public AttachmentService(AttachmentRepository repository)
+        public AttachmentService(GuapMessengerContext context)
         {
-            _repository = repository;
+            _context = context;
         }
 
         public async Task AddAttachmentAsync(Attachment attachment, CancellationToken cancellationToken = default)
         {
-            await _repository.AddAttachmentAsync(attachment, cancellationToken);
+            await _context.Attachments.AddAsync(attachment, cancellationToken);
+            await _context.SaveChangesAsync(cancellationToken);
         }
 
-        public async Task<IEnumerable<Attachment>> GetAttachmentsByMessageIdAsync(Guid messageId, 
+        public async Task<IEnumerable<Attachment>> GetAttachmentsByMessageIdAsync(Guid messageId,
             CancellationToken cancellationToken = default)
         {
-            return await _repository.GetByMessageIdAsync(messageId, cancellationToken);
+            return await _context.Attachments
+                .Where(a => a.MessageId == messageId)
+                .ToListAsync(cancellationToken);
         }
     }
 }

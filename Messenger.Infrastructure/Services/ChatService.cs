@@ -1,19 +1,19 @@
 ﻿using Messenger.Core.Interfaces;
 using Messenger.Core.Models;
-using Messenger.Infrastructure.Repositories;
+using Messenger.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
 namespace Messenger.Infrastructure.Services
 {
     public class ChatService : IChatService
     {
-        private readonly ChatRepository _repository;
+        private readonly GuapMessengerContext _context;
         private readonly IUserService _userService;
         private readonly IEncryptionService _encryptionService;
 
-        public ChatService(ChatRepository repository, IUserService userService, IEncryptionService encryptionService)
+        public ChatService(GuapMessengerContext context, IUserService userService, IEncryptionService encryptionService)
         {
-            _repository = repository;
+            _context = context;
             _userService = userService;
             _encryptionService = encryptionService;
         }
@@ -37,15 +37,23 @@ namespace Messenger.Infrastructure.Services
                 JoinDate = DateTime.Now
             };
 
-            await _repository.AddChatAsync(chat, token);
-            await _repository.AddParticipantAsync(participant, token);
+            await _context.Chats.AddAsync(chat, token);
+            await _context.SaveChangesAsync(token);
+            await _context.ChatParticipants.AddAsync(participant, token);
+            await _context.SaveChangesAsync(token);
 
             return chat;
         }
 
         public async Task<List<object>> GetUserChatsWithLastMessageAsync(Guid userId, CancellationToken token = default)
         {
-            var chats = await _repository.GetChatsByUserIdAsync(userId, token);
+            var chats = await _context.Chats
+                .Include(c => c.ChatParticipants)
+                    .ThenInclude(cp => cp.User)
+                        .ThenInclude(u => u.Account)
+                .Include(c => c.Messages)
+                .Where(c => c.ChatParticipants.Any(cp => cp.UserId == userId))
+                .ToListAsync(token);
 
             var result = new List<object>();
             foreach (var chat in chats)
@@ -111,12 +119,18 @@ namespace Messenger.Infrastructure.Services
 
         public async Task<IEnumerable<Chat>> GetUserChatsAsync(Guid userId, CancellationToken token = default)
         {
-            return await _repository.GetChatsByUserIdAsync(userId, token);
+            return await _context.Chats
+                .Include(c => c.ChatParticipants)
+                    .ThenInclude(cp => cp.User)
+                        .ThenInclude(u => u.Account)
+                .Include(c => c.Messages)
+                .Where(c => c.ChatParticipants.Any(cp => cp.UserId == userId))
+                .ToListAsync(token);
         }
 
         public async Task AddParticipantToChatAsync(Guid chatId, Guid userId, string role, CancellationToken token = default)
         {
-            var existing = await _repository.GetChatParticipantByChatAsync(chatId, userId, token);
+            var existing = await _context.ChatParticipants.FirstOrDefaultAsync(part => part.ChatId == chatId && part.UserId == userId, token);
             if (existing != null)
                 return;
 
@@ -130,7 +144,8 @@ namespace Messenger.Infrastructure.Services
 
             try
             {
-                await _repository.AddParticipantAsync(participant, token);
+                await _context.ChatParticipants.AddAsync(participant, token);
+                await _context.SaveChangesAsync(token);
             }
             catch (DbUpdateException ex) when (ex.InnerException?.Message.Contains("duplicate key") == true)
             {
@@ -140,33 +155,42 @@ namespace Messenger.Infrastructure.Services
 
         public async Task DeleteParticipantFromChatAsync(Guid chatId, Guid userId, CancellationToken token = default)
         {
-            var deleteParticipant = await _repository.GetChatParticipantByChatAsync(chatId, userId, token);
+            var deleteParticipant = await _context.ChatParticipants.FirstOrDefaultAsync(part => part.ChatId == chatId && part.UserId == userId, token);
 
             if (deleteParticipant != null)
             {
-                await _repository.DeleteParticipantAsync(deleteParticipant, token);
+                _context.ChatParticipants.Remove(deleteParticipant);
+                await _context.SaveChangesAsync(token);
             }
         }
 
         public async Task DeleteChatAsync(Chat chat, CancellationToken token = default)
         {
-            await _repository.DeleteChatAsync(chat, token);
+            _context.Chats.Remove(chat);
+            await _context.SaveChangesAsync(token);
         }
 
         public async Task<Chat?> GetChatByIdAsync(Guid chatId, CancellationToken token = default)
         {
-            return await _repository.GetChatByIdAsync(chatId, token);
+            return await _context.Chats
+                .Include(c => c.ChatParticipants)
+                .FirstOrDefaultAsync(c => c.ChatId == chatId, token);
         }
 
         public async Task<IEnumerable<ChatParticipant>> GetChatParticipantsAsync(Guid chatId, 
             CancellationToken token = default)
         {
-            return await _repository.GetParticipantsByChatAsync(chatId, token);
+            return await _context.ChatParticipants
+                .Where(part => part.ChatId == chatId)
+                .Include(p => p.User)
+                    .ThenInclude(u => u.Account)
+                .ToListAsync(token);
         }
 
         public async Task UpdateChatAsync(Chat chat, CancellationToken token = default)
         {
-            await _repository.UpdateChatAsync(chat, token);
+            _context.Chats.Update(chat);
+            await _context.SaveChangesAsync(token);
         }
     }
 }

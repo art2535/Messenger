@@ -63,7 +63,7 @@ namespace Messenger.Core.Hubs
 
                 await Groups.AddToGroupAsync(Context.ConnectionId, $"User_{userId}");
 
-                await _userStatusService.UpdateStatusAsync(new UserStatus
+                await _userStatusService.UpdateUserStatusAsync(new UserStatus
                 {
                     UserId = userId,
                     Online = true,
@@ -102,7 +102,7 @@ namespace Messenger.Core.Hubs
                     {
                         var userId = user.UserId;
 
-                        await _userStatusService.UpdateStatusAsync(new UserStatus
+                        await _userStatusService.UpdateUserStatusAsync(new UserStatus
                         {
                             UserId = userId,
                             Online = false,
@@ -264,7 +264,7 @@ namespace Messenger.Core.Hubs
         {
             try
             {
-                var status = await _userStatusService.GetStatusByUserIdAsync(userId);
+                var status = await _userStatusService.GetUserStatusByUserIdAsync(userId);
                 if (status == null) 
                     return;
 
