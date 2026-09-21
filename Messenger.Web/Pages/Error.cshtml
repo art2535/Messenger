@@ -1,26 +1,177 @@
 ﻿@page
 @model ErrorModel
 @{
-    ViewData["Title"] = "Error";
+    ViewData["Title"] = "Ошибка";
+    Layout = "_Layout";
 }
 
-<h1 class="text-danger">Error.</h1>
-<h2 class="text-danger">An error occurred while processing your request.</h2>
+<style>
+    .error-page {
+        min-height: calc(100vh - var(--header-height, 64px) - 80px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem 1rem 3rem;
+        background: linear-gradient(165deg, #f0f6fc 0%, #f8f5fa 50%, #eef2f7 100%);
+    }
+    html.dark .error-page {
+        background: linear-gradient(165deg, #0f172a 0%, #1e1b2e 50%, #0f172a 100%);
+    }
+    .error-card {
+        width: 100%;
+        max-width: 560px;
+        background: #fff;
+        border-radius: 1.25rem;
+        box-shadow: 0 12px 40px rgba(0, 90, 170, 0.12), 0 4px 12px rgba(0, 0, 0, 0.04);
+        overflow: hidden;
+        border: 1px solid rgba(0, 90, 170, 0.08);
+    }
+    html.dark .error-card {
+        background: #1e293b;
+        border-color: rgba(148, 163, 184, 0.15);
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+    }
+    .error-hero {
+        background: linear-gradient(135deg, #005aaa 0%, #2d6db5 45%, #ab3a8d 100%);
+        color: #fff;
+        padding: 2rem 1.75rem 1.75rem;
+        text-align: center;
+    }
+    .error-code {
+        font-size: 3.5rem;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        line-height: 1;
+        opacity: 0.95;
+        margin-bottom: 0.5rem;
+    }
+    .error-hero h1 {
+        font-size: 1.35rem;
+        font-weight: 700;
+        margin: 0 0 0.35rem;
+    }
+    .error-hero p {
+        margin: 0;
+        opacity: 0.9;
+        font-size: 0.95rem;
+        line-height: 1.45;
+    }
+    .error-body {
+        padding: 1.75rem;
+    }
+    .error-body p {
+        color: #475569;
+        font-size: 0.95rem;
+        line-height: 1.55;
+        margin: 0 0 1rem;
+    }
+    html.dark .error-body p { color: #94a3b8; }
+    .error-id {
+        background: #f1f5f9;
+        border-radius: 0.75rem;
+        padding: 0.85rem 1rem;
+        margin-bottom: 1.25rem;
+        font-size: 0.875rem;
+        color: #334155;
+        word-break: break-all;
+    }
+    html.dark .error-id {
+        background: #0f172a;
+        color: #cbd5e1;
+    }
+    .error-id strong { color: #005aaa; }
+    html.dark .error-id strong { color: #60a5fa; }
+    .error-id code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 0.8rem;
+        background: transparent;
+        padding: 0;
+    }
+    .error-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        margin-top: 0.25rem;
+    }
+    .error-actions a {
+        flex: 1 1 auto;
+        min-width: 140px;
+        text-align: center;
+        padding: 0.75rem 1.25rem;
+        border-radius: 0.75rem;
+        font-weight: 600;
+        font-size: 0.9rem;
+        text-decoration: none;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .error-actions a:hover { transform: translateY(-1px); }
+    .btn-guap-primary {
+        background: linear-gradient(135deg, #005aaa 0%, #ab3a8d 100%);
+        color: #fff !important;
+        box-shadow: 0 4px 14px rgba(0, 90, 170, 0.35);
+    }
+    .btn-guap-primary:hover {
+        box-shadow: 0 6px 18px rgba(0, 90, 170, 0.45);
+        color: #fff !important;
+    }
+    .btn-guap-secondary {
+        background: #f1f5f9;
+        color: #005aaa !important;
+        border: 1px solid rgba(0, 90, 170, 0.2);
+    }
+    html.dark .btn-guap-secondary {
+        background: #334155;
+        color: #93c5fd !important;
+        border-color: rgba(148, 163, 184, 0.25);
+    }
+    .error-hint {
+        margin-top: 1.25rem;
+        padding-top: 1.25rem;
+        border-top: 1px solid #e2e8f0;
+        font-size: 0.8rem;
+        color: #64748b;
+        line-height: 1.5;
+    }
+    html.dark .error-hint {
+        border-color: #334155;
+        color: #94a3b8;
+    }
+    @@media (max-width: 480px) {
+        .error-code { font-size: 2.75rem; }
+        .error-hero { padding: 1.5rem 1.25rem; }
+        .error-body { padding: 1.35rem; }
+        .error-actions a { min-width: 100%; }
+    }
+</style>
 
-@if (Model.ShowRequestId)
-{
-    <p>
-        <strong>Request ID:</strong> <code>@Model.RequestId</code>
-    </p>
-}
-
-<h3>Development Mode</h3>
-<p>
-    Swapping to the <strong>Development</strong> environment displays detailed information about the error that occurred.
-</p>
-<p>
-    <strong>The Development environment shouldn't be enabled for deployed applications.</strong>
-    It can result in displaying sensitive information from exceptions to end users.
-    For local debugging, enable the <strong>Development</strong> environment by setting the <strong>ASPNETCORE_ENVIRONMENT</strong> environment variable to <strong>Development</strong>
-    and restarting the app.
-</p>
+<div class="error-page">
+    <div class="error-card">
+        <div class="error-hero">
+            <div class="error-code">!</div>
+            <h1>Что-то пошло не так</h1>
+            <p>При обработке запроса произошла ошибка. Попробуйте ещё раз или вернитесь на главную.</p>
+        </div>
+        <div class="error-body">
+            @if (Model.ShowRequestId)
+            {
+                <div class="error-id">
+                    <strong>Идентификатор запроса:</strong>
+                    <code>@Model.RequestId</code>
+                </div>
+            }
+            <p>
+                Если проблема повторяется, сообщите в службу поддержки университета
+                или обратитесь в <a href="https://guap.ru/c/it/struct/orcs" target="_blank" rel="noopener" style="color:#005aaa;font-weight:600;">УЦР ГУАП</a>.
+            </p>
+            <div class="error-actions">
+                <a href="/" class="btn-guap-primary">На главную</a>
+                <a href="/Authorization" class="btn-guap-secondary">Войти в мессенджер</a>
+            </div>
+            <div class="error-hint">
+                Мессенджер ГУАП при локальной отладке включите окружение
+                <strong>Development</strong> (переменная <code>ASPNETCORE_ENVIRONMENT</code>),
+                чтобы видеть подробности исключения. На рабочем сервере режим разработки включать нельзя.
+            </div>
+        </div>
+    </div>
+</div>
