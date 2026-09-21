@@ -3128,9 +3128,7 @@
                 : '';
 
             const avatarHtml = showAvatar
-                ? (grouped
-                    ? `<div class="msg-avatar-spacer" aria-hidden="true"></div>`
-                    : `<img class="msg-avatar" src="${avatarUrl}" alt="" loading="lazy" onerror="this.src='${DEFAULT_MSG_AVATAR}'">`)
+                ? `<img class="msg-avatar" src="${avatarUrl}" alt="" loading="lazy" onerror="this.src='${DEFAULT_MSG_AVATAR}'">`
                 : '';
 
             const reactionsHtml = renderReactionsHtml(msg.reactions || msg.Reactions || [], msg.messageId);
@@ -4739,9 +4737,7 @@
             const isGroupOpt = currentChatInfo?.type === 'group';
             const groupedOpt = isSameSenderAsPrevious(me);
             const avatarOpt = isGroupOpt
-                ? (groupedOpt
-                    ? `<div class="msg-avatar-spacer" aria-hidden="true"></div>`
-                    : `<img class="msg-avatar" src="${getSenderAvatarUrl(me)}" alt="" loading="lazy" onerror="this.src='${DEFAULT_MSG_AVATAR}'">`)
+                ? `<img class="msg-avatar" src="${getSenderAvatarUrl(me)}" alt="" loading="lazy" onerror="this.src='${DEFAULT_MSG_AVATAR}'">`
                 : '';
             if (isGroupOpt) {
                 div.className = `message-row outgoing-row${groupedOpt ? ' grouped' : ''}`;
