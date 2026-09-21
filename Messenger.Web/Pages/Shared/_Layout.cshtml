@@ -84,7 +84,7 @@
             min-height: calc(var(--header-height) + var(--safe-area-top));
             height: auto;
             padding-top: var(--safe-area-top);
-            z-index: 1030;
+            z-index: 2000;
             background-color: var(--card-light);
             border-bottom: 1px solid var(--border-light);
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
@@ -107,6 +107,45 @@
         header {
             overflow: visible !important;
         }
+        header.site-header,
+        header {
+            background-color: #ffffff !important;
+            border-bottom: 1px solid #e2e8f0 !important;
+        }
+        html.dark header {
+            background-color: #1e293b !important;
+            border-bottom-color: #334155 !important;
+        }
+        header .navbar-brand {
+            font-weight: 600 !important;
+            font-size: 1.15rem !important;
+            color: #0f172a !important;
+            text-decoration: none !important;
+        }
+        html.dark header .navbar-brand {
+            color: #f1f5f9 !important;
+        }
+        header .nav-link-header {
+            font-size: 0.9rem !important;
+            font-weight: 500 !important;
+            color: #64748b !important;
+            text-decoration: none !important;
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            line-height: 1.4 !important;
+        }
+        header .nav-link-header:hover {
+            color: #005aaa !important;
+            background: rgba(0, 90, 170, 0.06) !important;
+        }
+        html.dark header .nav-link-header {
+            color: #94a3b8 !important;
+        }
+        html.dark header .nav-link-header:hover {
+            color: #7eb6e8 !important;
+        }
+
 
         #mobileNav {
             display: none !important;
@@ -122,7 +161,7 @@
             height: auto !important;
             max-height: none !important;
             overflow: visible !important;
-            z-index: 1040;
+            z-index: 2010;
         }
 
         #mobileNav.show {
@@ -191,7 +230,7 @@
             position: fixed;
             inset: 0;
             background: rgba(15, 23, 42, 0.45);
-            z-index: 1020;
+            z-index: 1990;
         }
 
         #mobileNavBackdrop.show {
@@ -440,7 +479,7 @@
     </style>
 </head>
 <body>
-    <header>
+    <header class="site-header">
         <nav class="navbar">
             <div class="container d-flex align-items-center justify-content-between h-100 px-3">
                 <a class="navbar-brand d-flex align-items-center" asp-area="" asp-page="/Index">
@@ -454,7 +493,7 @@
                         <div class="d-none d-md-flex align-items-center gap-1 gap-lg-2">
                             <a class="nav-link-header" asp-area="" asp-page="/Authorization/Authorization">Вход в систему</a>
                             <a class="nav-link-header" href="https://guap.ru/" target="_blank" rel="noopener">Сайт ГУАП</a>
-                            <a class="nav-link-header d-none d-lg-inline-flex" href="https://pro.guap.ru/" target="_blank" rel="noopener">Личный кабинет ГУАП</a>
+                            <a class="nav-link-header" href="https://pro.guap.ru/inside/profile" target="_blank" rel="noopener">Личный кабинет ГУАП</a>
                             <a class="nav-link-header" asp-area="" asp-page="/Privacy">Конфиденциальность</a>
                         </div>
                     }
@@ -481,7 +520,7 @@
                 <ul class="mobile-nav-list">
                     <li><a class="mobile-nav-item" asp-area="" asp-page="/Authorization/Authorization">Вход в систему</a></li>
                     <li><a class="mobile-nav-item" href="https://guap.ru/" target="_blank" rel="noopener">Сайт ГУАП</a></li>
-                    <li><a class="mobile-nav-item" href="https://pro.guap.ru/" target="_blank" rel="noopener">Личный кабинет ГУАП</a></li>
+                    <li><a class="mobile-nav-item" href="https://pro.guap.ru/inside/profile" target="_blank" rel="noopener">Личный кабинет ГУАП</a></li>
                     <li><a class="mobile-nav-item" asp-area="" asp-page="/Privacy">Конфиденциальность</a></li>
                     <li><a class="mobile-nav-item" asp-area="" asp-page="/Index">На главную</a></li>
                 </ul>

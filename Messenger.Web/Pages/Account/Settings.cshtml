@@ -7,6 +7,7 @@
     var lastName = Model.Profile.LastName;
     var firstName = Model.Profile.FirstName;
     var fullName = $"{lastName} {firstName}";
+    ViewData["Title"] = "Настройки аккаунта";
 }
 
 <!DOCTYPE html>
@@ -19,7 +20,7 @@
     <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#111827" media="(prefers-color-scheme: dark)">
     <meta name="access-token" content="@Model.AccessToken">
-    <title>Настройки — GUAP Messenger</title>
+    <title>@ViewData["Title"]</title>
 
     <script>
             (function () {
@@ -72,7 +73,7 @@
             }
 
             .guap-gradient {
-                background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+                background: linear-gradient(135deg, #005aaa 0%, #006cb6 45%, #ab3a8d 100%);
             }
 
             .input-field {
@@ -93,8 +94,8 @@
 
             .input-field:focus {
                 outline: none;
-                border-color: #3b82f6;
-                box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
+                border-color: #005aaa;
+                box-shadow: 0 0 0 3px rgba(0, 90, 170, 0.25);
             }
 
             .sidebar {
@@ -372,6 +373,27 @@
                     padding-left: 0.75rem;
                     padding-right: 0.75rem;
                 }
+            }
+
+            .settings-save-btn,
+            button[type="submit"].bg-blue-600,
+            .bg-blue-600 {
+                background: linear-gradient(135deg, #005aaa, #006cb6) !important;
+            }
+            a.bg-blue-50, .bg-blue-50 {
+                background-color: rgba(0, 90, 170, 0.08) !important;
+            }
+            .text-blue-600 {
+                color: #005aaa !important;
+            }
+            .dark .text-blue-400 {
+                color: #7eb6e8 !important;
+            }
+            .sidebar {
+                border-right: 1px solid #e2e8f0;
+            }
+            .dark .sidebar {
+                border-right-color: #334155;
             }
     </style>
 </head>

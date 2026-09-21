@@ -60,7 +60,7 @@
         }
 
         .guap-gradient {
-            background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+            background: linear-gradient(135deg, #005aaa 0%, #006cb6 45%, #ab3a8d 100%);
         }
 
         #chats-sidebar {
@@ -604,13 +604,13 @@
             }
 
             .message-bubble.incoming {
-                background: #f3f4f6;
+                background: #d1d5db;
                 color: #111827;
                 border-radius: 16px 16px 16px 4px;
             }
 
         .dark .message-bubble.incoming {
-            background: #374151;
+            background: #1f2937;
             color: #f3f4f6;
         }
 
@@ -632,12 +632,12 @@
             left: -7px;
             width: 12px;
             height: 12px;
-            background: #f3f4f6;
+            background: #d1d5db;
             clip-path: polygon(100% 0, 0 100%, 100% 100%);
         }
 
         .dark .message-bubble.incoming::after {
-            background: #374151;
+            background: #1f2937;
         }
 
         #chat-context-menu {
@@ -873,7 +873,7 @@
             background: rgba(59, 130, 246, 0.2);
         }
         #messages-container.select-mode .message-row.outgoing-row.selected::before {
-            border-color: #3b82f6;
+            border-color: #005aaa;
             background: #3b82f6;
             background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E");
             background-size: 14px 14px;
@@ -973,7 +973,6 @@
             position: relative;
         }
 
-        /* Mobile export modal — по центру экрана (не bottom-sheet) */
         @@media (max-width: 767.98px) {
             #export-chat-modal.modal {
                 align-items: center !important;
@@ -1126,13 +1125,15 @@
                 white-space: nowrap;
                 will-change: transform;
             }
+            /* Бегущая строка статуса, если не помещается */
             #chat-header #chat-subtitle.is-marquee {
-                animation: chatSubtitleMarquee 2s linear infinite alternate;
+                animation: chatSubtitleMarquee 6s linear infinite alternate;
             }
             @@keyframes chatSubtitleMarquee {
                 0%, 15% { transform: translateX(0); }
                 85%, 100% { transform: translateX(var(--marquee-shift, 0px)); }
             }
+            /* Блок с именем+статусом занимает всё место до кнопок */
             #chat-header > div.flex.items-center.space-x-3,
             #chat-header > div[onclick*="openChatInfo"] {
                 flex: 1 1 0%;
@@ -2107,6 +2108,8 @@
     <script src="~/app.js"></script>
     <script src="~/js/session-cleanup.js"></script>
 
+
+    <!-- Модальное окно выбора формата экспорта -->
     <div id="export-chat-modal" class="modal">
         <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-6 text-gray-900 dark:text-white">
             <div class="flex items-center justify-between mb-5">
