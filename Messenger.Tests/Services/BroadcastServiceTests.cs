@@ -2,7 +2,6 @@
 using Messenger.Core.DTOs.Broadcasts;
 using Messenger.Core.Models;
 using Messenger.Infrastructure.Data;
-using Messenger.Infrastructure.Repositories;
 using Messenger.Infrastructure.Services;
 using Moq;
 using Moq.EntityFrameworkCore;
@@ -12,7 +11,6 @@ namespace Messenger.Tests.Services
     public class BroadcastServiceTests
     {
         private readonly Mock<GuapMessengerContext> _contextMock;
-        private readonly BroadcastRepository _repository;
         private readonly BroadcastService _service;
 
         public BroadcastServiceTests()
@@ -29,8 +27,7 @@ namespace Messenger.Tests.Services
             _contextMock.Setup(c => c.Broadcasts.Add(It.IsAny<Broadcast>()))
                 .Callback<Broadcast>(b => b.BroadcastId = Guid.NewGuid());
 
-            _repository = new BroadcastRepository(_contextMock.Object);
-            _service = new BroadcastService(_repository);
+            _service = new BroadcastService(_contextMock.Object);
         }
 
         #region CreateBroadcastAsync
