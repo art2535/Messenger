@@ -55,10 +55,13 @@ namespace Messenger.Infrastructure.Services
                 .Where(c => c.ChatParticipants.Any(cp => cp.UserId == userId))
                 .ToListAsync(token);
 
-            var result = new List<object>();
+            var sortable = new List<(DateTime SortKey, object Item)>();
+
             foreach (var chat in chats)
             {
                 var lastMsg = chat.Messages?.OrderByDescending(m => m.SendTime).FirstOrDefault();
+                var lastMessageAt = lastMsg?.SendTime
+                    ?? chat.CreationDate;
 
                 bool isBlocked = false;
                 if (chat.Type == "private")
@@ -84,6 +87,10 @@ namespace Messenger.Infrastructure.Services
                         decryptedLastMessage = "[Сообщение защищено]";
                     }
                 }
+                else if (lastMsg != null && lastMsg.HasAttachments)
+                {
+                    decryptedLastMessage = "Вложение";
+                }
                 else if (chat.Messages?.Any() == true)
                 {
                     decryptedLastMessage = "Вложение";
@@ -91,7 +98,7 @@ namespace Messenger.Infrastructure.Services
 
                 int unreadCount = chat.Messages?.Count(m => m.SenderId != userId && m.ReadTime == null) ?? 0;
 
-                result.Add(new
+                var item = new
                 {
                     chatId = chat.ChatId,
                     name = chat.Type == "private"
@@ -108,13 +115,21 @@ namespace Messenger.Infrastructure.Services
                         : null,
                     type = chat.Type,
                     lastMessage = decryptedLastMessage,
+                    lastMessageAt = lastMessageAt == DateTime.MinValue ? (DateTime?)null : lastMessageAt,
+                    lastMessageTime = lastMessageAt == DateTime.MinValue ? (DateTime?)null : lastMessageAt,
+                    lastMessageSentAt = lastMessageAt == DateTime.MinValue ? (DateTime?)null : lastMessageAt,
                     isOnline = true,
                     isBlocked = isBlocked,
                     unreadCount = unreadCount
-                });
+                };
+
+                sortable.Add((lastMessageAt, item));
             }
 
-            return result;
+            return sortable
+                .OrderByDescending(x => x.SortKey)
+                .Select(x => x.Item)
+                .ToList();
         }
 
         public async Task<IEnumerable<Chat>> GetUserChatsAsync(Guid userId, CancellationToken token = default)
