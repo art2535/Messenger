@@ -153,6 +153,10 @@ public partial class GuapMessengerContext : DbContext
 
             entity.Property(e => e.ReactionId).ValueGeneratedNever();
 
+            entity.HasIndex(e => new { e.MessageId, e.UserId })
+                .IsUnique()
+                .HasDatabaseName("IX_Reactions_MessageId_UserId");
+
             entity.HasOne(d => d.Message).WithMany(p => p.Reactions).HasConstraintName("fk_reaction_message");
 
             entity.HasOne(d => d.User).WithMany(p => p.Reactions).HasConstraintName("fk_reaction_user");

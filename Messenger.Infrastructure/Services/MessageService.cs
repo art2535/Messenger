@@ -380,6 +380,23 @@ namespace Messenger.Infrastructure.Services
 
         private static MessageDto MapToDto(Message m, string decryptedText)
         {
+            var reactionGroups = (m.Reactions ?? Enumerable.Empty<Reaction>())
+                .GroupBy(r => r.ReactionType)
+                .Select(g => new ReactionSummaryDto
+                {
+                    ReactionType = g.Key,
+                    Count = g.Count(),
+                    Users = g.Select(r => new ReactionUserDto
+                    {
+                        UserId = r.UserId,
+                        UserName = r.User != null
+                            ? $"{r.User.FirstName} {r.User.LastName}".Trim()
+                            : null
+                    }).ToList()
+                })
+                .OrderByDescending(x => x.Count)
+                .ToList();
+
             return new MessageDto
             {
                 MessageId = m.MessageId,
@@ -399,7 +416,8 @@ namespace Messenger.Infrastructure.Services
                     FileType = a.FileType,
                     SizeInBytes = a.SizeInBytes ?? 0,
                     Url = a.Url
-                }).ToList() ?? new List<AttachmentDto>()
+                }).ToList() ?? new List<AttachmentDto>(),
+                Reactions = reactionGroups
             };
         }
     }

@@ -640,6 +640,82 @@
             background: #1f2937;
         }
 
+        .message-reactions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-top: 4px;
+            padding: 0 2px;
+            max-width: 100%;
+        }
+        .message-reactions:empty {
+            display: none;
+        }
+        .reaction-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            padding: 2px 7px;
+            border-radius: 12px;
+            font-size: 13px;
+            line-height: 1.3;
+            background: rgba(0,0,0,.06);
+            border: 1px solid transparent;
+            cursor: pointer;
+            user-select: none;
+            transition: background .15s, border-color .15s;
+        }
+        .dark .reaction-chip {
+            background: rgba(255,255,255,.08);
+        }
+        .reaction-chip:hover {
+            background: rgba(59,130,246,.15);
+        }
+        .reaction-chip.mine {
+            border-color: #3b82f6;
+            background: rgba(59,130,246,.18);
+        }
+        .reaction-chip .reaction-count {
+            font-size: 11px;
+            font-weight: 600;
+            color: #6b7280;
+        }
+        .dark .reaction-chip .reaction-count {
+            color: #9ca3af;
+        }
+        .reaction-picker {
+            position: fixed;
+            z-index: 10050;
+            display: flex;
+            gap: 4px;
+            padding: 8px;
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 14px;
+            box-shadow: 0 8px 24px rgba(0,0,0,.15);
+        }
+        .dark .reaction-picker {
+            background: #1f2937;
+            border-color: #374151;
+        }
+        .reaction-picker button {
+            width: 36px;
+            height: 36px;
+            font-size: 20px;
+            border: none;
+            background: transparent;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: background .15s, transform .1s;
+        }
+        .reaction-picker button:hover {
+            background: rgba(0,0,0,.06);
+            transform: scale(1.15);
+        }
+        .dark .reaction-picker button:hover {
+            background: rgba(255,255,255,.1);
+        }
+
         #chat-context-menu {
             position: fixed;
             z-index: 3000;
@@ -761,7 +837,6 @@
         .message-bubble.outgoing {
             cursor: context-menu;
         }
-        /* Edit mode indicator */
         #edit-mode-bar {
             display: none;
             align-items: center;
@@ -1125,7 +1200,6 @@
                 white-space: nowrap;
                 will-change: transform;
             }
-            /* Бегущая строка статуса, если не помещается */
             #chat-header #chat-subtitle.is-marquee {
                 animation: chatSubtitleMarquee 6s linear infinite alternate;
             }
@@ -1133,7 +1207,6 @@
                 0%, 15% { transform: translateX(0); }
                 85%, 100% { transform: translateX(var(--marquee-shift, 0px)); }
             }
-            /* Блок с именем+статусом занимает всё место до кнопок */
             #chat-header > div.flex.items-center.space-x-3,
             #chat-header > div[onclick*="openChatInfo"] {
                 flex: 1 1 0%;
@@ -2108,8 +2181,6 @@
     <script src="~/app.js"></script>
     <script src="~/js/session-cleanup.js"></script>
 
-
-    <!-- Модальное окно выбора формата экспорта -->
     <div id="export-chat-modal" class="modal">
         <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-6 text-gray-900 dark:text-white">
             <div class="flex items-center justify-between mb-5">
@@ -2165,6 +2236,9 @@
         <button type="button" id="ctx-reply-btn"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ctx-icon"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
             <span>Ответить</span>
         </button>
+        <button type="button" id="ctx-react-btn"><span class="ctx-icon" style="font-size:16px;line-height:1">😊</span>
+            <span>Реакция</span>
+        </button>
         <button type="button" id="ctx-pin-btn"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ctx-icon"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg>
             <span id="ctx-pin-label">Закрепить</span>
         </button>
@@ -2177,6 +2251,17 @@
         <button type="button" id="ctx-delete-btn" class="danger"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ctx-icon"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
             <span>Удалить</span>
         </button>
+    </div>
+
+    <div id="reaction-picker" class="reaction-picker" style="display:none;">
+        <button type="button" data-emoji="👍" title="Нравится">👍</button>
+        <button type="button" data-emoji="❤️" title="Любовь">❤️</button>
+        <button type="button" data-emoji="😂" title="Смех">😂</button>
+        <button type="button" data-emoji="😮" title="Удивление">😮</button>
+        <button type="button" data-emoji="😢" title="Грусть">😢</button>
+        <button type="button" data-emoji="🔥" title="Огонь">🔥</button>
+        <button type="button" data-emoji="👏" title="Аплодисменты">👏</button>
+        <button type="button" data-emoji="🎉" title="Праздник">🎉</button>
     </div>
 
     <div id="delete-message-modal" class="modal">
@@ -3048,6 +3133,8 @@
                     : `<img class="msg-avatar" src="${avatarUrl}" alt="" loading="lazy" onerror="this.src='${DEFAULT_MSG_AVATAR}'">`)
                 : '';
 
+            const reactionsHtml = renderReactionsHtml(msg.reactions || msg.Reactions || [], msg.messageId);
+
             div.innerHTML = `
                 ${!isMyMessage ? avatarHtml : ''}
                 <div class="message-col">
@@ -3062,6 +3149,7 @@
                             ${isGroupChat && isMyMessage ? ' · Вы' : ''}
                         </div>
                     </div>
+                    ${reactionsHtml}
                 </div>
                 ${isMyMessage ? avatarHtml : ''}
             `;
@@ -3159,6 +3247,186 @@
                 <i data-feather="clock" class="w-3 h-3"></i>
             </span>`;
         }
+
+        function renderReactionsHtml(reactions, messageId) {
+            if (!reactions || !reactions.length) {
+                return `<div class="message-reactions" data-message-id="${messageId || ''}"></div>`;
+            }
+            const chips = reactions.map(r => {
+                const type = r.reactionType || r.ReactionType || '';
+                const count = r.count || r.Count || (r.users || r.Users || []).length || 1;
+                const users = r.users || r.Users || [];
+                const isMine = users.some(u => String(u.userId || u.UserId) === String(me));
+                const title = users.map(u => u.userName || u.UserName || 'Пользователь').join(', ') || type;
+                return `<button type="button" class="reaction-chip${isMine ? ' mine' : ''}" data-emoji="${type}" title="${String(title).replace(/"/g, '&quot;')}" onclick="toggleReaction('${messageId}', '${type}')"><span>${type}</span>${count > 1 ? `<span class="reaction-count">${count}</span>` : ''}</button>`;
+            }).join('');
+            return `<div class="message-reactions" data-message-id="${messageId || ''}">${chips}</div>`;
+        }
+
+        function hideReactionPicker() {
+            const picker = document.getElementById('reaction-picker');
+            if (picker) picker.style.display = 'none';
+        }
+
+        function showReactionPicker(messageId, x, y) {
+            const picker = document.getElementById('reaction-picker');
+            if (!picker) return;
+            picker.dataset.messageId = messageId;
+            picker.style.display = 'flex';
+            const pad = 8;
+            let left = x, top = y;
+            requestAnimationFrame(() => {
+                const w = picker.offsetWidth, h = picker.offsetHeight;
+                if (left + w > window.innerWidth - pad) left = window.innerWidth - w - pad;
+                if (left < pad) left = pad;
+                if (top + h > window.innerHeight - pad) top = y - h - 8;
+                if (top < pad) top = pad;
+                picker.style.left = left + 'px';
+                picker.style.top = top + 'px';
+            });
+        }
+
+        async function toggleReaction(messageId, emoji) {
+            if (!messageId || !emoji || String(messageId).startsWith('temp-')) return;
+            hideReactionPicker();
+            const row = document.querySelector(`[data-mid="${messageId}"]`);
+            const container = row?.querySelector('.message-reactions');
+            const existingChip = container?.querySelector(`.reaction-chip.mine[data-emoji="${emoji}"]`);
+
+            try {
+                if (existingChip) {
+                    const res = await fetchWithAuth(`${API_BASE}/reactions/${messageId}`, { method: 'DELETE' });
+                    if (!res || !res.ok) throw new Error('Не удалось удалить реакцию');
+                    applyReactionLocally(messageId, me, null, 'remove');
+                } else {
+                    const res = await fetchWithAuth(`${API_BASE}/reactions/${messageId}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ reactionType: emoji })
+                    });
+                    if (!res || !res.ok) {
+                        const err = await res?.json().catch(() => ({}));
+                        throw new Error(err?.error || err?.Error || 'Не удалось добавить реакцию');
+                    }
+                    applyReactionLocally(messageId, me, emoji, 'add');
+                }
+            } catch (err) {
+                console.error('Реакция:', err);
+                showToast(err.message || 'Ошибка реакции', 'error');
+            }
+        }
+
+        function applyReactionLocally(messageId, userId, reactionType, action) {
+            const row = document.querySelector(`[data-mid="${messageId}"]`);
+            if (!row) return;
+            let container = row.querySelector('.message-reactions');
+            if (!container) {
+                const col = row.querySelector('.message-col');
+                if (!col) return;
+                container = document.createElement('div');
+                container.className = 'message-reactions';
+                container.dataset.messageId = messageId;
+                col.appendChild(container);
+            }
+
+            if (String(userId) === String(me)) {
+                container.querySelectorAll('.reaction-chip.mine').forEach(chip => {
+                    let countEl = chip.querySelector('.reaction-count');
+                    let count = countEl ? parseInt(countEl.textContent, 10) : 1;
+                    count -= 1;
+                    if (count <= 0) chip.remove();
+                    else {
+                        chip.classList.remove('mine');
+                        if (countEl) countEl.textContent = count;
+                        else {
+                            countEl = document.createElement('span');
+                            countEl.className = 'reaction-count';
+                            countEl.textContent = count;
+                            chip.appendChild(countEl);
+                        }
+                    }
+                });
+            }
+
+            if (action === 'add' && reactionType) {
+                let chip = container.querySelector(`.reaction-chip[data-emoji="${reactionType}"]`);
+                if (chip) {
+                    let countEl = chip.querySelector('.reaction-count');
+                    let count = countEl ? parseInt(countEl.textContent, 10) : 1;
+                    count += 1;
+                    if (!countEl) {
+                        countEl = document.createElement('span');
+                        countEl.className = 'reaction-count';
+                        chip.appendChild(countEl);
+                    }
+                    countEl.textContent = count;
+                    if (String(userId) === String(me)) chip.classList.add('mine');
+                } else {
+                    chip = document.createElement('button');
+                    chip.type = 'button';
+                    chip.className = 'reaction-chip' + (String(userId) === String(me) ? ' mine' : '');
+                    chip.dataset.emoji = reactionType;
+                    chip.onclick = () => toggleReaction(messageId, reactionType);
+                    chip.innerHTML = `<span>${reactionType}</span>`;
+                    container.appendChild(chip);
+                }
+            }
+        }
+
+        async function refreshMessageReactions(messageId) {
+            try {
+                const res = await fetchWithAuth(`${API_BASE}/reactions/${messageId}`);
+                if (!res || !res.ok) return;
+                const json = await res.json();
+                const list = json?.data || json?.Data || [];
+                const map = {};
+                for (const r of list) {
+                    const type = r.reactionType || r.ReactionType;
+                    if (!type) continue;
+                    if (!map[type]) map[type] = { reactionType: type, count: 0, users: [] };
+                    map[type].count++;
+                    map[type].users.push({
+                        userId: r.userId || r.UserId,
+                        userName: r.userName || r.UserName
+                    });
+                }
+                const row = document.querySelector(`[data-mid="${messageId}"]`);
+                if (!row) return;
+                let container = row.querySelector('.message-reactions');
+                if (!container) {
+                    const col = row.querySelector('.message-col');
+                    if (!col) return;
+                    container = document.createElement('div');
+                    container.className = 'message-reactions';
+                    col.appendChild(container);
+                }
+                const html = renderReactionsHtml(Object.values(map), messageId);
+                const tmp = document.createElement('div');
+                tmp.innerHTML = html;
+                const newEl = tmp.firstElementChild;
+                container.replaceWith(newEl);
+            } catch (e) {
+                console.warn('refreshMessageReactions', e);
+            }
+        }
+
+        document.getElementById('reaction-picker')?.addEventListener('click', (e) => {
+            const btn = e.target.closest('button[data-emoji]');
+            if (!btn) return;
+            e.preventDefault();
+            e.stopPropagation();
+            const picker = document.getElementById('reaction-picker');
+            const mid = picker?.dataset.messageId;
+            const emoji = btn.dataset.emoji;
+            if (mid && emoji) toggleReaction(mid, emoji);
+        });
+
+        document.addEventListener('click', (e) => {
+            const picker = document.getElementById('reaction-picker');
+            if (picker && picker.style.display !== 'none' && !picker.contains(e.target) && !e.target.closest('#ctx-react-btn')) {
+                hideReactionPicker();
+            }
+        });
 
         const MONTHS_RU = [
             'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
@@ -4899,6 +5167,21 @@
                 if (!mid) return;
                 const chatId = data?.chatId || data?.ChatId || currentChatId;
                 removeMessageFromUI(mid, chatId);
+            });
+
+            connection.on('ReactionUpdated', (data) => {
+                if (!data) return;
+                const mid = data.messageId || data.MessageId;
+                const uid = data.userId || data.UserId;
+                const emoji = data.reactionType || data.ReactionType || null;
+                const action = (data.action || data.Action || 'add').toLowerCase();
+                if (!mid || !uid) return;
+                if (String(uid) === String(me)) return;
+                if (action === 'add' && emoji) {
+                    applyReactionLocally(mid, uid, emoji, 'add');
+                } else {
+                    refreshMessageReactions(mid);
+                }
             });
 
             connection.on('ReceiveMessage', (msg) => {
@@ -7823,6 +8106,17 @@
             if (!mid) return;
             const row = document.querySelector(`[data-mid="${mid}"]`);
             startReply(mid, txt || getMessagePreviewFromRow(row), getSenderNameFromRow(row));
+        });
+
+        document.getElementById('ctx-react-btn')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const mid = contextMenuMessageId;
+            hideMessageContextMenu();
+            if (!mid) return;
+            const menu = document.getElementById('message-context-menu');
+            const rect = menu ? menu.getBoundingClientRect() : { left: e.clientX, bottom: e.clientY };
+            showReactionPicker(mid, rect.left || e.clientX, (rect.bottom || e.clientY) + 4);
         });
 
         document.getElementById('reply-compose-cancel')?.addEventListener('click', (e) => {

@@ -442,7 +442,23 @@ namespace Messenger.API.Controllers
                         FileType = a.FileType ?? GetMimeType(a.FileName),
                         SizeInBytes = a.SizeInBytes ?? 0,
                         Url = a.Url
-                    }).ToList()
+                    }).ToList(),
+                    Reactions = (m.Reactions ?? Enumerable.Empty<Reaction>())
+                        .GroupBy(r => r.ReactionType)
+                        .Select(g => new ReactionSummaryDto
+                        {
+                            ReactionType = g.Key,
+                            Count = g.Count(),
+                            Users = g.Select(r => new ReactionUserDto
+                            {
+                                UserId = r.UserId,
+                                UserName = r.User != null
+                                    ? $"{r.User.FirstName} {r.User.LastName}".Trim()
+                                    : null
+                            }).ToList()
+                        })
+                        .OrderByDescending(x => x.Count)
+                        .ToList()
                 }).ToList();
 
                 return Ok(new GetMessagesSuccessResponse
