@@ -1,7 +1,8 @@
-﻿using Messenger.Core.Interfaces;
+using Messenger.Core.Interfaces;
 using Messenger.Core.Models;
 using Messenger.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace Messenger.Infrastructure.Services
 {
@@ -10,13 +11,22 @@ namespace Messenger.Infrastructure.Services
         private readonly GuapMessengerContext _context;
         private readonly IUserService _userService;
         private readonly IEncryptionService _encryptionService;
+        private readonly ICacheService _cache;
+        private readonly ILogger<ChatService> _logger;
 
-        public ChatService(GuapMessengerContext context, IUserService userService, IEncryptionService encryptionService)
+        private static readonly TimeSpan ChatsListTtl = TimeSpan.FromSeconds(45);
+
+        public ChatService(GuapMessengerContext context, IUserService userService,
+            IEncryptionService encryptionService, ICacheService cache, ILogger<ChatService> logger)
         {
             _context = context;
             _userService = userService;
             _encryptionService = encryptionService;
+            _cache = cache;
+            _logger = logger;
         }
+
+        private static string UserChatsCacheKey(Guid userId) => $"user:{userId:N}:chats";
 
         public async Task<Chat> CreateChatAsync(string name, string type, Guid creatorId, CancellationToken token = default)
         {
@@ -42,26 +52,94 @@ namespace Messenger.Infrastructure.Services
             await _context.ChatParticipants.AddAsync(participant, token);
             await _context.SaveChangesAsync(token);
 
+            await _cache.RemoveAsync(UserChatsCacheKey(creatorId), token);
+
             return chat;
         }
 
         public async Task<List<object>> GetUserChatsWithLastMessageAsync(Guid userId, CancellationToken token = default)
         {
+            var cacheKey = UserChatsCacheKey(userId);
+            var cached = await _cache.GetAsync<List<object>>(cacheKey, token);
+            if (cached is { Count: > 0 })
+            {
+                _logger.LogInformation("GetUserChats: source=Redis userId={UserId} chats={Count}", userId, cached.Count);
+                return cached;
+            }
+
+            _logger.LogInformation("GetUserChats: source=PostgreSQL userId={UserId} (cache miss)", userId);
+
             var chats = await _context.Chats
+                .AsNoTracking()
                 .Include(c => c.ChatParticipants)
                     .ThenInclude(cp => cp.User)
                         .ThenInclude(u => u.Account)
-                .Include(c => c.Messages)
                 .Where(c => c.ChatParticipants.Any(cp => cp.UserId == userId))
                 .ToListAsync(token);
+
+            if (chats.Count == 0)
+            {
+                await _cache.SetAsync(cacheKey, new List<object>(), ChatsListTtl, token);
+                return new List<object>();
+            }
+
+            var chatIds = chats.Select(c => c.ChatId).ToList();
+
+            var lastMessagesRaw = await _context.Messages
+                .AsNoTracking()
+                .Where(m => chatIds.Contains(m.ChatId))
+                .GroupBy(m => m.ChatId)
+                .Select(g => new
+                {
+                    ChatId = g.Key,
+                    MaxSeq = g.Max(x => x.SequenceNumber)
+                })
+                .ToListAsync(token);
+
+            var maxSeqByChat = lastMessagesRaw.ToDictionary(x => x.ChatId, x => x.MaxSeq);
+
+            List<Message> lastMessages = new();
+            if (maxSeqByChat.Count > 0)
+            {
+                var predicates = maxSeqByChat.Select(kv =>
+                    _context.Messages.AsNoTracking()
+                        .Where(m => m.ChatId == kv.Key && m.SequenceNumber == kv.Value)
+                        .Include(m => m.Sender)
+                        .Include(m => m.Attachments));
+
+                var chatIdSeqPairs = maxSeqByChat.Select(kv => (kv.Key, kv.Value)).ToList();
+
+                lastMessages = await _context.Messages
+                    .AsNoTracking()
+                    .Where(m => chatIds.Contains(m.ChatId))
+                    .Where(m => maxSeqByChat.Keys.Contains(m.ChatId)) // filter early
+                    .Include(m => m.Sender)
+                    .Include(m => m.Attachments)
+                    .ToListAsync(token);
+
+                lastMessages = lastMessages
+                    .GroupBy(m => m.ChatId)
+                    .Select(g => g.OrderByDescending(m => m.SequenceNumber).First())
+                    .ToList();
+            }
+
+            var lastMsgByChat = lastMessages.ToDictionary(m => m.ChatId);
+
+            var unreadCounts = await _context.Messages
+                .AsNoTracking()
+                .Where(m => chatIds.Contains(m.ChatId)
+                         && m.SenderId != userId
+                         && m.ReadTime == null)
+                .GroupBy(m => m.ChatId)
+                .Select(g => new { ChatId = g.Key, Count = g.Count() })
+                .ToDictionaryAsync(x => x.ChatId, x => x.Count, token);
 
             var sortable = new List<(DateTime SortKey, object Item)>();
 
             foreach (var chat in chats)
             {
-                var lastMsg = chat.Messages?.OrderByDescending(m => m.SendTime).FirstOrDefault();
-                var lastMessageAt = lastMsg?.SendTime
-                    ?? chat.CreationDate;
+                lastMsgByChat.TryGetValue(chat.ChatId, out var lastMsg);
+                var lastMessageAt = lastMsg?.SendTime ?? chat.CreationDate;
 
                 bool isBlocked = false;
                 if (chat.Type == "private")
@@ -91,12 +169,8 @@ namespace Messenger.Infrastructure.Services
                 {
                     decryptedLastMessage = "Вложение";
                 }
-                else if (chat.Messages?.Any() == true)
-                {
-                    decryptedLastMessage = "Вложение";
-                }
 
-                int unreadCount = chat.Messages?.Count(m => m.SenderId != userId && m.ReadTime == null) ?? 0;
+                unreadCounts.TryGetValue(chat.ChatId, out var unreadCount);
 
                 var item = new
                 {
@@ -126,19 +200,22 @@ namespace Messenger.Infrastructure.Services
                 sortable.Add((lastMessageAt, item));
             }
 
-            return sortable
+            var result = sortable
                 .OrderByDescending(x => x.SortKey)
                 .Select(x => x.Item)
                 .ToList();
+
+            await _cache.SetAsync(cacheKey, result, ChatsListTtl, token);
+            return result;
         }
 
         public async Task<IEnumerable<Chat>> GetUserChatsAsync(Guid userId, CancellationToken token = default)
         {
             return await _context.Chats
+                .AsNoTracking()
                 .Include(c => c.ChatParticipants)
                     .ThenInclude(cp => cp.User)
                         .ThenInclude(u => u.Account)
-                .Include(c => c.Messages)
                 .Where(c => c.ChatParticipants.Any(cp => cp.UserId == userId))
                 .ToListAsync(token);
         }
@@ -166,6 +243,8 @@ namespace Messenger.Infrastructure.Services
             {
                 return;
             }
+
+            await InvalidateChatsCacheForParticipantsAsync(chatId, token);
         }
 
         public async Task DeleteParticipantFromChatAsync(Guid chatId, Guid userId, CancellationToken token = default)
@@ -177,12 +256,23 @@ namespace Messenger.Infrastructure.Services
                 _context.ChatParticipants.Remove(deleteParticipant);
                 await _context.SaveChangesAsync(token);
             }
+
+            await _cache.RemoveAsync(UserChatsCacheKey(userId), token);
+            await InvalidateChatsCacheForParticipantsAsync(chatId, token);
         }
 
         public async Task DeleteChatAsync(Chat chat, CancellationToken token = default)
         {
+            var participantIds = await _context.ChatParticipants
+                .Where(p => p.ChatId == chat.ChatId)
+                .Select(p => p.UserId)
+                .ToListAsync(token);
+
             _context.Chats.Remove(chat);
             await _context.SaveChangesAsync(token);
+
+            var keys = participantIds.Select(UserChatsCacheKey);
+            await _cache.RemoveAsync(keys, token);
         }
 
         public async Task<Chat?> GetChatByIdAsync(Guid chatId, CancellationToken token = default)
@@ -192,7 +282,7 @@ namespace Messenger.Infrastructure.Services
                 .FirstOrDefaultAsync(c => c.ChatId == chatId, token);
         }
 
-        public async Task<IEnumerable<ChatParticipant>> GetChatParticipantsAsync(Guid chatId, 
+        public async Task<IEnumerable<ChatParticipant>> GetChatParticipantsAsync(Guid chatId,
             CancellationToken token = default)
         {
             return await _context.ChatParticipants
@@ -206,6 +296,20 @@ namespace Messenger.Infrastructure.Services
         {
             _context.Chats.Update(chat);
             await _context.SaveChangesAsync(token);
+            await InvalidateChatsCacheForParticipantsAsync(chat.ChatId, token);
+        }
+
+        public async Task InvalidateChatsCacheForParticipantsAsync(Guid chatId, CancellationToken token = default)
+        {
+            var userIds = await _context.ChatParticipants
+                .AsNoTracking()
+                .Where(p => p.ChatId == chatId)
+                .Select(p => p.UserId)
+                .ToListAsync(token);
+
+            if (userIds.Count == 0) return;
+
+            await _cache.RemoveAsync(userIds.Select(UserChatsCacheKey), token);
         }
     }
 }

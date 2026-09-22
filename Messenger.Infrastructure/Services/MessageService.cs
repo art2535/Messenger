@@ -1,7 +1,6 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Text.RegularExpressions;
 using Messenger.Core.DTOs;
 using Messenger.Core.DTOs.Messages;
 using Messenger.Core.Interfaces;
@@ -11,6 +10,8 @@ using Messenger.Core.Messages;
 using Messenger.Infrastructure.Data;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Messenger.Core.DTOs.Cache;
 
 namespace Messenger.Infrastructure.Services
 {
@@ -19,6 +20,10 @@ namespace Messenger.Infrastructure.Services
         private readonly GuapMessengerContext _context;
         private readonly IEncryptionService _encryptionService;
         private readonly IPublishEndpoint _publishEndpoint;
+        private readonly ICacheService _cache;
+        private readonly ILogger<MessageService> _logger;
+
+        private static readonly TimeSpan LatestMessagesTtl = TimeSpan.FromSeconds(25);
 
         private static readonly JsonSerializerOptions JsonOptions = new()
         {
@@ -28,16 +33,30 @@ namespace Messenger.Infrastructure.Services
         };
 
         public MessageService(GuapMessengerContext context, IEncryptionService encryptionService,
-            IPublishEndpoint publishEndpoint)
+            IPublishEndpoint publishEndpoint, ICacheService cache, ILogger<MessageService> logger)
         {
             _context = context;
             _encryptionService = encryptionService;
             _publishEndpoint = publishEndpoint;
+            _cache = cache;
+            _logger = logger;
         }
 
-        /// <summary>
-        /// Публикует ChatMessageSent в рамках EF Outbox (Publish + SaveChanges в одной транзакции).
-        /// </summary>
+        private static string LatestMessagesCacheKey(Guid chatId, int limit)
+            => $"chat:{chatId:N}:messages:latest:{limit}";
+
+        public async Task InvalidateMessageCachesAsync(Guid chatId, CancellationToken token = default)
+        {
+            var keys = new[]
+            {
+                LatestMessagesCacheKey(chatId, 50),
+                LatestMessagesCacheKey(chatId, 100),
+                LatestMessagesCacheKey(chatId, 30)
+            };
+            await _cache.RemoveAsync(keys, token);
+            _logger.LogInformation("Messages cache invalidated chatId={ChatId}", chatId);
+        }
+
         public async Task PublishChatMessageAsync(ChatMessageSent message, CancellationToken cancellationToken = default)
         {
             await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
@@ -61,7 +80,7 @@ namespace Messenger.Infrastructure.Services
 
             query = query.Trim().ToLowerInvariant();
 
-            var (messages, _) = await GetMessagesByChatIdPagedAsync(chatId, beforeSequence: null, limit: 300, token);
+            var (messages, _) = await GetMessagesByChatIdPagedAsync(chatId, null, 300, token);
 
             var filtered = new List<MessageDto>();
 
@@ -94,6 +113,9 @@ namespace Messenger.Infrastructure.Services
             }
 
             await _context.SaveChangesAsync(ct);
+            await _cache.RemoveAsync($"user:{readerId:N}:chats", ct);
+            _logger.LogInformation("MarkAsRead: chatId={ChatId} count={Count}, messages cache kept, user chats cache invalidated",
+                chatId, messages.Count);
             return messages.Count;
         }
 
@@ -150,8 +172,10 @@ namespace Messenger.Infrastructure.Services
             var deletedMessage = await _context.Messages.FindAsync(new object[] { messageId }, token);
             if (deletedMessage != null)
             {
+                var chatId = deletedMessage.ChatId;
                 _context.Messages.Remove(deletedMessage);
                 await _context.SaveChangesAsync(token);
+                await InvalidateMessageCachesAsync(chatId, token);
             }
         }
 
@@ -159,9 +183,11 @@ namespace Messenger.Infrastructure.Services
         {
             _context.Messages.Update(message);
             await _context.SaveChangesAsync(token);
+            await InvalidateMessageCachesAsync(message.ChatId, token);
         }
 
-        public async Task<ChatExportResult> ExportChatAsync(Guid chatId, string format, string? chatName = null, CancellationToken token = default)
+        public async Task<ChatExportResult> ExportChatAsync(Guid chatId, string format, string? chatName = null, 
+            CancellationToken token = default)
         {
             format = (format ?? "txt").Trim().ToLowerInvariant();
             if (format is not ("txt" or "json" or "html" or "csv"))
@@ -400,8 +426,11 @@ namespace Messenger.Infrastructure.Services
             if (messages.Count == 0) 
                 return 0;
 
+            var chatIds = messages.Select(m => m.ChatId).Distinct().ToList();
             _context.Messages.RemoveRange(messages);
             await _context.SaveChangesAsync(token);
+            foreach (var chatId in chatIds)
+                await InvalidateMessageCachesAsync(chatId, token);
             return messages.Count;
         }
 
@@ -468,6 +497,7 @@ namespace Messenger.Infrastructure.Services
                 await _context.Messages.AddAsync(message, token);
                 await _context.SaveChangesAsync(token);
                 await transaction.CommitAsync(token);
+                await InvalidateMessageCachesAsync(message.ChatId, token);
             }
             catch
             {
@@ -479,8 +509,34 @@ namespace Messenger.Infrastructure.Services
         private async Task<(IReadOnlyList<Message> Items, bool HasMore)> GetMessagesByChatIdPagedAsync(Guid chatId,
             long? beforeSequence = null, int limit = 50, CancellationToken token = default)
         {
-            if (limit <= 0) limit = 50;
-            if (limit > 200) limit = 200;
+            if (limit <= 0)
+                limit = 50;
+            if (limit > 200)
+                limit = 200;
+
+            if (beforeSequence is null)
+            {
+                var cacheKey = LatestMessagesCacheKey(chatId, limit);
+                var cached = await _cache.GetAsync<CachedMessagesPage>(cacheKey, token);
+                if (cached is not null && cached.Items is { Count: > 0 })
+                {
+                    var fromCache = cached.Items.Select(ToMessage).ToList();
+                    _logger.LogInformation(
+                        "GetMessages: source=Redis chatId={ChatId} limit={Limit} count={Count}",
+                        chatId, limit, fromCache.Count);
+                    return (fromCache, cached.HasMore);
+                }
+
+                _logger.LogInformation(
+                    "GetMessages: source=PostgreSQL chatId={ChatId} limit={Limit} (cache miss)",
+                    chatId, limit);
+            }
+            else
+            {
+                _logger.LogInformation(
+                    "GetMessages: source=PostgreSQL chatId={ChatId} beforeSeq={Before} limit={Limit} (cursor page, без кэша)",
+                    chatId, beforeSequence, limit);
+            }
 
             var query = _context.Messages
                 .AsNoTracking()
@@ -504,11 +560,91 @@ namespace Messenger.Infrastructure.Services
                 batch = batch.Take(limit).ToList();
 
             batch.Reverse();
+
+            if (beforeSequence is null)
+            {
+                await _cache.SetAsync(
+                    LatestMessagesCacheKey(chatId, limit),
+                    new CachedMessagesPage
+                    {
+                        Items = batch.Select(ToCacheItem).ToList(),
+                        HasMore = hasMore
+                    },
+                    LatestMessagesTtl,
+                    token);
+            }
+
             return (batch, hasMore);
         }
 
+        private static CachedMessageItem ToCacheItem(Message m) => new()
+        {
+            MessageId = m.MessageId,
+            ChatId = m.ChatId,
+            SenderId = m.SenderId,
+            SenderFirstName = m.Sender?.FirstName,
+            SenderLastName = m.Sender?.LastName,
+            MessageText = m.MessageText ?? string.Empty,
+            SendTime = m.SendTime,
+            SequenceNumber = m.SequenceNumber,
+            DeliveryStatus = m.DeliveryStatus,
+            ReadTime = m.ReadTime,
+            HasAttachments = m.HasAttachments,
+            Attachments = (m.Attachments ?? Enumerable.Empty<Attachment>())
+                .Select(a => new CachedAttachmentItem
+                {
+                    AttachmentId = a.AttachmentId,
+                    FileName = a.FileName,
+                    FileType = a.FileType,
+                    SizeInBytes = a.SizeInBytes,
+                    Url = a.Url
+                }).ToList(),
+            Reactions = (m.Reactions ?? Enumerable.Empty<Reaction>())
+                .Select(r => new CachedReactionItem
+                {
+                    ReactionType = r.ReactionType,
+                    UserId = r.UserId,
+                    UserFirstName = r.User?.FirstName,
+                    UserLastName = r.User?.LastName
+                }).ToList()
+        };
 
-
-
+        private static Message ToMessage(CachedMessageItem c) => new()
+        {
+            MessageId = c.MessageId,
+            ChatId = c.ChatId,
+            SenderId = c.SenderId,
+            MessageText = c.MessageText,
+            SendTime = c.SendTime,
+            SequenceNumber = c.SequenceNumber,
+            DeliveryStatus = c.DeliveryStatus,
+            ReadTime = c.ReadTime,
+            HasAttachments = c.HasAttachments,
+            Sender = new User
+            {
+                UserId = c.SenderId,
+                FirstName = c.SenderFirstName ?? string.Empty,
+                LastName = c.SenderLastName ?? string.Empty
+            },
+            Attachments = c.Attachments.Select(a => new Attachment
+            {
+                AttachmentId = a.AttachmentId,
+                FileName = a.FileName ?? string.Empty,
+                FileType = a.FileType,
+                SizeInBytes = a.SizeInBytes,
+                Url = a.Url ?? string.Empty
+            }).ToList(),
+            Reactions = c.Reactions.Select(r => new Reaction
+            {
+                ReactionType = r.ReactionType ?? string.Empty,
+                UserId = r.UserId,
+                User = new User
+                {
+                    UserId = r.UserId,
+                    FirstName = r.UserFirstName ?? string.Empty,
+                    LastName = r.UserLastName ?? string.Empty
+                }
+            }).ToList()
+        };
     }
 }

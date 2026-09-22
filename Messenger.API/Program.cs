@@ -13,6 +13,7 @@ namespace Messenger.API
             builder.Services.AddControllers();
             builder.Services.AddValidation();
             builder.Services.AddSignalRService(builder.Configuration);
+            builder.Services.AddRedisCache(builder.Configuration);
             builder.Services.AddScalarApi(builder.Configuration);
             builder.Services.AddPostgreSQL(builder.Configuration);
             builder.Services.AddServices();
