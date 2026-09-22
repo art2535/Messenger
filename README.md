@@ -30,6 +30,13 @@
 - Обновления в реальном времени через **SignalR**
 - Индикатор «Печатает…» и онлайн-статус пользователей
 - Автоматическое прочтение сообщений в открытом чате
+- **Редактирование и удаление** сообщений и чатов
+- **Ответы на сообщения** (reply)
+- **Реакции** на сообщения
+- **Закрепление** чатов и сообщений
+- **Черновики** сообщений
+- **Расширенный поиск** по сообщениям с фильтрами
+- **Экспорт чатов** в разных форматах
 - Аутентификация через **OIDC SSO ГУАП**
 - Синхронизация профиля из SSO-claims
 - Policy-based авторизация
@@ -38,16 +45,17 @@
 - **RabbitMQ** + MassTransit (Outbox-паттерн для надёжной доставки сообщений и уведомлений)
 - API-версионирование (`/api/v{version}/...`)
 - Документация API через **Scalar UI**
+- **Health-эндпоинт** (`/health`)
 - **Пагинация сообщений** (cursor-based по `SequenceNumber`)
 - **Индексы БД** для быстрой выборки сообщений по чату
 - **Rate Limiting** (защита API, отправки сообщений и typing)
-- **Redis backplane** для SignalR (горизонтальное масштабирование)
+- **Redis** — backplane для SignalR + кэширование для снижения нагрузки на PostgreSQL
 - **Автоматическая очистка сессий** при долгом бездействии (фоновый сервис + клиентская логика)
 - Корректная очистка сессии при выходе из системы
 - Автоматический редирект на чаты при активном session token
 - Полноценная поддержка мобильных телефонов и планшетов (**Android / iOS**) + PWA
 - Поддержка **тёмной темы**
-- Улучшенный адаптивный интерфейс чатов и главной страницы
+- Улучшенный адаптивный интерфейс чатов, настроек и главной страницы
 
 ### В активной разработке
 - Дальнейшее улучшение UI/UX и отзывчивости интерфейса
@@ -65,10 +73,11 @@
 | **Архитектура**      | **Clean Architecture**                          | Core / Infrastructure / API / Web                 |
 | **БД**               | PostgreSQL 17                                   | Entity Framework Core 10 + индексы                |
 | **Messaging**        | RabbitMQ + MassTransit 8.5                      | Outbox-паттерн                                    |
-| **Кэш / Scale-out**  | Redis (StackExchange.Redis)                     | SignalR backplane                                 |
+| **Кэш / Scale-out**  | Redis (StackExchange.Redis)                     | SignalR backplane + кэш для снижения нагрузки на PostgreSQL |
 | **Rate Limiting**    | ASP.NET Core Rate Limiting                      | Fixed-window лимиты для API и хабов               |
 | **Session Cleanup**  | BackgroundService + клиентский JS               | Автозакрытие сессий при бездействии               |
 | **API Docs**         | Scalar.AspNetCore                               | Современный UI для OpenAPI                        |
+| **Health Checks**    | ASP.NET Core Health Checks                      | Эндпоинт `/health`                                |
 | **Push**             | VAPID                                           | Браузерные push-уведомления (в т.ч. мобильные)    |
 | **Аутентификация**   | OIDC                                            | SSO ГУАП                                          |
 | **Шифрование**       | AES                                             | Мастер-ключ в конфигурации                        |
@@ -78,10 +87,10 @@
 ## Установка и запуск (локально)
 
 ### Требования
-- .NET SDK 10.0+
+- **.NET SDK 10.0+**
 - PostgreSQL 17
 - RabbitMQ
-- Redis (опционально, для SignalR backplane в multi-instance режиме)
+- Redis (рекомендуется: backplane SignalR + кэширование)
 - Git
 - Рекомендуемая IDE: Visual Studio 2026
 
@@ -91,6 +100,7 @@
    ```bash
    git clone https://github.com/art2535/Messenger.git
    cd Messenger
+   git checkout feature/messaging-enhancements   # актуальная ветка с улучшениями
    ```
 
 2. **Восстановление пакетов**
@@ -102,14 +112,6 @@
 3. **Настройка конфигурации**  
 Рекомендуется использовать `dotnet user-secrets` или `appsettings.Development.json`  
 (строка подключения к PostgreSQL, Redis, URL-ы, ключи шифрования, VAPID, OIDC и т.д.).
-
-   Пример секции для очистки сессий:
-   ```json
-   "SessionCleanup": {
-     "IdleMinutes": 30,
-     "IntervalMinutes": 5
-   }
-   ```
 
 4. **Применение миграций**
 
@@ -130,7 +132,8 @@
       cd Messenger.Web && dotnet run
       ```
 
-В режиме Development документация API доступна через **Scalar UI**.
+В режиме Development документация API доступна через **Scalar UI**.  
+Health-check: `GET /health`.
 
 Подробная инструкция → [**Инструкции по запуску**](https://github.com/art2535/Messenger/wiki/Инструкции)
 
@@ -145,9 +148,9 @@
 ## Структура проекта
 
 * `Messenger.Core` — доменная модель и бизнес-логика
-* `Messenger.Infrastructure` — EF Core, репозитории, RabbitMQ/MassTransit
-* `Messenger.API` — REST API + SignalR Hubs + Scalar + API Versioning + Rate Limiting + Session Cleanup
-* `Messenger.Web` — Razor Pages + клиент (PWA, тёмная тема, мобильная адаптация)
+* `Messenger.Infrastructure` — EF Core, репозитории, RabbitMQ/MassTransit, Redis
+* `Messenger.API` — REST API + SignalR Hubs + Scalar + API Versioning + Rate Limiting + Session Cleanup + Health Checks
+* `Messenger.Web` — Razor Pages + клиент (PWA, тёмная тема, мобильная адаптация, реакции, ответы, черновики, поиск, экспорт)
 * `Messenger.Tests` — юнит-тесты (xUnit v3)
 * `Deployment/` — файлы для Windows Installer
 
