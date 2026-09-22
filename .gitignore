@@ -10,14 +10,6 @@
 *.userosscache
 *.sln.docstates
 
-# Development configurations
-Messenger.API/appsettings.Development.json
-Messenger.Web/appsettings.Development.json
-shared-dev.key
-
-# Database migrations
-Messenger.Infrastructure/Migrations/
-
 # Photos
 Messenger.Web/wwwroot/uploads/
 Messenger.API/wwwroot/

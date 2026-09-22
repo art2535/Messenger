@@ -28,8 +28,4 @@
 		<ProjectReference Include="..\Messenger.Core\Messenger.Core.csproj" />
 	</ItemGroup>
 
-	<ItemGroup>
-		<Folder Include="Migrations\" />
-	</ItemGroup>
-
 </Project>
