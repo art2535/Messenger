@@ -10,6 +10,11 @@
 *.userosscache
 *.sln.docstates
 
+# Development configs
+Messenger.API/appsettings.Development.json
+Messenger.Web/appsettings.Development.json
+shared-dev.key
+
 # Photos
 Messenger.Web/wwwroot/uploads/
 Messenger.API/wwwroot/
