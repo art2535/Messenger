@@ -52,7 +52,7 @@ namespace Messenger.API.Controllers
                     return error;
                 }
 
-                var status = await _userStatusService.GetStatusByUserIdAsync(user!.UserId, cancellationToken);
+                var status = await _userStatusService.GetUserStatusByUserIdAsync(user!.UserId, cancellationToken);
 
                 if (status == null)
                 {
@@ -110,7 +110,7 @@ namespace Messenger.API.Controllers
                     LastActivity = DateTime.Now
                 };
 
-                await _userStatusService.UpdateStatusAsync(userStatus, cancellationToken);
+                await _userStatusService.UpdateUserStatusAsync(userStatus, cancellationToken);
 
                 return Ok(new UpdateUserStatusSuccessResponse
                 {

@@ -7,7 +7,6 @@ using Messenger.Core.Hubs;
 using Messenger.Core.Interfaces;
 using Messenger.Core.Messages;
 using Messenger.Core.Models;
-using Messenger.Infrastructure.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -34,13 +33,10 @@ namespace Messenger.API.Controllers
         private readonly IUserService _userService;
         private readonly IEncryptionService _encryptionService;
         private readonly ILogger<MessagesController> _logger;
-        private readonly IPublishEndpoint _publishEndpoint;
-        private readonly GuapMessengerContext _context;
 
         public MessagesController(IMessageService messageService, IConfiguration configuration,
             IHubContext<ChatHub> hubContext, IChatService chatService, IUserService userService,
-            IEncryptionService encryptionService, ILogger<MessagesController> logger,
-            IPublishEndpoint publishEndpoint, GuapMessengerContext context)
+            IEncryptionService encryptionService, ILogger<MessagesController> logger)
         {
             _messageService = messageService;
             _configuration = configuration;
@@ -49,8 +45,6 @@ namespace Messenger.API.Controllers
             _userService = userService;
             _encryptionService = encryptionService;
             _logger = logger;
-            _publishEndpoint = publishEndpoint;
-            _context = context;
         }
 
         /// <summary>
@@ -220,10 +214,9 @@ namespace Messenger.API.Controllers
                     ? null
                     : _encryptionService.Encrypt(messageText.Trim());
 
-                await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
                 try
                 {
-                    await _publishEndpoint.Publish(new ChatMessageSent
+                    await _messageService.PublishChatMessageAsync(new ChatMessageSent
                     {
                         MessageId = messageId,
                         ChatId = chatId,
@@ -234,21 +227,9 @@ namespace Messenger.API.Controllers
                         HasAttachments = attachmentsInfo.Count > 0,
                         Attachments = attachmentsInfo
                     }, cancellationToken);
-
-                    await _context.SaveChangesAsync(cancellationToken);
-                    await transaction.CommitAsync(cancellationToken);
                 }
                 catch (Exception ex)
                 {
-                    try
-                    {
-                        await transaction.RollbackAsync(cancellationToken);
-                    }
-                    catch (Exception rbEx)
-                    {
-                        _logger.LogWarning(rbEx, "Rollback не выполнен (транзакция уже завершена)");
-                    }
-
                     _logger.LogError(ex, "Ошибка при публикации сообщения в чат {ChatId}", chatId);
                     return StatusCode(500, new ErrorResponse
                     {
@@ -353,7 +334,7 @@ namespace Messenger.API.Controllers
                     return error;
 
                 var chat = await _chatService.GetChatByIdAsync(chatId, ct);
-                if (chat == null) 
+                if (chat == null)
                     return NotFound(new ErrorResponse { Error = "Чат не найден" });
 
                 if (!chat.ChatParticipants.Any(p => p.UserId == user!.UserId))
@@ -442,7 +423,23 @@ namespace Messenger.API.Controllers
                         FileType = a.FileType ?? GetMimeType(a.FileName),
                         SizeInBytes = a.SizeInBytes ?? 0,
                         Url = a.Url
-                    }).ToList()
+                    }).ToList(),
+                    Reactions = (m.Reactions ?? Enumerable.Empty<Reaction>())
+                        .GroupBy(r => r.ReactionType)
+                        .Select(g => new ReactionSummaryDto
+                        {
+                            ReactionType = g.Key,
+                            Count = g.Count(),
+                            Users = g.Select(r => new ReactionUserDto
+                            {
+                                UserId = r.UserId,
+                                UserName = r.User != null
+                                    ? $"{r.User.FirstName} {r.User.LastName}".Trim()
+                                    : null
+                            }).ToList()
+                        })
+                        .OrderByDescending(x => x.Count)
+                        .ToList()
                 }).ToList();
 
                 return Ok(new GetMessagesSuccessResponse
@@ -455,6 +452,79 @@ namespace Messenger.API.Controllers
             }
             catch (Exception ex)
             {
+                return StatusCode(500, new ErrorResponse
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
+        }
+
+        /// <summary>
+        /// Экспорт истории чата в разных форматах
+        /// </summary>
+        [HttpGet("{chatId}/export")]
+        [EndpointName("ExportChat")]
+        [EndpointSummary("Экспорт истории чата")]
+        [EndpointDescription(
+            "Скачивает историю сообщений чата в одном из форматов: txt, json, html, csv. " +
+            "Доступно только участникам чата. Максимум 5000 сообщений.")]
+        [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> ExportChatAsync(
+            [Description("Идентификатор чата (GUID)")] Guid chatId,
+            [FromQuery, Description("Формат экспорта: txt | json | html | csv (по умолчанию txt)")] string format = "txt",
+            CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
+                if (error != null)
+                {
+                    return error;
+                }
+
+                var participants = await _chatService.GetChatParticipantsAsync(chatId, cancellationToken);
+                if (!participants.Any(p => p.UserId == user!.UserId))
+                {
+                    return StatusCode(StatusCodes.Status403Forbidden, new ErrorResponse
+                    {
+                        IsSuccess = false,
+                        Error = "Вы не являетесь участником этого чата"
+                    });
+                }
+
+                var chat = await _chatService.GetChatByIdAsync(chatId, cancellationToken);
+                if (chat == null)
+                {
+                    return NotFound(new ErrorResponse
+                    {
+                        IsSuccess = false,
+                        Error = "Чат не найден"
+                    });
+                }
+
+                var normalizedFormat = (format ?? "txt").Trim().ToLowerInvariant();
+                if (normalizedFormat is not ("txt" or "json" or "html" or "csv"))
+                {
+                    return BadRequest(new ErrorResponse
+                    {
+                        IsSuccess = false,
+                        Error = "Поддерживаемые форматы: txt, json, html, csv"
+                    });
+                }
+
+                var result = await _messageService.ExportChatAsync(chatId, normalizedFormat, chat.Name, cancellationToken);
+
+                return File(result.Content, result.ContentType, result.FileName);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка экспорта чата {ChatId}", chatId);
                 return StatusCode(500, new ErrorResponse
                 {
                     IsSuccess = false,
@@ -499,7 +569,7 @@ namespace Messenger.API.Controllers
                 }
 
                 var message = await _messageService.GetMessageByIdAsync(request.ChatId, messageId, ct);
-                if (message == null) 
+                if (message == null)
                 {
                     return NotFound(new ErrorResponse
                     {
@@ -507,21 +577,31 @@ namespace Messenger.API.Controllers
                         Error = "Сообщение не найдено"
                     });
                 }
-                if (message.SenderId != user!.UserId) 
-                { 
-                    return Forbid(); 
+                if (message.SenderId != user!.UserId)
+                {
+                    return Forbid();
                 }
 
                 message.MessageText = _encryptionService.Encrypt(request.MessageText);
                 await _messageService.UpdateMessageAsync(message, ct);
 
+                var updatedDto = new MessageDto
+                {
+                    MessageId = message.MessageId,
+                    ChatId = request.ChatId,
+                    SenderId = message.SenderId,
+                    MessageText = request.MessageText.Trim(),
+                    SentAt = message.SendTime,
+                    Status = "Sent"
+                };
+
                 await _hubContext.Clients.Group(request.ChatId.ToString())
-                    .SendAsync("ReceiveMessage", message);
+                    .SendAsync("ReceiveMessage", updatedDto, ct);
 
                 return Ok(new UpdateMessageSuccessResponse
                 {
-                    IsSuccess = true, 
-                    Message = "Сообщение обновлено" 
+                    IsSuccess = true,
+                    Message = "Сообщение обновлено"
                 });
             }
             catch (Exception ex)
@@ -556,31 +636,119 @@ namespace Messenger.API.Controllers
                 }
 
                 var message = await _messageService.GetMessageByIdAsync(chatId, messageId, ct);
-                if (message == null) 
-                { 
-                    return NotFound(); 
+                if (message == null)
+                {
+                    return NotFound();
                 }
                 if (message.SenderId != user!.UserId)
-                { 
-                    return Forbid(); 
+                {
+                    return Forbid();
                 }
 
                 await _messageService.DeleteMessageAsync(messageId, ct);
                 await _hubContext.Clients.Group(chatId.ToString())
-                    .SendAsync("MessageDeleted", new { messageId });
+                    .SendAsync("MessageDeleted", new { messageId, chatId });
 
                 return Ok(new DeleteMessageSuccessResponse
-                { 
-                    IsSuccess = true, 
-                    Message = "Сообщение удалено" 
+                {
+                    IsSuccess = true,
+                    Message = "Сообщение удалено"
                 });
             }
             catch (Exception ex)
             {
                 return StatusCode(500, new ErrorResponse
-                { 
-                    IsSuccess = false, 
-                    Error = ex.Message 
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
+        }
+
+        /// <summary>
+        /// Удалить несколько сообщений
+        /// </summary>
+        [HttpPost("bulk-delete")]
+        [EndpointName("BulkDeleteMessages")]
+        [EndpointSummary("Удалить несколько сообщений")]
+        [EndpointDescription("Удаляет указанные сообщения. Можно удалить только свои сообщения. Уведомления рассылаются через SignalR.")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> BulkDeleteMessagesAsync(
+            [FromBody] BulkDeleteMessagesRequest request,
+            CancellationToken ct = default)
+        {
+            try
+            {
+                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
+                if (error != null)
+                    return error;
+
+                if (request == null || request.MessageIds == null || request.MessageIds.Count == 0)
+                {
+                    return BadRequest(new ErrorResponse
+                    {
+                        IsSuccess = false,
+                        Error = "Не указаны сообщения для удаления"
+                    });
+                }
+
+                if (request.MessageIds.Count > 100)
+                {
+                    return BadRequest(new ErrorResponse
+                    {
+                        IsSuccess = false,
+                        Error = "За один раз можно удалить не более 100 сообщений"
+                    });
+                }
+
+                var chatId = request.ChatId;
+                var allowed = new List<Guid>();
+
+                foreach (var mid in request.MessageIds.Distinct())
+                {
+                    var message = await _messageService.GetMessageByIdAsync(chatId, mid, ct);
+                    if (message == null) 
+                        continue;
+                    if (message.SenderId != user!.UserId) 
+                        continue;
+                    allowed.Add(mid);
+                }
+
+                if (allowed.Count == 0)
+                {
+                    return StatusCode(StatusCodes.Status403Forbidden, new ErrorResponse
+                    {
+                        IsSuccess = false,
+                        Error = "Нет сообщений, которые можно удалить (только свои)"
+                    });
+                }
+
+                var deleted = await _messageService.DeleteMessagesAsync(allowed, ct);
+
+                foreach (var mid in allowed)
+                {
+                    await _hubContext.Clients.Group(chatId.ToString())
+                        .SendAsync("MessageDeleted", new { messageId = mid, chatId }, ct);
+                }
+
+                return Ok(new
+                {
+                    IsSuccess = true,
+                    DeletedCount = deleted,
+                    MessageIds = allowed
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка массового удаления сообщений");
+                return StatusCode(500, new ErrorResponse
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
                 });
             }
         }

@@ -1,4 +1,4 @@
-﻿@page
+@page
 @using System.Text.Json;
 @model Messenger.Web.Pages.Authorization.AuthorizationModel
 @{
@@ -6,43 +6,31 @@
     Layout = "_Layout";
 }
 
-<script src="https://cdn.tailwindcss.com"></script>
-<script>
-    tailwind.config = { darkMode: 'class' }
-</script>
-<script src="https://unpkg.com/feather-icons"></script>
 <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/feather-icons"></script>
 <partial name="_LayoutPWA" />
 
 <style>
     :root {
         --safe-top: env(safe-area-inset-top, 0px);
         --safe-bottom: env(safe-area-inset-bottom, 0px);
+        --guap-blue: #005aaa;
+        --guap-purple: #ab3a8d;
     }
 
-    html, body {
-        height: 100%;
-        height: 100dvh;
-        margin: 0;
-        font-family: 'Roboto', system-ui, -apple-system, sans-serif;
-        background-color: #f1f5f9;
-        overflow: hidden;
-        -webkit-font-smoothing: antialiased;
-        -webkit-tap-highlight-color: transparent;
-    }
-
-        html.dark, html.dark body {
-            background-color: #0f172a !important;
-        }
-
-    .guap-gradient {
-        background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+    main > .container {
+        max-width: none !important;
+        width: 100% !important;
+        padding: 0 !important;
+        margin: 0 !important;
     }
 
     .auth-wrapper {
         position: fixed;
-        inset: 0;
-        top: calc(64px + var(--safe-top));
+        left: 0;
+        right: 0;
+        bottom: 0;
+        top: calc(var(--header-height, 64px) + var(--safe-area-top, env(safe-area-inset-top, 0px)));
         display: flex;
         justify-content: center;
         align-items: center;
@@ -50,120 +38,171 @@
         padding-bottom: calc(1.25rem + var(--safe-bottom));
         overflow-y: auto;
         -webkit-overflow-scrolling: touch;
+        box-sizing: border-box;
+        background: #f1f5f9;
+        font-family: "Roboto", system-ui, -apple-system, sans-serif;
+    }
+
+    html.dark .auth-wrapper {
+        background: #0f172a;
     }
 
     @@media (max-width: 767.98px) {
         .auth-wrapper {
-            top: calc(56px + var(--safe-top));
-            align-items: flex-start;
-            padding-top: 2rem;
+            top: calc(var(--header-height, 56px) + var(--safe-area-top, env(safe-area-inset-top, 0px)));
+            align-items: center;
+            justify-content: center;
         }
     }
 
     .auth-card {
         width: 100%;
         max-width: 400px;
-        background-color: white;
+        background: #ffffff;
         border-radius: 1.25rem;
-        box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.12);
+        border: 1px solid rgba(0, 90, 170, 0.08);
+        box-shadow: 0 12px 40px -12px rgba(0, 90, 170, 0.18);
         padding: 2.25rem 1.75rem;
-        transition: background-color 0.25s ease, box-shadow 0.25s ease;
+        text-align: center;
     }
 
     html.dark .auth-card {
-        background-color: #1e293b;
-        box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.5);
-        color: #e2e8f0;
+        background: #1e293b;
+        border-color: #334155;
+        box-shadow: 0 12px 40px -12px rgba(0, 0, 0, 0.5);
     }
 
-        html.dark .auth-card h1 {
-            color: #f1f5f9 !important;
-        }
-
-        html.dark .auth-card p {
-            color: #94a3b8 !important;
-        }
-
-        html.dark .auth-card .logo-border {
-            border-color: #334155 !important;
-        }
-
-    .big-button {
-        transition: all 0.2s ease;
-        min-height: 52px;
+    .auth-logo-wrap {
+        width: 5.5rem;
+        height: 5.5rem;
+        margin: 0 auto 1.25rem;
+        border-radius: 999px;
+        overflow: hidden;
+        border: 4px solid rgba(0, 90, 170, 0.15);
+        box-shadow: 0 4px 14px rgba(0, 90, 170, 0.12);
     }
 
-        .big-button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 12px 28px -6px rgba(59, 130, 246, 0.45);
-        }
+    .auth-logo-wrap img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
 
-        .big-button:active {
-            transform: translateY(0);
-        }
+    .auth-card h1 {
+        margin: 0 0 0.5rem;
+        font-size: 1.65rem;
+        font-weight: 700;
+        color: #0f172a;
+        letter-spacing: -0.02em;
+    }
+
+    html.dark .auth-card h1 {
+        color: #f1f5f9;
+    }
+
+    .auth-card .auth-subtitle {
+        margin: 0 0 1.75rem;
+        font-size: 1.05rem;
+        color: #64748b;
+    }
+
+    html.dark .auth-card .auth-subtitle {
+        color: #94a3b8;
+    }
+
+    .auth-login-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.65rem;
+        width: 100%;
+        padding: 0.9rem 1.25rem;
+        border: none;
+        border-radius: 0.85rem;
+        font-size: 1rem;
+        font-weight: 600;
+        color: #fff !important;
+        text-decoration: none !important;
+        background: linear-gradient(135deg, #005aaa 0%, #006cb6 50%, #ab3a8d 100%);
+        box-shadow: 0 8px 24px -6px rgba(0, 90, 170, 0.45);
+        transition: filter 0.15s, transform 0.15s, box-shadow 0.15s;
+        cursor: pointer;
+        box-sizing: border-box;
+    }
+
+    .auth-login-btn:hover {
+        filter: brightness(1.06);
+        box-shadow: 0 12px 28px -6px rgba(0, 90, 170, 0.5);
+        color: #fff !important;
+        text-decoration: none !important;
+    }
+
+    .auth-login-btn:active {
+        transform: scale(0.98);
+    }
+
+    .auth-login-btn svg {
+        width: 1.25rem;
+        height: 1.25rem;
+        flex-shrink: 0;
+    }
+
+    .auth-hint {
+        margin: 1.25rem 0 0;
+        font-size: 0.8rem;
+        color: #94a3b8;
+    }
+
+    html.dark .auth-hint {
+        color: #64748b;
+    }
 
     @@media (max-width: 380px) {
         .auth-card {
             padding: 1.75rem 1.25rem;
         }
-
-            .auth-card h1 {
-                font-size: 1.5rem;
-            }
+        .auth-card h1 {
+            font-size: 1.4rem;
+        }
     }
 </style>
 
 <div class="auth-wrapper">
-    <div class="auth-card space-y-8 text-center">
-        <div>
-            <div class="w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden mx-auto mb-5 border-4 border-blue-100 logo-border shadow-md">
-                <img src="~/images/logo.png"
-                     alt="GUAP Messenger"
-                     class="w-full h-full object-cover">
-            </div>
-            <h1 class="text-2xl sm:text-3xl font-bold text-gray-800 mb-2">
-                GUAP Messenger
-            </h1>
-            <p class="text-gray-600 text-base sm:text-lg">
-                Войдите через систему ЕТА ГУАП
-            </p>
+    <div class="auth-card">
+        <div class="auth-logo-wrap">
+            <img src="~/images/logo.png" alt="GUAP Messenger" />
         </div>
+        <h1>GUAP Messenger</h1>
+        <p class="auth-subtitle">Войдите через систему ЕТА ГУАП</p>
 
-        <div class="pt-2">
-            <a href="/Authorization/Authorization?handler=EtaLogin"
-               class="big-button w-full flex justify-center items-center py-3.5 px-5 border border-transparent rounded-xl shadow-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 font-medium text-base transition-all active:scale-[0.98]">
-                <i data-feather="log-in" class="w-5 h-5 mr-3 flex-shrink-0"></i>
-                <span>Войти через ЕТА ГУАП</span>
-            </a>
-        </div>
+        <a href="/Authorization/Authorization?handler=EtaLogin" class="auth-login-btn">
+            <i data-feather="log-in"></i>
+            <span>Войти через ЕТА ГУАП</span>
+        </a>
 
-        <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400 pt-2">
-            Используйте корпоративную учётную запись ГУАП
-        </p>
+        <p class="auth-hint">Используйте корпоративную учётную запись ГУАП</p>
     </div>
 </div>
 
 <script>
     document.addEventListener("DOMContentLoaded", function () {
-        feather.replace();
+        if (typeof feather !== "undefined") feather.replace();
 
         const errors = [];
         @if (!string.IsNullOrEmpty(Model.ErrorMessage))
         {
-            <text>errors.push(@Html.Raw(JsonSerializer.Serialize(Model.ErrorMessage))); </text>
+            <text>errors.push(@Html.Raw(JsonSerializer.Serialize(Model.ErrorMessage)));</text>
         }
-
         @foreach (var key in ViewData.ModelState.Keys)
         {
             var state = ViewData.ModelState[key];
             foreach (var error in state.Errors)
             {
-                <text>errors.push(@Html.Raw(JsonSerializer.Serialize(error.ErrorMessage))); </text>
+                <text>errors.push(@Html.Raw(JsonSerializer.Serialize(error.ErrorMessage)));</text>
             }
         }
-
-        if (errors.length > 0)
-        {
+        if (errors.length > 0) {
             alert(errors.join("\n"));
         }
     });

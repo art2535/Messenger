@@ -1,4 +1,4 @@
-﻿using Messenger.API.Options;
+using Messenger.API.Options;
 using Messenger.API.Providers;
 using Messenger.API.Services;
 using Messenger.Core.Interfaces;
@@ -28,6 +28,38 @@ namespace Messenger.API.Extensions
                 services.AddSingleton<WebPushClient>();
                 services.AddScoped<IPushSubscriptionService, PushSubscriptionService>();
                 services.AddSingleton<TypingRateLimiterService>();
+
+                return services;
+            }
+
+            public IServiceCollection AddRedisCache(IConfiguration configuration)
+            {
+                var redisCs = configuration["Redis:ConnectionString"];
+
+                if (!string.IsNullOrWhiteSpace(redisCs))
+                {
+                    services.AddSingleton<IConnectionMultiplexer>(_ =>
+                    {
+                        var options = ConfigurationOptions.Parse(redisCs);
+                        options.AbortOnConnectFail = false;
+                        return ConnectionMultiplexer.Connect(options);
+                    });
+
+                    services.AddSingleton<ICacheService>(sp =>
+                    {
+                        var mux = sp.GetRequiredService<IConnectionMultiplexer>();
+                        var logger = sp.GetRequiredService<ILogger<RedisCacheService>>();
+                        return new RedisCacheService(mux, logger);
+                    });
+                }
+                else
+                {
+                    services.AddSingleton<ICacheService>(sp =>
+                    {
+                        var logger = sp.GetRequiredService<ILogger<RedisCacheService>>();
+                        return new RedisCacheService(null, logger);
+                    });
+                }
 
                 return services;
             }

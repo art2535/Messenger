@@ -13,9 +13,9 @@ namespace Messenger.API
             builder.Services.AddControllers();
             builder.Services.AddValidation();
             builder.Services.AddSignalRService(builder.Configuration);
+            builder.Services.AddRedisCache(builder.Configuration);
             builder.Services.AddScalarApi(builder.Configuration);
             builder.Services.AddPostgreSQL(builder.Configuration);
-            builder.Services.AddRepositories();
             builder.Services.AddServices();
             builder.Services.AddEncryption(builder.Configuration);
             builder.Services.AddLogging();
@@ -24,6 +24,7 @@ namespace Messenger.API
             builder.Services.AddEtaApiAuthentication(builder.Configuration, !builder.Environment.IsDevelopment());
             builder.Services.AddMessengerRateLimiting();
             builder.Services.AddSessionCleanup(builder.Configuration);
+            builder.Services.AddMessengerHealthChecks();
 
             builder.Services.AddCors(options =>
             {
@@ -65,6 +66,8 @@ namespace Messenger.API
 
                 await next();
             });
+
+            app.MapMessengerHealthChecks();
 
             app.UseUploads();
             app.UseCors("AllowWebApp");

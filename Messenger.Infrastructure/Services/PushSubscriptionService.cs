@@ -1,7 +1,8 @@
 ﻿using Messenger.Core.DTOs.Push;
 using Messenger.Core.Interfaces;
 using Messenger.Core.Models;
-using Messenger.Infrastructure.Repositories;
+using Messenger.Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
@@ -12,7 +13,7 @@ namespace Messenger.Infrastructure.Services
 {
     public class PushSubscriptionService : IPushSubscriptionService
     {
-        private readonly PushSubscriptionRepository _repository;
+        private readonly GuapMessengerContext _context;
         private readonly IChatService _chatService;
         private readonly WebPushClient _webPushClient;
         private readonly VapidDetails _vapidDetails;
@@ -21,11 +22,11 @@ namespace Messenger.Infrastructure.Services
         private readonly IUserService _userService;
         private readonly INotificationService _notificationService;
 
-        public PushSubscriptionService(PushSubscriptionRepository repository, IChatService chatService,
+        public PushSubscriptionService(GuapMessengerContext context, IChatService chatService,
             WebPushClient webPushClient, IConfiguration configuration, INotificationService notificationService,
             ILogger<PushSubscriptionService> logger, IEncryptionService encryptionService, IUserService userService)
         {
-            _repository = repository;
+            _context = context;
             _chatService = chatService;
             _webPushClient = webPushClient;
             _logger = logger;
@@ -40,27 +41,43 @@ namespace Messenger.Infrastructure.Services
 
         public async Task<List<PushSubscription>> GetSubscriptionsByUserIdAsync(Guid userId, CancellationToken ct = default)
         {
-            return await _repository.GetByUserIdAsync(userId, ct);
+            return await _context.PushSubscriptions
+                .Where(s => s.UserId == userId)
+                .ToListAsync(ct);
         }
 
         public async Task AddSubscriptionAsync(PushSubscription subscription, CancellationToken ct = default)
         {
-            await _repository.AddAsync(subscription, ct);
+            _context.PushSubscriptions.Add(subscription);
+            await _context.SaveChangesAsync(ct);
         }
 
         public async Task RemoveSubscriptionAsync(Guid id, CancellationToken ct = default)
         {
-            await _repository.RemoveAsync(id, ct);
+            var sub = await _context.PushSubscriptions.FindAsync(new object[] { id }, ct);
+            if (sub != null)
+            {
+                _context.PushSubscriptions.Remove(sub);
+                await _context.SaveChangesAsync(ct);
+            }
         }
 
         public async Task UpdateSubscriptionAsync(PushSubscription subscription, CancellationToken ct = default)
         {
-            await _repository.UpdateAsync(subscription, ct);
+            _context.PushSubscriptions.Update(subscription);
+            await _context.SaveChangesAsync(ct);
         }
 
         public async Task RemoveByEndpointAsync(string endpoint, CancellationToken ct = default)
         {
-            await _repository.RemoveByEndpointAsync(endpoint, ct);
+            var subscriptions = await _context.PushSubscriptions
+                .Where(s => s.Endpoint == endpoint)
+                .ToListAsync(ct);
+            if (subscriptions.Any())
+            {
+                _context.PushSubscriptions.RemoveRange(subscriptions);
+                await _context.SaveChangesAsync(ct);
+            }
         }
 
         public async Task<AccountSetting?> GetPushSettingsAsync(Guid userId, CancellationToken token = default)
@@ -69,17 +86,46 @@ namespace Messenger.Infrastructure.Services
             if (user?.AccountId == null)
                 return null;
 
-            return await _repository.GetAccountSettingsAsync(user.AccountId, token);
+            return await _context.AccountSettings
+                .FirstOrDefaultAsync(s => s.AccountId == user.AccountId, token);
         }
 
         public async Task SavePushSettingsAsync(Guid userId, Guid accountId, PushSubscriptionUpdateRequest request, 
             CancellationToken token = default)
         {
-            await _repository.SavePushSettingsAsync(accountId, request, token);
+            var settings = await _context.AccountSettings
+                .FirstOrDefaultAsync(s => s.AccountId == accountId, token);
+            if (settings == null)
+            {
+                settings = new AccountSetting
+                {
+                    AccountId = accountId,
+                    PushEnabled = request.PushEnabled,
+                    NotifyMessages = request.NotifyMessages,
+                    NotifyGroupChats = request.NotifyGroupChats,
+                    NotifyMentions = request.NotifyMentions
+                };
+                _context.AccountSettings.Add(settings);
+            }
+            else
+            {
+                settings.PushEnabled = request.PushEnabled;
+                settings.NotifyMessages = request.NotifyMessages;
+                settings.NotifyGroupChats = request.NotifyGroupChats;
+                settings.NotifyMentions = request.NotifyMentions;
+            }
+            await _context.SaveChangesAsync(token);
 
             if (!request.PushEnabled)
             {
-                await _repository.RemoveAllSubscriptionsForUserAsync(userId, token);
+                var allSubs = await _context.PushSubscriptions
+                    .Where(s => s.UserId == userId)
+                    .ToListAsync(token);
+                if (allSubs.Any())
+                {
+                    _context.PushSubscriptions.RemoveRange(allSubs);
+                    await _context.SaveChangesAsync(token);
+                }
                 _logger.LogInformation("Все push-подписки удалены для пользователя {UserId}", userId);
             }
         }
@@ -150,7 +196,9 @@ namespace Messenger.Infrastructure.Services
                         var notificationId = await _notificationService.CreateNotificationAsync(participant.UserId,
                             _encryptionService.Encrypt(notificationText), cancellationToken);
 
-                        var subscriptions = await _repository.GetByUserIdAsync(participant.UserId, cancellationToken);
+                        var subscriptions = await _context.PushSubscriptions
+                            .Where(s => s.UserId == participant.UserId)
+                            .ToListAsync(cancellationToken);
 
                         if (!subscriptions.Any())
                         {
@@ -179,14 +227,26 @@ namespace Messenger.Infrastructure.Services
                                 await _webPushClient.SendNotificationAsync(pushSubscription, JsonSerializer.Serialize(payload),
                                     _vapidDetails, cancellationToken);
 
-                                await _repository.UpdateLastUsedAsync(sub.Id, cancellationToken);
+                                var subEntity = await _context.PushSubscriptions.FindAsync(new object[] { sub.Id }, cancellationToken);
+                                if (subEntity != null)
+                                {
+                                    subEntity.LastUsedAt = DateTime.UtcNow;
+                                    await _context.SaveChangesAsync(cancellationToken);
+                                }
                             }
                             catch (WebPushException webEx) when (webEx.Message.Contains("no longer valid") ||
                                                                  webEx.Message.Contains("unsubscribed") ||
                                                                  webEx.Message.Contains("expired"))
                             {
                                 _logger.LogWarning("Подписка пользователя {UserId} устарела. Удаляем...", participant.UserId);
-                                await _repository.RemoveByEndpointAsync(sub.Endpoint, cancellationToken);
+                                var toRemove = await _context.PushSubscriptions
+                                    .Where(s => s.Endpoint == sub.Endpoint)
+                                    .ToListAsync(cancellationToken);
+                                if (toRemove.Any())
+                                {
+                                    _context.PushSubscriptions.RemoveRange(toRemove);
+                                    await _context.SaveChangesAsync(cancellationToken);
+                                }
                             }
                             catch (Exception ex)
                             {

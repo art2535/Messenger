@@ -1,7 +1,11 @@
 ﻿@{
-    var currentPath = Context.Request.Path.Value ?? "";
-    bool isIndexPage = currentPath.Equals("/", StringComparison.OrdinalIgnoreCase) || 
-                       currentPath.Equals("/Index", StringComparison.OrdinalIgnoreCase);
+    var currentPath = (Context.Request.Path.Value ?? "").TrimEnd('/');
+    if (string.IsNullOrEmpty(currentPath)) currentPath = "/";
+    bool isPublicHeader = currentPath.Equals("/", StringComparison.OrdinalIgnoreCase)
+        || currentPath.Equals("/Index", StringComparison.OrdinalIgnoreCase)
+        || currentPath.Equals("/Privacy", StringComparison.OrdinalIgnoreCase)
+        || currentPath.StartsWith("/Authorization", StringComparison.OrdinalIgnoreCase);
+    bool isIndexPage = isPublicHeader;
 }
 
 <!DOCTYPE html>
@@ -47,7 +51,7 @@
             --muted-dark: #94a3b8;
             --border-light: #e2e8f0;
             --border-dark: #334155;
-            --primary: #3b82f6;
+            --primary: #005aaa;
         }
 
         html, body {
@@ -80,7 +84,7 @@
             min-height: calc(var(--header-height) + var(--safe-area-top));
             height: auto;
             padding-top: var(--safe-area-top);
-            z-index: 1030;
+            z-index: 2000;
             background-color: var(--card-light);
             border-bottom: 1px solid var(--border-light);
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
@@ -100,12 +104,159 @@
             flex-wrap: wrap;
         }
 
+        header {
+            overflow: visible !important;
+        }
+        header.site-header,
+        header {
+            background-color: #ffffff !important;
+            border-bottom: 1px solid #e2e8f0 !important;
+        }
+        html.dark header {
+            background-color: #1e293b !important;
+            border-bottom-color: #334155 !important;
+        }
+        header .navbar-brand {
+            font-weight: 600 !important;
+            font-size: 1.15rem !important;
+            color: #0f172a !important;
+            text-decoration: none !important;
+        }
+        html.dark header .navbar-brand {
+            color: #f1f5f9 !important;
+        }
+        header .nav-link-header {
+            font-size: 0.9rem !important;
+            font-weight: 500 !important;
+            color: #64748b !important;
+            text-decoration: none !important;
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            line-height: 1.4 !important;
+        }
+        header .nav-link-header:hover {
+            color: #005aaa !important;
+            background: rgba(0, 90, 170, 0.06) !important;
+        }
+        html.dark header .nav-link-header {
+            color: #94a3b8 !important;
+        }
+        html.dark header .nav-link-header:hover {
+            color: #7eb6e8 !important;
+        }
+
+
         #mobileNav {
-            display: none;
+            display: none !important;
+            position: absolute;
+            left: 0;
+            right: 0;
+            top: 100%;
+            width: 100%;
+            background: #ffffff !important;
+            border-top: 1px solid #e2e8f0;
+            box-shadow: 0 10px 28px rgba(15, 23, 42, 0.14);
+            padding: 0.75rem 0;
+            height: auto !important;
+            max-height: none !important;
+            overflow: visible !important;
+            z-index: 2010;
         }
 
         #mobileNav.show {
             display: block !important;
+        }
+
+        html.dark #mobileNav {
+            background: #1e293b !important;
+            border-top-color: #334155;
+            box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+        }
+
+        #mobileNav .mobile-nav-list {
+            list-style: none;
+            margin: 0;
+            padding: 0 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+        }
+
+        #mobileNav .mobile-nav-list li {
+            margin: 0;
+            padding: 0;
+            display: block;
+        }
+
+        #mobileNav a.mobile-nav-item {
+            display: flex !important;
+            align-items: center !important;
+            width: 100%;
+            min-height: 52px;
+            padding: 0.85rem 1rem;
+            font-size: 1.05rem;
+            font-weight: 600;
+            line-height: 1.35;
+            color: #0f172a !important;
+            text-decoration: none !important;
+            border-radius: 12px;
+            background: #f1f5f9 !important;
+            border: 1px solid #e2e8f0;
+            box-sizing: border-box;
+        }
+
+        #mobileNav a.mobile-nav-item:active,
+        #mobileNav a.mobile-nav-item:hover {
+            background: #dbeafe !important;
+            border-color: #93c5fd;
+            color: #005aaa !important;
+        }
+
+        html.dark #mobileNav a.mobile-nav-item {
+            color: #f8fafc !important;
+            background: #0f172a !important;
+            border-color: #334155;
+        }
+
+        html.dark #mobileNav a.mobile-nav-item:active,
+        html.dark #mobileNav a.mobile-nav-item:hover {
+            background: #1e3a5f !important;
+            color: #93c5fd !important;
+        }
+
+        #mobileNavBackdrop {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.45);
+            z-index: 1990;
+        }
+
+        #mobileNavBackdrop.show {
+            display: block !important;
+        }
+
+        .nav-link-header {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.4rem 0.75rem !important;
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: #64748b !important;
+            text-decoration: none;
+            border-radius: 0.5rem;
+            white-space: nowrap;
+        }
+        .nav-link-header:hover {
+            color: #005aaa !important;
+            background: rgba(0, 90, 170, 0.06);
+        }
+        html.dark .nav-link-header {
+            color: #94a3b8 !important;
+        }
+        html.dark .nav-link-header:hover {
+            color: #7eb6e8 !important;
         }
 
         .navbar-brand {
@@ -302,24 +453,6 @@
                 padding-bottom: calc(1rem + var(--safe-area-bottom));
             }
 
-            #mobileNav {
-                background-color: var(--card-light);
-                border-bottom: 1px solid var(--border-light);
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-            }
-
-            html.dark #mobileNav {
-                background-color: var(--card-dark);
-                border-bottom-color: var(--border-dark);
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-            }
-
-            #mobileNav .nav-link {
-                padding: 0.85rem 1rem !important;
-                font-size: 1.05rem;
-                border-radius: 12px;
-                margin-bottom: 0.25rem;
-            }
         }
 
         @@media (max-width: 380px) {
@@ -346,10 +479,9 @@
     </style>
 </head>
 <body>
-    <header>
+    <header class="site-header">
         <nav class="navbar">
             <div class="container d-flex align-items-center justify-content-between h-100 px-3">
-
                 <a class="navbar-brand d-flex align-items-center" asp-area="" asp-page="/Index">
                     <img src="~/images/logo.png" alt="GUAP Messenger" class="logo-img">
                     <span>GUAP Messenger</span>
@@ -358,13 +490,11 @@
                 <div class="d-flex align-items-center gap-2 ms-auto">
                     @if (isIndexPage)
                     {
-                        <div class="d-none d-md-flex align-items-center gap-2">
-                            <a class="nav-link" asp-area="" asp-page="/Authorization/Authorization">
-                                Личный кабинет
-                            </a>
-                            <a class="nav-link" href="https://pro.guap.ru/" target="_blank" rel="noopener">
-                                Сайт ГУАП
-                            </a>
+                        <div class="d-none d-md-flex align-items-center gap-1 gap-lg-2">
+                            <a class="nav-link-header" asp-area="" asp-page="/Authorization/Authorization">Вход в систему</a>
+                            <a class="nav-link-header" href="https://guap.ru/" target="_blank" rel="noopener">Сайт ГУАП</a>
+                            <a class="nav-link-header" href="https://pro.guap.ru/inside/profile" target="_blank" rel="noopener">Личный кабинет ГУАП</a>
+                            <a class="nav-link-header" asp-area="" asp-page="/Privacy">Конфиденциальность</a>
                         </div>
                     }
 
@@ -386,24 +516,18 @@
 
         @if (isIndexPage)
         {
-            <div class="d-md-none" id="mobileNav">
-                <div class="container py-3 px-3">
-                    <ul class="navbar-nav w-100">
-                        <li class="nav-item">
-                            <a class="nav-link" asp-area="" asp-page="/Authorization/Authorization">
-                                Личный кабинет
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="https://pro.guap.ru/" target="_blank" rel="noopener">
-                                Сайт ГУАП
-                            </a>
-                        </li>
-                    </ul>
-                </div>
+            <div id="mobileNav" class="d-md-none" aria-label="Мобильное меню">
+                <ul class="mobile-nav-list">
+                    <li><a class="mobile-nav-item" asp-area="" asp-page="/Authorization/Authorization">Вход в систему</a></li>
+                    <li><a class="mobile-nav-item" href="https://guap.ru/" target="_blank" rel="noopener">Сайт ГУАП</a></li>
+                    <li><a class="mobile-nav-item" href="https://pro.guap.ru/inside/profile" target="_blank" rel="noopener">Личный кабинет ГУАП</a></li>
+                    <li><a class="mobile-nav-item" asp-area="" asp-page="/Privacy">Конфиденциальность</a></li>
+                    <li><a class="mobile-nav-item" asp-area="" asp-page="/Index">На главную</a></li>
+                </ul>
             </div>
         }
     </header>
+    <div id="mobileNavBackdrop" class="d-md-none" aria-hidden="true"></div>
 
     <main>
         <div class="container">
@@ -450,29 +574,31 @@
             updateLayoutThemeIcons();
 
             const mobileNav = document.getElementById('mobileNav');
+            const mobileBackdrop = document.getElementById('mobileNavBackdrop');
             const toggler = document.querySelector('.navbar-toggler');
             const mainEl = document.querySelector('main');
             const headerEl = document.querySelector('header');
 
             function updateMainMargin() {
-                if (mainEl && headerEl) {
-                    mainEl.style.marginTop = headerEl.offsetHeight + 'px';
-                }
+                if (!mainEl || !headerEl) return;
+                const bar = headerEl.querySelector('.navbar');
+                const h = bar ? bar.offsetHeight : 56;
+                mainEl.style.marginTop = h + 'px';
             }
 
             function closeMobileNav() {
                 if (!mobileNav) return;
                 mobileNav.classList.remove('show');
+                if (mobileBackdrop) mobileBackdrop.classList.remove('show');
                 if (toggler) toggler.setAttribute('aria-expanded', 'false');
-                updateMainMargin();
             }
 
             function toggleMobileNav() {
                 if (!mobileNav) return;
                 const willOpen = !mobileNav.classList.contains('show');
                 mobileNav.classList.toggle('show', willOpen);
+                if (mobileBackdrop) mobileBackdrop.classList.toggle('show', willOpen);
                 if (toggler) toggler.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
-                updateMainMargin();
             }
 
             if (toggler) {
@@ -483,19 +609,30 @@
                 });
             }
 
+            if (mobileBackdrop) {
+                mobileBackdrop.addEventListener('click', closeMobileNav);
+            }
+
             if (mobileNav) {
-                mobileNav.querySelectorAll('.nav-link').forEach(link => {
+                mobileNav.querySelectorAll('a.mobile-nav-item').forEach(function (link) {
                     link.addEventListener('click', closeMobileNav);
                 });
             }
 
             document.addEventListener('click', function (e) {
-                if (mobileNav && mobileNav.classList.contains('show')) {
-                    if (!mobileNav.contains(e.target) && toggler && !toggler.contains(e.target)) {
-                        closeMobileNav();
-                    }
-                }
+                if (!mobileNav || !mobileNav.classList.contains('show')) return;
+                if (mobileNav.contains(e.target)) return;
+                if (toggler && toggler.contains(e.target)) return;
+                closeMobileNav();
             });
+
+            window.addEventListener('resize', function () {
+                if (window.innerWidth >= 768) closeMobileNav();
+                updateMainMargin();
+            });
+
+            updateMainMargin();
+            window.addEventListener('load', updateMainMargin);
         })();
     </script>
 </body>

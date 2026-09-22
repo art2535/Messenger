@@ -110,11 +110,23 @@ namespace Messenger.API.Controllers
                 if (!participants.Any(p => p.UserId == user!.UserId))
                     return Forbid();
 
-                var participantDtos = participants.Select(p => new
+                var participantDtos = participants.Select(p =>
                 {
-                    id = p.UserId,
-                    name = $"{p.User?.FirstName} {p.User?.LastName}".Trim(),
-                    avatar = p.User?.Account?.Avatar
+                    var role = p.Role;
+                    if (string.IsNullOrWhiteSpace(role))
+                        role = p.UserId == chat.UserId ? "владелец" : "участник";
+                    else if (p.UserId == chat.UserId && role.Trim().ToLowerInvariant() is not ("владелец" or "owner"))
+                        role = "владелец";
+
+                    return new
+                    {
+                        id = p.UserId,
+                        userId = p.UserId,
+                        name = $"{p.User?.FirstName} {p.User?.LastName}".Trim(),
+                        fullName = $"{p.User?.FirstName} {p.User?.LastName}".Trim(),
+                        avatar = p.User?.Account?.Avatar,
+                        role
+                    };
                 }).ToList();
 
                 string displayName = chat.Type == "group"
@@ -126,6 +138,8 @@ namespace Messenger.API.Controllers
                     chatId = chat.ChatId,
                     name = displayName,
                     type = chat.Type,
+                    userId = chat.UserId,
+                    creatorId = chat.UserId,
                     avatar = chat.Type == "group" ? (string?)null : 
                         await GetOtherUserAvatarAsync(participantDtos.FirstOrDefault(p => p.id != user!.UserId)?.id 
                         ?? user!.UserId, ct),
@@ -499,11 +513,76 @@ namespace Messenger.API.Controllers
         {
             try
             {
+                var (currentUser, authError) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
+                if (authError != null)
+                    return authError;
+
                 var userToDelete = await _userService.GetUserByIdAsync(userId, cancellationToken);
 
                 if (userToDelete == null)
                 {
                     return NotFound(new ErrorResponse { IsSuccess = false, Error = "Пользователь не найден" });
+                }
+
+                var participants = (await _chatService.GetChatParticipantsAsync(chatId, cancellationToken)).ToList();
+                var actor = participants.FirstOrDefault(p => p.UserId == currentUser!.UserId);
+                if (actor == null)
+                {
+                    return StatusCode(StatusCodes.Status403Forbidden, new ErrorResponse
+                    {
+                        IsSuccess = false,
+                        Error = "Вы не являетесь участником этого чата"
+                    });
+                }
+
+                var target = participants.FirstOrDefault(p => p.UserId == userId);
+                if (target == null)
+                {
+                    return NotFound(new ErrorResponse { IsSuccess = false, Error = "Участник не найден в чате" });
+                }
+
+                static string NormRole(string? role) =>
+                    string.IsNullOrWhiteSpace(role) ? "участник" : role.Trim().ToLowerInvariant();
+
+                static bool IsAdminOrOwnerRole(string? role)
+                {
+                    var r = NormRole(role);
+                    return r is "владелец" or "owner" or "admin" or "админ" or "administrator" or "модератор" or "moderator";
+                }
+
+                var actorRole = NormRole(actor.Role);
+                var targetRole = NormRole(target.Role);
+
+                if (userId == currentUser!.UserId)
+                {
+                    return BadRequest(new ErrorResponse
+                    {
+                        IsSuccess = false,
+                        Error = "Нельзя удалить самого себя из чата этим методом"
+                    });
+                }
+
+                if (IsAdminOrOwnerRole(actor.Role))
+                {
+                    if (IsAdminOrOwnerRole(target.Role))
+                    {
+                        return StatusCode(StatusCodes.Status403Forbidden, new ErrorResponse
+                        {
+                            IsSuccess = false,
+                            Error = "Администратор не может удалить владельца или другого администратора"
+                        });
+                    }
+                }
+                else
+                {
+                    if (IsAdminOrOwnerRole(target.Role))
+                    {
+                        return StatusCode(StatusCodes.Status403Forbidden, new ErrorResponse
+                        {
+                            IsSuccess = false,
+                            Error = "Нельзя удалить владельца или администратора чата"
+                        });
+                    }
                 }
 
                 await _chatService.DeleteParticipantFromChatAsync(chatId, userId, cancellationToken);

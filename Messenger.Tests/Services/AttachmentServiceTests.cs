@@ -1,7 +1,6 @@
 ﻿using FluentAssertions;
 using Messenger.Core.Models;
 using Messenger.Infrastructure.Data;
-using Messenger.Infrastructure.Repositories;
 using Messenger.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Moq;
@@ -12,14 +11,12 @@ namespace Messenger.Tests.Services
     public class AttachmentServiceTests
     {
         private readonly Mock<GuapMessengerContext> _contextMock;
-        private readonly AttachmentRepository _repository;
         private readonly AttachmentService _service;
 
         public AttachmentServiceTests()
         {
             _contextMock = new Mock<GuapMessengerContext>();
-            _repository = new AttachmentRepository(_contextMock.Object);
-            _service = new AttachmentService(_repository);
+            _service = new AttachmentService(_contextMock.Object);
         }
 
         #region AddAttachmentAsync

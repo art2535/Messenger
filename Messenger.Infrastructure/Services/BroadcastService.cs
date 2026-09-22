@@ -1,22 +1,26 @@
 ﻿using Messenger.Core.DTOs.Broadcasts;
 using Messenger.Core.Interfaces;
 using Messenger.Core.Models;
-using Messenger.Infrastructure.Repositories;
+using Messenger.Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
 
 namespace Messenger.Infrastructure.Services
 {
     public class BroadcastService : IBroadcastService
     {
-        private readonly BroadcastRepository _repository;
+        private readonly GuapMessengerContext _context;
 
-        public BroadcastService(BroadcastRepository repository)
+        public BroadcastService(GuapMessengerContext context)
         {
-            _repository = repository;
+            _context = context;
         }
 
         public async Task<BroadcastCreatedResponse> CreateBroadcastAsync(CreateBroadcastRequest request, Guid senderId)
         {
-            var existingIds = await _repository.GetExistingUserIdsAsync(request.RecipientIds);
+            var existingIds = await _context.Users
+                .Where(u => request.RecipientIds.Contains(u.UserId))
+                .Select(u => u.UserId)
+                .ToListAsync();
 
             if (existingIds.Count != request.RecipientIds.Count)
                 throw new ArgumentException("Один или несколько получателей не существуют");
@@ -30,7 +34,8 @@ namespace Messenger.Infrastructure.Services
                 TotalRecipients = existingIds.Count
             };
 
-            await _repository.AddBroadcastAsync(broadcast);
+            _context.Broadcasts.Add(broadcast);
+            await _context.SaveChangesAsync();
 
             var recipients = existingIds.Select(uid => new BroadcastRecipient
             {
@@ -39,7 +44,8 @@ namespace Messenger.Infrastructure.Services
                 SentAt = DateTime.UtcNow
             }).ToList();
 
-            await _repository.AddRecipientsRangeAsync(recipients);
+            _context.BroadcastRecipients.AddRange(recipients);
+            await _context.SaveChangesAsync();
 
             return new BroadcastCreatedResponse
             {
@@ -51,15 +57,24 @@ namespace Messenger.Infrastructure.Services
 
         public async Task<BroadcastSummaryDto?> GetBroadcastSummaryAsync(Guid id, Guid currentUserId, bool isAdmin)
         {
-            var broadcast = await _repository.GetBroadcastByIdAsync(id);
+            var broadcast = await _context.Broadcasts
+                .AsNoTracking()
+                .FirstOrDefaultAsync(b => b.BroadcastId == id);
             if (broadcast == null)
                 return null;
 
             if (broadcast.SenderId != currentUserId && !isAdmin)
                 throw new UnauthorizedAccessException("Нет прав на просмотр этой рассылки");
 
-            var recipients = await _repository.GetRecipientStatusesAsync(id);
-            var stats = await _repository.GetReadStatsAsync(id);
+            var recipients = await _context.BroadcastRecipients
+                .AsNoTracking()
+                .Where(r => r.BroadcastId == id)
+                .ToListAsync();
+            var statsData = await _context.BroadcastRecipients
+                .Where(r => r.BroadcastId == id)
+                .GroupBy(_ => 1)
+                .Select(g => new { ReadCount = g.Count(r => r.IsRead), FirstRead = g.Min(r => r.ReadAt) })
+                .FirstOrDefaultAsync();
 
             return new BroadcastSummaryDto
             {
@@ -69,7 +84,7 @@ namespace Messenger.Infrastructure.Services
                 SenderId = broadcast.SenderId,
                 CreatedAt = broadcast.CreatedAt,
                 TotalRecipients = broadcast.TotalRecipients,
-                ReadCount = stats?.ReadCount ?? 0,
+                ReadCount = statsData?.ReadCount ?? 0,
                 Recipients = recipients.Select(r => new RecipientStatusDto
                 {
                     UserId = r.UserId,
@@ -81,7 +96,8 @@ namespace Messenger.Infrastructure.Services
 
         public async Task<MarkAsReadResponse> MarkAsReadAsync(Guid broadcastId, Guid userId)
         {
-            var recipient = await _repository.GetRecipientAsync(broadcastId, userId);
+            var recipient = await _context.BroadcastRecipients
+                .FirstOrDefaultAsync(r => r.BroadcastId == broadcastId && r.UserId == userId);
             if (recipient == null)
                 throw new KeyNotFoundException("Вы не являетесь получателем этой рассылки");
 
@@ -97,7 +113,8 @@ namespace Messenger.Infrastructure.Services
             recipient.IsRead = true;
             recipient.ReadAt = DateTime.UtcNow;
 
-            await _repository.UpdateRecipientAsync(recipient);
+            _context.BroadcastRecipients.Update(recipient);
+            await _context.SaveChangesAsync();
 
             return new MarkAsReadResponse
             {
@@ -108,7 +125,15 @@ namespace Messenger.Infrastructure.Services
 
         public async Task<List<object>> GetMyBroadcastsAsync(Guid userId, bool unreadOnly = true)
         {
-            var items = await _repository.GetUserBroadcastsAsync(userId, unreadOnly);
+            var query = _context.BroadcastRecipients
+                .AsNoTracking()
+                .Where(r => r.UserId == userId)
+                .Include(r => r.Broadcast)
+                .AsQueryable();
+            if (unreadOnly)
+                query = query.Where(r => !r.IsRead);
+            var items = (await query.OrderByDescending(r => r.Broadcast.CreatedAt).ToListAsync())
+                .Select(r => (r.Broadcast, r.IsRead, r.ReadAt)).ToList();
 
             return items.Select(x => new
             {
