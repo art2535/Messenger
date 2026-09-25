@@ -31,6 +31,15 @@
 </div>
 
 <script>
+    // После выхода очищаем клиентский token, чтобы session-cleanup и SignalR не слали запросы
+    (function () {
+        try {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('loggedOut') === 'true' || params.get('loggedOut') === 'True') {
+                localStorage.removeItem('token');
+            }
+        } catch (e) { }
+    })();
     window.AUTH_ERRORS = [];
     @if (!string.IsNullOrEmpty(Model.ErrorMessage))
     {

@@ -1,6 +1,7 @@
-﻿const SESSION_CLOSE_DELAY_MS = 30 * 60 * 1000;
+const SESSION_CLOSE_DELAY_MS = 30 * 60 * 1000;
 let closeSessionTimer = null;
 let sessionClosed = false;
+let intentionalLogout = false;
 
 function getAccessTokenForBeacon() {
     return (typeof token === 'string' && token)
@@ -9,7 +10,7 @@ function getAccessTokenForBeacon() {
 }
 
 async function closeSessionViaApi() {
-    if (sessionClosed) return;
+    if (sessionClosed || intentionalLogout) return;
     sessionClosed = true;
 
     const accessToken = getAccessTokenForBeacon();
@@ -25,12 +26,12 @@ async function closeSessionViaApi() {
     } catch (e) { }
 
     try {
+        const headers = {
+            'Authorization': accessToken.startsWith('Bearer ') ? accessToken : `Bearer ${accessToken}`
+        };
         await fetch(`${window.API_BASE_URL}/logins`, {
             method: 'PATCH',
-            headers: {
-                'Authorization': accessToken.startsWith('Bearer ') ? accessToken : `Bearer ${accessToken}`,
-                'Content-Type': 'application/json'
-            },
+            headers,
             keepalive: true
         });
     } catch (e) {
@@ -40,8 +41,19 @@ async function closeSessionViaApi() {
     localStorage.removeItem('token');
 }
 
+function markIntentionalLogout() {
+    intentionalLogout = true;
+    sessionClosed = true;
+    if (closeSessionTimer) {
+        clearTimeout(closeSessionTimer);
+        closeSessionTimer = null;
+    }
+    localStorage.removeItem('token');
+}
+
 document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') {
+        if (intentionalLogout) return;
         closeSessionTimer = setTimeout(() => {
             closeSessionViaApi();
         }, SESSION_CLOSE_DELAY_MS);
@@ -50,12 +62,28 @@ document.addEventListener('visibilitychange', () => {
             clearTimeout(closeSessionTimer);
             closeSessionTimer = null;
         }
-        sessionClosed = false;
+        if (!intentionalLogout) {
+            sessionClosed = false;
+        }
     }
 });
 
 window.addEventListener('pagehide', (e) => {
-    if (!e.persisted) {
+    if (!e.persisted && !intentionalLogout) {
         closeSessionViaApi();
     }
 });
+
+document.addEventListener('submit', (e) => {
+    const form = e.target;
+    if (!(form instanceof HTMLFormElement)) return;
+    const action = (form.getAttribute('action') || '').toLowerCase();
+    if (form.dataset.logout === 'true' || action.includes('/authorization/logout') || action.includes('logout')) {
+        markIntentionalLogout();
+    }
+}, true);
+
+document.addEventListener('click', (e) => {
+    const el = e.target instanceof Element ? e.target.closest('[data-logout="true"]') : null;
+    if (el) markIntentionalLogout();
+}, true);

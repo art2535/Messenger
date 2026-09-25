@@ -25,6 +25,9 @@ namespace Messenger.Web.Pages.Authorization
 
         public string ErrorMessage { get; private set; } = string.Empty;
 
+        [BindProperty(SupportsGet = true)]
+        public bool LoggedOut { get; set; }
+
         public AuthorizationModel(ApiHelper api, ILogger<AuthorizationModel> logger, IHubContext<ChatHub> hubContext)
         {
             _api = api;
@@ -34,6 +37,19 @@ namespace Messenger.Web.Pages.Authorization
 
         public async Task<IActionResult> OnGetAsync()
         {
+            if (LoggedOut)
+            {
+                if (User.Identity?.IsAuthenticated == true)
+                {
+                    try
+                    {
+                        await HttpContext.SignOutAsync(Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationDefaults.AuthenticationScheme);
+                    }
+                    catch { }
+                }
+                return Page();
+            }
+
             if (User.Identity?.IsAuthenticated == true)
             {
                 var accessToken = await HttpContext.GetTokenAsync("access_token");

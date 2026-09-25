@@ -1,4 +1,4 @@
-﻿using Messenger.Core.DTOs.UserStatuses;
+using Messenger.Core.DTOs.UserStatuses;
 using Messenger.Core.Hubs;
 using Messenger.Web.Helpers;
 using Microsoft.AspNetCore.Authentication;
@@ -10,6 +10,8 @@ using System.Security.Claims;
 
 namespace Messenger.Web.Pages.Authorization
 {
+    [IgnoreAntiforgeryToken]
+    [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
     public class LogoutModel : PageModel
     {
         private readonly ApiHelper _api;
@@ -45,7 +47,7 @@ namespace Messenger.Web.Pages.Authorization
                     if (!loginResponse.IsSuccessStatusCode)
                     {
                         var error = await loginResponse.Content.ReadAsStringAsync();
-                        _logger.LogError("Ошибка API при выходе: {StatusCode} - {Error}",
+                        _logger.LogWarning("Ошибка API при выходе (logins): {StatusCode} - {Error}",
                             loginResponse.StatusCode, error);
                     }
 
@@ -77,6 +79,12 @@ namespace Messenger.Web.Pages.Authorization
                             }
                         }
                     }
+                    else
+                    {
+                        var error = await statusResponse.Content.ReadAsStringAsync();
+                        _logger.LogWarning("Ошибка API при выходе (userstatuses): {StatusCode} - {Error}",
+                            statusResponse.StatusCode, error);
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -84,13 +92,40 @@ namespace Messenger.Web.Pages.Authorization
                 }
             }
 
-            HttpContext.Session.Clear();
+            try
+            {
+                HttpContext.Session.Clear();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Не удалось очистить Session при выходе");
+            }
 
-            await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            try
+            {
+                await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Ошибка SignOut Cookie");
+            }
 
-            Response.Cookies.Delete(".AspNetCore.Session");
+            DeleteCookie(".AspNetCore.Session");
+            DeleteCookie(".GuapMessenger.Cookie");
+            DeleteCookie(".AspNetCore.Antiforgery");
 
-            return RedirectToPage("/Authorization/Authorization");
+            return RedirectToPage("/Authorization/Authorization", new { loggedOut = true });
+        }
+
+        private void DeleteCookie(string name)
+        {
+            Response.Cookies.Delete(name, new CookieOptions
+            {
+                Path = "/",
+                Secure = true,
+                SameSite = SameSiteMode.Lax,
+                HttpOnly = true
+            });
         }
     }
 }
