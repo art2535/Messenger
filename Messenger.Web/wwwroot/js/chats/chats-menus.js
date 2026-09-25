@@ -278,14 +278,28 @@ function showMessageContextMenu(x, y, messageId, text) {
             ? 'Открепить'
             : 'Закрепить';
     }
-    const row = document.querySelector(`[data-mid="${messageId}"]`);
-    const isMine = !!row?.querySelector('.message-bubble.outgoing');
+    const row = document.querySelector(`[data-mid="${CSS.escape(String(messageId))}"]`);
+    const isMine = !!(row && (
+        row.querySelector('.message-bubble.outgoing') ||
+        row.classList.contains('outgoing-row') ||
+        (typeof isOwnMessageRow === 'function' && isOwnMessageRow(row))
+    ));
     const editBtn = document.getElementById('ctx-edit-btn');
     const delBtn = document.getElementById('ctx-delete-btn');
     const selBtn = document.getElementById('ctx-select-btn');
+    const replyBtn = document.getElementById('ctx-reply-btn');
+    const forwardBtn = document.getElementById('ctx-forward-btn');
+    const reactBtn = document.getElementById('ctx-react-btn');
+    const pinBtn = document.getElementById('ctx-pin-btn');
+
+    if (replyBtn) replyBtn.style.display = '';
+    if (forwardBtn) forwardBtn.style.display = '';
+    if (reactBtn) reactBtn.style.display = '';
+    if (pinBtn) pinBtn.style.display = '';
+    if (selBtn) selBtn.style.display = '';
+    if (delBtn) delBtn.style.display = '';
     if (editBtn) editBtn.style.display = isMine ? '' : 'none';
-    if (delBtn) delBtn.style.display = isMine ? '' : 'none';
-    if (selBtn) selBtn.style.display = isMine ? '' : 'none';
+
     positionContextMenu(menu, x, y);
 }
 
@@ -369,12 +383,41 @@ async function submitEditMessage() {
     }
 }
 
-function openDeleteMessageConfirm(messageId) {
+function openDeleteMessageConfirm(messageId, options = {}) {
     const modal = document.getElementById('delete-message-modal');
     if (!modal) return;
-    modal.dataset.messageId = messageId;
+
+    const ids = options.messageIds || (messageId ? [messageId] : []);
+    const isBulk = ids.length > 1;
+
+    modal.dataset.messageId = ids[0] || '';
+    if (isBulk) modal.dataset.messageIds = JSON.stringify(ids);
+    else delete modal.dataset.messageIds;
+
+    const title = modal.querySelector('#delete-message-title') || modal.querySelector('h3');
+    if (title) {
+        title.textContent = isBulk
+            ? `Удалить сообщения (${ids.length})?`
+            : 'Удалить сообщение?';
+    }
+    const hint = modal.querySelector('#delete-message-hint');
+    if (hint) {
+        hint.textContent = 'Выберите, для кого удалить:';
+    }
+
+    const btnEveryone = modal.querySelector('#confirm-delete-for-everyone');
+    if (btnEveryone) {
+        btnEveryone.style.display = '';
+        btnEveryone.disabled = false;
+    }
+    const btnMe = modal.querySelector('#confirm-delete-for-me');
+    if (btnMe) {
+        btnMe.style.display = '';
+        btnMe.disabled = false;
+    }
+
     modal.classList.add('show');
-    feather.replace();
+    if (typeof feather !== 'undefined') feather.replace();
 }
 
 function closeDeleteMessageConfirm() {
@@ -382,6 +425,7 @@ function closeDeleteMessageConfirm() {
     if (modal) {
         modal.classList.remove('show');
         delete modal.dataset.messageId;
+        delete modal.dataset.messageIds;
     }
 }
 

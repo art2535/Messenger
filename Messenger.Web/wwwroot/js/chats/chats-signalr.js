@@ -337,6 +337,7 @@ async function startSignalR() {
 
     connection.on('ReceiveMessage', (msg) => {
         if (!msg?.messageId) return;
+        if (typeof isMessageHiddenForMe === 'function' && isMessageHiddenForMe(msg.messageId)) return;
 
         const mid = String(msg.messageId);
         const isMyMessage = String(msg.senderId || msg.SenderId) === String(me);

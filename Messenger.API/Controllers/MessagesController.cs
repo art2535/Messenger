@@ -32,11 +32,13 @@ namespace Messenger.API.Controllers
         private readonly IChatService _chatService;
         private readonly IUserService _userService;
         private readonly IEncryptionService _encryptionService;
+        private readonly IAttachmentService _attachmentService;
         private readonly ILogger<MessagesController> _logger;
 
         public MessagesController(IMessageService messageService, IConfiguration configuration,
             IHubContext<ChatHub> hubContext, IChatService chatService, IUserService userService,
-            IEncryptionService encryptionService, ILogger<MessagesController> logger)
+            IEncryptionService encryptionService, IAttachmentService attachmentService,
+            ILogger<MessagesController> logger)
         {
             _messageService = messageService;
             _configuration = configuration;
@@ -44,13 +46,14 @@ namespace Messenger.API.Controllers
             _chatService = chatService;
             _userService = userService;
             _encryptionService = encryptionService;
+            _attachmentService = attachmentService;
             _logger = logger;
         }
 
         /// <summary>
         /// Поиск сообщений в чате
         /// </summary>
-        [HttpGet("{chatId}/search")]
+        [HttpGet("{chatId:guid}/search")]
         [EndpointName("SearchMessages")]
         [EndpointSummary("Поиск сообщений в чате")]
         [EndpointDescription("Возвращает сообщения, соответствующие критерию поиска в указанном чате.")]
@@ -92,7 +95,7 @@ namespace Messenger.API.Controllers
         /// <summary>
         /// Отправить сообщение в чат
         /// </summary>
-        [HttpPost("{chatId}")]
+        [HttpPost("{chatId:guid}")]
         [EnableRateLimiting("send-message")]
         [EndpointName("SendMessage")]
         [EndpointSummary("Отправить сообщение в чат")]
@@ -312,9 +315,211 @@ namespace Messenger.API.Controllers
         }
 
         /// <summary>
+        /// Переслать одно или несколько сообщений в другие чаты (включая вложения)
+        /// </summary>
+        [HttpPost("forward")]
+        [EndpointName("ForwardMessages")]
+        [EndpointSummary("Пересылка сообщений")]
+        [EndpointDescription("Копирует выбранные сообщения (текст + файлы на диске) в указанные чаты. До 20 сообщений и 5 чатов за раз.")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> ForwardMessagesAsync(
+            [FromBody] ForwardMessagesRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
+                if (error != null)
+                    return error;
+
+                if (request == null)
+                    return BadRequest(new ErrorResponse { Error = "Тело запроса пустое или неверный JSON" });
+                if (request.MessageIds == null || request.MessageIds.Count == 0)
+                    return BadRequest(new ErrorResponse { Error = "Не указаны сообщения для пересылки" });
+                if (request.TargetChatIds == null || request.TargetChatIds.Count == 0)
+                    return BadRequest(new ErrorResponse { Error = "Не указаны целевые чаты" });
+                if (request.MessageIds.Count > 20)
+                    return BadRequest(new ErrorResponse { Error = "Можно переслать не более 20 сообщений за раз" });
+                if (request.TargetChatIds.Count > 5)
+                    return BadRequest(new ErrorResponse { Error = "Можно выбрать не более 5 чатов" });
+
+                request.MessageIds = request.MessageIds.Where(id => id != Guid.Empty).Distinct().ToList();
+                request.TargetChatIds = request.TargetChatIds.Where(id => id != Guid.Empty).Distinct().ToList();
+                if (request.MessageIds.Count == 0)
+                    return BadRequest(new ErrorResponse { Error = "Некорректные ID сообщений" });
+                if (request.TargetChatIds.Count == 0)
+                    return BadRequest(new ErrorResponse { Error = "Некорректные ID чатов" });
+
+                var senderName = $"{user!.FirstName} {user.LastName}".Trim();
+                if (string.IsNullOrWhiteSpace(senderName))
+                    senderName = "Пользователь";
+
+                var sourceMessages = new List<(Message msg, string? plainText, List<Attachment> attachments)>();
+                foreach (var mid in request.MessageIds.Distinct())
+                {
+                    var msg = await _messageService.GetMessageByIdGlobalAsync(mid, cancellationToken);
+                    if (msg == null)
+                        return NotFound(new ErrorResponse { Error = $"Сообщение {mid} не найдено" });
+
+                    var sourceChat = await _chatService.GetChatByIdAsync(msg.ChatId, cancellationToken);
+                    if (sourceChat == null || !sourceChat.ChatParticipants.Any(p => p.UserId == user.UserId))
+                        return Forbid();
+
+                    var plain = string.IsNullOrEmpty(msg.MessageText)
+                        ? null
+                        : _encryptionService.TryDecryptSafe(msg.MessageText);
+
+                    var atts = msg.Attachments?.ToList()
+                        ?? (await _attachmentService.GetAttachmentsByMessageIdAsync(mid, cancellationToken)).ToList();
+                    sourceMessages.Add((msg, plain, atts));
+                }
+
+                var targetChats = new List<Chat>();
+                foreach (var chatId in request.TargetChatIds.Distinct())
+                {
+                    var chat = await _chatService.GetChatByIdAsync(chatId, cancellationToken);
+                    if (chat == null)
+                        return NotFound(new ErrorResponse { Error = $"Чат {chatId} не найден" });
+                    if (!chat.ChatParticipants.Any(p => p.UserId == user.UserId))
+                        return Forbid();
+                    targetChats.Add(chat);
+                }
+
+                var uploadPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads");
+                Directory.CreateDirectory(uploadPath);
+                var apiBase = (_configuration["URL:API:HTTPS"] ?? "").TrimEnd('/');
+
+                int published = 0;
+                var errors = new List<string>();
+
+                foreach (var target in targetChats)
+                {
+                    foreach (var (srcMsg, plainText, attachments) in sourceMessages)
+                    {
+                        try
+                        {
+                            var originalSender = srcMsg.Sender != null
+                                ? $"{srcMsg.Sender.FirstName} {srcMsg.Sender.LastName}".Trim()
+                                : "Пользователь";
+                            if (string.IsNullOrWhiteSpace(originalSender))
+                                originalSender = "Пользователь";
+
+                            var body = plainText ?? "";
+                            var forwardHeader = "\u200BFORWARD:" + srcMsg.MessageId.ToString() + "|" + originalSender.Replace("|", " ") + "\u200B\n";
+                            var contentToEncrypt = forwardHeader + body;
+                            var encryptedText = string.IsNullOrWhiteSpace(contentToEncrypt)
+                                ? null
+                                : _encryptionService.Encrypt(contentToEncrypt.TrimEnd());
+
+                            var newMessageId = Guid.NewGuid();
+                            var attachmentsInfo = new List<AttachmentInfo>();
+
+                            foreach (var att in attachments)
+                            {
+                                var diskName = ExtractUploadFileName(att.Url, att.FileName);
+                                var srcPath = Path.Combine(uploadPath, diskName);
+                                if (!System.IO.File.Exists(srcPath))
+                                {
+                                    _logger.LogWarning("Файл вложения не найден: {Path}", srcPath);
+                                    continue;
+                                }
+
+                                var ext = Path.GetExtension(diskName);
+                                if (string.IsNullOrEmpty(ext) && !string.IsNullOrEmpty(att.FileName))
+                                    ext = Path.GetExtension(att.FileName);
+                                var newFileName = Guid.NewGuid().ToString() + ext;
+                                var destPath = Path.Combine(uploadPath, newFileName);
+                                System.IO.File.Copy(srcPath, destPath, overwrite: true);
+
+                                var newAttId = Guid.NewGuid();
+                                var fileUrl = $"{apiBase}/uploads/{newFileName}";
+                                var size = att.SizeInBytes ?? (int)new FileInfo(destPath).Length;
+
+                                attachmentsInfo.Add(new AttachmentInfo
+                                {
+                                    AttachmentId = newAttId,
+                                    FileName = att.FileName,
+                                    FileType = att.FileType ?? "application/octet-stream",
+                                    SizeInBytes = size,
+                                    Url = fileUrl
+                                });
+                            }
+
+                            await _messageService.PublishChatMessageAsync(new ChatMessageSent
+                            {
+                                MessageId = newMessageId,
+                                ChatId = target.ChatId,
+                                SenderId = user.UserId,
+                                SenderName = senderName,
+                                MessageText = encryptedText,
+                                SentAt = DateTime.UtcNow,
+                                HasAttachments = attachmentsInfo.Count > 0,
+                                Attachments = attachmentsInfo
+                            }, cancellationToken);
+
+                            published++;
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, "Ошибка пересылки сообщения {MessageId} в чат {ChatId}", srcMsg.MessageId, target.ChatId);
+                            errors.Add(ex.Message);
+                        }
+                    }
+                }
+
+                if (published == 0)
+                {
+                    return StatusCode(500, new ErrorResponse
+                    {
+                        IsSuccess = false,
+                        Error = errors.FirstOrDefault() ?? "Не удалось переслать сообщения"
+                    });
+                }
+
+                return Ok(new
+                {
+                    IsSuccess = true,
+                    published,
+                    errors
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка ForwardMessages");
+                return StatusCode(500, new ErrorResponse { IsSuccess = false, Error = ex.Message });
+            }
+        }
+
+        private static string ExtractUploadFileName(string? url, string? fileName)
+        {
+            if (!string.IsNullOrWhiteSpace(url))
+            {
+                try
+                {
+                    var path = url;
+                    if (Uri.TryCreate(url, UriKind.Absolute, out var uri))
+                        path = uri.AbsolutePath;
+                    var name = Path.GetFileName(path.Split('?')[0]);
+                    if (!string.IsNullOrWhiteSpace(name))
+                        return name;
+                }
+                catch { }
+            }
+            if (!string.IsNullOrWhiteSpace(fileName))
+            {
+                return Path.GetFileName(fileName);
+            }
+            return "file";
+        }
+
+        /// <summary>
         /// Пометить все сообщения чата как прочитанные (для текущего пользователя)
         /// </summary>
-        [HttpPost("{chatId}/read")]
+        [HttpPost("{chatId:guid}/read")]
         [EndpointName("MarkChatAsRead")]
         [EndpointSummary("Пометить все сообщения чата как прочитанные")]
         [EndpointDescription("Обновляет статус сообщения на прочитанный")]
@@ -376,7 +581,7 @@ namespace Messenger.API.Controllers
         /// <summary>
         /// Получить сообщения чата
         /// </summary>
-        [HttpGet("{chatId}")]
+        [HttpGet("{chatId:guid}")]
         [EndpointName("GetMessagesByChat")]
         [EndpointSummary("Получить сообщения чата")]
         [EndpointDescription(
@@ -463,7 +668,7 @@ namespace Messenger.API.Controllers
         /// <summary>
         /// Экспорт истории чата в разных форматах
         /// </summary>
-        [HttpGet("{chatId}/export")]
+        [HttpGet("{chatId:guid}/export")]
         [EndpointName("ExportChat")]
         [EndpointSummary("Экспорт истории чата")]
         [EndpointDescription(
@@ -640,7 +845,9 @@ namespace Messenger.API.Controllers
                 {
                     return NotFound();
                 }
-                if (message.SenderId != user!.UserId)
+
+                var chat = await _chatService.GetChatByIdAsync(chatId, ct);
+                if (chat == null || !chat.ChatParticipants.Any(p => p.UserId == user!.UserId))
                 {
                     return Forbid();
                 }
@@ -711,19 +918,17 @@ namespace Messenger.API.Controllers
                 foreach (var mid in request.MessageIds.Distinct())
                 {
                     var message = await _messageService.GetMessageByIdAsync(chatId, mid, ct);
-                    if (message == null) 
-                        continue;
-                    if (message.SenderId != user!.UserId) 
+                    if (message == null)
                         continue;
                     allowed.Add(mid);
                 }
 
                 if (allowed.Count == 0)
                 {
-                    return StatusCode(StatusCodes.Status403Forbidden, new ErrorResponse
+                    return NotFound(new ErrorResponse
                     {
                         IsSuccess = false,
-                        Error = "Нет сообщений, которые можно удалить (только свои)"
+                        Error = "Сообщения не найдены"
                     });
                 }
 

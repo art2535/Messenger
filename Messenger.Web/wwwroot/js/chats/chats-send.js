@@ -1,42 +1,46 @@
 function removeMessageFromUI(messageId, chatIdHint) {
     const chatId = chatIdHint || currentChatId;
-    withFrozenChatListPosition(chatId, () => {
-        const el = document.querySelector(`[data-mid="${messageId}"]`);
-        if (el) {
-            const prev = el.previousElementSibling;
-            el.remove();
-            if (prev && prev.classList.contains('date-separator')) {
-                const next = prev.nextElementSibling;
-                const nextIsMsg = next && next.dataset && next.dataset.mid;
-                if (!nextIsMsg) prev.remove();
-            }
-            messagesContainer.querySelectorAll('.date-separator').forEach(sep => {
-                const n = sep.nextElementSibling;
-                if (!n || n.classList.contains('date-separator') || !(n.dataset && n.dataset.mid)) {
-                    sep.remove();
-                }
-            });
-            const seps = messagesContainer.querySelectorAll('.date-separator');
-            if (typeof lastRenderedDateKey !== 'undefined') {
-                lastRenderedDateKey = seps.length
-                    ? (seps[seps.length - 1].dataset.dateKey || null)
-                    : null;
-            }
+    const el = document.querySelector(`[data-mid="${messageId}"]`);
+    if (el) {
+        const prev = el.previousElementSibling;
+        el.remove();
+        if (prev && prev.classList.contains('date-separator')) {
+            const next = prev.nextElementSibling;
+            const nextIsMsg = next && next.dataset && next.dataset.mid;
+            if (!nextIsMsg) prev.remove();
         }
-        if (editingMessageId && String(editingMessageId) === String(messageId)) {
-            exitEditMode();
-        }
-        try {
-            const seen = window.__seenMessageIds;
-            if (seen && messageId) seen.delete(String(messageId));
-        } catch (_) {}
-        if (chatId) {
-            if (isMessagePinned(chatId, messageId)) {
-                unpinMessage(chatId, messageId);
+        messagesContainer.querySelectorAll('.date-separator').forEach(sep => {
+            const n = sep.nextElementSibling;
+            if (!n || n.classList.contains('date-separator') || !(n.dataset && n.dataset.mid)) {
+                sep.remove();
             }
+        });
+        const seps = messagesContainer.querySelectorAll('.date-separator');
+        if (typeof lastRenderedDateKey !== 'undefined') {
+            lastRenderedDateKey = seps.length
+                ? (seps[seps.length - 1].dataset.dateKey || null)
+                : null;
+        }
+    }
+    if (editingMessageId && String(editingMessageId) === String(messageId)) {
+        exitEditMode();
+    }
+    try {
+        const seen = window.__seenMessageIds;
+        if (seen && messageId) seen.delete(String(messageId));
+    } catch (_) {}
+    if (chatId) {
+        if (typeof isMessagePinned === 'function' && isMessagePinned(chatId, messageId)) {
+            unpinMessage(chatId, messageId);
+        }
+        if (typeof refreshChatListPreviewFromDom === 'function') {
             refreshChatListPreviewFromDom(chatId);
         }
-    });
+        // Спустить чат по дате последнего сообщения (не оставлять наверху)
+        if (typeof reorderUnpinnedChatsByLastActivity === 'function') {
+            reorderUnpinnedChatsByLastActivity();
+        }
+    }
 }
 
 function getOutgoingStatusFromBubble(bubble) {
@@ -76,23 +80,34 @@ function refreshChatListPreviewFromDom(chatId) {
             if (timeEl) timeEl.textContent = '';
             chatItem.dataset.lastMessageId = '';
             chatItem.dataset.lastMessageStatus = '';
+            chatItem.dataset.lastMessageAt = '';
             return;
         }
         const last = rows[rows.length - 1];
         const mid = last.dataset.mid;
         const bubble = last.querySelector('.message-bubble');
         const textEl = bubble?.querySelector('p');
-        const text = textEl ? (textEl.innerText || textEl.textContent || '').trim() : '';
+        let text = textEl ? (textEl.innerText || textEl.textContent || '').trim() : '';
+        // Метка пересылки не должна попадать в превью списка
+        if (typeof stripMessageMetaForPreview === 'function') {
+            text = stripMessageMetaForPreview(text);
+        } else if (typeof stripReplyForPreview === 'function') {
+            text = stripReplyForPreview(text);
+        }
         const isMine = !!bubble?.classList.contains('outgoing');
-        const hasImg = !!bubble?.querySelector('img');
+        const hasImg = !!bubble?.querySelector('img.image-preview, img[src]');
         const hasFile = !!bubble?.querySelector('.file-attachment');
         const attachments = (hasImg || hasFile)
             ? [{ fileType: hasImg ? 'image/png' : 'application/octet-stream' }]
             : [];
+        if (!text && (hasImg || hasFile)) text = '';
         const status = isMine ? getOutgoingStatusFromBubble(bubble) : null;
-        updateChatLastMessagePreview(chatId, text, attachments, null, isMine, status);
+        // Время последнего ОСТАВШЕГОСЯ сообщения (не текущего времени и не null)
+        const sentAt = last.dataset.sentAt || last.getAttribute('data-sent-at') || null;
+        updateChatLastMessagePreview(chatId, text, attachments, sentAt, isMine, status);
         chatItem.dataset.lastMessageId = mid;
         chatItem.dataset.lastMessageStatus = status || '';
+        if (sentAt) chatItem.dataset.lastMessageAt = sentAt;
         return;
     }
 
@@ -104,11 +119,14 @@ function refreshChatListPreviewFromDom(chatId) {
             const list = Array.isArray(messages) ? messages : [];
             if (!list.length) {
                 const preview = chatItem.querySelector('.last-message-preview');
+                const timeEl = chatItem.querySelector('.chat-list-time');
                 if (preview) {
                     preview.outerHTML = `<div class="flex items-center min-w-0 gap-1 last-message-preview"><span class="truncate text-gray-400">Нет сообщений</span></div>`;
                 }
+                if (timeEl) timeEl.textContent = '';
                 chatItem.dataset.lastMessageId = '';
                 chatItem.dataset.lastMessageStatus = '';
+                chatItem.dataset.lastMessageAt = '';
                 return;
             }
             let msg = list[list.length - 1];
@@ -129,23 +147,78 @@ function refreshChatListPreviewFromDom(chatId) {
                     msg.messageStatus || msg.MessageStatus || 'sent'
                 )
                 : null;
+            const sentAt = msg.sentAt || msg.SentAt || msg.sendTime || msg.SendTime || null;
             updateChatLastMessagePreview(
                 chatId,
                 msg.messageText || msg.MessageText || '',
                 msg.attachments || msg.Attachments || [],
-                msg.sentAt || msg.SentAt || msg.sendTime || msg.SendTime || null,
+                sentAt,
                 isMine,
                 status
             );
             chatItem.dataset.lastMessageId = String(msg.messageId || msg.MessageId || '');
             chatItem.dataset.lastMessageStatus = status || '';
+            if (sentAt) {
+                try {
+                    const d = new Date(sentAt);
+                    if (!isNaN(d.getTime())) chatItem.dataset.lastMessageAt = d.toISOString();
+                } catch (_) {}
+            }
+            if (typeof reorderUnpinnedChatsByLastActivity === 'function') {
+                reorderUnpinnedChatsByLastActivity();
+            }
         })
         .catch(e => console.warn('[refreshChatListPreviewFromDom]', e));
 }
 
-async function deleteMessage(messageId) {
-    if (!messageId || !currentChatId) return;
+/** Скрытые «только у себя» сообщения (localStorage). */
+function getHiddenMessageIds() {
     try {
+        const key = 'guap_hidden_msgs_' + encodeURIComponent(String(me || 'anon'));
+        const raw = localStorage.getItem(key);
+        const arr = raw ? JSON.parse(raw) : [];
+        return new Set(Array.isArray(arr) ? arr.map(String) : []);
+    } catch {
+        return new Set();
+    }
+}
+
+function persistHiddenMessageIds(set) {
+    try {
+        const key = 'guap_hidden_msgs_' + encodeURIComponent(String(me || 'anon'));
+        localStorage.setItem(key, JSON.stringify([...set]));
+    } catch (e) {
+        console.warn('[hidden] save failed', e);
+    }
+}
+
+function hideMessageForMe(messageId) {
+    const set = getHiddenMessageIds();
+    set.add(String(messageId));
+    persistHiddenMessageIds(set);
+}
+
+function isMessageHiddenForMe(messageId) {
+    return getHiddenMessageIds().has(String(messageId));
+}
+
+/**
+ * @param {string} messageId
+ * @param {'me'|'everyone'} scope
+ * @param {{ silent?: boolean }} [opts]
+ * @returns {Promise<boolean>} success
+ */
+async function deleteMessage(messageId, scope = 'everyone', opts = {}) {
+    if (!messageId || !currentChatId) return false;
+    const silent = !!opts.silent;
+    try {
+        if (scope === 'me') {
+            hideMessageForMe(messageId);
+            removeMessageFromUI(messageId, currentChatId);
+            if (!silent) showToast('Сообщение удалено только у вас', 'success');
+            return true;
+        }
+
         const res = await fetchWithAuth(`${API_BASE}/messages/${messageId}?chatId=${currentChatId}`, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${token}` }
@@ -155,10 +228,124 @@ async function deleteMessage(messageId) {
             throw new Error(err.error || err.Error || `HTTP ${res.status}`);
         }
         removeMessageFromUI(messageId, currentChatId);
-        showToast('Сообщение удалено', 'success');
+        if (!silent) showToast('Сообщение удалено для всех', 'success');
+        return true;
     } catch (err) {
         console.error('Ошибка удаления:', err);
-        showToast(err.message || 'Не удалось удалить сообщение', 'error');
+        if (!silent) showToast(err.message || 'Не удалось удалить сообщение', 'error');
+        return false;
+    }
+}
+
+/**
+ * Пакетное удаление: одна операция — одно уведомление.
+ * Позиция чата в списке сохраняется.
+ * @param {string[]} messageIds
+ * @param {'me'|'everyone'} scope
+ */
+async function deleteMessagesBatch(messageIds, scope = 'everyone') {
+    const ids = (messageIds || []).map(String).filter(id => id && !id.startsWith('temp-'));
+    if (!ids.length || !currentChatId) return;
+
+    const chatId = currentChatId;
+    const run = async () => {
+        let ok = 0;
+        let fail = 0;
+        let lastError = '';
+
+        if (scope === 'me') {
+            for (const mid of ids) {
+                hideMessageForMe(mid);
+                removeMessageFromUI(mid, chatId);
+                ok++;
+            }
+        } else if (ids.length > 1) {
+            // bulk API
+            try {
+                const res = await fetchWithAuth(`${API_BASE}/messages/bulk-delete`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ chatId, messageIds: ids })
+                });
+                if (!res) throw new Error('Нет ответа от сервера');
+                if (!res.ok) {
+                    // fallback по одному
+                    if (res.status === 404 || res.status === 405 || res.status === 403) {
+                        for (const mid of ids) {
+                            const one = await deleteMessage(mid, 'everyone', { silent: true });
+                            if (one) ok++; else fail++;
+                        }
+                    } else {
+                        const err = await res.json().catch(() => ({}));
+                        throw new Error(err.error || err.Error || `HTTP ${res.status}`);
+                    }
+                } else {
+                    const data = await res.json().catch(() => ({}));
+                    const deletedIds = data.messageIds || data.MessageIds || ids;
+                    (deletedIds || []).forEach(mid => {
+                        removeMessageFromUI(mid, chatId);
+                        ok++;
+                    });
+                    // если API вернул меньше — остаток пробуем по одному
+                    const deletedSet = new Set((deletedIds || []).map(String));
+                    for (const mid of ids) {
+                        if (!deletedSet.has(String(mid))) {
+                            const one = await deleteMessage(mid, 'everyone', { silent: true });
+                            if (one) ok++; else fail++;
+                        }
+                    }
+                }
+            } catch (err) {
+                lastError = err.message || String(err);
+                // fallback
+                for (const mid of ids) {
+                    const one = await deleteMessage(mid, 'everyone', { silent: true });
+                    if (one) ok++; else fail++;
+                }
+            }
+        } else {
+            const one = await deleteMessage(ids[0], 'everyone', { silent: true });
+            if (one) ok++; else fail++;
+        }
+
+        if (typeof exitSelectMode === 'function') exitSelectMode();
+
+        // Обновить превью и спустить чат по дате последнего сообщения
+        if (typeof refreshChatListPreviewFromDom === 'function') {
+            refreshChatListPreviewFromDom(chatId);
+        }
+        if (typeof reorderUnpinnedChatsByLastActivity === 'function') {
+            reorderUnpinnedChatsByLastActivity();
+        }
+
+        // Один toast
+        if (ok && !fail) {
+            const msg = scope === 'me'
+                ? (ok === 1 ? 'Сообщение удалено только у вас' : `Удалено у вас: ${ok}`)
+                : (ok === 1 ? 'Сообщение удалено для всех' : `Удалено для всех: ${ok}`);
+            showToast(msg, 'success');
+        } else if (ok && fail) {
+            showToast(`Удалено: ${ok}, ошибок: ${fail}`, 'warning');
+        } else {
+            showToast(lastError || 'Не удалось удалить сообщения', 'error');
+        }
+    };
+
+    // Подавляем bump на время удаления (SignalR), но позицию ставим по дате, не «замораживаем»
+    const prevSuppress = typeof __suppressChatBump !== 'undefined' ? __suppressChatBump : false;
+    if (typeof __suppressChatBump !== 'undefined') __suppressChatBump = true;
+    try {
+        await run();
+    } finally {
+        setTimeout(() => {
+            if (typeof __suppressChatBump !== 'undefined') __suppressChatBump = prevSuppress;
+            if (typeof reorderUnpinnedChatsByLastActivity === 'function') {
+                reorderUnpinnedChatsByLastActivity();
+            }
+        }, 400);
     }
 }
 
@@ -184,6 +371,7 @@ async function sendMessage() {
 
     appendOptimisticMessage(text, selectedFiles, tempId);
     updateChatLastMessagePreview(currentChatId, text, selectedFiles, new Date(), true, 'pending');
+    if (typeof bumpChatToTop === 'function') bumpChatToTop(currentChatId);
 
     try {
         const formData = new FormData();
@@ -267,10 +455,8 @@ document.getElementById('messages-container')?.addEventListener('click', (e) => 
     if (!row) return;
     e.preventDefault();
     e.stopPropagation();
-    if (!isOwnMessageRow(row)) {
-        showToast('Можно удалять только свои сообщения', 'warning');
-        return;
-    }
+    // Выделять можно любые сообщения (нужно для пересылки).
+    // Удаление своих фильтруется отдельно в deleteSelectedMessages.
     const mid = row.dataset.mid;
     if (mid && !String(mid).startsWith('temp-')) {
         toggleMessageSelection(mid);
@@ -286,11 +472,28 @@ document.getElementById('ctx-delete-btn')?.addEventListener('click', () => {
 });
 document.getElementById('cancel-edit-btn')?.addEventListener('click', () => exitEditMode());
 document.getElementById('cancel-delete-message')?.addEventListener('click', () => closeDeleteMessageConfirm());
+document.getElementById('confirm-delete-for-me')?.addEventListener('click', async () => {
+    const modal = document.getElementById('delete-message-modal');
+    const id = modal?.dataset?.messageId;
+    const ids = modal?.dataset?.messageIds ? JSON.parse(modal.dataset.messageIds) : (id ? [id] : []);
+    closeDeleteMessageConfirm();
+    await deleteMessagesBatch(ids, 'me');
+});
+
+document.getElementById('confirm-delete-for-everyone')?.addEventListener('click', async () => {
+    const modal = document.getElementById('delete-message-modal');
+    const id = modal?.dataset?.messageId;
+    const ids = modal?.dataset?.messageIds ? JSON.parse(modal.dataset.messageIds) : (id ? [id] : []);
+    closeDeleteMessageConfirm();
+    await deleteMessagesBatch(ids, 'everyone');
+});
+
+// legacy
 document.getElementById('confirm-delete-message')?.addEventListener('click', async () => {
     const modal = document.getElementById('delete-message-modal');
     const id = modal?.dataset?.messageId;
     closeDeleteMessageConfirm();
-    if (id) await deleteMessage(id);
+    if (id) await deleteMessagesBatch([id], 'everyone');
 });
 document.addEventListener('click', (e) => {
     const msgMenu = document.getElementById('message-context-menu');
@@ -399,7 +602,22 @@ function updateChatLastMessagePreview(chatId, messageText, attachments = [], sen
         }
     }
     if (timeEl) {
-        if (sentAt && meta.time) timeEl.textContent = meta.time;
+        if (sentAt === '' || sentAt === false) {
+            timeEl.textContent = '';
+        } else if (sentAt && meta.time) {
+            timeEl.textContent = meta.time;
+        }
+    }
+    // Для сортировки списка по дате
+    if (sentAt === '' || sentAt === false || sentAt == null) {
+        if (sentAt === '' || sentAt === false) chatItem.dataset.lastMessageAt = '';
+    } else {
+        try {
+            const d = new Date(sentAt);
+            if (!isNaN(d.getTime())) chatItem.dataset.lastMessageAt = d.toISOString();
+        } catch (_) {
+            chatItem.dataset.lastMessageAt = String(sentAt);
+        }
     }
     if (typeof feather !== 'undefined') feather.replace();
     renderChatListDraft(chatId);
@@ -423,8 +641,11 @@ function appendOptimisticMessage(text, files, tempId) {
     const div = document.createElement('div');
     div.className = `message-row outgoing-row`;
     div.dataset.mid = tempId;
+    div.dataset.sentAt = new Date().toISOString();
 
-    const parsedOpt = parseReplyPayload(text || '');
+    const parsedOpt = (typeof parseForwardPayload === 'function')
+        ? parseForwardPayload(text || '')
+        : parseReplyPayload(text || '');
     const bodyText = parsedOpt.text || '';
     const replyMetaOpt = parsedOpt.reply;
 

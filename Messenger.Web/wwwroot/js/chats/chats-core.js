@@ -60,13 +60,10 @@ function enterSelectMode(initialMessageId) {
     hideChatContextMenu();
     if (initialMessageId && !String(initialMessageId).startsWith('temp-')) {
         const row = document.querySelector(`[data-mid="${CSS.escape(String(initialMessageId))}"]`);
-        if (row && isOwnMessageRow(row)) {
+        if (row) {
             toggleMessageSelection(initialMessageId, true);
         } else {
             updateSelectionToolbar();
-            if (row && !isOwnMessageRow(row)) {
-                showToast('Можно удалять только свои сообщения — выберите свои', 'info');
-            }
         }
     } else {
         updateSelectionToolbar();
@@ -97,10 +94,6 @@ function toggleMessageSelection(messageId, forceOn) {
     const id = String(messageId);
     const row = document.querySelector(`[data-mid="${CSS.escape(id)}"]`);
     if (!row) return;
-    if (!isOwnMessageRow(row)) {
-        showToast('Можно удалять только свои сообщения', 'warning');
-        return;
-    }
 
     const isSelected = selectedMessageIds.has(id);
     if (forceOn === true || !isSelected) {
@@ -116,82 +109,62 @@ function toggleMessageSelection(messageId, forceOn) {
 function updateSelectionToolbar() {
     const label = document.getElementById('sel-count-label');
     const delBtn = document.getElementById('sel-delete-btn');
+    const fwdBtn = document.getElementById('sel-forward-btn');
     const n = selectedMessageIds.size;
     if (label) label.textContent = n === 0 ? 'Выберите сообщения' : (n === 1 ? 'Выбрано: 1' : `Выбрано: ${n}`);
     if (delBtn) delBtn.disabled = n === 0;
+    if (fwdBtn) fwdBtn.disabled = n === 0;
 }
 
 async function deleteSelectedMessages() {
     if (!currentChatId || selectedMessageIds.size === 0) return;
     const ids = [...selectedMessageIds];
-    const count = ids.length;
-    const ok = await showConfirm(
-        count === 1 ? 'Удалить выбранное сообщение?' : `Удалить выбранные сообщения (${count})?`,
-        { title: 'Удаление сообщений', okText: 'Удалить', cancelText: 'Отмена', danger: true }
-    );
-    if (!ok) return;
-
+    if (typeof openDeleteMessageConfirm === 'function') {
+        openDeleteMessageConfirm(ids[0], { messageIds: ids });
+        return;
+    }
+    const ownIds = ids.filter(id => {
+        const row = document.querySelector(`[data-mid="${CSS.escape(id)}"]`);
+        return row && isOwnMessageRow(row);
+    });
+    if (!ownIds.length) {
+        showToast('Среди выбранных нет ваших сообщений для удаления у всех', 'warning');
+        return;
+    }
     const delBtn = document.getElementById('sel-delete-btn');
     if (delBtn) delBtn.disabled = true;
-    showToast('Удаление…', 'info');
-
     try {
         const res = await fetchWithAuth(`${API_BASE}/messages/bulk-delete`, {
             method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                chatId: currentChatId,
-                messageIds: ids
-            })
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chatId: currentChatId, messageIds: ownIds })
         });
-
-        if (!res) throw new Error('Нет ответа');
-        if (!res.ok) {
-            if (res.status === 404 || res.status === 405) {
-                let ok = 0;
-                for (const mid of ids) {
-                    try {
-                        const r = await fetchWithAuth(`${API_BASE}/messages/${mid}?chatId=${currentChatId}`, {
-                            method: 'DELETE',
-                            headers: { 'Authorization': `Bearer ${token}` }
-                        });
-                        if (r && (r.ok || r.status === 204)) {
-                            removeMessageFromUI(mid, currentChatId);
-                            ok++;
-                        }
-                    } catch (_) {}
-                }
-                exitSelectMode();
-                showToast(ok ? `Удалено: ${ok}` : 'Не удалось удалить', ok ? 'success' : 'error');
-                return;
-            }
-            const err = await res.json().catch(() => ({}));
-            throw new Error(err.error || err.Error || `HTTP ${res.status}`);
-        }
-
+        if (!res || !res.ok) throw new Error('Не удалось удалить');
         const data = await res.json().catch(() => ({}));
-        const deletedIds = data.messageIds || data.MessageIds || ids;
+        const deletedIds = data.messageIds || data.MessageIds || ownIds;
         (deletedIds || []).forEach(mid => removeMessageFromUI(mid, currentChatId));
         exitSelectMode();
-        const n = data.deletedCount ?? data.DeletedCount ?? deletedIds.length;
-        showToast(n === 1 ? 'Сообщение удалено' : `Удалено сообщений: ${n}`, 'success');
+        showToast('Удалено', 'success');
     } catch (err) {
-        console.error('Bulk delete error:', err);
         showToast(err.message || 'Ошибка удаления', 'error');
         if (delBtn) delBtn.disabled = selectedMessageIds.size === 0;
     }
 }
 
 
-        let contextMenuMessageId = null;
+
+let contextMenuMessageId = null;
 let contextMenuMessageText = '';
 
 const REPLY_PREFIX = '\u200BREPLY:';
 const REPLY_SUFFIX = '\u200B\n';
+const FORWARD_PREFIX = '\u200BFORWARD:';
+const FORWARD_SUFFIX = '\u200B\n';
 let replyingTo = null;
+
+window.__messageForwardCache = window.__messageForwardCache instanceof Map
+    ? window.__messageForwardCache
+    : new Map();
 
 const MESSAGE_DRAFTS_KEY = 'guap_message_drafts_v1_' + encodeURIComponent(String(me || 'anonymous'));
 let draftsCache = null;
@@ -422,7 +395,53 @@ function parseReplyPayload(raw) {
 }
 
 function stripReplyForPreview(raw) {
+    if (typeof parseForwardPayload === 'function') {
+        return parseForwardPayload(raw).text || '';
+    }
     return parseReplyPayload(raw).text || '';
+}
+
+function buildForwardPayload(forwardMeta, bodyText) {
+    if (!forwardMeta || !forwardMeta.senderName) return bodyText || '';
+    const name = String(forwardMeta.senderName || 'Пользователь').replace(/\|/g, ' ').slice(0, 80);
+    const originalId = String(forwardMeta.messageId || '').replace(/\|/g, '');
+    return FORWARD_PREFIX + originalId + '|' + name + FORWARD_SUFFIX + (bodyText || '');
+}
+
+function parseForwardPayload(raw) {
+    const s = String(raw || '');
+    const replyParsed = parseReplyPayload(s);
+    const base = replyParsed.text || '';
+    if (!base.startsWith(FORWARD_PREFIX)) {
+        return { text: base, forward: null, reply: replyParsed.reply };
+    }
+    const rest = base.slice(FORWARD_PREFIX.length);
+    const end = rest.indexOf(FORWARD_SUFFIX);
+    let header, body;
+    if (end < 0) {
+        const nl = rest.indexOf('\n');
+        if (nl < 0) return { text: base, forward: null, reply: replyParsed.reply };
+        header = rest.slice(0, nl);
+        body = rest.slice(nl + 1);
+    } else {
+        header = rest.slice(0, end);
+        body = rest.slice(end + FORWARD_SUFFIX.length);
+    }
+    const parts = header.split('|');
+    return {
+        text: body,
+        forward: { messageId: parts[0] || '', senderName: parts[1] || 'Пользователь' },
+        reply: replyParsed.reply
+    };
+}
+
+function stripForwardForPreview(raw) {
+    const p = parseForwardPayload(raw);
+    return p.text || '';
+}
+
+function stripMessageMetaForPreview(raw) {
+    return stripForwardForPreview(raw);
 }
 
 function startReply(messageId, previewText, senderName) {

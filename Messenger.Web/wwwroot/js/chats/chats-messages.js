@@ -91,17 +91,32 @@ function updateExistingMessageText(messageId, newText, markEdited = false) {
     const bubble = el.querySelector('.message-bubble');
     if (!bubble) return false;
 
-    const parsedUpd = parseReplyPayload(newText == null ? '' : String(newText));
+    const parsedUpd = (typeof parseForwardPayload === 'function')
+        ? parseForwardPayload(newText == null ? '' : String(newText))
+        : { text: parseReplyPayload(newText == null ? '' : String(newText)).text, reply: parseReplyPayload(newText == null ? '' : String(newText)).reply, forward: null };
     const p = bubble.querySelector('p');
     const oldText = p ? (p.innerText || p.textContent || '').trim() : '';
     const nextText = (parsedUpd.text || '').trim();
+    if (parsedUpd.forward) {
+        let fl = bubble.querySelector('.forward-label');
+        if (!fl) {
+            fl = document.createElement('div');
+            fl.className = 'forward-label';
+            fl.innerHTML = '<span class="forward-label-icon">↗</span> Переслано от <span class="forward-label-name"></span>';
+            bubble.insertBefore(fl, bubble.firstChild);
+        }
+        const nameEl = fl.querySelector('.forward-label-name');
+        if (nameEl) nameEl.textContent = parsedUpd.forward.senderName || 'Пользователь';
+    }
     if (parsedUpd.reply) {
         let q = bubble.querySelector('.reply-quote');
         if (!q) {
             q = document.createElement('div');
             q.className = 'reply-quote';
             q.innerHTML = '<div class="reply-quote-name"></div><div class="reply-quote-text"></div>';
-            bubble.insertBefore(q, bubble.firstChild);
+            const after = bubble.querySelector('.forward-label');
+            if (after && after.nextSibling) bubble.insertBefore(q, after.nextSibling);
+            else bubble.insertBefore(q, bubble.firstChild);
         }
         fillReplyQuoteInRow(el, parsedUpd.reply);
     }
@@ -132,6 +147,9 @@ function updateExistingMessageText(messageId, newText, markEdited = false) {
 }
 
 function appendMessage(msg) {
+    if (msg.messageId && typeof isMessageHiddenForMe === 'function' && isMessageHiddenForMe(msg.messageId)) {
+        return;
+    }
     if (msg.messageId && document.querySelector(`[data-mid="${msg.messageId}"]`)) {
         if (msg.messageText !== undefined && msg.messageText !== null) {
             updateExistingMessageText(msg.messageId, msg.messageText);
@@ -153,14 +171,30 @@ function appendMessage(msg) {
     removeEmptyStateIfNeeded();
 
     let displayText = msg.messageText || "";
-    const _parsedReply = parseReplyPayload(displayText);
-    displayText = _parsedReply.text || '';
-    const replyMeta = _parsedReply.reply;
+    const _parsedFwd = (typeof parseForwardPayload === 'function')
+        ? parseForwardPayload(displayText)
+        : { text: (typeof parseReplyPayload === 'function' ? parseReplyPayload(displayText).text : displayText), forward: null, reply: (typeof parseReplyPayload === 'function' ? parseReplyPayload(displayText).reply : null) };
+    displayText = _parsedFwd.text || '';
+    const replyMeta = _parsedFwd.reply;
+    const forwardMeta = _parsedFwd.forward;
 
     if (displayText && displayText.length > 20 && !displayText.includes(' ') && !displayText.includes('\n') &&
         /^[A-Za-z0-9+/=]+$/.test(displayText)) {
         displayText = "[Сообщение]";
     }
+
+    try {
+        if (msg.messageId && window.__messageForwardCache) {
+            const senderDisplay = (msg.senderName || msg.SenderName || '').trim();
+            window.__messageForwardCache.set(String(msg.messageId), {
+                messageId: msg.messageId,
+                messageText: displayText,
+                senderId: msg.senderId || msg.SenderId,
+                senderName: senderDisplay,
+                attachments: msg.attachments || msg.Attachments || []
+            });
+        }
+    } catch (_) {}
 
     const isGroupChat = currentChatInfo?.type === 'group';
 
@@ -175,6 +209,15 @@ function appendMessage(msg) {
     div.className = `message-row ${isMyMessage ? 'outgoing-row' : 'incoming-row'}${grouped ? ' grouped' : ''}`;
     if (msg.messageId) div.dataset.mid = msg.messageId;
     if (senderId) div.dataset.senderId = String(senderId);
+    const rawSentAt = msg.sentAt || msg.sentTime || msg.SendTime || msg.SentAt || null;
+    if (rawSentAt) {
+        try {
+            const d = new Date(rawSentAt);
+            if (!isNaN(d.getTime())) div.dataset.sentAt = d.toISOString();
+        } catch (_) {
+            div.dataset.sentAt = String(rawSentAt);
+        }
+    }
 
     const time = formatTimeOnly(msg.sentAt || msg.sentTime);
 
@@ -198,6 +241,7 @@ function appendMessage(msg) {
         <div class="message-col">
             ${senderNameHtml}
             <div class="message-bubble ${isMyMessage ? 'outgoing' : 'incoming'} px-3.5 py-2 shadow-sm">
+                ${forwardMeta ? `<div class="forward-label"><span class="forward-label-icon">↗</span> Переслано от <span class="forward-label-name"></span></div>` : ''}
                 ${replyMeta ? `<div class="reply-quote" data-reply-to="${replyMeta.messageId || ''}"><div class="reply-quote-name"></div><div class="reply-quote-text"></div></div>` : ''}
                 ${displayText ? `<p class="break-words whitespace-pre-wrap leading-relaxed text-[15px]">${displayText.replace(/\n/g, '<br>')}</p>` : ''}
                 ${renderAttachments(msg.attachments || [], isMyMessage)}
@@ -213,6 +257,12 @@ function appendMessage(msg) {
     `;
 
     messagesContainer.appendChild(div);
+    if (forwardMeta) {
+        const nameEl = div.querySelector('.forward-label-name');
+        if (nameEl) nameEl.textContent = forwardMeta.senderName || 'Пользователь';
+        div.dataset.forwardFrom = forwardMeta.senderName || '';
+        div.dataset.forwardOf = forwardMeta.messageId || '';
+    }
     if (replyMeta) fillReplyQuoteInRow(div, replyMeta);
     feather.replace();
 

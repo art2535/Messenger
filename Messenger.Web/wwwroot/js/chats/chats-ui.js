@@ -150,14 +150,140 @@ document.getElementById('reply-compose-cancel')?.addEventListener('click', (e) =
 });
 
 document.getElementById('messages-container')?.addEventListener('dblclick', (e) => {
+    if (typeof selectMode !== 'undefined' && selectMode) return;
     const bubble = e.target.closest('.message-bubble');
     if (!bubble) return;
-    if (e.target.closest('.reply-quote')) return;
+    if (e.target.closest('a, button, input, textarea, .reply-quote, .reaction-chip, .msg-attachments')) return;
     const row = bubble.closest('[data-mid]');
     if (!row || String(row.dataset.mid || '').startsWith('temp-')) return;
     e.preventDefault();
-    startReply(row.dataset.mid, getMessagePreviewFromRow(row), getSenderNameFromRow(row));
+    e.stopPropagation();
+    if (typeof hideMessageContextMenu === 'function') hideMessageContextMenu();
+    if (typeof startReply === 'function') {
+        startReply(row.dataset.mid, getMessagePreviewFromRow(row), getSenderNameFromRow(row));
+    }
 });
+
+/** Свайп влево по сообщению → ответ (мобильные). */
+(function bindSwipeToReply() {
+    const root = document.getElementById('messages-container');
+    if (!root || root.dataset.swipeReplyBound === '1') return;
+    root.dataset.swipeReplyBound = '1';
+
+    const THRESHOLD = 64; // px
+    const MAX_DRAG = 96;
+    let startX = 0, startY = 0, activeRow = null, tracking = false, decided = false, horizontal = false;
+
+    function resetRow(row) {
+        if (!row) return;
+        row.style.transition = 'transform 0.2s ease';
+        row.style.transform = '';
+        const icon = row.querySelector('.swipe-reply-hint');
+        if (icon) icon.style.opacity = '0';
+        setTimeout(() => {
+            if (row) row.style.transition = '';
+        }, 220);
+    }
+
+    function ensureHint(row) {
+        let hint = row.querySelector('.swipe-reply-hint');
+        if (!hint) {
+            hint = document.createElement('div');
+            hint.className = 'swipe-reply-hint';
+            hint.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>';
+            row.style.position = row.style.position || 'relative';
+            row.appendChild(hint);
+        }
+        return hint;
+    }
+
+    function onStart(e) {
+        if (typeof selectMode !== 'undefined' && selectMode) return;
+        if (e.pointerType === 'mouse') return;
+        const bubble = e.target.closest('.message-bubble');
+        if (!bubble) return;
+        if (e.target.closest('a, button, input, textarea')) return;
+        const row = bubble.closest('.message-row[data-mid], [data-mid]');
+        if (!row || String(row.dataset.mid || '').startsWith('temp-')) return;
+        const point = e.touches ? e.touches[0] : e;
+        startX = point.clientX;
+        startY = point.clientY;
+        activeRow = row;
+        tracking = true;
+        decided = false;
+        horizontal = false;
+        ensureHint(row);
+    }
+
+    function onMove(e) {
+        if (!tracking || !activeRow) return;
+        const point = e.touches ? e.touches[0] : e;
+        const dx = point.clientX - startX;
+        const dy = point.clientY - startY;
+        if (!decided) {
+            if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+            decided = true;
+            horizontal = Math.abs(dx) > Math.abs(dy) * 1.2;
+            if (!horizontal) {
+                tracking = false;
+                resetRow(activeRow);
+                activeRow = null;
+                return;
+            }
+        }
+        if (!horizontal) return;
+        // только влево
+        const drag = Math.max(-MAX_DRAG, Math.min(0, dx));
+        activeRow.style.transition = 'none';
+        activeRow.style.transform = `translateX(${drag}px)`;
+        const hint = ensureHint(activeRow);
+        const progress = Math.min(1, Math.abs(drag) / THRESHOLD);
+        hint.style.opacity = String(progress);
+        if (e.cancelable) e.preventDefault();
+    }
+
+    function onEnd(e) {
+        if (!tracking || !activeRow) return;
+        const point = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0] : e;
+        const dx = point.clientX - startX;
+        const row = activeRow;
+        const mid = row.dataset.mid;
+        tracking = false;
+        activeRow = null;
+
+        if (horizontal && dx <= -THRESHOLD && mid) {
+            resetRow(row);
+            if (typeof hideMessageContextMenu === 'function') hideMessageContextMenu();
+            if (typeof startReply === 'function') {
+                startReply(mid, getMessagePreviewFromRow(row), getSenderNameFromRow(row));
+            }
+            try { if (navigator.vibrate) navigator.vibrate(20); } catch (_) {}
+        } else {
+            resetRow(row);
+        }
+        horizontal = false;
+    }
+
+    if (window.PointerEvent) {
+        root.addEventListener('pointerdown', onStart, { passive: true });
+        root.addEventListener('pointermove', onMove, { passive: false });
+        root.addEventListener('pointerup', onEnd, { passive: true });
+        root.addEventListener('pointercancel', () => {
+            if (activeRow) resetRow(activeRow);
+            tracking = false;
+            activeRow = null;
+        }, { passive: true });
+    } else {
+        root.addEventListener('touchstart', onStart, { passive: true });
+        root.addEventListener('touchmove', onMove, { passive: false });
+        root.addEventListener('touchend', onEnd, { passive: true });
+        root.addEventListener('touchcancel', () => {
+            if (activeRow) resetRow(activeRow);
+            tracking = false;
+            activeRow = null;
+        }, { passive: true });
+    }
+})();
 
 
 document.getElementById('pinned-message-bar')?.addEventListener('click', (e) => {

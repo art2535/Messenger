@@ -330,6 +330,10 @@
                     <span>Отмена</span>
                 </button>
                 <span class="sel-count" id="sel-count-label">Выбрано: 0</span>
+                <button type="button" class="sel-forward" id="sel-forward-btn" title="Переслать" disabled>
+                    <i data-feather="corner-up-right" class="w-5 h-5"></i>
+                    <span>Переслать</span>
+                </button>
                 <button type="button" class="sel-delete" id="sel-delete-btn" title="Удалить" disabled>
                     <i data-feather="trash-2" class="w-5 h-5"></i>
                     <span>Удалить</span>
@@ -548,6 +552,9 @@
         <button type="button" id="ctx-reply-btn"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ctx-icon"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
             <span>Ответить</span>
         </button>
+        <button type="button" id="ctx-forward-btn"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ctx-icon"><path d="M15 17l5-5-5-5"/><path d="M4 19v-2a4 4 0 0 1 4-4h12"/></svg>
+            <span>Переслать</span>
+        </button>
         <button type="button" id="ctx-react-btn"><span class="ctx-icon" style="font-size:16px;line-height:1">😊</span>
             <span>Реакция</span>
         </button>
@@ -578,19 +585,30 @@
 
     <div id="delete-message-modal" class="modal">
         <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl">
-            <div class="text-center mb-6">
+            <div class="text-center mb-5">
                 <div class="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
                     <i data-feather="trash-2" class="w-8 h-8 text-red-600 dark:text-red-400"></i>
                 </div>
-                <h3 class="text-xl font-bold text-gray-900 dark:text-gray-100">Удалить сообщение?</h3>
-                <p class="text-gray-600 dark:text-gray-400 mt-2 text-sm">Это действие нельзя отменить.</p>
+                <h3 id="delete-message-title" class="text-xl font-bold text-gray-900 dark:text-gray-100">Удалить сообщение?</h3>
+                <p id="delete-message-hint" class="text-gray-600 dark:text-gray-400 mt-2 text-sm">Выберите, для кого удалить:</p>
             </div>
-            <div class="flex gap-3">
-                <button type="button" id="cancel-delete-message" class="flex-1 px-4 py-2.5 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-100 rounded-xl font-medium transition">
-                    Отмена
+            <div class="flex flex-col gap-2.5">
+                <button type="button" id="confirm-delete-for-me" class="w-full px-4 py-3 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 rounded-xl font-medium transition text-left flex items-center gap-3">
+                    <span class="text-lg">👤</span>
+                    <span>
+                        <span class="block font-semibold">Удалить только у себя</span>
+                        <span class="block text-xs text-gray-500 dark:text-gray-400 font-normal">Сообщение исчезнет только у вас</span>
+                    </span>
                 </button>
-                <button type="button" id="confirm-delete-message" class="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl font-medium transition">
-                    Удалить
+                <button type="button" id="confirm-delete-for-everyone" class="w-full px-4 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-medium transition text-left flex items-center gap-3">
+                    <span class="text-lg">🌐</span>
+                    <span>
+                        <span class="block font-semibold">Удалить для всех</span>
+                        <span class="block text-xs text-red-100 font-normal">Сообщение исчезнет у всех участников</span>
+                    </span>
+                </button>
+                <button type="button" id="cancel-delete-message" class="w-full px-4 py-2.5 mt-1 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl font-medium transition">
+                    Отмена
                 </button>
             </div>
         </div>
@@ -628,6 +646,7 @@
     <script src="~/js/session-cleanup.js"></script>
     <script src="~/js/chats/chats-core.js" asp-append-version="true"></script>
     <script src="~/js/chats/chats-messages.js" asp-append-version="true"></script>
+    <script src="~/js/chats/chats-forward.js" asp-append-version="true"></script>
     <script src="~/js/chats/chats-menus.js" asp-append-version="true"></script>
     <script src="~/js/chats/chats-pins.js" asp-append-version="true"></script>
     <script src="~/js/chats/chats-send.js" asp-append-version="true"></script>

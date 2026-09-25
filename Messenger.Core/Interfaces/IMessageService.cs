@@ -14,6 +14,7 @@ namespace Messenger.Core.Interfaces
         Task<(IReadOnlyList<Message> Items, bool HasMore)> GetMessagesPagedAsync(Guid chatId, long? beforeSequence = null,
             int limit = 50, CancellationToken token = default);
         Task<Message?> GetMessageByIdAsync(Guid chatId, Guid messageId, CancellationToken token = default);
+        Task<Message?> GetMessageByIdGlobalAsync(Guid messageId, CancellationToken token = default);
         Task DeleteMessageAsync(Guid messageId, CancellationToken token = default);
         Task<int> DeleteMessagesAsync(IEnumerable<Guid> messageIds, CancellationToken token = default);
         Task UpdateMessageAsync(Message message, CancellationToken token = default);

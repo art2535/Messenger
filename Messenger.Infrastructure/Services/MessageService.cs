@@ -167,6 +167,14 @@ namespace Messenger.Infrastructure.Services
                 .FirstOrDefaultAsync(m => m.ChatId == chatId && m.MessageId == messageId, token);
         }
 
+        public async Task<Message?> GetMessageByIdGlobalAsync(Guid messageId, CancellationToken token = default)
+        {
+            return await _context.Messages
+                .Include(m => m.Attachments)
+                .Include(m => m.Sender)
+                .FirstOrDefaultAsync(m => m.MessageId == messageId, token);
+        }
+
         public async Task DeleteMessageAsync(Guid messageId, CancellationToken token = default)
         {
             var deletedMessage = await _context.Messages.FindAsync(new object[] { messageId }, token);

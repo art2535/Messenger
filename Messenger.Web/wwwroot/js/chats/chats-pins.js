@@ -297,35 +297,74 @@ function onPinnedBarClick() {
 }
 
 
-function withFrozenChatListPosition(chatId, fn) {
+async function withFrozenChatListPosition(chatId, fn) {
     const container = document.getElementById('chats-container');
-    const item = chatId ? document.querySelector(`.chat-item[data-chat-id="${chatId}"]`) : null;
+    const item = chatId ? document.querySelector(`.chat-item[data-chat-id="${CSS.escape(String(chatId))}"]`) : null;
     const next = item?.nextElementSibling || null;
+    const prev = item?.previousElementSibling || null;
     const wasFirst = !!(item && container && item === container.firstElementChild);
+    const indexBefore = item && container
+        ? [...container.querySelectorAll('.chat-item')].indexOf(item)
+        : -1;
+
+    __suppressChatBump = true;
     try {
-        __suppressChatBump = true;
-        fn();
+        const result = fn();
+        if (result && typeof result.then === 'function') {
+            await result;
+        }
     } finally {
+        // Вернуть чат на прежнее место относительно соседей
         if (item && container && item.parentElement === container) {
             if (next && next.parentElement === container) {
                 if (item.nextElementSibling !== next) {
                     container.insertBefore(item, next);
                 }
+            } else if (prev && prev.parentElement === container) {
+                // вставить после prev
+                if (prev.nextElementSibling !== item) {
+                    if (prev.nextElementSibling) container.insertBefore(item, prev.nextElementSibling);
+                    else container.appendChild(item);
+                }
             } else if (!next && !wasFirst) {
                 container.appendChild(item);
-            } else if (!next && wasFirst) {
-            } else if (!next) {
-                container.appendChild(item);
+            } else if (wasFirst && container.firstElementChild !== item) {
+                container.insertBefore(item, container.firstElementChild);
+            }
+
+            // Если порядок всё ещё сбился — восстановить по индексу
+            const items = [...container.querySelectorAll('.chat-item')];
+            const indexAfter = items.indexOf(item);
+            if (indexBefore >= 0 && indexAfter >= 0 && indexBefore !== indexAfter) {
+                const ref = items[indexBefore] === item
+                    ? (items[indexBefore + 1] || null)
+                    : items[indexBefore];
+                // более надёжно: собрать id-порядок
+                const ids = items.map(el => el.dataset.chatId);
+                const id = String(chatId);
+                ids.splice(indexAfter, 1);
+                ids.splice(Math.min(indexBefore, ids.length), 0, id);
+                // не перестраиваем весь список — только этот элемент
+                if (indexBefore === 0) {
+                    container.insertBefore(item, container.firstElementChild);
+                } else {
+                    const beforeEl = container.querySelector(`.chat-item[data-chat-id="${CSS.escape(ids[indexBefore - 1])}"]`);
+                    if (beforeEl && beforeEl.nextElementSibling !== item) {
+                        if (beforeEl.nextElementSibling) container.insertBefore(item, beforeEl.nextElementSibling);
+                        else container.appendChild(item);
+                    }
+                }
             }
         }
-        setTimeout(() => { __suppressChatBump = false; }, 300);
+        // Дольше держим suppress: SignalR MessageDeleted может прийти с задержкой
+        setTimeout(() => { __suppressChatBump = false; }, 1500);
     }
 }
 
 function bumpChatToTop(chatId) {
     if (__suppressChatBump) return;
     if (!chatId) return;
-    if (String(chatId) === String(currentChatId)) return;
+    // Текущий чат тоже поднимаем — при отправке/пересылке список должен обновиться
     const container = document.getElementById('chats-container');
     const item = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
     if (!container || !item) return;
@@ -347,3 +386,58 @@ function bumpChatToTop(chatId) {
     const id = String(chatId);
     __chatBaseOrder = [id, ...__chatBaseOrder.filter(x => x !== id)];
 }
+
+/** Timestamp последней активности чата (ms). indexFallback сохраняет текущий порядок, если даты нет. */
+function getChatLastActivityTs(chatItem, indexFallback = 0) {
+    if (!chatItem) return 0;
+    const at = chatItem.dataset.lastMessageAt || chatItem.getAttribute('data-last-message-at');
+    if (at) {
+        const t = new Date(at).getTime();
+        if (!isNaN(t) && t > 0) return t;
+    }
+    // Нет даты — стабильный fallback по текущей позиции (не сбрасывать весь список вниз)
+    return 1e15 - indexFallback;
+}
+
+/**
+ * Пересортировать незакреплённые чаты по дате последнего сообщения (новые сверху).
+ * Закреплённые остаются сверху. Чаты без даты сохраняют относительный порядок.
+ */
+function reorderUnpinnedChatsByLastActivity() {
+    const container = document.getElementById('chats-container');
+    if (!container) return;
+
+    const pinnedIds = typeof loadPinnedChatIds === 'function' ? loadPinnedChatIds() : [];
+    const items = [...container.querySelectorAll('.chat-item')];
+    if (!items.length) return;
+
+    const map = new Map(items.map(el => [String(el.dataset.chatId || ''), el]));
+
+    const pinnedOrdered = [];
+    for (const id of pinnedIds) {
+        if (map.has(id)) {
+            pinnedOrdered.push(map.get(id));
+            map.delete(id);
+        }
+    }
+
+    // unpinned в текущем DOM-порядке
+    const unpinned = items.filter(el => {
+        const id = String(el.dataset.chatId || '');
+        return id && !pinnedIds.includes(id);
+    });
+
+    const scored = unpinned.map((el, i) => ({
+        el,
+        ts: getChatLastActivityTs(el, i)
+    }));
+    scored.sort((a, b) => b.ts - a.ts);
+
+    [...pinnedOrdered, ...scored.map(s => s.el)].forEach(el => container.appendChild(el));
+
+    if (typeof __chatBaseOrder !== 'undefined') {
+        __chatBaseOrder = scored.map(s => String(s.el.dataset.chatId || '')).filter(Boolean);
+    }
+    if (typeof cacheChatItems === 'function') cacheChatItems();
+}
+

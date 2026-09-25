@@ -49,10 +49,23 @@ namespace Messenger.Web
             app.UseHttpsRedirection();
 
             app.UseStaticFiles();
-            app.Map("/uploads/{**path}", (string path, HttpContext ctx) =>
+            // Проксируем файлы с API (stream), а не redirect — иначе fetch() ломается на CORS
+            app.Map("/uploads/{**path}", async (string path, HttpContext ctx, IHttpClientFactory httpClientFactory) =>
             {
-                var targetUrl = $"{builder.Configuration["URL:API:HTTPS"]}/uploads/{path}{ctx.Request.QueryString}";
-                return Results.Redirect(targetUrl, false);
+                var apiBase = builder.Configuration["URL:API:HTTPS"]?.TrimEnd('/');
+                if (string.IsNullOrEmpty(apiBase))
+                    return Results.Problem("URL:API:HTTPS не настроен");
+
+                var targetUrl = $"{apiBase}/uploads/{path}{ctx.Request.QueryString}";
+                var client = httpClientFactory.CreateClient("Api");
+                using var response = await client.GetAsync(targetUrl, HttpCompletionOption.ResponseHeadersRead, ctx.RequestAborted);
+                if (!response.IsSuccessStatusCode)
+                    return Results.StatusCode((int)response.StatusCode);
+
+                var contentType = response.Content.Headers.ContentType?.ToString() ?? "application/octet-stream";
+                var stream = await response.Content.ReadAsStreamAsync(ctx.RequestAborted);
+                // Не диспозируем stream раньше времени — Results.Stream владеет им
+                return Results.Stream(stream, contentType, enableRangeProcessing: true);
             });
 
             app.UseSession();
