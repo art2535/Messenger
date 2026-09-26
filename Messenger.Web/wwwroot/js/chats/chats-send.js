@@ -36,7 +36,6 @@ function removeMessageFromUI(messageId, chatIdHint) {
         if (typeof refreshChatListPreviewFromDom === 'function') {
             refreshChatListPreviewFromDom(chatId);
         }
-        // Спустить чат по дате последнего сообщения (не оставлять наверху)
         if (typeof reorderUnpinnedChatsByLastActivity === 'function') {
             reorderUnpinnedChatsByLastActivity();
         }
@@ -88,7 +87,6 @@ function refreshChatListPreviewFromDom(chatId) {
         const bubble = last.querySelector('.message-bubble');
         const textEl = bubble?.querySelector('p');
         let text = textEl ? (textEl.innerText || textEl.textContent || '').trim() : '';
-        // Метка пересылки не должна попадать в превью списка
         if (typeof stripMessageMetaForPreview === 'function') {
             text = stripMessageMetaForPreview(text);
         } else if (typeof stripReplyForPreview === 'function') {
@@ -102,7 +100,6 @@ function refreshChatListPreviewFromDom(chatId) {
             : [];
         if (!text && (hasImg || hasFile)) text = '';
         const status = isMine ? getOutgoingStatusFromBubble(bubble) : null;
-        // Время последнего ОСТАВШЕГОСЯ сообщения (не текущего времени и не null)
         const sentAt = last.dataset.sentAt || last.getAttribute('data-sent-at') || null;
         updateChatLastMessagePreview(chatId, text, attachments, sentAt, isMine, status);
         chatItem.dataset.lastMessageId = mid;
@@ -171,7 +168,6 @@ function refreshChatListPreviewFromDom(chatId) {
         .catch(e => console.warn('[refreshChatListPreviewFromDom]', e));
 }
 
-/** Скрытые «только у себя» сообщения (localStorage). */
 function getHiddenMessageIds() {
     try {
         const key = 'guap_hidden_msgs_' + encodeURIComponent(String(me || 'anon'));
@@ -202,12 +198,6 @@ function isMessageHiddenForMe(messageId) {
     return getHiddenMessageIds().has(String(messageId));
 }
 
-/**
- * @param {string} messageId
- * @param {'me'|'everyone'} scope
- * @param {{ silent?: boolean }} [opts]
- * @returns {Promise<boolean>} success
- */
 async function deleteMessage(messageId, scope = 'everyone', opts = {}) {
     if (!messageId || !currentChatId) return false;
     const silent = !!opts.silent;
@@ -237,12 +227,6 @@ async function deleteMessage(messageId, scope = 'everyone', opts = {}) {
     }
 }
 
-/**
- * Пакетное удаление: одна операция — одно уведомление.
- * Позиция чата в списке сохраняется.
- * @param {string[]} messageIds
- * @param {'me'|'everyone'} scope
- */
 async function deleteMessagesBatch(messageIds, scope = 'everyone') {
     const ids = (messageIds || []).map(String).filter(id => id && !id.startsWith('temp-'));
     if (!ids.length || !currentChatId) return;
@@ -260,7 +244,6 @@ async function deleteMessagesBatch(messageIds, scope = 'everyone') {
                 ok++;
             }
         } else if (ids.length > 1) {
-            // bulk API
             try {
                 const res = await fetchWithAuth(`${API_BASE}/messages/bulk-delete`, {
                     method: 'POST',
@@ -272,7 +255,6 @@ async function deleteMessagesBatch(messageIds, scope = 'everyone') {
                 });
                 if (!res) throw new Error('Нет ответа от сервера');
                 if (!res.ok) {
-                    // fallback по одному
                     if (res.status === 404 || res.status === 405 || res.status === 403) {
                         for (const mid of ids) {
                             const one = await deleteMessage(mid, 'everyone', { silent: true });
@@ -289,7 +271,6 @@ async function deleteMessagesBatch(messageIds, scope = 'everyone') {
                         removeMessageFromUI(mid, chatId);
                         ok++;
                     });
-                    // если API вернул меньше — остаток пробуем по одному
                     const deletedSet = new Set((deletedIds || []).map(String));
                     for (const mid of ids) {
                         if (!deletedSet.has(String(mid))) {
@@ -300,7 +281,6 @@ async function deleteMessagesBatch(messageIds, scope = 'everyone') {
                 }
             } catch (err) {
                 lastError = err.message || String(err);
-                // fallback
                 for (const mid of ids) {
                     const one = await deleteMessage(mid, 'everyone', { silent: true });
                     if (one) ok++; else fail++;
@@ -313,7 +293,6 @@ async function deleteMessagesBatch(messageIds, scope = 'everyone') {
 
         if (typeof exitSelectMode === 'function') exitSelectMode();
 
-        // Обновить превью и спустить чат по дате последнего сообщения
         if (typeof refreshChatListPreviewFromDom === 'function') {
             refreshChatListPreviewFromDom(chatId);
         }
@@ -321,7 +300,6 @@ async function deleteMessagesBatch(messageIds, scope = 'everyone') {
             reorderUnpinnedChatsByLastActivity();
         }
 
-        // Один toast
         if (ok && !fail) {
             const msg = scope === 'me'
                 ? (ok === 1 ? 'Сообщение удалено только у вас' : `Удалено у вас: ${ok}`)
@@ -334,7 +312,6 @@ async function deleteMessagesBatch(messageIds, scope = 'everyone') {
         }
     };
 
-    // Подавляем bump на время удаления (SignalR), но позицию ставим по дате, не «замораживаем»
     const prevSuppress = typeof __suppressChatBump !== 'undefined' ? __suppressChatBump : false;
     if (typeof __suppressChatBump !== 'undefined') __suppressChatBump = true;
     try {
@@ -455,8 +432,6 @@ document.getElementById('messages-container')?.addEventListener('click', (e) => 
     if (!row) return;
     e.preventDefault();
     e.stopPropagation();
-    // Выделять можно любые сообщения (нужно для пересылки).
-    // Удаление своих фильтруется отдельно в deleteSelectedMessages.
     const mid = row.dataset.mid;
     if (mid && !String(mid).startsWith('temp-')) {
         toggleMessageSelection(mid);
@@ -488,7 +463,6 @@ document.getElementById('confirm-delete-for-everyone')?.addEventListener('click'
     await deleteMessagesBatch(ids, 'everyone');
 });
 
-// legacy
 document.getElementById('confirm-delete-message')?.addEventListener('click', async () => {
     const modal = document.getElementById('delete-message-modal');
     const id = modal?.dataset?.messageId;
@@ -511,7 +485,6 @@ document.addEventListener('keydown', (e) => {
         closeDeleteMessageConfirm();
         closeExportChatModal();
         document.getElementById('delete-chat-confirm-modal')?.classList.remove('show');
-        // Hide pinned-messages bar (same priority as other overlays)
         const pinBar = document.getElementById('pinned-message-bar');
         if (pinBar && pinBar.classList.contains('show')) {
             if (typeof hidePinnedMessageBar === 'function') hidePinnedMessageBar();
@@ -524,17 +497,49 @@ window.addEventListener('scroll', () => {
     hideChatContextMenu();
 }, true);
 
+function normChatId(chatId) {
+    if (chatId == null || chatId === '') return null;
+    return String(chatId).trim().toLowerCase();
+}
 
+const unreadMessageIds = window.__unreadMessageIds || (window.__unreadMessageIds = new Map());
+
+function trackUnreadMessage(chatId, messageId) {
+    const cid = normChatId(chatId);
+    const mid = messageId != null ? String(messageId) : null;
+    if (!cid || !mid) return;
+    if (!unreadMessageIds.has(cid)) unreadMessageIds.set(cid, new Set());
+    unreadMessageIds.get(cid).add(mid);
+}
+
+function untrackUnreadMessage(chatId, messageId) {
+    const cid = normChatId(chatId);
+    const mid = messageId != null ? String(messageId) : null;
+    if (!cid || !mid) return false;
+    const set = unreadMessageIds.get(cid);
+    if (!set || !set.has(mid)) return false;
+    set.delete(mid);
+    return true;
+}
 
 function updateUnreadBadge(chatId, count) {
-    const item = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
+    const cid = normChatId(chatId);
+    if (!cid) return;
+
+    let item = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
+    if (!item) {
+        item = [...document.querySelectorAll('.chat-item')].find(
+            el => normChatId(el.dataset.chatId) === cid
+        );
+    }
     if (!item) return;
 
     const badge = item.querySelector('.unread-badge');
     if (!badge) return;
 
-    if (count > 0) {
-        badge.textContent = count > 99 ? '99+' : count;
+    const n = Math.max(0, Number(count) || 0);
+    if (n > 0) {
+        badge.textContent = n > 99 ? '99+' : String(n);
         badge.classList.remove('hidden');
     } else {
         badge.classList.add('hidden');
@@ -542,17 +547,62 @@ function updateUnreadBadge(chatId, count) {
     }
 }
 
-function incrementUnread(chatId) {
-    if (!chatId) return;
-    const next = (unreadCounts.get(chatId) || 0) + 1;
-    unreadCounts.set(chatId, next);
-    updateUnreadBadge(chatId, next);
+function getUnreadCount(chatId) {
+    const cid = normChatId(chatId);
+    if (!cid) return 0;
+    if (unreadCounts.has(cid)) return unreadCounts.get(cid) || 0;
+    for (const [k, v] of unreadCounts) {
+        if (normChatId(k) === cid) return v || 0;
+    }
+    return 0;
+}
+
+function setUnreadCount(chatId, count) {
+    const cid = normChatId(chatId);
+    if (!cid) return;
+    const n = Math.max(0, Number(count) || 0);
+    unreadCounts.set(cid, n);
+    updateUnreadBadge(cid, n);
+}
+
+function incrementUnread(chatId, messageId) {
+    const cid = normChatId(chatId);
+    if (!cid) return;
+    if (messageId != null) trackUnreadMessage(cid, messageId);
+    const next = getUnreadCount(cid) + 1;
+    setUnreadCount(cid, next);
+}
+
+function decrementUnread(chatId, by = 1, messageId = null) {
+    const cid = normChatId(chatId);
+    if (!cid) return;
+
+    let removed = false;
+    if (messageId != null) {
+        removed = untrackUnreadMessage(cid, messageId);
+    }
+
+    const set = unreadMessageIds.get(cid);
+    if (set && set.size >= 0 && messageId != null) {
+        setUnreadCount(cid, set.size);
+        return;
+    }
+
+    const cur = getUnreadCount(cid);
+    if (cur <= 0) {
+        setUnreadCount(cid, 0);
+        return;
+    }
+    const next = Math.max(0, cur - (Number(by) || 1));
+    setUnreadCount(cid, next);
+    if (next === 0 && set) set.clear();
 }
 
 function clearUnread(chatId) {
-    if (!chatId) return;
-    unreadCounts.set(chatId, 0);
-    updateUnreadBadge(chatId, 0);
+    const cid = normChatId(chatId);
+    if (!cid) return;
+    setUnreadCount(cid, 0);
+    if (unreadMessageIds.has(cid)) unreadMessageIds.get(cid).clear();
 }
 
 function renderChatListStatus(status) {
@@ -608,7 +658,6 @@ function updateChatLastMessagePreview(chatId, messageText, attachments = [], sen
             timeEl.textContent = meta.time;
         }
     }
-    // Для сортировки списка по дате
     if (sentAt === '' || sentAt === false || sentAt == null) {
         if (sentAt === '' || sentAt === false) chatItem.dataset.lastMessageAt = '';
     } else {

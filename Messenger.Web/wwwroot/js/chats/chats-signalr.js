@@ -318,6 +318,21 @@ async function startSignalR() {
         if (!mid) return;
         const chatId = data?.chatId || data?.ChatId || currentChatId;
         removeMessageFromUI(mid, chatId);
+
+        if (typeof GuapNotify !== 'undefined' && GuapNotify.closeMessageNotification) {
+            GuapNotify.closeMessageNotification(mid);
+        }
+
+        const open = currentChatId != null && String(currentChatId).toLowerCase() === String(chatId).toLowerCase();
+        if (!open) {
+            if (typeof decrementUnread === 'function') {
+                decrementUnread(chatId, 1, mid);
+            }
+        }
+
+        if (typeof refreshChatListPreviewFromDom === 'function') {
+            refreshChatListPreviewFromDom(chatId);
+        }
     });
 
     connection.on('ReactionUpdated', (data) => {
@@ -390,9 +405,13 @@ async function startSignalR() {
 
         bumpChatToTop(msg.chatId || chatId);
 
+        if (!isMyMessage && typeof GuapNotify !== 'undefined' && GuapNotify.onIncomingMessage) {
+            GuapNotify.onIncomingMessage(msg);
+        }
+
         if (!isCurrentChat) {
             if (!isMyMessage) {
-                incrementUnread(msg.chatId);
+                incrementUnread(msg.chatId || chatId, mid);
             }
             return;
         }

@@ -49,7 +49,6 @@ namespace Messenger.Web
             app.UseHttpsRedirection();
 
             app.UseStaticFiles();
-            // Проксируем файлы с API (stream), а не redirect — иначе fetch() ломается на CORS
             app.Map("/uploads/{**path}", async (string path, HttpContext ctx, IHttpClientFactory httpClientFactory) =>
             {
                 var apiBase = builder.Configuration["URL:API:HTTPS"]?.TrimEnd('/');
@@ -64,7 +63,6 @@ namespace Messenger.Web
 
                 var contentType = response.Content.Headers.ContentType?.ToString() ?? "application/octet-stream";
                 var stream = await response.Content.ReadAsStreamAsync(ctx.RequestAborted);
-                // Не диспозируем stream раньше времени — Results.Stream владеет им
                 return Results.Stream(stream, contentType, enableRangeProcessing: true);
             });
 

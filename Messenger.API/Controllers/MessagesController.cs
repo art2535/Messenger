@@ -853,8 +853,14 @@ namespace Messenger.API.Controllers
                 }
 
                 await _messageService.DeleteMessageAsync(messageId, ct);
+                var deletedPayload = new { messageId, chatId };
                 await _hubContext.Clients.Group(chatId.ToString())
-                    .SendAsync("MessageDeleted", new { messageId, chatId });
+                    .SendAsync("MessageDeleted", deletedPayload, ct);
+                foreach (var participant in chat.ChatParticipants)
+                {
+                    await _hubContext.Clients.Group($"User_{participant.UserId}")
+                        .SendAsync("MessageDeleted", deletedPayload, ct);
+                }
 
                 return Ok(new DeleteMessageSuccessResponse
                 {
@@ -934,10 +940,20 @@ namespace Messenger.API.Controllers
 
                 var deleted = await _messageService.DeleteMessagesAsync(allowed, ct);
 
+                var bulkChat = await _chatService.GetChatByIdAsync(chatId, ct);
+                var participants = bulkChat?.ChatParticipants?.ToList()
+                    ?? new List<ChatParticipant>();
+
                 foreach (var mid in allowed)
                 {
+                    var payload = new { messageId = mid, chatId };
                     await _hubContext.Clients.Group(chatId.ToString())
-                        .SendAsync("MessageDeleted", new { messageId = mid, chatId }, ct);
+                        .SendAsync("MessageDeleted", payload, ct);
+                    foreach (var participant in participants)
+                    {
+                        await _hubContext.Clients.Group($"User_{participant.UserId}")
+                            .SendAsync("MessageDeleted", payload, ct);
+                    }
                 }
 
                 return Ok(new
