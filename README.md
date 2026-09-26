@@ -6,15 +6,16 @@
 <strong>GUAP Messenger</strong> — корпоративный мессенджер<br>
 для студентов, преподавателей и сотрудников ГУАП
 <br><br>
-<strong>Реальное время · Защищённая аутентификация · Только для университета</strong>
+<strong>Реальное время · Offline-first PWA · Защищённая аутентификация</strong>
 <br><br>
 </div>
 
 [![.NET](https://img.shields.io/badge/.NET-10.0-blueviolet)](https://dotnet.microsoft.com/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-blue)](https://www.postgresql.org/)
-[![License](https://img.shields.io/badge/License-Не%20определена-lightgrey)](LICENSE)
+[![PWA](https://img.shields.io/badge/PWA-Offline--first-success)](https://web.dev/progressive-web-apps/)
 [![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2088FF)](https://github.com/art2535/Messenger/actions)
 [![Методология](https://img.shields.io/badge/Методология-Waterfall-orange)](https://github.com/art2535/Messenger/wiki/%D0%9F%D1%80%D0%BE%D1%86%D0%B5%D1%81%D1%81%D1%8B)
+[![License](https://img.shields.io/badge/License-Не%20определена-lightgrey)](LICENSE)
 
 **GUAP Messenger** — современное веб-приложение для обмена сообщениями в реальном времени, разработанное специально для сообщества **Государственного университета аэрокосмического приборостроения (ГУАП)**.
 
@@ -22,85 +23,106 @@
 **Заказчик** — ГУАП.  
 **Дата старта проекта:** 17 сентября 2025 года.
 
+---
+
 ## Основной функционал
 
 ### Реализовано
+
+#### Чаты и сообщения
 - Личные (1:1) и групповые чаты
-- Отправка текстовых сообщений и файлов (с хранением на сервере)
+- Отправка текстовых сообщений и файлов (хранение на сервере)
 - Обновления в реальном времени через **SignalR**
 - Индикатор «Печатает…» и онлайн-статус пользователей
 - Автоматическое прочтение сообщений в открытом чате
 - **Редактирование и удаление** сообщений и чатов
-- **Ответы на сообщения** (reply)
+- **Ответы** на сообщения (reply)
+- **Пересылка** сообщений в другие чаты
 - **Реакции** на сообщения
 - **Закрепление** чатов и сообщений
 - **Черновики** сообщений
 - **Расширенный поиск** по сообщениям с фильтрами
 - **Экспорт чатов** в разных форматах
+- **Пагинация** истории (cursor-based по `SequenceNumber`)
+- Счётчик непрочитанных с корректным сбросом при удалении сообщений
+
+#### Offline-first и PWA
+- **Progressive Web App** на всех страницах приложения (`scope: /`)
+- **IndexedDB**: кэш списка чатов, истории сообщений, очередь исходящих
+- **Background Sync** — автоматическая отправка очереди при появлении сети
+- Оптимистичный UI: статус «В очереди» / повтор при ошибке
+- Service Worker: precache статики и страниц, network-first + cache fallback
+- Установка на домашний экран (Android / iOS / desktop)
+
+#### Уведомления
+- **Push (VAPID)** — фоновые уведомления на телефоне и десктопе
+- **Стек уведомлений** (как в Telegram): отдельная карточка на каждое сообщение
+- Автоскрытие через 4–8 секунд
+- Без дублей: при открытом том же чате OS-уведомление не показывается
+- Локальные уведомления через SignalR, когда вкладка на переднем плане
+
+#### Безопасность и инфраструктура
 - Аутентификация через **OIDC SSO ГУАП**
 - Синхронизация профиля из SSO-claims
 - Policy-based авторизация
 - Шифрование чувствительных данных (**AES**)
-- **Push-уведомления (VAPID)** с улучшенной работой на мобильных устройствах
-- **RabbitMQ** + MassTransit (Outbox-паттерн для надёжной доставки сообщений и уведомлений)
+- **RabbitMQ** + MassTransit (Outbox для надёжной доставки)
+- **Redis** — backplane SignalR + кэш
+- **Rate Limiting** (API, отправка, typing)
 - API-версионирование (`/api/v{version}/...`)
 - Документация API через **Scalar UI**
 - **Health-эндпоинт** (`/health`)
-- **Пагинация сообщений** (cursor-based по `SequenceNumber`)
-- **Индексы БД** для быстрой выборки сообщений по чату
-- **Rate Limiting** (защита API, отправки сообщений и typing)
-- **Redis** — backplane для SignalR + кэширование для снижения нагрузки на PostgreSQL
-- **Автоматическая очистка сессий** при долгом бездействии (фоновый сервис + клиентская логика)
-- Корректная очистка сессии при выходе из системы
-- Автоматический редирект на чаты при активном session token
-- Полноценная поддержка мобильных телефонов и планшетов (**Android / iOS**) + PWA
-- Поддержка **тёмной темы**
-- Улучшенный адаптивный интерфейс чатов, настроек и главной страницы
+- Индексы БД для быстрой выборки сообщений
+- Автоматическая очистка сессий при бездействии
+- Корректный logout и редирект при активной сессии
+- Тёмная тема, адаптив для телефонов и планшетов
 
 ### В активной разработке
-- Дальнейшее улучшение UI/UX и отзывчивости интерфейса
+- Дальнейшее улучшение UI/UX
 - Расширение функционала групповых чатов
-- Подготовка к переходу хранения файлов на MinIO/S3
-- Автоматизация сборки установщиков и дальнейшее развитие CI/CD
+- Переход хранения файлов на MinIO/S3
+- End-to-end шифрование личных чатов (MVP)
+
+---
 
 ## Технологический стек
 
-| Компонент            | Технология                                      | Описание                                          |
-|----------------------|-------------------------------------------------|---------------------------------------------------|
-| **Frontend**         | ASP.NET Razor Pages + SignalR Client + PWA      | Серверный рендеринг + реальное время + мобильная адаптация |
-| **Real-time**        | ASP.NET Core SignalR + Redis backplane          | Сообщения, typing, online, уведомления            |
-| **Backend**          | ASP.NET Core Web API (.NET 10)                  | REST API + SignalR Hubs + версионирование         |
-| **Архитектура**      | **Clean Architecture**                          | Core / Infrastructure / API / Web                 |
-| **БД**               | PostgreSQL 17                                   | Entity Framework Core 10 + индексы                |
-| **Messaging**        | RabbitMQ + MassTransit 8.5                      | Outbox-паттерн                                    |
-| **Кэш / Scale-out**  | Redis (StackExchange.Redis)                     | SignalR backplane + кэш для снижения нагрузки на PostgreSQL |
-| **Rate Limiting**    | ASP.NET Core Rate Limiting                      | Fixed-window лимиты для API и хабов               |
-| **Session Cleanup**  | BackgroundService + клиентский JS               | Автозакрытие сессий при бездействии               |
-| **API Docs**         | Scalar.AspNetCore                               | Современный UI для OpenAPI                        |
-| **Health Checks**    | ASP.NET Core Health Checks                      | Эндпоинт `/health`                                |
-| **Push**             | VAPID                                           | Браузерные push-уведомления (в т.ч. мобильные)    |
-| **Аутентификация**   | OIDC                                            | SSO ГУАП                                          |
-| **Шифрование**       | AES                                             | Мастер-ключ в конфигурации                        |
-| **CI/CD**            | GitHub Actions                                  | Сборка, тесты, релиз                              |
-| **Тестирование**     | xUnit v3                                        | Unit-тесты                                        |
+| Компонент | Технология | Описание |
+|-----------|------------|----------|
+| **Frontend** | ASP.NET Razor Pages + SignalR + **PWA** | SSR, реальное время, offline-first |
+| **Offline** | **IndexedDB** + **Background Sync API** | Очередь сообщений, кэш чатов/истории |
+| **Real-time** | ASP.NET Core SignalR + Redis backplane | Сообщения, typing, online, удаление |
+| **Push** | Web Push (VAPID) + Service Worker | Стек уведомлений, mobile + desktop |
+| **Backend** | ASP.NET Core Web API (**.NET 10**) | REST + Hubs + версионирование |
+| **Архитектура** | **Clean Architecture** | Core / Infrastructure / API / Web |
+| **БД** | PostgreSQL 17 | EF Core 10 + индексы |
+| **Messaging** | RabbitMQ + MassTransit 8.5 | Outbox-паттерн |
+| **Кэш / Scale-out** | Redis (StackExchange.Redis) | SignalR backplane + кэш |
+| **Rate Limiting** | ASP.NET Core Rate Limiting | Fixed-window для API и хабов |
+| **Session Cleanup** | BackgroundService + клиентский JS | Автозакрытие сессий |
+| **API Docs** | Scalar.AspNetCore | OpenAPI UI |
+| **Health Checks** | ASP.NET Core Health Checks | `GET /health` |
+| **Тесты** | xUnit v3 | Юнит-тесты доменной логики |
 
-## Установка и запуск (локально)
+---
+
+## Быстрый старт
 
 ### Требования
-- **.NET SDK 10.0+**
+- [.NET 10 SDK](https://dotnet.microsoft.com/download)
 - PostgreSQL 17
 - RabbitMQ
-- Redis (рекомендуется: backplane SignalR + кэширование)
+- Redis
 - Git
-- Рекомендуемая IDE: Visual Studio 2026
+- Visual Studio 2022/2026 или VS Code / Rider
 
 ### Пошаговая инструкция
 
 1. **Клонирование**
+
    ```bash
    git clone https://github.com/art2535/Messenger.git
    cd Messenger
-   git checkout feature/messaging-enhancements   # актуальная ветка с улучшениями
    ```
 
 2. **Восстановление пакетов**
@@ -109,11 +131,11 @@
    dotnet restore
    ```
 
-3. **Настройка конфигурации**  
-Рекомендуется использовать `dotnet user-secrets` или `appsettings.Development.json`  
-(строка подключения к PostgreSQL, Redis, URL-ы, ключи шифрования, VAPID, OIDC и т.д.).
+3. **Конфигурация**  
+   `dotnet user-secrets` или `appsettings.Development.json`  
+   (PostgreSQL, Redis, RabbitMQ, VAPID, OIDC, ключи шифрования).
 
-4. **Применение миграций**
+4. **Миграции**
 
    ```bash
    dotnet ef database update --project Messenger.Infrastructure --startup-project Messenger.API
@@ -121,57 +143,50 @@
 
 5. **Запуск**
 
-   * **Через Visual Studio**: Multiple startup projects → `Messenger.API` + `Messenger.Web`
-   * **Через терминал** (два окна):
+   * **Visual Studio**: Multiple startup projects → `Messenger.API` + `Messenger.Web`
+   * **Терминал** (два окна):
 
-      ```bash
-      # API + SignalR
-      cd Messenger.API && dotnet run
+     ```bash
+     cd Messenger.API && dotnet run
+     cd Messenger.Web && dotnet run
+     ```
 
-      # Web-интерфейс
-      cd Messenger.Web && dotnet run
-      ```
-
-В режиме Development документация API доступна через **Scalar UI**.  
+В Development: документация API — **Scalar UI**.  
 Health-check: `GET /health`.
 
-Подробная инструкция → [**Инструкции по запуску**](https://github.com/art2535/Messenger/wiki/Инструкции)
+Подробнее → [**Инструкции по запуску**](https://github.com/art2535/Messenger/wiki/Инструкции)
 
-## CI/CD
+### PWA / offline (проверка)
 
-Настроены **GitHub Actions**:
+1. Откройте приложение по **HTTPS** (или `localhost`).
+2. DevTools → Application → Service Workers — статус **activated**.
+3. Manifest: имя **GUAP Messenger**, scope `/`.
+4. Offline: отключите сеть → список чатов из кэша, текст уходит в очередь IndexedDB и отправится после `online` / Background Sync.
 
-* Автоматическая сборка и запуск тестов при push/merge в `main`
-* Поддержка ручного запуска workflow
-* Release workflow (сборка под ОС Windows и Linux)
-
-## Структура проекта
-
-* `Messenger.Core` — доменная модель и бизнес-логика
-* `Messenger.Infrastructure` — EF Core, репозитории, RabbitMQ/MassTransit, Redis
-* `Messenger.API` — REST API + SignalR Hubs + Scalar + API Versioning + Rate Limiting + Session Cleanup + Health Checks
-* `Messenger.Web` — Razor Pages + клиент (PWA, тёмная тема, мобильная адаптация, реакции, ответы, черновики, поиск, экспорт)
-* `Messenger.Tests` — юнит-тесты (xUnit v3)
-* `Deployment/` — файлы для Windows Installer
+---
 
 ## Документация
 
-Полная документация доступна в [**GitHub Wiki**](https://github.com/art2535/Messenger/wiki).
+Полная документация — в [**GitHub Wiki**](https://github.com/art2535/Messenger/wiki).
+
+---
 
 ## Как внести вклад
 
-1. Форкните репозиторий
-2. Создайте ветку от `main` (`feature/название` или `fix/проблема`)
-3. Внесите изменения + тесты (при необходимости)
-4. Откройте **Pull Request**
+1. Форкните репозиторий  
+2. Ветка от `main` (`feature/...` или `fix/...`)  
+3. Изменения + тесты при необходимости  
+4. Pull Request  
 
-Ищите задачи с метками `good first issue`, `help wanted`, `ci-cd`, `notifications`.
+Метки: `good first issue`, `help wanted`, `ci-cd`, `notifications`, `pwa`.
+
+---
 
 ## Ведущий разработчик
 
-[**Артём Петров**](https://github.com/art2535) — студент 1 курса ГУАП специальности 09.03.04 "Программная инженерия"
+[**Артём Петров**](https://github.com/art2535) — студент 1 курса ГУАП, направление 09.03.04 «Программная инженерия»
 
 ---
 
 **Спасибо за интерес к проекту!**  
-Вместе сделаем лучший университетский мессенджер в России 🚀
+Вместе сделаем лучший университетский мессенджер 🚀
