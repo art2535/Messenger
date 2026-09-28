@@ -1,5 +1,6 @@
 ﻿using Messenger.API.Extensions;
 using Messenger.Core.Hubs;
+using System.Text;
 
 namespace Messenger.API
 {
@@ -7,6 +8,11 @@ namespace Messenger.API
     {
         public static void Main(string[] args)
         {
+            if (Console.IsOutputRedirected)
+            {
+                Console.OutputEncoding = Encoding.UTF8;
+            }
+
             var builder = WebApplication.CreateBuilder(args);
 
             builder.EnsureSharedDevelopmentEncryptionKey();
@@ -26,17 +32,25 @@ namespace Messenger.API
             builder.Services.AddSessionCleanup(builder.Configuration);
             builder.Services.AddMessengerHealthChecks();
 
+            const string WebCorsPolicy = "WebClient";
+
             builder.Services.AddCors(options =>
             {
-                options.AddPolicy("AllowWebApp", policy =>
+                options.AddPolicy(WebCorsPolicy, policy =>
                 {
-                    var webUrl = builder.Configuration.GetValue<string>("URL:Web:HTTPS")
-                        ?? throw new InvalidOperationException("URL не прописан в appsettings.Development.json");
+                    policy.SetIsOriginAllowed(origin =>
+                    {
+                        if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri))
+                        {
+                            return false;
+                        }
 
-                    policy.WithOrigins(webUrl)
-                        .AllowAnyHeader()
-                        .AllowAnyMethod()
-                        .AllowCredentials();
+                        return uri.Host == "localhost" ||
+                                uri.Host.EndsWith(".dev.localhost", StringComparison.OrdinalIgnoreCase);
+                    })
+                    .AllowAnyHeader()
+                    .AllowAnyMethod()
+                    .AllowCredentials();
                 });
             });
 
@@ -70,16 +84,16 @@ namespace Messenger.API
             app.MapMessengerHealthChecks();
 
             app.UseUploads();
-            app.UseCors("AllowWebApp");
+            app.UseCors(WebCorsPolicy);
             app.UseHttpsRedirection();
             app.UseRateLimiter();
             app.UseAuthentication();
             app.UseAuthorization();
             app.MapControllers().RequireRateLimiting("api");
 
-            app.MapHub<ChatHub>($"/api/v{apiVersion}/hubs/chat");
-            app.MapHub<UserStatusHub>($"/api/v{apiVersion}/hubs/userstatus");
-            app.MapHub<NotificationHub>($"/api/v{apiVersion}/hubs/notification");
+            app.MapHub<ChatHub>($"/api/v{apiVersion}/hubs/chat").RequireCors(WebCorsPolicy);
+            app.MapHub<UserStatusHub>($"/api/v{apiVersion}/hubs/userstatus").RequireCors(WebCorsPolicy);
+            app.MapHub<NotificationHub>($"/api/v{apiVersion}/hubs/notification").RequireCors(WebCorsPolicy);
 
             app.Run();
         }

@@ -40,13 +40,22 @@ namespace Messenger.API.Extensions
 
                     x.UsingRabbitMq((context, cfg) =>
                     {
-                        var rabbitConfig = configuration.GetSection("RabbitMQ");
+                        var connectionString = configuration.GetConnectionString("RabbitMQ");
 
-                        cfg.Host(rabbitConfig["Host"], ushort.Parse(rabbitConfig["Port"]), "/", h =>
+                        if (!string.IsNullOrWhiteSpace(connectionString))
                         {
-                            h.Username(rabbitConfig["Username"]);
-                            h.Password(rabbitConfig["Password"]);
-                        });
+                            cfg.Host(new Uri(connectionString));
+                        }
+                        else
+                        {
+                            var rabbitConfig = configuration.GetSection("RabbitMQ");
+
+                            cfg.Host(rabbitConfig["Host"], ushort.Parse(rabbitConfig["Port"] ?? "5672"), "/", h =>
+                            {
+                                h.Username(rabbitConfig["Username"] ?? "guest");
+                                h.Password(rabbitConfig["Password"] ?? "guest");
+                            });
+                        }
 
                         cfg.UseMessageRetry(r =>
                         {
