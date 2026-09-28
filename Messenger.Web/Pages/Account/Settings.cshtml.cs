@@ -199,6 +199,15 @@ namespace Messenger.Web.Pages.Account
                     AccessToken = authResult.Properties.GetTokenValue("access_token") ?? "";
             }
 
+            if (string.IsNullOrEmpty(AccessToken))
+            {
+                AccessToken = HttpContext.Session.GetString("ACCESS_TOKEN") ?? "";
+            }
+            if (!string.IsNullOrEmpty(AccessToken))
+            {
+                HttpContext.Session.SetString("ACCESS_TOKEN", AccessToken);
+            }
+
             ApiBaseUrl = _api.GetApiUrl();
             HubUrl = $"{ApiBaseUrl}/hubs/chat";
         }

@@ -59,7 +59,7 @@
                         <i data-feather="moon" class="w-5 h-5 theme-icon-dark hidden"></i>
                         <i data-feather="sun" class="w-5 h-5 theme-icon-light"></i>
                     </button>
-                    <a asp-page="/Account/Settings" class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"><i data-feather="settings" class="w-5 h-5"></i></a>
+                    <a asp-page="/Account/Settings" asp-route-TokenSaved="true" class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200" title="Настройки"><i data-feather="settings" class="w-5 h-5"></i></a>
                 </div>
             </div>
 
