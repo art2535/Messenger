@@ -1,7 +1,7 @@
-using Messenger.API.Extensions;
+using Messenger.Web.Extensions;
 using Messenger.Web.Helpers;
-using Messenger.Web.Middleware;
 using System.Net.Http.Headers;
+using System.Text;
 
 namespace Messenger.Web
 {
@@ -9,6 +9,11 @@ namespace Messenger.Web
     {
         public static void Main(string[] args)
         {
+            if (Console.IsOutputRedirected)
+            {
+                Console.OutputEncoding = Encoding.UTF8;
+            }
+
             var builder = WebApplication.CreateBuilder(args);
 
             builder.Services.AddRazorPages();
@@ -29,6 +34,8 @@ namespace Messenger.Web
                 client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             });
             builder.Services.AddDistributedMemoryCache();
+
+            builder.Services.AddBackgroundTokenRefresh(builder.Configuration);
 
             builder.Services.AddSession(options =>
             {
@@ -70,7 +77,6 @@ namespace Messenger.Web
             app.UseRouting();
 
             app.UseAuthentication();
-            app.UseMiddleware<TokenRefreshMiddleware>();
             app.UseAuthorization();
 
             app.MapRazorPages();
