@@ -317,21 +317,33 @@ async function startSignalR() {
         const mid = data?.messageId || data?.MessageId || data;
         if (!mid) return;
         const chatId = data?.chatId || data?.ChatId || currentChatId;
-        removeMessageFromUI(mid, chatId);
+        const open = currentChatId != null && String(currentChatId).toLowerCase() === String(chatId).toLowerCase();
+
+        if (!open && typeof decrementUnread === 'function') {
+            decrementUnread(chatId, 1, mid);
+        }
 
         if (typeof GuapNotify !== 'undefined' && GuapNotify.closeMessageNotification) {
             GuapNotify.closeMessageNotification(mid);
         }
 
-        const open = currentChatId != null && String(currentChatId).toLowerCase() === String(chatId).toLowerCase();
-        if (!open) {
-            if (typeof decrementUnread === 'function') {
-                decrementUnread(chatId, 1, mid);
-            }
+        removeMessageFromUI(mid, chatId, { skipListUpdate: true });
+
+        let shouldReorder = false;
+        if (open) {
+            const left = (typeof messagesContainer !== 'undefined' && messagesContainer)
+                ? messagesContainer.querySelectorAll('[data-mid]:not([data-mid^="temp-"])').length
+                : 0;
+            shouldReorder = left === 0;
+        } else {
+            const unreadLeft = typeof getUnreadCount === 'function' ? getUnreadCount(chatId) : 0;
+            shouldReorder = unreadLeft <= 0;
         }
 
         if (typeof refreshChatListPreviewFromDom === 'function') {
-            refreshChatListPreviewFromDom(chatId);
+            refreshChatListPreviewFromDom(chatId, { reorder: shouldReorder });
+        } else if (shouldReorder && typeof reorderUnpinnedChatsByLastActivity === 'function') {
+            reorderUnpinnedChatsByLastActivity();
         }
     });
 

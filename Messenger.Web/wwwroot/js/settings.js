@@ -10,6 +10,7 @@ const deleteAvatarFlag = document.getElementById('delete-avatar-flag');
 let hasOriginalAvatar = '@hasAvatar'.toLowerCase() === 'true';
 let pushToggle = null;
 let currentSubscription = null;
+let pushToggleBusy = false;
 
 const sidebar = document.getElementById('sidebar');
 const overlay = document.getElementById('sidebar-overlay');
@@ -320,10 +321,27 @@ function updatePushHints() {
         }
     } else {
         iosHint?.classList.add('hidden');
-        if (statusText) {
+        if (statusText && Notification.permission !== 'denied') {
             statusText.textContent = 'Получать уведомления даже когда приложение закрыто';
         }
     }
+}
+
+function setPushToggleUnavailable(unavailable) {
+    const slider = document.getElementById('push-toggle-slider');
+    if (!pushToggle) pushToggle = document.getElementById('push-toggle');
+    if (pushToggle) pushToggle.disabled = !!unavailable;
+    if (!slider) return;
+    if (unavailable) {
+        slider.classList.add('!bg-gray-400', 'cursor-not-allowed', 'opacity-60');
+    } else {
+        slider.classList.remove('!bg-gray-400', 'cursor-not-allowed', 'opacity-60');
+    }
+}
+
+function setNotificationTypesVisible(visible) {
+    const typesContainer = document.getElementById('notification-types');
+    if (typesContainer) typesContainer.classList.toggle('hidden', !visible);
 }
 
 async function ensureServiceWorker() {
@@ -359,29 +377,29 @@ async function checkPushStatus() {
     updatePushHints();
 
     if (!('PushManager' in window) || !('serviceWorker' in navigator)) {
-        pushToggle.disabled = true;
-        const slider = document.getElementById('push-toggle-slider');
-        if (slider) slider.classList.add('!bg-gray-400', 'cursor-not-allowed', 'opacity-60');
+        setPushToggleUnavailable(true);
         return;
     }
 
     if (isIOS() && !isStandalonePWA()) {
-        pushToggle.disabled = true;
-        const slider = document.getElementById('push-toggle-slider');
-        if (slider) slider.classList.add('!bg-gray-400', 'cursor-not-allowed', 'opacity-60');
+        setPushToggleUnavailable(true);
         return;
     }
+
+    if (Notification.permission === 'denied') {
+        setPushToggleUnavailable(true);
+        const statusText = document.getElementById('push-status-text');
+        if (statusText) {
+            statusText.textContent = 'Разрешение отклонено. Включите уведомления в настройках системы';
+        }
+        return;
+    }
+
+    setPushToggleUnavailable(false);
 
     try {
         const registration = await ensureServiceWorker();
         currentSubscription = await registration.pushManager.getSubscription();
-        if (Notification.permission === 'denied') {
-            pushToggle.disabled = true;
-            const statusText = document.getElementById('push-status-text');
-            if (statusText) {
-                statusText.textContent = 'Разрешение отклонено. Включите уведомления в настройках системы';
-            }
-        }
     } catch (e) {
         console.error('Ошибка проверки статуса push:', e);
     }
@@ -390,10 +408,10 @@ async function checkPushStatus() {
 async function subscribeToPush() {
     try {
         if (isIOS() && !isStandalonePWA()) {
-            pushToggle.checked = false;
+            if (pushToggle) pushToggle.checked = false;
             document.getElementById('ios-push-hint')?.classList.remove('hidden');
             showToast('На iPhone откройте приложение с экрана «Домой»', 'error');
-            return;
+            return false;
         }
 
         if (!('Notification' in window)) {
@@ -401,17 +419,18 @@ async function subscribeToPush() {
         }
 
         if (Notification.permission === 'denied') {
-            pushToggle.checked = false;
+            if (pushToggle) pushToggle.checked = false;
+            setPushToggleUnavailable(true);
             showToast('Уведомления запрещены в настройках браузера/системы', 'error');
-            return;
+            return false;
         }
 
         if (Notification.permission === 'default') {
             const permission = await Notification.requestPermission();
             if (permission !== 'granted') {
-                pushToggle.checked = false;
+                if (pushToggle) pushToggle.checked = false;
                 showToast('Разрешение на уведомления отклонено', 'error');
-                return;
+                return false;
             }
         }
 
@@ -419,6 +438,7 @@ async function subscribeToPush() {
         const keyRes = await fetch(`${API_URL}/push/vapid-public-key`);
         if (!keyRes.ok) throw new Error('Не удалось получить VAPID-ключ');
         const vapidPublicKey = (await keyRes.text()).trim();
+        if (!vapidPublicKey) throw new Error('Пустой VAPID-ключ');
 
         let subscription = await registration.pushManager.getSubscription();
         if (!subscription) {
@@ -429,6 +449,8 @@ async function subscribeToPush() {
         }
 
         const token = getAuthToken();
+        if (!token) throw new Error('Нет токена авторизации');
+
         const subJson = subscription.toJSON();
         const res = await fetch(`${API_URL}/push/subscribe`, {
             method: 'POST',
@@ -445,45 +467,68 @@ async function subscribeToPush() {
 
         if (res.ok) {
             currentSubscription = subscription;
+            if (pushToggle) pushToggle.checked = true;
             showToast('Push-уведомления включены', 'success');
-        } else {
-            const errText = await res.text().catch(() => '');
-            throw new Error(errText || 'Не удалось сохранить подписку на сервере');
+            return true;
         }
+
+        const errText = await res.text().catch(() => '');
+        throw new Error(errText || `Не удалось сохранить подписку (${res.status})`);
     } catch (err) {
         console.error(err);
         if (pushToggle) pushToggle.checked = false;
+        currentSubscription = null;
         const msg = (err && err.message) ? String(err.message) : 'Не удалось включить push-уведомления';
         showToast(msg.length > 120 ? 'Не удалось включить push-уведомления' : msg, 'error');
+        return false;
     }
 }
 
 async function unsubscribeFromPush() {
     try {
         if (!currentSubscription) {
-            const registration = await ensureServiceWorker();
-            currentSubscription = await registration.pushManager.getSubscription();
+            try {
+                const registration = await ensureServiceWorker();
+                currentSubscription = await registration.pushManager.getSubscription();
+            } catch (_) {
+                currentSubscription = null;
+            }
         }
 
         if (currentSubscription) {
             const endpoint = currentSubscription.endpoint;
-            await currentSubscription.unsubscribe();
+            try {
+                await currentSubscription.unsubscribe();
+            } catch (e) {
+                console.warn('Browser unsubscribe:', e);
+            }
             const token = getAuthToken();
-            await fetch(`${API_URL}/push/unsubscribe`, {
-                method: 'DELETE',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': token
-                },
-                body: JSON.stringify(endpoint)
-            });
+            if (token && endpoint) {
+                try {
+                    await fetch(`${API_URL}/push/unsubscribe`, {
+                        method: 'DELETE',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': token
+                        },
+                        body: JSON.stringify(endpoint)
+                    });
+                } catch (e) {
+                    console.warn('Server unsubscribe:', e);
+                }
+            }
             currentSubscription = null;
-            showToast('Push-уведомления отключены', 'info');
         }
+
+        if (pushToggle) pushToggle.checked = false;
+        showToast('Push-уведомления отключены', 'info');
+        return true;
     } catch (err) {
         console.error(err);
-        if (pushToggle) pushToggle.checked = true;
-        showToast('Не удалось отключить push-уведомления', 'error');
+        if (pushToggle) pushToggle.checked = false;
+        currentSubscription = null;
+        showToast('Push-уведомления отключены', 'info');
+        return true;
     }
 }
 
@@ -502,58 +547,70 @@ async function loadPushSettings() {
     try {
         const settings = await apiFetch('/push/settings');
         pushToggle = document.getElementById('push-toggle');
-        const slider = document.getElementById('push-toggle-slider');
-        const typesContainer = document.getElementById('notification-types');
         const isEnabled = !!settings.pushEnabled;
 
         if (pushToggle) pushToggle.checked = isEnabled;
 
-        if (slider) {
-            if (isEnabled) {
-                slider.classList.remove('!bg-gray-400', 'cursor-not-allowed', 'opacity-60');
-            } else {
-                slider.classList.add('!bg-gray-400', 'cursor-not-allowed', 'opacity-60');
-            }
-        }
+        setNotificationTypesVisible(isEnabled);
 
-        if (typesContainer) {
-            typesContainer.classList.toggle('hidden', !isEnabled);
-        }
-
-        document.getElementById('notifyMessages').checked = !!settings.notifyMessages;
-        document.getElementById('notifyGroup').checked = !!settings.notifyGroupChats;
-        document.getElementById('notifyMentions').checked = !!settings.notifyMentions;
+        const nm = document.getElementById('notifyMessages');
+        const ng = document.getElementById('notifyGroup');
+        const nmen = document.getElementById('notifyMentions');
+        if (nm) nm.checked = !!settings.notifyMessages;
+        if (ng) ng.checked = !!settings.notifyGroupChats;
+        if (nmen) nmen.checked = !!settings.notifyMentions;
     } catch (e) {
         console.error('Не удалось загрузить настройки push:', e);
     }
 }
 
 async function togglePushNotifications() {
+    if (!pushToggle) pushToggle = document.getElementById('push-toggle');
     if (!pushToggle) return;
 
-    const slider = document.getElementById('push-toggle-slider');
-    const typesContainer = document.getElementById('notification-types');
-    const isEnabled = pushToggle.checked;
-
-    if (isEnabled) {
-        slider.classList.remove('!bg-gray-400', 'cursor-not-allowed', 'opacity-60');
-        await subscribeToPush();
-        if (typesContainer) typesContainer.classList.remove('hidden');
-    } else {
-        slider.classList.add('!bg-gray-400', 'cursor-not-allowed', 'opacity-60');
-        await unsubscribeFromPush();
-        if (typesContainer) typesContainer.classList.add('hidden');
+    if (pushToggleBusy) {
+        pushToggle.checked = !pushToggle.checked;
+        return;
     }
 
-    await saveNotificationSettings();
+    pushToggleBusy = true;
+    pushToggle.disabled = true;
+
+    try {
+        const wantEnable = pushToggle.checked;
+
+        if (wantEnable) {
+            const ok = await subscribeToPush();
+            if (!ok) {
+                pushToggle.checked = false;
+                setNotificationTypesVisible(false);
+                await saveNotificationSettings();
+                return;
+            }
+            setNotificationTypesVisible(true);
+        } else {
+            await unsubscribeFromPush();
+            pushToggle.checked = false;
+            setNotificationTypesVisible(false);
+        }
+
+        await saveNotificationSettings();
+    } finally {
+        pushToggleBusy = false;
+        if (Notification.permission !== 'denied' &&
+            !((isIOS() && !isStandalonePWA())) &&
+            ('PushManager' in window) && ('serviceWorker' in navigator)) {
+            pushToggle.disabled = false;
+        }
+    }
 }
 
 async function saveNotificationSettings() {
     const dto = {
-        pushEnabled: document.getElementById('push-toggle').checked,
-        notifyMessages: document.getElementById('notifyMessages').checked,
-        notifyGroupChats: document.getElementById('notifyGroup').checked,
-        notifyMentions: document.getElementById('notifyMentions').checked
+        pushEnabled: !!(document.getElementById('push-toggle')?.checked),
+        notifyMessages: !!(document.getElementById('notifyMessages')?.checked),
+        notifyGroupChats: !!(document.getElementById('notifyGroup')?.checked),
+        notifyMentions: !!(document.getElementById('notifyMentions')?.checked)
     };
 
     try {
@@ -571,7 +628,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     feather.replace();
     initSignalR();
     await loadPushSettings();
-    checkPushStatus();
+    await checkPushStatus();
 
     const pushToggleEl = document.getElementById('push-toggle');
     if (pushToggleEl) {

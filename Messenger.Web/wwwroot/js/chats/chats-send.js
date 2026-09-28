@@ -1,4 +1,4 @@
-function removeMessageFromUI(messageId, chatIdHint) {
+function removeMessageFromUI(messageId, chatIdHint, options = {}) {
     const chatId = chatIdHint || currentChatId;
     const el = document.querySelector(`[data-mid="${messageId}"]`);
     if (el) {
@@ -33,10 +33,21 @@ function removeMessageFromUI(messageId, chatIdHint) {
         if (typeof isMessagePinned === 'function' && isMessagePinned(chatId, messageId)) {
             unpinMessage(chatId, messageId);
         }
-        if (typeof refreshChatListPreviewFromDom === 'function') {
-            refreshChatListPreviewFromDom(chatId);
+        if (options.skipListUpdate) return;
+        const isOpen = currentChatId != null && String(currentChatId).toLowerCase() === String(chatId).toLowerCase();
+        let shouldReorder = false;
+        if (isOpen) {
+            const left = messagesContainer
+                ? messagesContainer.querySelectorAll('[data-mid]:not([data-mid^="temp-"])').length
+                : 0;
+            shouldReorder = left === 0;
+        } else {
+            const unreadLeft = typeof getUnreadCount === 'function' ? getUnreadCount(chatId) : 0;
+            shouldReorder = unreadLeft <= 0;
         }
-        if (typeof reorderUnpinnedChatsByLastActivity === 'function') {
+        if (typeof refreshChatListPreviewFromDom === 'function') {
+            refreshChatListPreviewFromDom(chatId, { reorder: shouldReorder });
+        } else if (shouldReorder && typeof reorderUnpinnedChatsByLastActivity === 'function') {
             reorderUnpinnedChatsByLastActivity();
         }
     }
@@ -63,8 +74,9 @@ function normalizeMessageStatus(raw) {
     return s || 'sent';
 }
 
-function refreshChatListPreviewFromDom(chatId) {
+function refreshChatListPreviewFromDom(chatId, options = {}) {
     if (!chatId) return;
+    const doReorder = options.reorder !== false;
     const chatItem = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
     if (!chatItem) return;
 
@@ -161,7 +173,7 @@ function refreshChatListPreviewFromDom(chatId) {
                     if (!isNaN(d.getTime())) chatItem.dataset.lastMessageAt = d.toISOString();
                 } catch (_) {}
             }
-            if (typeof reorderUnpinnedChatsByLastActivity === 'function') {
+            if (doReorder && typeof reorderUnpinnedChatsByLastActivity === 'function') {
                 reorderUnpinnedChatsByLastActivity();
             }
         })
@@ -293,10 +305,13 @@ async function deleteMessagesBatch(messageIds, scope = 'everyone') {
 
         if (typeof exitSelectMode === 'function') exitSelectMode();
 
+        const msgsLeft = messagesContainer
+            ? messagesContainer.querySelectorAll('[data-mid]:not([data-mid^="temp-"])').length
+            : 0;
+        const shouldReorder = msgsLeft === 0;
         if (typeof refreshChatListPreviewFromDom === 'function') {
-            refreshChatListPreviewFromDom(chatId);
-        }
-        if (typeof reorderUnpinnedChatsByLastActivity === 'function') {
+            refreshChatListPreviewFromDom(chatId, { reorder: shouldReorder });
+        } else if (shouldReorder && typeof reorderUnpinnedChatsByLastActivity === 'function') {
             reorderUnpinnedChatsByLastActivity();
         }
 
@@ -319,9 +334,6 @@ async function deleteMessagesBatch(messageIds, scope = 'everyone') {
     } finally {
         setTimeout(() => {
             if (typeof __suppressChatBump !== 'undefined') __suppressChatBump = prevSuppress;
-            if (typeof reorderUnpinnedChatsByLastActivity === 'function') {
-                reorderUnpinnedChatsByLastActivity();
-            }
         }, 400);
     }
 }
