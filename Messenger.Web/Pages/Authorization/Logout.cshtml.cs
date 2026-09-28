@@ -1,6 +1,7 @@
 using Messenger.Core.DTOs.UserStatuses;
 using Messenger.Core.Hubs;
 using Messenger.Web.Helpers;
+using Messenger.Web.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc;
@@ -17,12 +18,17 @@ namespace Messenger.Web.Pages.Authorization
         private readonly ApiHelper _api;
         private readonly ILogger<LogoutModel> _logger;
         private readonly IHubContext<ChatHub> _hubContext;
+        private readonly UserTokenStore _tokenStore;
+        private readonly TokenRefresher _tokenRefresher;
 
-        public LogoutModel(ApiHelper api, ILogger<LogoutModel> logger, IHubContext<ChatHub> hubContext)
+        public LogoutModel(ApiHelper api, ILogger<LogoutModel> logger, IHubContext<ChatHub> hubContext,
+            UserTokenStore tokenStore, TokenRefresher tokenRefresher)
         {
             _api = api;
             _logger = logger;
             _hubContext = hubContext;
+            _tokenStore = tokenStore;
+            _tokenRefresher = tokenRefresher;
         }
 
         public async Task<IActionResult> OnGetAsync()
@@ -37,13 +43,16 @@ namespace Messenger.Web.Pages.Authorization
 
         private async Task<IActionResult> PerformLogoutAsync()
         {
-            var token = await HttpContext.GetTokenAsync("access_token");
+            var accessToken = await HttpContext.GetTokenAsync("access_token");
+            var refreshToken = await HttpContext.GetTokenAsync("refresh_token");
 
-            if (!string.IsNullOrEmpty(token))
+            await StopTokenRefreshAsync(accessToken, refreshToken);
+
+            if (!string.IsNullOrEmpty(accessToken))
             {
                 try
                 {
-                    var loginResponse = await _api.PatchRawAsync("logins", accessToken: token);
+                    var loginResponse = await _api.PatchRawAsync("logins", accessToken: accessToken);
                     if (!loginResponse.IsSuccessStatusCode)
                     {
                         var error = await loginResponse.Content.ReadAsStringAsync();
@@ -52,7 +61,7 @@ namespace Messenger.Web.Pages.Authorization
                     }
 
                     var userStatusRequest = new UpdateStatusRequest { Online = false };
-                    var statusResponse = await _api.PutRawAsync("userstatuses", userStatusRequest, token);
+                    var statusResponse = await _api.PutRawAsync("userstatuses", userStatusRequest, accessToken);
 
                     if (statusResponse.IsSuccessStatusCode)
                     {
@@ -69,13 +78,11 @@ namespace Messenger.Web.Pages.Authorization
                                     isOnline = false,
                                     lastActivity = DateTime.UtcNow
                                 };
-
                                 await _hubContext.Clients.All.SendAsync("UserOnlineStatusChanged", payload);
-                                _logger.LogInformation("SignalR уведомление о выходе отправлено для пользователя {UserId}", userId);
                             }
-                            catch (Exception ex)
+                            catch (Exception hubEx)
                             {
-                                _logger.LogWarning("Не удалось отправить SignalR уведомление о выходе: {Message}", ex.Message);
+                                _logger.LogWarning(hubEx, "Не удалось разослать offline-статус через SignalR");
                             }
                         }
                     }
@@ -88,7 +95,7 @@ namespace Messenger.Web.Pages.Authorization
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Не удалось связаться с API при выходе");
+                    _logger.LogWarning(ex, "Не удалось связаться с API при выходе");
                 }
             }
 
@@ -115,6 +122,32 @@ namespace Messenger.Web.Pages.Authorization
             DeleteCookie(".AspNetCore.Antiforgery");
 
             return RedirectToPage("/Authorization/Authorization", new { loggedOut = true });
+        }
+
+        private async Task StopTokenRefreshAsync(string? accessToken, string? refreshToken)
+        {
+            try
+            {
+                string? storeKey = null;
+                var auth = await HttpContext.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                if (auth.Succeeded && auth.Properties != null)
+                {
+                    auth.Properties.Items.TryGetValue(UserTokenStore.StoreKeyItem, out storeKey);
+                }
+
+                var removedByKey = _tokenStore.RevokeAndRemove(storeKey);
+                var removedByToken = _tokenStore.RevokeByToken(accessToken, refreshToken);
+
+                _logger.LogInformation(
+                    "[Logout] TokenStore: key={Key} removedByKey={ByKey} removedByToken={ByToken}",
+                    storeKey ?? "(null)", removedByKey, removedByToken);
+
+                await _tokenRefresher.RevokeRefreshTokenAsync(refreshToken, HttpContext.RequestAborted);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[Logout] Не удалось остановить фоновое обновление токенов");
+            }
         }
 
         private void DeleteCookie(string name)

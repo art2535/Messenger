@@ -63,6 +63,13 @@ namespace Messenger.Web.Services
 
             foreach (var entry in entries)
             {
+                if (entry.IsRevoked)
+                {
+                    _store.Remove(entry.Key);
+                    _logger.LogInformation("[TokenRefresh] Сессия {Key} удалена: отозвана (logout)", entry.Key);
+                    continue;
+                }
+
                 if (DateTime.UtcNow - entry.LastSeenUtc > idleLimit)
                 {
                     _store.Remove(entry.Key);

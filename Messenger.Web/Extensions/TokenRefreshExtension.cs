@@ -6,8 +6,6 @@ namespace Messenger.Web.Extensions
 {
     public static class TokenRefreshExtensions
     {
-        private const string StoreKeyItem = ".Messenger.TokenStoreKey";
-
         extension(IServiceCollection services)
         {
             public IServiceCollection AddBackgroundTokenRefresh(IConfiguration configuration)
@@ -59,12 +57,12 @@ namespace Messenger.Web.Extensions
             var refresher = services.GetRequiredService<TokenRefresher>();
             var logger = services.GetRequiredService<ILoggerFactory>().CreateLogger("Messenger.Web.TokenRefresh");
 
-            properties.Items.TryGetValue(StoreKeyItem, out var key);
+            properties.Items.TryGetValue(UserTokenStore.StoreKeyItem, out var key);
             var isNewKey = string.IsNullOrEmpty(key);
             if (isNewKey)
             {
                 key = Guid.NewGuid().ToString("N");
-                properties.Items[StoreKeyItem] = key;
+                properties.Items[UserTokenStore.StoreKeyItem] = key;
             }
 
             var entry = store.GetOrAdd(key!, accessToken, refreshToken);

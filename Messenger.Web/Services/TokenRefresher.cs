@@ -4,10 +4,6 @@ using Microsoft.Extensions.Options;
 
 namespace Messenger.Web.Services
 {
-    /// <summary>
-    /// Обновление токенов через refresh_token в SSO. Используется и фоновым сервисом,
-    /// и (как запасной путь) при проверке cookie.
-    /// </summary>
     public sealed class TokenRefresher
     {
         private const string FallbackTokenEndpoint = "https://sso.guap.ru/realms/master/protocol/openid-connect/token";
@@ -42,7 +38,6 @@ namespace Messenger.Web.Services
             }
         }
 
-        /// <summary>Обновляет токены, если они скоро истекут. Ошибки не выбрасывает — только логирует.</summary>
         public async Task RefreshIfNeededAsync(TokenEntry entry, CancellationToken cancellationToken)
         {
             if (entry.IsRevoked || !NeedsRefresh(entry))
@@ -53,7 +48,6 @@ namespace Messenger.Web.Services
             await entry.RefreshLock.WaitAsync(cancellationToken);
             try
             {
-                // Пока ждали блокировку, токен мог уже обновить другой поток.
                 if (entry.IsRevoked || !NeedsRefresh(entry))
                 {
                     return;
@@ -111,14 +105,12 @@ namespace Messenger.Web.Services
                 else if (response.StatusCode is HttpStatusCode.BadRequest
                          or HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
                 {
-                    // Keycloak на просроченный/отозванный refresh_token отвечает 400 invalid_grant.
                     entry.IsRevoked = true;
                     _logger.LogWarning("[TokenRefresh] Refresh-токен сессии {Key} отклонён ({Status}): {Body}",
                         entry.Key, (int)response.StatusCode, body);
                 }
                 else
                 {
-                    // Временный сбой SSO (5xx и т.п.) — попробуем на следующем тике.
                     _logger.LogError("[TokenRefresh] Ошибка обновления: {Status} - {Body}",
                         (int)response.StatusCode, body);
                 }
@@ -134,6 +126,45 @@ namespace Messenger.Web.Services
             finally
             {
                 entry.RefreshLock.Release();
+            }
+        }
+        public async Task RevokeRefreshTokenAsync(string? refreshToken, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrEmpty(refreshToken))
+                return;
+
+            try
+            {
+                var clientId = _configuration["AzureAd:ClientId"] ?? "messager";
+                var clientSecret = _configuration["AzureAd:ClientSecret"];
+
+                var revokeUrl = TokenEndpoint.Replace("/token", "/revoke");
+                var form = new Dictionary<string, string>
+                {
+                    ["client_id"] = clientId,
+                    ["token"] = refreshToken,
+                    ["token_type_hint"] = "refresh_token"
+                };
+                if (!string.IsNullOrEmpty(clientSecret))
+                    form["client_secret"] = clientSecret;
+
+                var client = _httpClientFactory.CreateClient();
+                using var content = new FormUrlEncodedContent(form);
+                using var response = await client.PostAsync(revokeUrl, content, cancellationToken);
+                if (response.IsSuccessStatusCode)
+                {
+                    _logger.LogInformation("[TokenRefresh] Refresh-токен отозван в SSO ({Status})", (int)response.StatusCode);
+                }
+                else
+                {
+                    var body = await response.Content.ReadAsStringAsync(cancellationToken);
+                    _logger.LogWarning("[TokenRefresh] SSO revoke вернул {Status}: {Body}",
+                        (int)response.StatusCode, body);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[TokenRefresh] Не удалось отозвать refresh-токен в SSO");
             }
         }
     }
