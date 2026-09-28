@@ -13,6 +13,7 @@
 # Development configs
 Messenger.API/appsettings.Development.json
 Messenger.Web/appsettings.Development.json
+Messenger.AppHost/appsettings.Development.json
 shared-dev.key
 
 # Photos
