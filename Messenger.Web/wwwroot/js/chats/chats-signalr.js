@@ -336,14 +336,20 @@ async function startSignalR() {
                 : 0;
             shouldReorder = left === 0;
         } else {
-            const unreadLeft = typeof getUnreadCount === 'function' ? getUnreadCount(chatId) : 0;
-            shouldReorder = unreadLeft <= 0;
+            shouldReorder = true;
         }
 
         if (typeof refreshChatListPreviewFromDom === 'function') {
             refreshChatListPreviewFromDom(chatId, { reorder: shouldReorder });
-        } else if (shouldReorder && typeof reorderUnpinnedChatsByLastActivity === 'function') {
-            reorderUnpinnedChatsByLastActivity();
+        }
+        if (shouldReorder && open) {
+            const item = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
+            if (item) {
+                item.dataset.lastMessageAt = '';
+                item.dataset.lastMessageId = '';
+            }
+            if (typeof moveChatToBottom === 'function') moveChatToBottom(chatId);
+            else if (typeof reorderUnpinnedChatsByLastActivity === 'function') reorderUnpinnedChatsByLastActivity();
         }
     });
 

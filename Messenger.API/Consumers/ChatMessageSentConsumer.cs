@@ -1,4 +1,4 @@
-﻿using MassTransit;
+using MassTransit;
 using Messenger.Core.DTOs.Messages;
 using Messenger.Core.Hubs;
 using Messenger.Core.Interfaces;
@@ -14,17 +14,19 @@ namespace Messenger.API.Consumers
         private readonly IMessageService _messageService;
         private readonly IAttachmentService _attachmentService;
         private readonly IEncryptionService _encryptionService;
+        private readonly IChatService _chatService;
         private readonly ILogger<ChatMessageSentConsumer> _logger;
         private readonly IPushSubscriptionService _subscriptionService;
 
         public ChatMessageSentConsumer(IHubContext<ChatHub> hubContext, IMessageService messageService,
-            IAttachmentService attachmentService, IEncryptionService encryptionService, 
+            IAttachmentService attachmentService, IEncryptionService encryptionService, IChatService chatService,
             ILogger<ChatMessageSentConsumer> logger, IPushSubscriptionService subscriptionService)
         {
             _hubContext = hubContext;
             _messageService = messageService;
             _attachmentService = attachmentService;
             _encryptionService = encryptionService;
+            _chatService = chatService;
             _logger = logger;
             _subscriptionService = subscriptionService;
 
@@ -35,7 +37,8 @@ namespace Messenger.API.Consumers
         {
             var msg = context.Message;
 
-            _logger.LogInformation("=== CONSUMER ПОЛУЧИЛ СООБЩЕНИЕ === MessageId={MessageId} ChatId={ChatId} SenderId={SenderId} HasText={HasText}",
+            _logger.LogInformation(
+                "=== CONSUMER ПОЛУЧИЛ СООБЩЕНИЕ === MessageId={MessageId} ChatId={ChatId} SenderId={SenderId} HasText={HasText}",
                 msg.MessageId, msg.ChatId, msg.SenderId, !string.IsNullOrEmpty(msg.MessageText));
 
             try
@@ -80,6 +83,7 @@ namespace Messenger.API.Consumers
                     SenderName = msg.SenderName ?? "Пользователь",
                     MessageText = decryptedText,
                     SentAt = savedMessage.SendTime,
+                    SequenceNumber = savedMessage.SequenceNumber,
                     Status = "Sent",
                     Attachments = msg.Attachments?.Select(a => new AttachmentDto
                     {
@@ -90,6 +94,42 @@ namespace Messenger.API.Consumers
                         Url = a.Url
                     }).ToList() ?? new List<AttachmentDto>()
                 };
+
+                try
+                {
+                    var chatIdStr = msg.ChatId.ToString();
+                    await _hubContext.Clients.Group(chatIdStr)
+                        .SendAsync("ReceiveMessage", finalMessageDto, context.CancellationToken);
+                    await _hubContext.Clients.Group(chatIdStr)
+                        .SendAsync("MessageSendingStatus", new
+                        {
+                            MessageId = msg.MessageId,
+                            ChatId = msg.ChatId,
+                            Status = "Sent",
+                            Timestamp = DateTimeOffset.UtcNow
+                        }, context.CancellationToken);
+
+                    var chat = await _chatService.GetChatByIdAsync(msg.ChatId, context.CancellationToken);
+                    if (chat?.ChatParticipants != null)
+                    {
+                        foreach (var participant in chat.ChatParticipants)
+                        {
+                            var userGroup = $"User_{participant.UserId}";
+                            await _hubContext.Clients.Group(userGroup)
+                                .SendAsync("ReceiveMessage", finalMessageDto, context.CancellationToken);
+                        }
+                    }
+
+                    _logger.LogInformation(
+                        "SignalR ReceiveMessage отправлен MessageId={MessageId} ChatId={ChatId}",
+                        msg.MessageId, msg.ChatId);
+                }
+                catch (Exception signalrEx)
+                {
+                    _logger.LogWarning(signalrEx,
+                        "Не удалось отправить SignalR для сообщения {MessageId} в чат {ChatId}",
+                        msg.MessageId, msg.ChatId);
+                }
 
                 try
                 {

@@ -42,8 +42,7 @@ function removeMessageFromUI(messageId, chatIdHint, options = {}) {
                 : 0;
             shouldReorder = left === 0;
         } else {
-            const unreadLeft = typeof getUnreadCount === 'function' ? getUnreadCount(chatId) : 0;
-            shouldReorder = unreadLeft <= 0;
+            shouldReorder = true;
         }
         if (typeof refreshChatListPreviewFromDom === 'function') {
             refreshChatListPreviewFromDom(chatId, { reorder: shouldReorder });
@@ -80,7 +79,9 @@ function refreshChatListPreviewFromDom(chatId, options = {}) {
     const chatItem = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
     if (!chatItem) return;
 
-    if (String(currentChatId) === String(chatId)) {
+    const isOpenChat = currentChatId != null
+        && String(currentChatId).toLowerCase() === String(chatId).toLowerCase();
+    if (isOpenChat) {
         const rows = [...messagesContainer.querySelectorAll('[data-mid]:not([data-mid^="temp-"])')];
         if (!rows.length) {
             const preview = chatItem.querySelector('.last-message-preview');
@@ -92,6 +93,10 @@ function refreshChatListPreviewFromDom(chatId, options = {}) {
             chatItem.dataset.lastMessageId = '';
             chatItem.dataset.lastMessageStatus = '';
             chatItem.dataset.lastMessageAt = '';
+            if (doReorder) {
+                if (typeof moveChatToBottom === 'function') moveChatToBottom(chatId);
+                else if (typeof reorderUnpinnedChatsByLastActivity === 'function') reorderUnpinnedChatsByLastActivity();
+            }
             return;
         }
         const last = rows[rows.length - 1];
@@ -117,6 +122,9 @@ function refreshChatListPreviewFromDom(chatId, options = {}) {
         chatItem.dataset.lastMessageId = mid;
         chatItem.dataset.lastMessageStatus = status || '';
         if (sentAt) chatItem.dataset.lastMessageAt = sentAt;
+        if (doReorder && typeof reorderUnpinnedChatsByLastActivity === 'function') {
+            reorderUnpinnedChatsByLastActivity();
+        }
         return;
     }
 
@@ -136,6 +144,10 @@ function refreshChatListPreviewFromDom(chatId, options = {}) {
                 chatItem.dataset.lastMessageId = '';
                 chatItem.dataset.lastMessageStatus = '';
                 chatItem.dataset.lastMessageAt = '';
+                if (doReorder) {
+                    if (typeof moveChatToBottom === 'function') moveChatToBottom(chatId);
+                    else if (typeof reorderUnpinnedChatsByLastActivity === 'function') reorderUnpinnedChatsByLastActivity();
+                }
                 return;
             }
             let msg = list[list.length - 1];
@@ -172,9 +184,6 @@ function refreshChatListPreviewFromDom(chatId, options = {}) {
                     const d = new Date(sentAt);
                     if (!isNaN(d.getTime())) chatItem.dataset.lastMessageAt = d.toISOString();
                 } catch (_) {}
-            }
-            if (doReorder && typeof reorderUnpinnedChatsByLastActivity === 'function') {
-                reorderUnpinnedChatsByLastActivity();
             }
         })
         .catch(e => console.warn('[refreshChatListPreviewFromDom]', e));
@@ -216,7 +225,22 @@ async function deleteMessage(messageId, scope = 'everyone', opts = {}) {
     try {
         if (scope === 'me') {
             hideMessageForMe(messageId);
-            removeMessageFromUI(messageId, currentChatId);
+            removeMessageFromUI(messageId, currentChatId, { skipListUpdate: true });
+            const leftMe = messagesContainer
+                ? messagesContainer.querySelectorAll('[data-mid]:not([data-mid^="temp-"])').length
+                : 0;
+            if (typeof refreshChatListPreviewFromDom === 'function') {
+                refreshChatListPreviewFromDom(currentChatId, { reorder: leftMe === 0 });
+            }
+            if (leftMe === 0) {
+                const item = document.querySelector(`.chat-item[data-chat-id="${currentChatId}"]`);
+                if (item) {
+                    item.dataset.lastMessageAt = '';
+                    item.dataset.lastMessageId = '';
+                }
+                if (typeof moveChatToBottom === 'function') moveChatToBottom(currentChatId);
+                else if (typeof reorderUnpinnedChatsByLastActivity === 'function') reorderUnpinnedChatsByLastActivity();
+            }
             if (!silent) showToast('Сообщение удалено только у вас', 'success');
             return true;
         }
@@ -229,7 +253,22 @@ async function deleteMessage(messageId, scope = 'everyone', opts = {}) {
             const err = await res.json().catch(() => ({}));
             throw new Error(err.error || err.Error || `HTTP ${res.status}`);
         }
-        removeMessageFromUI(messageId, currentChatId);
+        removeMessageFromUI(messageId, currentChatId, { skipListUpdate: true });
+        const left = messagesContainer
+            ? messagesContainer.querySelectorAll('[data-mid]:not([data-mid^="temp-"])').length
+            : 0;
+        if (typeof refreshChatListPreviewFromDom === 'function') {
+            refreshChatListPreviewFromDom(currentChatId, { reorder: left === 0 });
+        }
+        if (left === 0) {
+            const item = document.querySelector(`.chat-item[data-chat-id="${currentChatId}"]`);
+            if (item) {
+                item.dataset.lastMessageAt = '';
+                item.dataset.lastMessageId = '';
+            }
+            if (typeof moveChatToBottom === 'function') moveChatToBottom(currentChatId);
+            else if (typeof reorderUnpinnedChatsByLastActivity === 'function') reorderUnpinnedChatsByLastActivity();
+        }
         if (!silent) showToast('Сообщение удалено для всех', 'success');
         return true;
     } catch (err) {
@@ -252,7 +291,7 @@ async function deleteMessagesBatch(messageIds, scope = 'everyone') {
         if (scope === 'me') {
             for (const mid of ids) {
                 hideMessageForMe(mid);
-                removeMessageFromUI(mid, chatId);
+                removeMessageFromUI(mid, chatId, { skipListUpdate: true });
                 ok++;
             }
         } else if (ids.length > 1) {
@@ -280,7 +319,7 @@ async function deleteMessagesBatch(messageIds, scope = 'everyone') {
                     const data = await res.json().catch(() => ({}));
                     const deletedIds = data.messageIds || data.MessageIds || ids;
                     (deletedIds || []).forEach(mid => {
-                        removeMessageFromUI(mid, chatId);
+                        removeMessageFromUI(mid, chatId, { skipListUpdate: true });
                         ok++;
                     });
                     const deletedSet = new Set((deletedIds || []).map(String));
@@ -311,8 +350,15 @@ async function deleteMessagesBatch(messageIds, scope = 'everyone') {
         const shouldReorder = msgsLeft === 0;
         if (typeof refreshChatListPreviewFromDom === 'function') {
             refreshChatListPreviewFromDom(chatId, { reorder: shouldReorder });
-        } else if (shouldReorder && typeof reorderUnpinnedChatsByLastActivity === 'function') {
-            reorderUnpinnedChatsByLastActivity();
+        }
+        if (shouldReorder) {
+            const item = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
+            if (item) {
+                item.dataset.lastMessageAt = '';
+                item.dataset.lastMessageId = '';
+            }
+            if (typeof moveChatToBottom === 'function') moveChatToBottom(chatId);
+            else if (typeof reorderUnpinnedChatsByLastActivity === 'function') reorderUnpinnedChatsByLastActivity();
         }
 
         if (ok && !fail) {

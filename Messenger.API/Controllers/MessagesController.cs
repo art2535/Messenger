@@ -461,6 +461,53 @@ namespace Messenger.API.Controllers
                                 Attachments = attachmentsInfo
                             }, cancellationToken);
 
+                            try
+                            {
+                                var plainForDto = string.IsNullOrEmpty(encryptedText)
+                                    ? null
+                                    : _encryptionService.TryDecryptSafe(encryptedText);
+                                var forwardDto = new MessageDto
+                                {
+                                    MessageId = newMessageId,
+                                    ChatId = target.ChatId,
+                                    SenderId = user.UserId,
+                                    SenderName = senderName,
+                                    MessageText = plainForDto,
+                                    SentAt = DateTime.UtcNow,
+                                    Status = "Sent",
+                                    Attachments = attachmentsInfo.Select(a => new AttachmentDto
+                                    {
+                                        AttachmentId = a.AttachmentId,
+                                        FileName = a.FileName,
+                                        FileType = a.FileType,
+                                        SizeInBytes = (int)a.SizeInBytes,
+                                        Url = a.Url
+                                    }).ToList()
+                                };
+                                var chatIdStr = target.ChatId.ToString();
+                                await _hubContext.Clients.Group(chatIdStr)
+                                    .SendAsync("ReceiveMessage", forwardDto, cancellationToken);
+                                await _hubContext.Clients.Group(chatIdStr)
+                                    .SendAsync("MessageSendingStatus", new
+                                    {
+                                        MessageId = newMessageId,
+                                        ChatId = target.ChatId,
+                                        Status = "Sent",
+                                        Timestamp = DateTimeOffset.UtcNow
+                                    }, cancellationToken);
+                                foreach (var participant in target.ChatParticipants)
+                                {
+                                    await _hubContext.Clients.Group($"User_{participant.UserId}")
+                                        .SendAsync("ReceiveMessage", forwardDto, cancellationToken);
+                                }
+                            }
+                            catch (Exception signalrEx)
+                            {
+                                _logger.LogWarning(signalrEx,
+                                    "SignalR после forward не удался MessageId={MessageId} ChatId={ChatId}",
+                                    newMessageId, target.ChatId);
+                            }
+
                             published++;
                         }
                         catch (Exception ex)

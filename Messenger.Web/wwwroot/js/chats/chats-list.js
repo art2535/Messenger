@@ -86,6 +86,12 @@ async function loadChats() {
             `;
 
             if (partnerId) div.dataset.partnerId = partnerId;
+            if (lastMessageTime) {
+                try {
+                    const d = new Date(lastMessageTime);
+                    if (!isNaN(d.getTime())) div.dataset.lastMessageAt = d.toISOString();
+                } catch (_) {}
+            }
 
             div.onclick = () => openChat(div);
             container.appendChild(div);
@@ -171,6 +177,12 @@ async function loadChats() {
                         </div>
                     `;
                     if (partnerId) div.dataset.partnerId = partnerId;
+                    if (lastMessageTime) {
+                        try {
+                            const d = new Date(lastMessageTime);
+                            if (!isNaN(d.getTime())) div.dataset.lastMessageAt = d.toISOString();
+                        } catch (_) {}
+                    }
                     div.onclick = () => openChat(div);
                     container.appendChild(div);
                 });
