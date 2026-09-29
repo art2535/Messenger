@@ -520,6 +520,10 @@ async function subscribeToPush() {
         if (res.ok) {
             currentSubscription = subscription;
             if (pushToggle) pushToggle.checked = true;
+            try {
+                localStorage.setItem('pushSubscribed', 'true');
+                localStorage.setItem('pushSubscriptionEndpoint', subscription.endpoint);
+            } catch (_) { }
             showToast('Push-уведомления включены', 'success');
             return true;
         }
@@ -573,12 +577,20 @@ async function unsubscribeFromPush() {
         }
 
         if (pushToggle) pushToggle.checked = false;
+        try {
+            localStorage.removeItem('pushSubscribed');
+            localStorage.removeItem('pushSubscriptionEndpoint');
+        } catch (_) { }
         showToast('Push-уведомления отключены', 'info');
         return true;
     } catch (err) {
         console.error(err);
         if (pushToggle) pushToggle.checked = false;
         currentSubscription = null;
+        try {
+            localStorage.removeItem('pushSubscribed');
+            localStorage.removeItem('pushSubscriptionEndpoint');
+        } catch (_) { }
         showToast('Push-уведомления отключены', 'info');
         return true;
     }

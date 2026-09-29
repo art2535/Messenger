@@ -72,31 +72,38 @@ async function initializePushNotifications(registration) {
             return;
         }
 
-        if (permission === 'default') {
-            const result = await Notification.requestPermission();
-            if (result !== 'granted') return;
+        if (permission !== 'granted') {
+            console.log('Push: permission не granted — автоматическая подписка пропущена');
+            return;
         }
 
-        const keyResponse = await fetch(`${API_BASE_URL}/push/vapid-public-key`, {
-            method: 'GET',
-            headers: {
-                'Authorization': token
-            }
-        });
-
-        if (!keyResponse.ok) throw new Error('Не удалось получить VAPID ключ');
-        const publicKey = await keyResponse.text();
-
         let subscription = await registration.pushManager.getSubscription();
+        const storedEndpoint = localStorage.getItem('pushSubscriptionEndpoint') || '';
+        const alreadySynced = localStorage.getItem('pushSubscribed') === 'true';
+
+        if (subscription && alreadySynced && storedEndpoint && subscription.endpoint === storedEndpoint) {
+            console.log('Push: подписка уже активна и синхронизирована, повторная отправка пропущена');
+            return;
+        }
 
         if (!subscription) {
+            const keyResponse = await fetch(`${API_BASE_URL}/push/vapid-public-key`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': token
+                }
+            });
+
+            if (!keyResponse.ok) throw new Error('Не удалось получить VAPID ключ');
+            const publicKey = (await keyResponse.text()).trim();
+
             subscription = await registration.pushManager.subscribe({
                 userVisibleOnly: true,
                 applicationServerKey: urlBase64ToUint8Array(publicKey)
             });
             console.log('Новая push-подписка создана');
         } else {
-            console.log('Существующая подписка найдена');
+            console.log('Существующая подписка найдена, синхронизация с сервером…');
         }
 
         const subJson = subscription.toJSON();
@@ -109,14 +116,15 @@ async function initializePushNotifications(registration) {
             },
             body: JSON.stringify({
                 endpoint: subscription.endpoint,
-                p256dh: subJson.keys.p256dh,
-                auth: subJson.keys.auth
+                p256dh: subJson.keys?.p256dh,
+                auth: subJson.keys?.auth
             })
         });
 
         if (response.ok) {
             console.log('✅ Push-подписка успешно отправлена на сервер');
             localStorage.setItem('pushSubscribed', 'true');
+            localStorage.setItem('pushSubscriptionEndpoint', subscription.endpoint);
         } else {
             const errorText = await response.text();
             console.error('❌ Ошибка при отправке подписки:', errorText);
