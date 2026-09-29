@@ -37,22 +37,68 @@ document.querySelectorAll('.sidebar-link').forEach(link => {
     });
 });
 
+function cleanToken(t) {
+    return (t || '').trim().replace(/^Bearer\s+/i, '');
+}
+
+function jwtExpiresAtMs(token) {
+    try {
+        const payload = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+        const json = JSON.parse(atob(payload + '='.repeat((4 - payload.length % 4) % 4)));
+        return json.exp ? json.exp * 1000 : 0;
+    } catch (_) {
+        return 0;
+    }
+}
+
 function getJwtToken() {
-    let token = document.querySelector('meta[name="access-token"]')?.content?.trim();
-    if (!token) token = localStorage.getItem('token')?.trim();
-    if (!token) token = sessionStorage.getItem('token')?.trim();
-    return token || '';
+    const candidates = [
+        document.querySelector('meta[name="access-token"]')?.content,
+        localStorage.getItem('token'),
+        sessionStorage.getItem('token')
+    ].map(cleanToken).filter(Boolean);
+
+    if (!candidates.length) return '';
+    candidates.sort((a, b) => jwtExpiresAtMs(b) - jwtExpiresAtMs(a));
+    return candidates[0];
 }
 
 function getAuthToken() {
-    let token = getJwtToken();
-    if (token && !token.startsWith('Bearer ')) {
-        token = 'Bearer ' + token;
-    }
-    return token;
+    const token = getJwtToken();
+    return token ? 'Bearer ' + token : '';
 }
 
-async function apiFetch(endpoint, options = {}) {
+async function fetchFreshToken() {
+    try {
+        const res = await fetch('/Account/Settings?handler=Token', {
+            credentials: 'same-origin',
+            cache: 'no-store',
+            headers: { 'Accept': 'application/json' }
+        });
+        if (!res.ok) return '';
+        const data = await res.json();
+        const fresh = cleanToken(data?.accessToken);
+        if (!fresh) return '';
+
+        try { localStorage.setItem('token', fresh); } catch (_) { }
+        const meta = document.querySelector('meta[name="access-token"]');
+        if (meta) meta.content = fresh;
+        return fresh;
+    } catch (_) {
+        return '';
+    }
+}
+
+async function ensureFreshToken() {
+    const token = getJwtToken();
+    const exp = token ? jwtExpiresAtMs(token) : 0;
+    if (!token || (exp && exp - Date.now() < 30000)) {
+        await fetchFreshToken();
+    }
+}
+
+async function apiFetch(endpoint, options = {}, retried = false) {
+    await ensureFreshToken();
     const token = getAuthToken();
     const headers = {
         'Authorization': token,
@@ -60,6 +106,11 @@ async function apiFetch(endpoint, options = {}) {
         ...options.headers
     };
     const response = await fetch(`${API_URL}${endpoint}`, { ...options, headers });
+
+    if (response.status === 401 && !retried && await fetchFreshToken()) {
+        return apiFetch(endpoint, options, true);
+    }
+
     if (!response.ok) {
         const errorText = await response.text();
         throw new Error(errorText || `Ошибка: ${response.statusText}`);
@@ -154,14 +205,14 @@ function closeConfirm(result = false) {
 }
 
 async function initSignalR() {
-    const token = getJwtToken();
-    if (!token) {
+    await ensureFreshToken();
+    if (!getJwtToken()) {
         console.warn("⚠️ SignalR: Токен не найден");
         return;
     }
 
     connection = new signalR.HubConnectionBuilder()
-        .withUrl(HUB_URL, { accessTokenFactory: () => token })
+        .withUrl(HUB_URL, { accessTokenFactory: () => getJwtToken() })
         .withAutomaticReconnect()
         .configureLogging(signalR.LogLevel.Warning)
         .build();
@@ -448,6 +499,7 @@ async function subscribeToPush() {
             });
         }
 
+        await ensureFreshToken();
         const token = getAuthToken();
         if (!token) throw new Error('Нет токена авторизации');
 
@@ -626,9 +678,6 @@ async function saveNotificationSettings() {
 
 document.addEventListener('DOMContentLoaded', async () => {
     feather.replace();
-    initSignalR();
-    await loadPushSettings();
-    await checkPushStatus();
 
     const pushToggleEl = document.getElementById('push-toggle');
     if (pushToggleEl) {
@@ -638,6 +687,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.querySelectorAll('#notification-types input[type="checkbox"]').forEach(cb => {
         cb.addEventListener('change', saveNotificationSettings);
     });
+
+    initSignalR();
+    await loadPushSettings();
+    await checkPushStatus();
 
     document.getElementById('confirmYesBtn').onclick = () => closeConfirm(true);
 

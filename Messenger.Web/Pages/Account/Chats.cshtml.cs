@@ -9,6 +9,7 @@ using System.Security.Claims;
 namespace Messenger.Web.Pages.Account
 {
     [Authorize]
+    [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
     public class ChatsModel : PageModel
     {
         private readonly ApiHelper _api;

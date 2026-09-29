@@ -12,6 +12,7 @@ using System.Text.Json.Serialization;
 namespace Messenger.Web.Pages.Account
 {
     [Authorize]
+    [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
     public class SettingsModel : PageModel
     {
         private readonly ApiHelper _api;
@@ -55,6 +56,13 @@ namespace Messenger.Web.Pages.Account
             await InitializeAsync();
             await LoadProfileAsync();
             return Page();
+        }
+
+        public async Task<IActionResult> OnGetTokenAsync()
+        {
+            await InitializeAsync();
+            Response.Headers.CacheControl = "no-store";
+            return new JsonResult(new { accessToken = AccessToken });
         }
 
         private async Task LoadProfileAsync()
