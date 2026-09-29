@@ -329,28 +329,7 @@ async function startSignalR() {
 
         removeMessageFromUI(mid, chatId, { skipListUpdate: true });
 
-        let shouldReorder = false;
-        if (open) {
-            const left = (typeof messagesContainer !== 'undefined' && messagesContainer)
-                ? messagesContainer.querySelectorAll('[data-mid]:not([data-mid^="temp-"])').length
-                : 0;
-            shouldReorder = left === 0;
-        } else {
-            shouldReorder = true;
-        }
-
-        if (typeof refreshChatListPreviewFromDom === 'function') {
-            refreshChatListPreviewFromDom(chatId, { reorder: shouldReorder });
-        }
-        if (shouldReorder && open) {
-            const item = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
-            if (item) {
-                item.dataset.lastMessageAt = '';
-                item.dataset.lastMessageId = '';
-            }
-            if (typeof moveChatToBottom === 'function') moveChatToBottom(chatId);
-            else if (typeof reorderUnpinnedChatsByLastActivity === 'function') reorderUnpinnedChatsByLastActivity();
-        }
+        syncChatListAfterDelete(chatId);
     });
 
     connection.on('ReactionUpdated', (data) => {

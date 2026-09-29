@@ -34,21 +34,7 @@ function removeMessageFromUI(messageId, chatIdHint, options = {}) {
             unpinMessage(chatId, messageId);
         }
         if (options.skipListUpdate) return;
-        const isOpen = currentChatId != null && String(currentChatId).toLowerCase() === String(chatId).toLowerCase();
-        let shouldReorder = false;
-        if (isOpen) {
-            const left = messagesContainer
-                ? messagesContainer.querySelectorAll('[data-mid]:not([data-mid^="temp-"])').length
-                : 0;
-            shouldReorder = left === 0;
-        } else {
-            shouldReorder = true;
-        }
-        if (typeof refreshChatListPreviewFromDom === 'function') {
-            refreshChatListPreviewFromDom(chatId, { reorder: shouldReorder });
-        } else if (shouldReorder && typeof reorderUnpinnedChatsByLastActivity === 'function') {
-            reorderUnpinnedChatsByLastActivity();
-        }
+        syncChatListAfterDelete(chatId);
     }
 }
 
@@ -71,6 +57,99 @@ function normalizeMessageStatus(raw) {
     if (s === 'pending' || s === 'sending') return 'pending';
     if (s === 'delivered' || s === 'sent') return 'sent';
     return s || 'sent';
+}
+
+const __chatListSyncTimers = new Map();
+
+function syncChatListAfterDelete(chatId) {
+    if (!chatId) return;
+    const key = String(chatId).toLowerCase();
+    clearTimeout(__chatListSyncTimers.get(key));
+    __chatListSyncTimers.set(key, setTimeout(() => {
+        __chatListSyncTimers.delete(key);
+        runChatListSyncAfterDelete(chatId).catch(e => console.warn('[syncChatListAfterDelete]', e));
+    }, 200));
+}
+
+async function fetchLastVisibleMessage(chatId) {
+    const res = await fetchWithAuth(`${API_BASE}/messages/${chatId}?limit=50`);
+    if (!res || !res.ok) return undefined;
+    const json = await res.json().catch(() => null);
+    if (!json) return undefined;
+    const raw = json.data || json.Data || (Array.isArray(json) ? json : []);
+    const list = Array.isArray(raw) ? raw : [];
+    const hidden = typeof getHiddenMessageIds === 'function' ? getHiddenMessageIds() : new Set();
+    const visible = list.filter(m => !hidden.has(String(m.messageId || m.MessageId)));
+    if (!visible.length) return null;
+    return visible.reduce((a, b) => {
+        const sa = Number(a.sequenceNumber ?? a.SequenceNumber ?? 0);
+        const sb = Number(b.sequenceNumber ?? b.SequenceNumber ?? 0);
+        if (sa || sb) return sa >= sb ? a : b;
+        const ta = new Date(a.sentAt || a.SentAt || 0).getTime();
+        const tb = new Date(b.sentAt || b.SentAt || 0).getTime();
+        return ta >= tb ? a : b;
+    });
+}
+
+function setChatListItemEmpty(chatItem) {
+    const preview = chatItem.querySelector('.last-message-preview');
+    const timeEl = chatItem.querySelector('.chat-list-time');
+    if (preview) {
+        preview.outerHTML = `<div class="flex items-center min-w-0 gap-1 last-message-preview"><span class="truncate text-gray-400">Нет сообщений</span></div>`;
+    }
+    if (timeEl) timeEl.textContent = '';
+    chatItem.dataset.lastMessageId = '';
+    chatItem.dataset.lastMessageStatus = '';
+    chatItem.dataset.lastMessageAt = '';
+}
+
+async function runChatListSyncAfterDelete(chatId) {
+    const chatItem = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
+    if (!chatItem) return;
+
+    const isOpen = currentChatId != null
+        && String(currentChatId).toLowerCase() === String(chatId).toLowerCase();
+
+    if (isOpen) {
+        const rows = messagesContainer
+            ? messagesContainer.querySelectorAll('[data-mid]:not([data-mid^="temp-"])').length
+            : 0;
+        if (rows > 0) {
+            refreshChatListPreviewFromDom(chatId, { reorder: true });
+            return;
+        }
+    }
+
+    const last = await fetchLastVisibleMessage(chatId);
+
+    if (last === undefined) {
+        if (isOpen) refreshChatListPreviewFromDom(chatId, { reorder: true });
+        return;
+    }
+
+    if (last === null) {
+        setChatListItemEmpty(chatItem);
+        if (typeof moveChatToBottom === 'function') moveChatToBottom(chatId);
+        else if (typeof reorderUnpinnedChatsByLastActivity === 'function') reorderUnpinnedChatsByLastActivity();
+        return;
+    }
+
+    const isMine = String(last.senderId || last.SenderId) === String(me);
+    const status = isMine
+        ? normalizeMessageStatus(last.status || last.Status || last.deliveryStatus || last.DeliveryStatus || 'sent')
+        : null;
+    const sentAt = last.sentAt || last.SentAt || last.sendTime || last.SendTime || null;
+    let text = last.messageText || last.MessageText || '';
+    if (typeof stripMessageMetaForPreview === 'function') text = stripMessageMetaForPreview(text);
+
+    updateChatLastMessagePreview(chatId, text, last.attachments || last.Attachments || [], sentAt, isMine, status);
+    chatItem.dataset.lastMessageId = String(last.messageId || last.MessageId || '');
+    chatItem.dataset.lastMessageStatus = status || '';
+    if (sentAt) {
+        const d = new Date(sentAt);
+        if (!isNaN(d.getTime())) chatItem.dataset.lastMessageAt = d.toISOString();
+    }
+    if (typeof reorderUnpinnedChatsByLastActivity === 'function') reorderUnpinnedChatsByLastActivity();
 }
 
 function refreshChatListPreviewFromDom(chatId, options = {}) {
@@ -226,21 +305,7 @@ async function deleteMessage(messageId, scope = 'everyone', opts = {}) {
         if (scope === 'me') {
             hideMessageForMe(messageId);
             removeMessageFromUI(messageId, currentChatId, { skipListUpdate: true });
-            const leftMe = messagesContainer
-                ? messagesContainer.querySelectorAll('[data-mid]:not([data-mid^="temp-"])').length
-                : 0;
-            if (typeof refreshChatListPreviewFromDom === 'function') {
-                refreshChatListPreviewFromDom(currentChatId, { reorder: leftMe === 0 });
-            }
-            if (leftMe === 0) {
-                const item = document.querySelector(`.chat-item[data-chat-id="${currentChatId}"]`);
-                if (item) {
-                    item.dataset.lastMessageAt = '';
-                    item.dataset.lastMessageId = '';
-                }
-                if (typeof moveChatToBottom === 'function') moveChatToBottom(currentChatId);
-                else if (typeof reorderUnpinnedChatsByLastActivity === 'function') reorderUnpinnedChatsByLastActivity();
-            }
+            syncChatListAfterDelete(currentChatId);
             if (!silent) showToast('Сообщение удалено только у вас', 'success');
             return true;
         }
@@ -254,21 +319,7 @@ async function deleteMessage(messageId, scope = 'everyone', opts = {}) {
             throw new Error(err.error || err.Error || `HTTP ${res.status}`);
         }
         removeMessageFromUI(messageId, currentChatId, { skipListUpdate: true });
-        const left = messagesContainer
-            ? messagesContainer.querySelectorAll('[data-mid]:not([data-mid^="temp-"])').length
-            : 0;
-        if (typeof refreshChatListPreviewFromDom === 'function') {
-            refreshChatListPreviewFromDom(currentChatId, { reorder: left === 0 });
-        }
-        if (left === 0) {
-            const item = document.querySelector(`.chat-item[data-chat-id="${currentChatId}"]`);
-            if (item) {
-                item.dataset.lastMessageAt = '';
-                item.dataset.lastMessageId = '';
-            }
-            if (typeof moveChatToBottom === 'function') moveChatToBottom(currentChatId);
-            else if (typeof reorderUnpinnedChatsByLastActivity === 'function') reorderUnpinnedChatsByLastActivity();
-        }
+        syncChatListAfterDelete(currentChatId);
         if (!silent) showToast('Сообщение удалено для всех', 'success');
         return true;
     } catch (err) {
@@ -344,22 +395,7 @@ async function deleteMessagesBatch(messageIds, scope = 'everyone') {
 
         if (typeof exitSelectMode === 'function') exitSelectMode();
 
-        const msgsLeft = messagesContainer
-            ? messagesContainer.querySelectorAll('[data-mid]:not([data-mid^="temp-"])').length
-            : 0;
-        const shouldReorder = msgsLeft === 0;
-        if (typeof refreshChatListPreviewFromDom === 'function') {
-            refreshChatListPreviewFromDom(chatId, { reorder: shouldReorder });
-        }
-        if (shouldReorder) {
-            const item = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
-            if (item) {
-                item.dataset.lastMessageAt = '';
-                item.dataset.lastMessageId = '';
-            }
-            if (typeof moveChatToBottom === 'function') moveChatToBottom(chatId);
-            else if (typeof reorderUnpinnedChatsByLastActivity === 'function') reorderUnpinnedChatsByLastActivity();
-        }
+        syncChatListAfterDelete(chatId);
 
         if (ok && !fail) {
             const msg = scope === 'me'

@@ -47,14 +47,25 @@ namespace Messenger.Infrastructure.Services
 
         public async Task InvalidateMessageCachesAsync(Guid chatId, CancellationToken token = default)
         {
-            var keys = new[]
-            {
-                LatestMessagesCacheKey(chatId, 50),
-                LatestMessagesCacheKey(chatId, 100),
-                LatestMessagesCacheKey(chatId, 30)
-            };
+            var keys = new[] { 1, 20, 30, 50, 100, 200 }
+                .Select(limit => LatestMessagesCacheKey(chatId, limit))
+                .ToArray();
             await _cache.RemoveAsync(keys, token);
             _logger.LogInformation("Messages cache invalidated chatId={ChatId}", chatId);
+        }
+
+        private async Task InvalidateUserChatsCacheAsync(Guid chatId, CancellationToken token = default)
+        {
+            var userIds = await _context.ChatParticipants
+                .AsNoTracking()
+                .Where(p => p.ChatId == chatId)
+                .Select(p => p.UserId)
+                .ToListAsync(token);
+
+            if (userIds.Count == 0)
+                return;
+
+            await _cache.RemoveAsync(userIds.Select(id => $"user:{id:N}:chats"), token);
         }
 
         public async Task PublishChatMessageAsync(ChatMessageSent message, CancellationToken cancellationToken = default)
@@ -184,6 +195,7 @@ namespace Messenger.Infrastructure.Services
                 _context.Messages.Remove(deletedMessage);
                 await _context.SaveChangesAsync(token);
                 await InvalidateMessageCachesAsync(chatId, token);
+                await InvalidateUserChatsCacheAsync(chatId, token);
             }
         }
 
@@ -438,7 +450,10 @@ namespace Messenger.Infrastructure.Services
             _context.Messages.RemoveRange(messages);
             await _context.SaveChangesAsync(token);
             foreach (var chatId in chatIds)
+            {
                 await InvalidateMessageCachesAsync(chatId, token);
+                await InvalidateUserChatsCacheAsync(chatId, token);
+            }
             return messages.Count;
         }
 
