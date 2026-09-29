@@ -492,6 +492,7 @@ function clearInputAfterSend() {
     selectedFiles = [];
     fileInput.value = '';
     if (typeof cancelReply === 'function') cancelReply();
+    if (typeof resetMessageInputSize === 'function') resetMessageInputSize();
 }
 
 document.getElementById('ctx-edit-btn')?.addEventListener('click', () => {

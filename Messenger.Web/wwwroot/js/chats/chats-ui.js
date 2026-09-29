@@ -398,12 +398,32 @@ setTimeout(() => applyPinnedChatsOrder(), 800);
 startSignalR();
 
 sendButton.onclick = sendMessage;
-messageInput.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        sendMessage();
-    }
-});
+
+function autoResizeMessageInput() {
+    if (!messageInput) return;
+    messageInput.style.height = 'auto';
+    const max = 128; // ~8rem
+    const next = Math.min(messageInput.scrollHeight, max);
+    messageInput.style.height = next + 'px';
+    messageInput.style.overflowY = messageInput.scrollHeight > max ? 'auto' : 'hidden';
+}
+
+function resetMessageInputSize() {
+    if (!messageInput) return;
+    messageInput.style.height = '';
+    autoResizeMessageInput();
+}
+
+if (messageInput) {
+    messageInput.addEventListener('input', autoResizeMessageInput);
+    messageInput.addEventListener('keydown', e => {
+        if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+    autoResizeMessageInput();
+}
 
 const observer = new MutationObserver(() => feather.replace());
 observer.observe(document.body, { childList: true, subtree: true });

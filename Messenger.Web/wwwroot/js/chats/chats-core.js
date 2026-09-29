@@ -341,6 +341,7 @@ function restoreDraftForChat(chatId) {
     }
 
     messageInput.value = draft.text || '';
+    if (typeof autoResizeMessageInput === 'function') autoResizeMessageInput();
 
     if (draft.reply?.messageId) {
         replyingTo = {

@@ -371,10 +371,13 @@
                                 <i data-feather="paperclip" class="w-5 h-5"></i>
                             </label>
                             <input id="file-input" type="file" class="hidden" multiple>
-                            <input id="message-input"
-                                   type="text"
-                                   placeholder="Напишите сообщение..."
-                                   class="flex-1 px-4 py-2 bg-gray-100 dark:bg-gray-700 dark:text-gray-100 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white dark:focus:bg-gray-600 dark:placeholder-gray-400">
+                            <textarea id="message-input"
+                                      rows="1"
+                                      placeholder="Напишите сообщение..."
+                                      class="flex-1 px-4 py-2 bg-gray-100 dark:bg-gray-700 dark:text-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white dark:focus:bg-gray-600 dark:placeholder-gray-400 resize-none overflow-y-auto"
+                                      style="max-height: 8rem; line-height: 1.4;"
+                                      enterkeyhint="send"
+                                      autocomplete="off"></textarea>
                             <button id="send-button" class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
                                 <i data-feather="send" class="w-5 h-5"></i>
                             </button>

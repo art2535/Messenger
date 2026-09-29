@@ -7,8 +7,6 @@ function hideMessageContextMenu() {
     if (!chatMenu || !chatMenu.classList.contains('show')) hideContextBackdrop();
 }
 
-
-
 let exportModalChatId = null;
 
 function openExportChatModal(chatId) {
@@ -311,6 +309,7 @@ function enterEditMode(messageId, text) {
     editingMessageId = messageId;
     const parsedEdit = parseReplyPayload(text || '');
     messageInput.value = parsedEdit.text || '';
+    if (typeof autoResizeMessageInput === 'function') autoResizeMessageInput();
     messageInput.focus();
     if (editModeBar) {
         editModeBar.classList.add('show');
@@ -327,6 +326,7 @@ function enterEditMode(messageId, text) {
 function exitEditMode() {
     editingMessageId = null;
     messageInput.value = '';
+    if (typeof resetMessageInputSize === 'function') resetMessageInputSize();
     if (editModeBar) editModeBar.classList.remove('show');
     sendButton.classList.remove('edit-mode');
     sendButton.innerHTML = '<i data-feather="send" class="w-5 h-5"></i>';
