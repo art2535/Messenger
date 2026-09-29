@@ -47,6 +47,7 @@ namespace Messenger.Web.Services
         private async Task RefreshAllAsync(CancellationToken cancellationToken)
         {
             var idleLimit = TimeSpan.FromMinutes(_options.IdleTimeoutMinutes);
+            _store.PurgeExpiredTombstones();
             var entries = _store.Snapshot();
 
             if (_logger.IsEnabled(LogLevel.Debug))

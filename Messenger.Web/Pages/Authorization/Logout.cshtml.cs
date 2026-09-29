@@ -46,7 +46,7 @@ namespace Messenger.Web.Pages.Authorization
             var accessToken = await HttpContext.GetTokenAsync("access_token");
             var refreshToken = await HttpContext.GetTokenAsync("refresh_token");
 
-            await StopTokenRefreshAsync(accessToken, refreshToken);
+            var closedSessions = await StopTokenRefreshAsync(accessToken, refreshToken);
 
             if (!string.IsNullOrEmpty(accessToken))
             {
@@ -99,6 +99,8 @@ namespace Messenger.Web.Pages.Authorization
                 }
             }
 
+            await RevokeTokensInSsoAsync(refreshToken, closedSessions);
+
             try
             {
                 HttpContext.Session.Clear();
@@ -124,7 +126,7 @@ namespace Messenger.Web.Pages.Authorization
             return RedirectToPage("/Authorization/Authorization", new { loggedOut = true });
         }
 
-        private async Task StopTokenRefreshAsync(string? accessToken, string? refreshToken)
+        private async Task<IReadOnlyList<TokenEntry>> StopTokenRefreshAsync(string? accessToken, string? refreshToken)
         {
             try
             {
@@ -135,18 +137,49 @@ namespace Messenger.Web.Pages.Authorization
                     auth.Properties.Items.TryGetValue(UserTokenStore.StoreKeyItem, out storeKey);
                 }
 
-                var removedByKey = _tokenStore.RevokeAndRemove(storeKey);
-                var removedByToken = _tokenStore.RevokeByToken(accessToken, refreshToken);
+                var closed = _tokenStore.RevokeSession(storeKey, accessToken, refreshToken);
 
-                _logger.LogInformation(
-                    "[Logout] TokenStore: key={Key} removedByKey={ByKey} removedByToken={ByToken}",
-                    storeKey ?? "(null)", removedByKey, removedByToken);
+                foreach (var entry in closed)
+                {
+                    if (await entry.RefreshLock.WaitAsync(TimeSpan.FromSeconds(10)))
+                        entry.RefreshLock.Release();
+                }
 
-                await _tokenRefresher.RevokeRefreshTokenAsync(refreshToken, HttpContext.RequestAborted);
+                _logger.LogInformation("[Logout] TokenStore: key={Key} closedSessions={Count}",
+                    storeKey ?? "(null)", closed.Count);
+
+                return closed;
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "[Logout] Не удалось остановить фоновое обновление токенов");
+                return Array.Empty<TokenEntry>();
+            }
+        }
+
+        private async Task RevokeTokensInSsoAsync(string? cookieRefreshToken, IReadOnlyList<TokenEntry> closedSessions)
+        {
+            var refreshTokens = new List<string>();
+            foreach (var entry in closedSessions)
+            {
+                var current = entry.Tokens.RefreshToken;
+                if (!string.IsNullOrEmpty(current) && !refreshTokens.Contains(current))
+                    refreshTokens.Add(current);
+            }
+            if (!string.IsNullOrEmpty(cookieRefreshToken) && !refreshTokens.Contains(cookieRefreshToken))
+                refreshTokens.Add(cookieRefreshToken);
+
+            if (refreshTokens.Count == 0)
+            {
+                _logger.LogInformation("[Logout] Нет refresh-токенов для отзыва в SSO");
+                return;
+            }
+
+            foreach (var token in refreshTokens)
+            {
+                var revoked = await _tokenRefresher.RevokeRefreshTokenAsync(token, CancellationToken.None);
+                if (!revoked)
+                    _logger.LogWarning("[Logout] Refresh-токен не удалось отозвать в SSO");
             }
         }
 

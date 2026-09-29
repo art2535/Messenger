@@ -6,7 +6,7 @@ namespace Messenger.Web.Services
 {
     public sealed class TokenRefresher
     {
-        private const string FallbackTokenEndpoint = "https://sso.guap.ru/realms/master/protocol/openid-connect/token";
+        private const string FallbackOidcBase = "https://sso.guap.ru/realms/master/protocol/openid-connect";
 
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IConfiguration _configuration;
@@ -25,7 +25,7 @@ namespace Messenger.Web.Services
         public bool NeedsRefresh(TokenEntry entry)
             => entry.Tokens.ExpiresAtUtc - DateTime.UtcNow <= TimeSpan.FromSeconds(_options.RefreshBeforeExpirySeconds);
 
-        private string TokenEndpoint
+        private string OidcBase
         {
             get
             {
@@ -33,10 +33,14 @@ namespace Messenger.Web.Services
                 var realm = _configuration["AzureAd:TenantId"];
 
                 return string.IsNullOrEmpty(instance) || string.IsNullOrEmpty(realm)
-                    ? FallbackTokenEndpoint
-                    : $"{instance}/{realm}/protocol/openid-connect/token";
+                    ? FallbackOidcBase
+                    : $"{instance}/{realm}/protocol/openid-connect";
             }
         }
+
+        private string TokenEndpoint => $"{OidcBase}/token";
+
+        private string RevokeEndpoint => $"{OidcBase}/revoke";
 
         public async Task RefreshIfNeededAsync(TokenEntry entry, CancellationToken cancellationToken)
         {
@@ -87,6 +91,15 @@ namespace Messenger.Web.Services
                         return;
                     }
 
+                    if (entry.IsRevoked)
+                    {
+                        _logger.LogWarning(
+                            "[TokenRefresh] Сессия {Key}: выход произошёл во время обновления — новый refresh-токен отзывается",
+                            entry.Key);
+                        await RevokeRefreshTokenAsync(newRefresh ?? current.RefreshToken, CancellationToken.None);
+                        return;
+                    }
+
                     var lifetime = root.TryGetProperty("expires_in", out var expiresElement)
                                    && expiresElement.TryGetInt32(out var seconds)
                         ? TimeSpan.FromSeconds(seconds)
@@ -128,17 +141,16 @@ namespace Messenger.Web.Services
                 entry.RefreshLock.Release();
             }
         }
-        public async Task RevokeRefreshTokenAsync(string? refreshToken, CancellationToken cancellationToken = default)
+        public async Task<bool> RevokeRefreshTokenAsync(string? refreshToken, CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrEmpty(refreshToken))
-                return;
+                return false;
 
             try
             {
                 var clientId = _configuration["AzureAd:ClientId"] ?? "messager";
                 var clientSecret = _configuration["AzureAd:ClientSecret"];
 
-                var revokeUrl = TokenEndpoint.Replace("/token", "/revoke");
                 var form = new Dictionary<string, string>
                 {
                     ["client_id"] = clientId,
@@ -148,23 +160,27 @@ namespace Messenger.Web.Services
                 if (!string.IsNullOrEmpty(clientSecret))
                     form["client_secret"] = clientSecret;
 
+                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                timeout.CancelAfter(TimeSpan.FromSeconds(10));
+
                 var client = _httpClientFactory.CreateClient();
                 using var content = new FormUrlEncodedContent(form);
-                using var response = await client.PostAsync(revokeUrl, content, cancellationToken);
+                using var response = await client.PostAsync(RevokeEndpoint, content, timeout.Token);
                 if (response.IsSuccessStatusCode)
                 {
                     _logger.LogInformation("[TokenRefresh] Refresh-токен отозван в SSO ({Status})", (int)response.StatusCode);
+                    return true;
                 }
-                else
-                {
-                    var body = await response.Content.ReadAsStringAsync(cancellationToken);
-                    _logger.LogWarning("[TokenRefresh] SSO revoke вернул {Status}: {Body}",
-                        (int)response.StatusCode, body);
-                }
+
+                var body = await response.Content.ReadAsStringAsync(timeout.Token);
+                _logger.LogWarning("[TokenRefresh] SSO revoke вернул {Status}: {Body}",
+                    (int)response.StatusCode, body);
+                return false;
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "[TokenRefresh] Не удалось отозвать refresh-токен в SSO");
+                return false;
             }
         }
     }

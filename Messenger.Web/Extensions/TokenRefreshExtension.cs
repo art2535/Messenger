@@ -58,6 +58,15 @@ namespace Messenger.Web.Extensions
             var logger = services.GetRequiredService<ILoggerFactory>().CreateLogger("Messenger.Web.TokenRefresh");
 
             properties.Items.TryGetValue(UserTokenStore.StoreKeyItem, out var key);
+
+            if (store.IsRevoked(key, refreshToken))
+            {
+                logger.LogWarning("[TokenRefresh] Сессия {Key}: выход уже выполнен — cookie отклонена", key ?? "(null)");
+                context.RejectPrincipal();
+                await context.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                return;
+            }
+
             var isNewKey = string.IsNullOrEmpty(key);
             if (isNewKey)
             {
@@ -81,6 +90,7 @@ namespace Messenger.Web.Extensions
             {
                 logger.LogWarning("[TokenRefresh] Сессия {Key}: refresh-токен отклонён — выполняем выход", key);
                 store.Remove(key!);
+                store.MarkRevoked(key, refreshToken);
                 context.RejectPrincipal();
                 await context.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
                 return;
