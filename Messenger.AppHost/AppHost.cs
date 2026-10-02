@@ -6,6 +6,11 @@ builder.AddDockerComposeEnvironment("compose");
 
 var useDocker = builder.Configuration.GetValue<bool>("UseDocker");
 
+int apiHttpsPort = builder.Configuration.GetValue<int>("Endpoints:HTTPS:API:Port");
+int apiHttpPort = builder.Configuration.GetValue<int>("Endpoints:HTTP:API:Port");
+int webHttpsPort = builder.Configuration.GetValue<int>("Endpoints:HTTPS:Web:Port");
+int webHttpPort = builder.Configuration.GetValue<int>("Endpoints:HTTP:Web:Port");
+
 IResourceBuilder<IResourceWithConnectionString> messengerDb;
 IResourceBuilder<IResourceWithConnectionString> rabbitmq;
 IResourceBuilder<IResourceWithConnectionString> redis;
@@ -44,9 +49,19 @@ else
 }
 
 var api = builder.AddProject<Projects.Messenger_API>("messenger-api")
-    .WithEndpoint("https", e => e.Port = 7001)
-    .WithEndpoint("http", e => e.Port = 5245)
-    .WithUrlForEndpoint("http", url => url.DisplayLocation = UrlDisplayLocation.DetailsOnly)
+    .WithEndpoint("https", e => e.Port = apiHttpsPort)
+    .WithEndpoint("http", e => e.Port = apiHttpPort)
+    .WithUrlForEndpoint("https", url =>
+    {
+        url.DisplayText = "Scalar API Docs";
+        url.Url = "/scalar";
+    })
+    .WithUrlForEndpoint("http", url =>
+    {
+        url.DisplayText = "Scalar API Docs (HTTP)";
+        url.Url = "/scalar";
+        url.DisplayLocation = UrlDisplayLocation.DetailsOnly;
+    })
     .WithReference(messengerDb)
     .WaitFor(messengerDb)
     .WithEnvironment("Redis__ConnectionString", redis.Resource.ConnectionStringExpression)
@@ -60,8 +75,17 @@ if (redisReady is not null)
 }
 
 builder.AddProject<Projects.Messenger_Web>("messenger-web")
-    .WithEndpoint("https", e => e.Port = 7010)
-    .WithEndpoint("http", e => e.Port = 5207)
+    .WithEndpoint("https", e => e.Port = webHttpsPort)
+    .WithEndpoint("http", e => e.Port = webHttpPort)
+    .WithUrlForEndpoint("https", url =>
+    {
+        url.DisplayText = "Messenger Web App";
+    })
+    .WithUrlForEndpoint("http", url =>
+    {
+        url.DisplayText = "Messenger Web (HTTP)";
+        url.DisplayLocation = UrlDisplayLocation.DetailsOnly;
+    })
     .WithReference(api)
     .WaitFor(api)
     .WithExternalHttpEndpoints();
