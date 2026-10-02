@@ -32,7 +32,7 @@ namespace Messenger.Infrastructure.Services
                 .Where(us => ids.Contains(us.UserId) && us.Online)
                 .ExecuteUpdateAsync(s => s
                     .SetProperty(us => us.Online, false)
-                    .SetProperty(us => us.LastActivity, DateTime.UtcNow),
+                    .SetProperty(us => us.LastActivity, DateTime.Now),
                     cancellationToken);
         }
 
