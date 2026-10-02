@@ -1,0 +1,92 @@
+networks:
+  messenger-net:
+    name: messenger-net
+
+volumes:
+  pg_data:
+  rabbit_data:
+
+services:
+  postgres:
+    image: postgres:17
+    container_name: messenger-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-GUAP_Messenger}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks:
+      - messenger-net
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: messenger-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
+    ports:
+      - "15672:15672"
+    networks:
+      - messenger-net
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: messenger-api
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-GUAP_Messenger};Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-postgres}"
+      RabbitMQ__Host: rabbitmq
+      RabbitMQ__Port: "5672"
+      RabbitMQ__Username: ${RABBITMQ_USER:-guest}
+      RabbitMQ__Password: ${RABBITMQ_PASSWORD:-guest}
+    depends_on:
+      - postgres
+      - rabbitmq
+    ports:
+      - "5245:8080"
+    networks:
+      - messenger-net
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    container_name: messenger-web
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-GUAP_Messenger};Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-postgres}"
+      RabbitMQ__Host: rabbitmq
+      RabbitMQ__Port: "5672"
+      RabbitMQ__Username: ${RABBITMQ_USER:-guest}
+      RabbitMQ__Password: ${RABBITMQ_PASSWORD:-guest}
+    depends_on:
+      - api
+    networks:
+      - messenger-net
+    ports:
+      - "5207:8080"
+
+  nginx:
+    image: nginx:alpine
+    container_name: messenger-nginx
+    restart: unless-stopped
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "80:80"
+    depends_on:
+      - api
+      - web
+    networks:
+      - messenger-net
