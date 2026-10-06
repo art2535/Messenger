@@ -325,19 +325,24 @@
 
     <script>
         const sessionToken = '@(HttpContext.Session.GetString("ACCESS_TOKEN") ?? "")';
-        if (sessionToken) {
-            localStorage.setItem('token', sessionToken);
-        }
+        const modelToken = '@Model.AccessToken';
+        (function persistToken() {
+            const t = (modelToken || sessionToken || localStorage.getItem('token') || '').trim();
+            if (t) {
+                try { localStorage.setItem('token', t.replace(/^Bearer\s+/i, '')); } catch (_) {}
+            }
+        })();
         const isAuthenticated = @User.Identity?.IsAuthenticated.ToString().ToLower();
         const tokenSaved = @Model.TokenSaved.ToString().ToLower();
-        if (!isAuthenticated && !tokenSaved) {
+        const hasClientToken = !!(localStorage.getItem('token') || sessionToken || modelToken);
+        if (!isAuthenticated && !tokenSaved && !hasClientToken) {
             console.warn("Settings: Неавторизованный доступ - редирект");
             window.location.href = "/Authorization/Authorization";
         }
         function getAuthToken() {
-            return '@Model.AccessToken' ||
-                localStorage.getItem('token') ||
-                sessionToken || '';
+            const raw = (modelToken || localStorage.getItem('token') || sessionToken || '').trim();
+            if (!raw) return '';
+            return raw.startsWith('Bearer ') ? raw : raw;
         }
         window.API_BASE_URL = '@Model.ApiBaseUrl';
         window.HUB_URL = '@Model.HubUrl';

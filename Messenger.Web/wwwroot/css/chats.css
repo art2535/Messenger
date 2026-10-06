@@ -1974,3 +1974,38 @@ body.select-mode-active #right-panel {
     background: rgba(96, 165, 250, 0.18);
     color: #93c5fd;
 }
+
+#message-input {
+    min-height: 2.5rem;
+    max-height: 8rem;
+    line-height: 1.4;
+    resize: none;
+    overflow-x: hidden;
+    overflow-y: hidden;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    border-radius: 1rem;
+    padding-top: 0.6rem;
+    padding-bottom: 0.6rem;
+    box-sizing: border-box;
+    field-sizing: content;
+}
+
+#normal-input-ui > .flex.items-center {
+    align-items: flex-end;
+}
+
+@media (max-width: 767.98px) {
+    #message-input {
+        font-size: 16px;
+        min-height: 2.75rem;
+        padding-top: 0.75rem;
+        padding-bottom: 0.75rem;
+    }
+
+    #normal-input-ui > .flex.items-center {
+        align-items: flex-end;
+        gap: 0.5rem;
+    }
+}

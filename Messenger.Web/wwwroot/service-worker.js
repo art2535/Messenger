@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'guap-messenger-v0.12.2';
+const CACHE_VERSION = 'guap-messenger-v0.12.3';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const CHATS_CACHE = `${CACHE_VERSION}-chats`;
@@ -27,7 +27,6 @@ self.addEventListener('message', event => {
 const STATIC_ASSETS = [
     '/', '/Index', '/Privacy', '/Error',
     '/Authorization/Authorization', '/Authorization', '/Authorization/Logout',
-    '/Account/Chats', '/Account/Settings',
     '/manifest.json',
     '/images/web-app-manifest-192x192.png',
     '/images/web-app-manifest-512x512.png',
@@ -119,6 +118,42 @@ async function networkFirst(request, cacheName, maxEntries) {
     }
 }
 
+async function offlineNavigationFallback(url) {
+    const path = url.pathname.replace(/\/$/, '') || '/';
+    const candidates = [
+        path,
+        path === '/Index' ? '/' : null,
+        path.startsWith('/Authorization') ? '/Authorization/Authorization' : null,
+        path.startsWith('/Account/Settings') ? '/Account/Settings' : null,
+        path.startsWith('/Account') ? '/Account/Chats' : null,
+        '/Account/Chats', '/', '/Index', '/Privacy', '/Error'
+    ].filter(Boolean);
+    for (const c of candidates) {
+        const hit = await caches.match(c, { ignoreSearch: true });
+        if (hit) return hit;
+    }
+    return new Response(
+        '<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Offline</title><style>body{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#0f172a;color:#e2e8f0;text-align:center;padding:1.5rem}a{color:#38bdf8}</style></head><body><div><h1>Нет сети</h1><p>GUAP Messenger недоступен offline.</p><p><a href="/">На главную</a> · <a href="/Account/Chats">Чаты</a></p></div></body></html>',
+        { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+    );
+}
+
+async function networkFirstNavigation(request, url) {
+    try {
+        const response = await fetch(request);
+        if (response && response.ok) {
+            const cache = await caches.open(RUNTIME_CACHE);
+            cache.put(request, response.clone());
+            trimCache(RUNTIME_CACHE, MAX_RUNTIME_ENTRIES);
+        }
+        return response;
+    } catch (err) {
+        const cached = await caches.match(request);
+        if (cached) return cached;
+        return offlineNavigationFallback(url);
+    }
+}
+
 self.addEventListener('fetch', event => {
     const request = event.request;
     const url = new URL(request.url);
@@ -146,6 +181,11 @@ self.addEventListener('fetch', event => {
                     });
             })
         );
+        return;
+    }
+
+    if (request.mode === 'navigate' || request.destination === 'document') {
+        event.respondWith(networkFirstNavigation(request, url));
         return;
     }
 

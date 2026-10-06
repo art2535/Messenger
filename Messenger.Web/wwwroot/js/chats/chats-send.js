@@ -1,4 +1,4 @@
-function removeMessageFromUI(messageId, chatIdHint) {
+function removeMessageFromUI(messageId, chatIdHint, options = {}) {
     const chatId = chatIdHint || currentChatId;
     const el = document.querySelector(`[data-mid="${messageId}"]`);
     if (el) {
@@ -33,12 +33,8 @@ function removeMessageFromUI(messageId, chatIdHint) {
         if (typeof isMessagePinned === 'function' && isMessagePinned(chatId, messageId)) {
             unpinMessage(chatId, messageId);
         }
-        if (typeof refreshChatListPreviewFromDom === 'function') {
-            refreshChatListPreviewFromDom(chatId);
-        }
-        if (typeof reorderUnpinnedChatsByLastActivity === 'function') {
-            reorderUnpinnedChatsByLastActivity();
-        }
+        if (options.skipListUpdate) return;
+        syncChatListAfterDelete(chatId);
     }
 }
 
@@ -63,12 +59,108 @@ function normalizeMessageStatus(raw) {
     return s || 'sent';
 }
 
-function refreshChatListPreviewFromDom(chatId) {
+const __chatListSyncTimers = new Map();
+
+function syncChatListAfterDelete(chatId) {
     if (!chatId) return;
+    const key = String(chatId).toLowerCase();
+    clearTimeout(__chatListSyncTimers.get(key));
+    __chatListSyncTimers.set(key, setTimeout(() => {
+        __chatListSyncTimers.delete(key);
+        runChatListSyncAfterDelete(chatId).catch(e => console.warn('[syncChatListAfterDelete]', e));
+    }, 200));
+}
+
+async function fetchLastVisibleMessage(chatId) {
+    const res = await fetchWithAuth(`${API_BASE}/messages/${chatId}?limit=50`);
+    if (!res || !res.ok) return undefined;
+    const json = await res.json().catch(() => null);
+    if (!json) return undefined;
+    const raw = json.data || json.Data || (Array.isArray(json) ? json : []);
+    const list = Array.isArray(raw) ? raw : [];
+    const hidden = typeof getHiddenMessageIds === 'function' ? getHiddenMessageIds() : new Set();
+    const visible = list.filter(m => !hidden.has(String(m.messageId || m.MessageId)));
+    if (!visible.length) return null;
+    return visible.reduce((a, b) => {
+        const sa = Number(a.sequenceNumber ?? a.SequenceNumber ?? 0);
+        const sb = Number(b.sequenceNumber ?? b.SequenceNumber ?? 0);
+        if (sa || sb) return sa >= sb ? a : b;
+        const ta = new Date(a.sentAt || a.SentAt || 0).getTime();
+        const tb = new Date(b.sentAt || b.SentAt || 0).getTime();
+        return ta >= tb ? a : b;
+    });
+}
+
+function setChatListItemEmpty(chatItem) {
+    const preview = chatItem.querySelector('.last-message-preview');
+    const timeEl = chatItem.querySelector('.chat-list-time');
+    if (preview) {
+        preview.outerHTML = `<div class="flex items-center min-w-0 gap-1 last-message-preview"><span class="truncate text-gray-400">Нет сообщений</span></div>`;
+    }
+    if (timeEl) timeEl.textContent = '';
+    chatItem.dataset.lastMessageId = '';
+    chatItem.dataset.lastMessageStatus = '';
+    chatItem.dataset.lastMessageAt = '';
+}
+
+async function runChatListSyncAfterDelete(chatId) {
     const chatItem = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
     if (!chatItem) return;
 
-    if (String(currentChatId) === String(chatId)) {
+    const isOpen = currentChatId != null
+        && String(currentChatId).toLowerCase() === String(chatId).toLowerCase();
+
+    if (isOpen) {
+        const rows = messagesContainer
+            ? messagesContainer.querySelectorAll('[data-mid]:not([data-mid^="temp-"])').length
+            : 0;
+        if (rows > 0) {
+            refreshChatListPreviewFromDom(chatId, { reorder: true });
+            return;
+        }
+    }
+
+    const last = await fetchLastVisibleMessage(chatId);
+
+    if (last === undefined) {
+        if (isOpen) refreshChatListPreviewFromDom(chatId, { reorder: true });
+        return;
+    }
+
+    if (last === null) {
+        setChatListItemEmpty(chatItem);
+        if (typeof moveChatToBottom === 'function') moveChatToBottom(chatId);
+        else if (typeof reorderUnpinnedChatsByLastActivity === 'function') reorderUnpinnedChatsByLastActivity();
+        return;
+    }
+
+    const isMine = String(last.senderId || last.SenderId) === String(me);
+    const status = isMine
+        ? normalizeMessageStatus(last.status || last.Status || last.deliveryStatus || last.DeliveryStatus || 'sent')
+        : null;
+    const sentAt = last.sentAt || last.SentAt || last.sendTime || last.SendTime || null;
+    let text = last.messageText || last.MessageText || '';
+    if (typeof stripMessageMetaForPreview === 'function') text = stripMessageMetaForPreview(text);
+
+    updateChatLastMessagePreview(chatId, text, last.attachments || last.Attachments || [], sentAt, isMine, status);
+    chatItem.dataset.lastMessageId = String(last.messageId || last.MessageId || '');
+    chatItem.dataset.lastMessageStatus = status || '';
+    if (sentAt) {
+        const d = new Date(sentAt);
+        if (!isNaN(d.getTime())) chatItem.dataset.lastMessageAt = d.toISOString();
+    }
+    if (typeof reorderUnpinnedChatsByLastActivity === 'function') reorderUnpinnedChatsByLastActivity();
+}
+
+function refreshChatListPreviewFromDom(chatId, options = {}) {
+    if (!chatId) return;
+    const doReorder = options.reorder !== false;
+    const chatItem = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
+    if (!chatItem) return;
+
+    const isOpenChat = currentChatId != null
+        && String(currentChatId).toLowerCase() === String(chatId).toLowerCase();
+    if (isOpenChat) {
         const rows = [...messagesContainer.querySelectorAll('[data-mid]:not([data-mid^="temp-"])')];
         if (!rows.length) {
             const preview = chatItem.querySelector('.last-message-preview');
@@ -80,6 +172,10 @@ function refreshChatListPreviewFromDom(chatId) {
             chatItem.dataset.lastMessageId = '';
             chatItem.dataset.lastMessageStatus = '';
             chatItem.dataset.lastMessageAt = '';
+            if (doReorder) {
+                if (typeof moveChatToBottom === 'function') moveChatToBottom(chatId);
+                else if (typeof reorderUnpinnedChatsByLastActivity === 'function') reorderUnpinnedChatsByLastActivity();
+            }
             return;
         }
         const last = rows[rows.length - 1];
@@ -105,6 +201,9 @@ function refreshChatListPreviewFromDom(chatId) {
         chatItem.dataset.lastMessageId = mid;
         chatItem.dataset.lastMessageStatus = status || '';
         if (sentAt) chatItem.dataset.lastMessageAt = sentAt;
+        if (doReorder && typeof reorderUnpinnedChatsByLastActivity === 'function') {
+            reorderUnpinnedChatsByLastActivity();
+        }
         return;
     }
 
@@ -124,6 +223,10 @@ function refreshChatListPreviewFromDom(chatId) {
                 chatItem.dataset.lastMessageId = '';
                 chatItem.dataset.lastMessageStatus = '';
                 chatItem.dataset.lastMessageAt = '';
+                if (doReorder) {
+                    if (typeof moveChatToBottom === 'function') moveChatToBottom(chatId);
+                    else if (typeof reorderUnpinnedChatsByLastActivity === 'function') reorderUnpinnedChatsByLastActivity();
+                }
                 return;
             }
             let msg = list[list.length - 1];
@@ -160,9 +263,6 @@ function refreshChatListPreviewFromDom(chatId) {
                     const d = new Date(sentAt);
                     if (!isNaN(d.getTime())) chatItem.dataset.lastMessageAt = d.toISOString();
                 } catch (_) {}
-            }
-            if (typeof reorderUnpinnedChatsByLastActivity === 'function') {
-                reorderUnpinnedChatsByLastActivity();
             }
         })
         .catch(e => console.warn('[refreshChatListPreviewFromDom]', e));
@@ -204,7 +304,8 @@ async function deleteMessage(messageId, scope = 'everyone', opts = {}) {
     try {
         if (scope === 'me') {
             hideMessageForMe(messageId);
-            removeMessageFromUI(messageId, currentChatId);
+            removeMessageFromUI(messageId, currentChatId, { skipListUpdate: true });
+            syncChatListAfterDelete(currentChatId);
             if (!silent) showToast('Сообщение удалено только у вас', 'success');
             return true;
         }
@@ -217,7 +318,8 @@ async function deleteMessage(messageId, scope = 'everyone', opts = {}) {
             const err = await res.json().catch(() => ({}));
             throw new Error(err.error || err.Error || `HTTP ${res.status}`);
         }
-        removeMessageFromUI(messageId, currentChatId);
+        removeMessageFromUI(messageId, currentChatId, { skipListUpdate: true });
+        syncChatListAfterDelete(currentChatId);
         if (!silent) showToast('Сообщение удалено для всех', 'success');
         return true;
     } catch (err) {
@@ -240,7 +342,7 @@ async function deleteMessagesBatch(messageIds, scope = 'everyone') {
         if (scope === 'me') {
             for (const mid of ids) {
                 hideMessageForMe(mid);
-                removeMessageFromUI(mid, chatId);
+                removeMessageFromUI(mid, chatId, { skipListUpdate: true });
                 ok++;
             }
         } else if (ids.length > 1) {
@@ -268,7 +370,7 @@ async function deleteMessagesBatch(messageIds, scope = 'everyone') {
                     const data = await res.json().catch(() => ({}));
                     const deletedIds = data.messageIds || data.MessageIds || ids;
                     (deletedIds || []).forEach(mid => {
-                        removeMessageFromUI(mid, chatId);
+                        removeMessageFromUI(mid, chatId, { skipListUpdate: true });
                         ok++;
                     });
                     const deletedSet = new Set((deletedIds || []).map(String));
@@ -293,12 +395,7 @@ async function deleteMessagesBatch(messageIds, scope = 'everyone') {
 
         if (typeof exitSelectMode === 'function') exitSelectMode();
 
-        if (typeof refreshChatListPreviewFromDom === 'function') {
-            refreshChatListPreviewFromDom(chatId);
-        }
-        if (typeof reorderUnpinnedChatsByLastActivity === 'function') {
-            reorderUnpinnedChatsByLastActivity();
-        }
+        syncChatListAfterDelete(chatId);
 
         if (ok && !fail) {
             const msg = scope === 'me'
@@ -319,9 +416,6 @@ async function deleteMessagesBatch(messageIds, scope = 'everyone') {
     } finally {
         setTimeout(() => {
             if (typeof __suppressChatBump !== 'undefined') __suppressChatBump = prevSuppress;
-            if (typeof reorderUnpinnedChatsByLastActivity === 'function') {
-                reorderUnpinnedChatsByLastActivity();
-            }
         }, 400);
     }
 }
@@ -398,6 +492,7 @@ function clearInputAfterSend() {
     selectedFiles = [];
     fileInput.value = '';
     if (typeof cancelReply === 'function') cancelReply();
+    if (typeof resetMessageInputSize === 'function') resetMessageInputSize();
 }
 
 document.getElementById('ctx-edit-btn')?.addEventListener('click', () => {

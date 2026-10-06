@@ -24,7 +24,7 @@ namespace Messenger.Infrastructure.Services
                 .Where(l => ids.Contains(l.UserId) && l.Active)
                 .ExecuteUpdateAsync(s => s
                     .SetProperty(l => l.Active, false)
-                    .SetProperty(l => l.LogoutTime, DateTime.UtcNow)
+                    .SetProperty(l => l.LogoutTime, DateTime.Now)
                     .SetProperty(l => l.Token, string.Empty),
                     cancellationToken);
         }

@@ -317,22 +317,19 @@ async function startSignalR() {
         const mid = data?.messageId || data?.MessageId || data;
         if (!mid) return;
         const chatId = data?.chatId || data?.ChatId || currentChatId;
-        removeMessageFromUI(mid, chatId);
+        const open = currentChatId != null && String(currentChatId).toLowerCase() === String(chatId).toLowerCase();
+
+        if (!open && typeof decrementUnread === 'function') {
+            decrementUnread(chatId, 1, mid);
+        }
 
         if (typeof GuapNotify !== 'undefined' && GuapNotify.closeMessageNotification) {
             GuapNotify.closeMessageNotification(mid);
         }
 
-        const open = currentChatId != null && String(currentChatId).toLowerCase() === String(chatId).toLowerCase();
-        if (!open) {
-            if (typeof decrementUnread === 'function') {
-                decrementUnread(chatId, 1, mid);
-            }
-        }
+        removeMessageFromUI(mid, chatId, { skipListUpdate: true });
 
-        if (typeof refreshChatListPreviewFromDom === 'function') {
-            refreshChatListPreviewFromDom(chatId);
-        }
+        syncChatListAfterDelete(chatId);
     });
 
     connection.on('ReactionUpdated', (data) => {

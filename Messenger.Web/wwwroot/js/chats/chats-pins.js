@@ -140,7 +140,6 @@ function isMessagePinned(chatId, messageId) {
 }
 
 const pinnedViewIndex = new Map();
-/** Chat IDs where user dismissed the pinned-messages bar (Esc / close without unpin). */
 const pinnedBarDismissed = new Set();
 
 function hidePinnedMessageBar() {
@@ -219,7 +218,6 @@ function updatePinnedMessageBar() {
         pinnedBarDismissed.delete(String(currentChatId));
         return;
     }
-    // User dismissed the bar (Esc) — keep hidden until re-open or new pin
     if (pinnedBarDismissed.has(String(currentChatId))) {
         bar.classList.remove('show');
         return;
@@ -314,14 +312,12 @@ async function withFrozenChatListPosition(chatId, fn) {
             await result;
         }
     } finally {
-        // Вернуть чат на прежнее место относительно соседей
         if (item && container && item.parentElement === container) {
             if (next && next.parentElement === container) {
                 if (item.nextElementSibling !== next) {
                     container.insertBefore(item, next);
                 }
             } else if (prev && prev.parentElement === container) {
-                // вставить после prev
                 if (prev.nextElementSibling !== item) {
                     if (prev.nextElementSibling) container.insertBefore(item, prev.nextElementSibling);
                     else container.appendChild(item);
@@ -332,19 +328,16 @@ async function withFrozenChatListPosition(chatId, fn) {
                 container.insertBefore(item, container.firstElementChild);
             }
 
-            // Если порядок всё ещё сбился — восстановить по индексу
             const items = [...container.querySelectorAll('.chat-item')];
             const indexAfter = items.indexOf(item);
             if (indexBefore >= 0 && indexAfter >= 0 && indexBefore !== indexAfter) {
                 const ref = items[indexBefore] === item
                     ? (items[indexBefore + 1] || null)
                     : items[indexBefore];
-                // более надёжно: собрать id-порядок
                 const ids = items.map(el => el.dataset.chatId);
                 const id = String(chatId);
                 ids.splice(indexAfter, 1);
                 ids.splice(Math.min(indexBefore, ids.length), 0, id);
-                // не перестраиваем весь список — только этот элемент
                 if (indexBefore === 0) {
                     container.insertBefore(item, container.firstElementChild);
                 } else {
@@ -356,7 +349,6 @@ async function withFrozenChatListPosition(chatId, fn) {
                 }
             }
         }
-        // Дольше держим suppress: SignalR MessageDeleted может прийти с задержкой
         setTimeout(() => { __suppressChatBump = false; }, 1500);
     }
 }
@@ -364,7 +356,6 @@ async function withFrozenChatListPosition(chatId, fn) {
 function bumpChatToTop(chatId) {
     if (__suppressChatBump) return;
     if (!chatId) return;
-    // Текущий чат тоже поднимаем — при отправке/пересылке список должен обновиться
     const container = document.getElementById('chats-container');
     const item = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
     if (!container || !item) return;
@@ -387,7 +378,23 @@ function bumpChatToTop(chatId) {
     __chatBaseOrder = [id, ...__chatBaseOrder.filter(x => x !== id)];
 }
 
-/** Timestamp последней активности чата (ms). indexFallback сохраняет текущий порядок, если даты нет. */
+function moveChatToBottom(chatId) {
+    if (!chatId) return;
+    const container = document.getElementById('chats-container');
+    const item = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
+    if (!container || !item) return;
+    if (typeof isChatPinned === 'function' && isChatPinned(chatId)) return;
+
+    item.dataset.lastMessageAt = '';
+    container.appendChild(item);
+
+    const id = String(chatId);
+    if (typeof __chatBaseOrder !== 'undefined' && Array.isArray(__chatBaseOrder)) {
+        __chatBaseOrder = __chatBaseOrder.filter(x => x !== id).concat([id]);
+    }
+    if (typeof cacheChatItems === 'function') cacheChatItems();
+}
+
 function getChatLastActivityTs(chatItem, indexFallback = 0) {
     if (!chatItem) return 0;
     const at = chatItem.dataset.lastMessageAt || chatItem.getAttribute('data-last-message-at');
@@ -395,14 +402,9 @@ function getChatLastActivityTs(chatItem, indexFallback = 0) {
         const t = new Date(at).getTime();
         if (!isNaN(t) && t > 0) return t;
     }
-    // Нет даты — стабильный fallback по текущей позиции (не сбрасывать весь список вниз)
-    return 1e15 - indexFallback;
+    return indexFallback * 1e-6;
 }
 
-/**
- * Пересортировать незакреплённые чаты по дате последнего сообщения (новые сверху).
- * Закреплённые остаются сверху. Чаты без даты сохраняют относительный порядок.
- */
 function reorderUnpinnedChatsByLastActivity() {
     const container = document.getElementById('chats-container');
     if (!container) return;
@@ -421,7 +423,6 @@ function reorderUnpinnedChatsByLastActivity() {
         }
     }
 
-    // unpinned в текущем DOM-порядке
     const unpinned = items.filter(el => {
         const id = String(el.dataset.chatId || '');
         return id && !pinnedIds.includes(id);
