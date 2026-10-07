@@ -1,0 +1,17 @@
+stages:
+  - deploy
+
+deploy:
+  stage: deploy
+  tags:
+    - msg
+  variables:
+    # имя compose-проекта фиксируем = текущему (по папке messenger),
+    # иначе runner создал бы новые тома -> потеря БД
+    COMPOSE_PROJECT_NAME: messenger
+  script:
+    - cp "$ENV_FILE" .env
+    - docker compose build web api
+    - docker compose up -d web api
+  only:
+    - main
