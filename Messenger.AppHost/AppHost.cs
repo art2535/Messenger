@@ -42,10 +42,12 @@ else
     redis = builder.AddConnectionString("Redis");
 
     redisReady = builder.AddExecutable("redis-ready", "wsl", ".",
-        "bash", "-lc", "redis-cli -p 16379 ping 2>/dev/null | grep -q PONG "
-        + "|| (sudo service redis-server start 2>/dev/null; sleep 1; redis-cli -p 16379 ping | grep -q PONG)");
+        "-d", "Ubuntu-26.04", "bash", "-lc",
+        "redis-cli -p 6379 ping 2>/dev/null | grep -q PONG " +
+        "|| (sudo service redis-server start 2>/dev/null; sleep 1; redis-cli -p 6379 ping | grep -q PONG)");
 
-    builder.AddExecutable("redis-cli-monitor", "wsl", ".", "redis-cli", "-p", "16379", "monitor");
+    builder.AddExecutable("redis-cli-monitor", "wsl", ".",
+        "-d", "Ubuntu-26.04", "redis-cli", "-p", "6379", "monitor");
 }
 
 var api = builder.AddProject<Projects.Messenger_API>("messenger-api")
