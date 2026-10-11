@@ -40,7 +40,6 @@ namespace Messenger.Web.Pages.Account
         public bool HasAvatar { get; private set; }
         public string? AvatarUrl { get; private set; }
         public UserProfileDto? CurrentUser { get; private set; }
-        public List<BlockedUserDto> BlockedUsers { get; private set; } = new();
 
         public string? ErrorMessage { get; private set; }
         public string AccessToken { get; set; } = string.Empty;

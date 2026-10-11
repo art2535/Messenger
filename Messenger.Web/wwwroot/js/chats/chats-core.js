@@ -2,7 +2,6 @@ feather.replace();
 
 const API_BASE = window.API_BASE_URL;
 
-let myBlockedUsers = new Set();
 let allChats = [];
 let unreadCounts = new Map();
 
