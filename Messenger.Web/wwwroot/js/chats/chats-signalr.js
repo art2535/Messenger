@@ -799,7 +799,6 @@ function updateCurrentChatSubtitle() {
 }
 
 function parseActivityDate(value) {
-    // Same UTC-without-Z rules as parseMessageDate (server timestamps are UTC).
     if (typeof parseMessageDate === 'function') {
         return parseMessageDate(value);
     }
@@ -808,7 +807,11 @@ function parseActivityDate(value) {
         const d = new Date(value < 1e12 ? value * 1000 : value);
         return isNaN(d.getTime()) ? null : d;
     }
+    if (value instanceof Date) {
+        return isNaN(value.getTime()) ? null : value;
+    }
     let s = String(value).trim();
+    if (!s) return null;
     if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(s)) {
         s = s.replace(' ', 'T');
     }
