@@ -12,23 +12,6 @@ namespace Messenger.API.Responses
         public List<string> Roles { get; set; } = new();
     }
 
-    public class RegisterSuccessResponse
-    {
-        public bool IsSuccess { get; set; }
-        public User? User { get; set; }
-        public string? Role { get; set; }
-        public string? Token { get; set; }
-    }
-
-    public class LoginSuccessResponse
-    {
-        public bool IsSuccess { get; set; }
-        public Guid UserId { get; set; }
-        public string? Role { get; set; }
-        public string? Token { get; set; }
-        public string FullName { get; set; } = string.Empty;
-    }
-
     public class LogoutSuccessResponse
     {
         public bool IsSuccess { get; set; }
@@ -121,18 +104,6 @@ namespace Messenger.API.Responses
         public long? NextBeforeSequence { get; set; }
     }
 
-    public class UpdateMessageStatusSuccessResponse
-    {
-        public bool IsSuccess { get; set; }
-        public string Message { get; set; } = string.Empty;
-    }
-
-    public class GetMessageStatusesSuccessResponse
-    {
-        public bool IsSuccess { get; set; }
-        public object? Data { get; set; }
-    }
-
     public class AddReactionSuccessResponse
     {
         public bool IsSuccess { get; set; }
@@ -223,18 +194,6 @@ namespace Messenger.API.Responses
         public string Message { get; set; } = string.Empty;
     }
 
-    public class GetBlockedUsersSuccessResponse
-    {
-        public bool IsSuccess { get; set; }
-        public object? Data { get; set; }
-    }
-
-    public class BlockUserSuccessResponse
-    {
-        public bool IsSuccess { get; set; }
-        public string Message { get; set; } = string.Empty;
-    }
-
     public class UploadAvatarSuccessResponse
     {
         public bool IsSuccess { get; set; }
@@ -242,30 +201,7 @@ namespace Messenger.API.Responses
         public object? Data { get; set; }
     }
 
-    public class UnblockUserSuccessResponse
-    {
-        public bool IsSuccess { get; set; }
-        public string Message { get; set; } = string.Empty;
-    }
-
-    public class ChangePasswordSuccessResponse
-    {
-        public bool IsSuccess { get; set; }
-        public string Message { get; set; } = string.Empty;
-    }
-
     public class AssignRoleSuccessResponse
-    {
-        public bool IsSuccess { get; set; }
-        public string Message { get; set; } = string.Empty;
-    }
-
-    public class IsBlockedByResponse
-    {
-        public bool IsBlocked { get; set; }
-    }
-
-    public class DeleteAccountSuccessResponse
     {
         public bool IsSuccess { get; set; }
         public string Message { get; set; } = string.Empty;

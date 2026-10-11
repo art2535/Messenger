@@ -19,8 +19,6 @@ public partial class GuapMessengerContext : DbContext
 
     public virtual DbSet<Attachment> Attachments { get; set; }
 
-    public virtual DbSet<Blacklist> Blacklists { get; set; }
-
     public virtual DbSet<Chat> Chats { get; set; }
 
     public virtual DbSet<ChatParticipant> ChatParticipants { get; set; }
@@ -70,18 +68,10 @@ public partial class GuapMessengerContext : DbContext
 
             entity.Property(e => e.AttachmentId).ValueGeneratedNever();
 
+            entity.HasIndex(e => e.MessageId)
+                .HasDatabaseName("IX_Attachments_MessageId");
+
             entity.HasOne(d => d.Message).WithMany(p => p.Attachments).HasConstraintName("fk_attachment_message");
-        });
-
-        modelBuilder.Entity<Blacklist>(entity =>
-        {
-            entity.HasKey(e => new { e.UserId, e.BlockedUserId }).HasName("Blacklist_pkey");
-
-            entity.Property(e => e.BlockDate).HasDefaultValueSql("now()");
-
-            entity.HasOne(d => d.BlockedUser).WithMany(p => p.BlacklistBlockedUsers).HasConstraintName("fk_blocked_to");
-
-            entity.HasOne(d => d.User).WithMany(p => p.BlacklistUsers).HasConstraintName("fk_blocked_by");
         });
 
         modelBuilder.Entity<Chat>(entity =>
@@ -100,6 +90,9 @@ public partial class GuapMessengerContext : DbContext
 
             entity.Property(e => e.JoinDate).HasDefaultValueSql("now()");
             entity.Property(e => e.Role).HasDefaultValueSql("'participant'::character varying");
+
+            entity.HasIndex(e => e.UserId)
+                .HasDatabaseName("IX_ChatParticipants_UserId");
 
             entity.HasOne(d => d.Chat).WithMany(p => p.ChatParticipants).HasConstraintName("fk_participant_chat");
 
@@ -143,6 +136,9 @@ public partial class GuapMessengerContext : DbContext
             entity.Property(e => e.NotificationId).ValueGeneratedNever();
             entity.Property(e => e.CreationDate).HasDefaultValueSql("now()");
             entity.Property(e => e.Read).HasDefaultValue(false);
+
+            entity.HasIndex(e => new { e.UserId, e.Read })
+                .HasDatabaseName("IX_Notifications_UserId_Read");
 
             entity.HasOne(d => d.User).WithMany(p => p.Notifications).HasConstraintName("fk_notification_user");
         });
@@ -271,6 +267,9 @@ public partial class GuapMessengerContext : DbContext
             entity.HasKey(e => e.Id).HasName("PushSubscriptions_pkey");
 
             entity.Property(e => e.Id).ValueGeneratedNever();
+
+            entity.HasIndex(e => e.UserId)
+                .HasDatabaseName("IX_PushSubscriptions_UserId");
 
             entity.HasOne(d => d.User)
                 .WithMany(p => p.PushSubscriptions)

@@ -36,14 +36,6 @@ public partial class User
     [JsonIgnore]
     public virtual AccountSetting Account { get; set; } = null!;
 
-    [InverseProperty("BlockedUser")]
-    [JsonIgnore]
-    public virtual ICollection<Blacklist> BlacklistBlockedUsers { get; set; } = new List<Blacklist>();
-
-    [InverseProperty("User")]
-    [JsonIgnore]
-    public virtual ICollection<Blacklist> BlacklistUsers { get; set; } = new List<Blacklist>();
-
     [InverseProperty("User")]
     [JsonIgnore]
     public virtual ICollection<ChatParticipant> ChatParticipants { get; set; } = new List<ChatParticipant>();
