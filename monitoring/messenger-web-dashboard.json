@@ -1,0 +1,74 @@
+{
+  "title": "Messenger Web Dashboard",
+  "panels": [
+    {
+      "title": "Web - Memory Usage (MB)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [{
+        "expr": "dotnet_process_memory_working_set_bytes{job=\"messenger-web\"} / 1024 / 1024",
+        "legendFormat": "Working Set"
+      }],
+      "fieldConfig": { "defaults": { "unit": "decmbytes" } }
+    },
+    {
+      "title": "Web - CPU Usage (%)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [{
+        "expr": "rate(dotnet_process_cpu_time_seconds_total{job=\"messenger-web\"}[1m]) * 100",
+        "legendFormat": "{{cpu_mode}}"
+      }]
+    },
+    {
+      "title": "Web - Incoming HTTP Requests/sec",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
+      "targets": [{
+        "expr": "sum(rate(http_server_request_duration_seconds_count{job=\"messenger-web\"}[1m]))",
+        "legendFormat": "RPS"
+      }]
+    },
+    {
+      "title": "Web - Incoming HTTP 95th Percentile Latency",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
+      "targets": [{
+        "expr": "histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket{job=\"messenger-web\"}[5m])) by (le))",
+        "legendFormat": "p95"
+      }],
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    },
+    {
+      "title": "Web - Outgoing HTTP to API (Duration p95)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 },
+      "targets": [{
+        "expr": "histogram_quantile(0.95, sum(rate(http_client_request_duration_seconds_bucket{job=\"messenger-web\"}[5m])) by (le))",
+        "legendFormat": "API Call p95"
+      }],
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "description": "Сколько времени Web-приложение ждет ответа от API"
+    },
+    {
+      "title": "Web - Outgoing HTTP to API (Errors)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "targets": [{
+        "expr": "sum(rate(http_client_request_duration_seconds_count{job=\"messenger-web\", http_response_status_code=~\"5..\"}[5m]))",
+        "legendFormat": "API 5xx Errors"
+      }]
+    },
+    {
+      "title": "Web - GC Collections",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "targets": [{
+        "expr": "rate(dotnet_gc_collections_total{job=\"messenger-web\"}[5m])",
+        "legendFormat": "{{gc_heap_generation}}"
+      }]
+    }
+  ],
+  "time": { "from": "now-15m", "to": "now" },
+  "tags": ["dotnet", "messenger-web"]
+}
