@@ -85,8 +85,8 @@ async function fetchLastVisibleMessage(chatId) {
         const sa = Number(a.sequenceNumber ?? a.SequenceNumber ?? 0);
         const sb = Number(b.sequenceNumber ?? b.SequenceNumber ?? 0);
         if (sa || sb) return sa >= sb ? a : b;
-        const ta = new Date(a.sentAt || a.SentAt || 0).getTime();
-        const tb = new Date(b.sentAt || b.SentAt || 0).getTime();
+        const ta = (typeof parseMessageDate === 'function' ? parseMessageDate(a.sentAt || a.SentAt) : new Date(a.sentAt || a.SentAt || 0))?.getTime() || 0;
+        const tb = (typeof parseMessageDate === 'function' ? parseMessageDate(b.sentAt || b.SentAt) : new Date(b.sentAt || b.SentAt || 0))?.getTime() || 0;
         return ta >= tb ? a : b;
     });
 }
@@ -146,8 +146,8 @@ async function runChatListSyncAfterDelete(chatId) {
     chatItem.dataset.lastMessageId = String(last.messageId || last.MessageId || '');
     chatItem.dataset.lastMessageStatus = status || '';
     if (sentAt) {
-        const d = new Date(sentAt);
-        if (!isNaN(d.getTime())) chatItem.dataset.lastMessageAt = d.toISOString();
+        const d = typeof parseMessageDate === 'function' ? parseMessageDate(sentAt) : new Date(sentAt);
+        if (d && !isNaN(d.getTime())) chatItem.dataset.lastMessageAt = d.toISOString();
     }
     if (typeof reorderUnpinnedChatsByLastActivity === 'function') reorderUnpinnedChatsByLastActivity();
 }
@@ -200,7 +200,13 @@ function refreshChatListPreviewFromDom(chatId, options = {}) {
         updateChatLastMessagePreview(chatId, text, attachments, sentAt, isMine, status);
         chatItem.dataset.lastMessageId = mid;
         chatItem.dataset.lastMessageStatus = status || '';
-        if (sentAt) chatItem.dataset.lastMessageAt = sentAt;
+        if (sentAt) {
+            try {
+                const d = typeof parseMessageDate === 'function' ? parseMessageDate(sentAt) : new Date(sentAt);
+                if (d && !isNaN(d.getTime())) chatItem.dataset.lastMessageAt = d.toISOString();
+                else chatItem.dataset.lastMessageAt = String(sentAt);
+            } catch (_) { chatItem.dataset.lastMessageAt = String(sentAt); }
+        }
         if (doReorder && typeof reorderUnpinnedChatsByLastActivity === 'function') {
             reorderUnpinnedChatsByLastActivity();
         }
@@ -235,8 +241,8 @@ function refreshChatListPreviewFromDom(chatId, options = {}) {
                     const sa = a.sequenceNumber ?? a.SequenceNumber ?? 0;
                     const sb = b.sequenceNumber ?? b.SequenceNumber ?? 0;
                     if (sa || sb) return sa >= sb ? a : b;
-                    const ta = new Date(a.sentAt || a.SentAt || a.sendTime || a.SendTime || 0).getTime();
-                    const tb = new Date(b.sentAt || b.SentAt || b.sendTime || b.SendTime || 0).getTime();
+                    const ta = (typeof parseMessageDate === 'function' ? parseMessageDate(a.sentAt || a.SentAt || a.sendTime || a.SendTime) : new Date(a.sentAt || a.SentAt || a.sendTime || a.SendTime || 0))?.getTime() || 0;
+                    const tb = (typeof parseMessageDate === 'function' ? parseMessageDate(b.sentAt || b.SentAt || b.sendTime || b.SendTime) : new Date(b.sentAt || b.SentAt || b.sendTime || b.SendTime || 0))?.getTime() || 0;
                     return ta >= tb ? a : b;
                 });
             }
@@ -260,8 +266,8 @@ function refreshChatListPreviewFromDom(chatId, options = {}) {
             chatItem.dataset.lastMessageStatus = status || '';
             if (sentAt) {
                 try {
-                    const d = new Date(sentAt);
-                    if (!isNaN(d.getTime())) chatItem.dataset.lastMessageAt = d.toISOString();
+                    const d = typeof parseMessageDate === 'function' ? parseMessageDate(sentAt) : new Date(sentAt);
+                    if (d && !isNaN(d.getTime())) chatItem.dataset.lastMessageAt = d.toISOString();
                 } catch (_) {}
             }
         })
@@ -757,8 +763,8 @@ function updateChatLastMessagePreview(chatId, messageText, attachments = [], sen
         if (sentAt === '' || sentAt === false) chatItem.dataset.lastMessageAt = '';
     } else {
         try {
-            const d = new Date(sentAt);
-            if (!isNaN(d.getTime())) chatItem.dataset.lastMessageAt = d.toISOString();
+            const d = typeof parseMessageDate === 'function' ? parseMessageDate(sentAt) : new Date(sentAt);
+            if (d && !isNaN(d.getTime())) chatItem.dataset.lastMessageAt = d.toISOString();
         } catch (_) {
             chatItem.dataset.lastMessageAt = String(sentAt);
         }

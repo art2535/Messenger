@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'guap-messenger-v0.12.3';
+const CACHE_VERSION = 'guap-messenger-v0.13.1';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const CHATS_CACHE = `${CACHE_VERSION}-chats`;

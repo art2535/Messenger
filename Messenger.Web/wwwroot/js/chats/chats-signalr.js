@@ -799,6 +799,10 @@ function updateCurrentChatSubtitle() {
 }
 
 function parseActivityDate(value) {
+    // Same UTC-without-Z rules as parseMessageDate (server timestamps are UTC).
+    if (typeof parseMessageDate === 'function') {
+        return parseMessageDate(value);
+    }
     if (value == null || value === '') return null;
     if (typeof value === 'number') {
         const d = new Date(value < 1e12 ? value * 1000 : value);
@@ -808,10 +812,12 @@ function parseActivityDate(value) {
     if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(s)) {
         s = s.replace(' ', 'T');
     }
+    const hasTz = /[zZ]$/.test(s) || /[+-]\d{2}:?\d{2}$/.test(s);
+    if (!hasTz && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s)) {
+        s += 'Z';
+    }
     const d = new Date(s);
-    if (!isNaN(d.getTime())) return d;
-    const d2 = new Date(s.endsWith('Z') ? s : s + 'Z');
-    return isNaN(d2.getTime()) ? null : d2;
+    return isNaN(d.getTime()) ? null : d;
 }
 
 function formatLastSeen(isoString) {
