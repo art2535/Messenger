@@ -1,23 +1,32 @@
 using Messenger.Infrastructure.Data;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using StackExchange.Redis;
 using System.Text;
 using System.Text.Json;
 
 namespace Messenger.API.Extensions
-{
+{  
     public static class HealthChecksExtension
     {
         extension(IServiceCollection services)
         {
             public IServiceCollection AddMessengerHealthChecks()
             {
-                services.AddHealthChecks()
+                var builder = services.AddHealthChecks()
                     .AddCheck("self", () => HealthCheckResult.Healthy("API is running"), tags: new[] { "live" })
                     .AddDbContextCheck<GuapMessengerContext>(
                         name: "postgresql",
                         failureStatus: HealthStatus.Unhealthy,
                         tags: new[] { "ready", "db" });
+
+                if (services.Any(d => d.ServiceType == typeof(IConnectionMultiplexer)))
+                {
+                    builder.AddCheck<RedisHealthCheck>(
+                        name: "redis",
+                        failureStatus: HealthStatus.Degraded,
+                        tags: new[] { "ready", "cache" });
+                }
 
                 return services;
             }
