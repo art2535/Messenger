@@ -455,19 +455,67 @@ async function sendMessage() {
         if (text) formData.append('messageText', text);
         selectedFiles.forEach(file => formData.append('files', file));
 
-        const res = await fetchWithAuth(`${API_BASE}/messages/${currentChatId}`, {
-            method: 'POST',
-            body: formData
-        });
+        const controller = new AbortController();
+        const abortTimer = setTimeout(() => controller.abort(), 12000);
+
+        let res;
+        try {
+            res = await fetchWithAuth(`${API_BASE}/messages/${currentChatId}`, {
+                method: 'POST',
+                body: formData,
+                signal: controller.signal
+            });
+        } catch (fetchErr) {
+            if (fetchErr && (fetchErr.name === 'AbortError' || controller.signal.aborted)) {
+                updateMessageStatus(tempId, 'failed', 'Лимит отправки');
+                const msg = 'Слишком много запросов. Подождите немного и попробуйте снова.';
+                if (typeof showAlert === 'function') {
+                    showAlert(msg, { type: 'warning', title: 'Слишком часто', okText: 'Понятно' });
+                } else if (typeof showToast === 'function') {
+                    showToast(msg, 'warning', 6000);
+                }
+                return;
+            }
+            throw fetchErr;
+        } finally {
+            clearTimeout(abortTimer);
+        }
 
         if (!res) throw new Error('Нет ответа от сервера');
 
         if (isRateLimited(res)) {
-            updateMessageStatus(tempId, 'failed', 'Слишком часто');
+            const msg = typeof getRateLimitMessage === 'function'
+                ? getRateLimitMessage(res)
+                : 'Слишком много запросов. Подождите немного и попробуйте снова.';
+
+            updateMessageStatus(tempId, 'failed', 'Лимит отправки');
+
+            if (text && messageInput && !messageInput.value.trim()) {
+                const plain = (typeof parseReplyPayload === 'function')
+                    ? (parseReplyPayload(text).text || text)
+                    : text;
+                messageInput.value = plain;
+            }
+
+            if (typeof showAlert === 'function') {
+                showAlert(msg, { type: 'warning', title: 'Слишком часто', okText: 'Понятно' });
+            } else if (typeof showToast === 'function') {
+                showToast(msg, 'warning', 6000);
+            } else {
+                console.warn(msg);
+            }
             return;
         }
 
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) {
+            let serverError = `Ошибка сервера (${res.status})`;
+            try {
+                const errBody = await res.json();
+                if (errBody?.error) serverError = errBody.error;
+                else if (errBody?.message) serverError = errBody.message;
+            } catch { }
+            throw new Error(serverError);
+        }
 
         const result = await res.json();
         const serverMessageId = result?.data?.messageId || result?.messageId;
@@ -481,7 +529,9 @@ async function sendMessage() {
     } catch (err) {
         console.error('Ошибка отправки:', err);
         updateMessageStatus(tempId, 'failed', err.message || 'Ошибка');
-        showToast('Не удалось отправить сообщение', 'error');
+        if (typeof showToast === 'function') {
+            showToast(err.message || 'Не удалось отправить сообщение', 'error', 5000);
+        }
     } finally {
         isSending = false;
         sendButton.disabled = false;
@@ -861,10 +911,10 @@ function appendOptimisticMessage(text, files, tempId) {
         if (stillExists) {
             const statusEl = stillExists.querySelector('.message-status');
             if (statusEl && statusEl.textContent.includes('Отправляется')) {
-                updateMessageStatus(tempId, 'failed', 'Таймаут подтверждения от сервера');
+                updateMessageStatus(tempId, 'failed', 'Нет ответа сервера');
             }
         }
-    }, 15000);
+    }, 20000);
 }
 
 function removeEmptyStateIfNeeded() {
