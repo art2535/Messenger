@@ -1,4 +1,4 @@
-﻿using Asp.Versioning;
+using Asp.Versioning;
 using MassTransit;
 using Messenger.API.Responses;
 using Messenger.API.Services;
@@ -670,7 +670,9 @@ namespace Messenger.API.Controllers
                             }).ToList()
                         })
                         .OrderByDescending(x => x.Count)
-                        .ToList()
+                        .ToList(),
+                    IsPinned = m.IsPinned,
+                    PinnedAt = m.PinnedAt.HasValue ? UtcDateTime.AsUtc(m.PinnedAt.Value) : null
                 }).ToList();
 
                 return Ok(new GetMessagesSuccessResponse
@@ -1013,5 +1015,236 @@ namespace Messenger.API.Controllers
                 _ => "application/octet-stream"
             };
         }
+        
+        /// <summary>
+        /// Закрепить сообщение в чате
+        /// </summary>
+        [HttpPost("{messageId:guid}/pin")]
+        [EndpointName("PinMessage")]
+        [EndpointSummary("Закрепить сообщение")]
+        [EndpointDescription("Закрепляет сообщение в чате. Доступно любому участнику чата.")]
+        [ProducesResponseType(typeof(PinMessageSuccessResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> PinMessageAsync(
+            [Description("Идентификатор сообщения")] Guid messageId,
+            CancellationToken ct = default)
+        {
+            try
+            {
+                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
+                if (error != null)
+                    return error;
+
+                Message? message;
+                try
+                {
+                    message = await _messageService.PinMessageAsync(messageId, user!.UserId, ct);
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    return Forbid();
+                }
+
+                if (message == null)
+                {
+                    return NotFound(new ErrorResponse
+                    {
+                        IsSuccess = false,
+                        Error = "Сообщение не найдено"
+                    });
+                }
+
+                var text = string.IsNullOrEmpty(message.MessageText)
+                    ? null
+                    : _encryptionService.TryDecryptSafe(message.MessageText);
+
+                var payload = new
+                {
+                    messageId = message.MessageId,
+                    chatId = message.ChatId,
+                    isPinned = true,
+                    pinnedAt = message.PinnedAt.HasValue ? UtcDateTime.AsUtc(message.PinnedAt.Value) : (DateTime?)null,
+                    text = (text ?? string.Empty).Length > 200 ? (text ?? string.Empty)[..200] : (text ?? string.Empty),
+                    pinnedBy = user.UserId
+                };
+
+                await _hubContext.Clients.Group(message.ChatId.ToString())
+                    .SendAsync("MessagePinned", payload, ct);
+
+                var chat = await _chatService.GetChatByIdAsync(message.ChatId, ct);
+                if (chat?.ChatParticipants != null)
+                {
+                    foreach (var participant in chat.ChatParticipants)
+                    {
+                        await _hubContext.Clients.Group($"User_{participant.UserId}")
+                            .SendAsync("MessagePinned", payload, ct);
+                    }
+                }
+
+                return Ok(new PinMessageSuccessResponse
+                {
+                    IsSuccess = true,
+                    Message = "Сообщение закреплено",
+                    Data = payload
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new ErrorResponse
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
+        }
+
+        /// <summary>
+        /// Открепить сообщение
+        /// </summary>
+        [HttpDelete("{messageId:guid}/pin")]
+        [EndpointName("UnpinMessage")]
+        [EndpointSummary("Открепить сообщение")]
+        [EndpointDescription("Снимает закрепление с сообщения. Доступно любому участнику чата.")]
+        [ProducesResponseType(typeof(PinMessageSuccessResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> UnpinMessageAsync(
+            [Description("Идентификатор сообщения")] Guid messageId,
+            CancellationToken ct = default)
+        {
+            try
+            {
+                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
+                if (error != null)
+                    return error;
+
+                Message? message;
+                try
+                {
+                    message = await _messageService.UnpinMessageAsync(messageId, user!.UserId, ct);
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    return Forbid();
+                }
+
+                if (message == null)
+                {
+                    return NotFound(new ErrorResponse
+                    {
+                        IsSuccess = false,
+                        Error = "Сообщение не найдено"
+                    });
+                }
+
+                var payload = new
+                {
+                    messageId = message.MessageId,
+                    chatId = message.ChatId,
+                    isPinned = false,
+                    pinnedAt = (DateTime?)null,
+                    text = (string?)null,
+                    pinnedBy = user.UserId
+                };
+
+                await _hubContext.Clients.Group(message.ChatId.ToString())
+                    .SendAsync("MessagePinned", payload, ct);
+
+                var chat = await _chatService.GetChatByIdAsync(message.ChatId, ct);
+                if (chat?.ChatParticipants != null)
+                {
+                    foreach (var participant in chat.ChatParticipants)
+                    {
+                        await _hubContext.Clients.Group($"User_{participant.UserId}")
+                            .SendAsync("MessagePinned", payload, ct);
+                    }
+                }
+
+                return Ok(new PinMessageSuccessResponse
+                {
+                    IsSuccess = true,
+                    Message = "Сообщение откреплено",
+                    Data = payload
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new ErrorResponse
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
+        }
+
+        /// <summary>
+        /// Получить закреплённые сообщения чата
+        /// </summary>
+        [HttpGet("{chatId:guid}/pinned")]
+        [EndpointName("GetPinnedMessages")]
+        [EndpointSummary("Список закреплённых сообщений")]
+        [EndpointDescription("Возвращает все закреплённые сообщения указанного чата (от старых к новым).")]
+        [ProducesResponseType(typeof(GetPinnedMessagesSuccessResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> GetPinnedMessagesAsync(
+            [Description("Идентификатор чата")] Guid chatId,
+            CancellationToken ct = default)
+        {
+            try
+            {
+                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
+                if (error != null)
+                    return error;
+
+                var chat = await _chatService.GetChatByIdAsync(chatId, ct);
+                if (chat == null || !chat.ChatParticipants.Any(p => p.UserId == user!.UserId))
+                {
+                    return Forbid();
+                }
+
+                var messages = await _messageService.GetPinnedMessagesAsync(chatId, ct);
+                var data = messages.Select(m =>
+                {
+                    var decrypted = string.IsNullOrEmpty(m.MessageText)
+                        ? null
+                        : _encryptionService.TryDecryptSafe(m.MessageText);
+                    return new
+                    {
+                        messageId = m.MessageId,
+                        chatId = m.ChatId,
+                        text = (decrypted ?? string.Empty).Length > 200
+                            ? (decrypted ?? string.Empty)[..200]
+                            : (decrypted ?? string.Empty),
+                        pinnedAt = m.PinnedAt.HasValue ? UtcDateTime.AsUtc(m.PinnedAt.Value) : (DateTime?)null,
+                        sequenceNumber = m.SequenceNumber,
+                        senderId = m.SenderId,
+                        senderName = m.Sender != null
+                            ? $"{m.Sender.FirstName} {m.Sender.LastName}".Trim()
+                            : (string?)null
+                    };
+                }).ToList();
+
+                return Ok(new GetPinnedMessagesSuccessResponse
+                {
+                    IsSuccess = true,
+                    Data = data
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new ErrorResponse
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
+        }
+
     }
 }

@@ -506,7 +506,11 @@ namespace Messenger.Infrastructure.Services
                     SizeInBytes = a.SizeInBytes ?? 0,
                     Url = a.Url
                 }).ToList() ?? new List<AttachmentDto>(),
-                Reactions = reactionGroups
+                Reactions = reactionGroups,
+                IsPinned = m.IsPinned,
+                PinnedAt = m.PinnedAt.HasValue
+                    ? Messenger.Core.Models.UtcDateTime.AsUtc(m.PinnedAt.Value)
+                    : null
             };
         }
         private async Task AddMessageAsync(Message message, CancellationToken token = default)
@@ -623,6 +627,8 @@ namespace Messenger.Infrastructure.Services
             DeliveryStatus = m.DeliveryStatus,
             ReadTime = m.ReadTime,
             HasAttachments = m.HasAttachments,
+            IsPinned = m.IsPinned,
+            PinnedAt = m.PinnedAt,
             Attachments = (m.Attachments ?? Enumerable.Empty<Attachment>())
                 .Select(a => new CachedAttachmentItem
                 {
@@ -653,6 +659,8 @@ namespace Messenger.Infrastructure.Services
             DeliveryStatus = c.DeliveryStatus,
             ReadTime = c.ReadTime,
             HasAttachments = c.HasAttachments,
+            IsPinned = c.IsPinned,
+            PinnedAt = c.PinnedAt,
             Sender = new User
             {
                 UserId = c.SenderId,
@@ -679,5 +687,62 @@ namespace Messenger.Infrastructure.Services
                 }
             }).ToList()
         };
+
+        public async Task<Message?> PinMessageAsync(Guid messageId, Guid userId, CancellationToken token = default)
+        {
+            var message = await _context.Messages
+                .FirstOrDefaultAsync(m => m.MessageId == messageId, token);
+            if (message == null)
+                return null;
+
+            var isParticipant = await _context.ChatParticipants
+                .AsNoTracking()
+                .AnyAsync(p => p.ChatId == message.ChatId && p.UserId == userId, token);
+            if (!isParticipant)
+                throw new UnauthorizedAccessException("Вы не участник этого чата");
+
+            if (message.IsPinned)
+                return message;
+
+            message.IsPinned = true;
+            message.PinnedAt = Messenger.Core.Models.UtcDateTime.Now;
+            await _context.SaveChangesAsync(token);
+            await InvalidateMessageCachesAsync(message.ChatId, token);
+            return message;
+        }
+
+        public async Task<Message?> UnpinMessageAsync(Guid messageId, Guid userId, CancellationToken token = default)
+        {
+            var message = await _context.Messages
+                .FirstOrDefaultAsync(m => m.MessageId == messageId, token);
+            if (message == null)
+                return null;
+
+            var isParticipant = await _context.ChatParticipants
+                .AsNoTracking()
+                .AnyAsync(p => p.ChatId == message.ChatId && p.UserId == userId, token);
+            if (!isParticipant)
+                throw new UnauthorizedAccessException("Вы не участник этого чата");
+
+            if (!message.IsPinned)
+                return message;
+
+            message.IsPinned = false;
+            message.PinnedAt = null;
+            await _context.SaveChangesAsync(token);
+            await InvalidateMessageCachesAsync(message.ChatId, token);
+            return message;
+        }
+
+        public async Task<List<Message>> GetPinnedMessagesAsync(Guid chatId, CancellationToken token = default)
+        {
+            return await _context.Messages
+                .AsNoTracking()
+                .Where(m => m.ChatId == chatId && m.IsPinned)
+                .OrderBy(m => m.PinnedAt)
+                .ThenBy(m => m.SequenceNumber)
+                .Include(m => m.Sender)
+                .ToListAsync(token);
+        }
     }
 }

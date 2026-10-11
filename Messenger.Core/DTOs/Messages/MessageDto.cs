@@ -12,6 +12,8 @@ namespace Messenger.Core.DTOs.Messages
         public long SequenceNumber { get; set; }
         public List<AttachmentDto> Attachments { get; set; } = new();
         public List<ReactionSummaryDto> Reactions { get; set; } = new();
+        public bool IsPinned { get; set; }
+        public DateTime? PinnedAt { get; set; }
     }
 
     public class AttachmentDto

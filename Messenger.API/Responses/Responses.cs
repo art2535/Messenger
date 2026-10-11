@@ -1,4 +1,4 @@
-﻿using Messenger.Core.DTOs.Messages;
+using Messenger.Core.DTOs.Messages;
 using Messenger.Core.Models;
 
 namespace Messenger.API.Responses
@@ -126,6 +126,19 @@ namespace Messenger.API.Responses
     {
         public bool IsSuccess { get; set; }
         public string Message { get; set; } = string.Empty;
+    }
+
+    public class PinMessageSuccessResponse
+    {
+        public bool IsSuccess { get; set; }
+        public string Message { get; set; } = string.Empty;
+        public object? Data { get; set; }
+    }
+
+    public class GetPinnedMessagesSuccessResponse
+    {
+        public bool IsSuccess { get; set; }
+        public object? Data { get; set; }
     }
 
     public class CreateNotificationSuccessResponse
