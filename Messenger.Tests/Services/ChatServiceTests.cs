@@ -12,7 +12,6 @@ namespace Messenger.Tests.Services
     public class ChatServiceTests
     {
         private readonly Mock<GuapMessengerContext> _contextMock;
-        private readonly Mock<IUserService> _userServiceMock;
         private readonly Mock<IEncryptionService> _encryptionMock;
         private readonly Mock<ICacheService> _cacheMock;
         private readonly Mock<ILogger<ChatService>> _loggerMock;
@@ -21,7 +20,6 @@ namespace Messenger.Tests.Services
         public ChatServiceTests()
         {
             _contextMock = new Mock<GuapMessengerContext>();
-            _userServiceMock = new Mock<IUserService>();
             _encryptionMock = new Mock<IEncryptionService>();
             _cacheMock = new Mock<ICacheService>();
             _loggerMock = new Mock<ILogger<ChatService>>();
@@ -39,7 +37,6 @@ namespace Messenger.Tests.Services
 
             _service = new ChatService(
                 _contextMock.Object,
-                _userServiceMock.Object,
                 _encryptionMock.Object,
                 _cacheMock.Object,
                 _loggerMock.Object);
