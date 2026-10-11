@@ -98,7 +98,7 @@ namespace Messenger.API.Controllers
                     UserId = user!.UserId,
                     Token = $"{request.Token.Substring(0, 20)}...",
                     IpAddress = request.IpAddress,
-                    LoginTime = DateTime.Now,
+                    LoginTime = UtcDateTime.Now,
                     Active = true
                 };
 
@@ -148,7 +148,7 @@ namespace Messenger.API.Controllers
                 {
                     userLogout.Token = string.Empty;
                     userLogout.Active = false;
-                    userLogout.LogoutTime = DateTime.Now;
+                    userLogout.LogoutTime = UtcDateTime.Now;
 
                     await _loginService.UpdateLoginAsync(userLogout, cancellationToken);
                 }

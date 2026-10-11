@@ -1,5 +1,4 @@
 ﻿using Messenger.API.Extensions;
-using Messenger.API.Serialization;
 using Messenger.Core.Hubs;
 using System.Text;
 
@@ -17,12 +16,7 @@ namespace Messenger.API
             var builder = WebApplication.CreateBuilder(args);
 
             builder.EnsureSharedDevelopmentEncryptionKey();
-            builder.Services.AddControllers()
-                .AddJsonOptions(o =>
-                {
-                    o.JsonSerializerOptions.Converters.Add(new UtcDateTimeJsonConverter());
-                    o.JsonSerializerOptions.Converters.Add(new UtcNullableDateTimeJsonConverter());
-                });
+            builder.Services.AddControllers();
             builder.Services.AddValidation();
             builder.Services.AddSignalRService(builder.Configuration);
             builder.Services.AddRedisCache(builder.Configuration);

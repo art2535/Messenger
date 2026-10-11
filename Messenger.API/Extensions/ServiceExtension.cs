@@ -1,6 +1,5 @@
 using Messenger.API.Options;
 using Messenger.API.Providers;
-using Messenger.API.Serialization;
 using Messenger.API.Services;
 using Messenger.Core.Interfaces;
 using Messenger.Core.Services;
@@ -83,11 +82,6 @@ namespace Messenger.API.Extensions
                     options.EnableDetailedErrors = configuration.GetValue("SignalR:EnableDetailedErrors", false);
                     options.ClientTimeoutInterval = TimeSpan.FromSeconds(30);
                     options.KeepAliveInterval = TimeSpan.FromSeconds(15);
-                })
-                .AddJsonProtocol(options =>
-                {
-                    options.PayloadSerializerOptions.Converters.Add(new UtcDateTimeJsonConverter());
-                    options.PayloadSerializerOptions.Converters.Add(new UtcNullableDateTimeJsonConverter());
                 });
 
                 if (!string.IsNullOrWhiteSpace(redisCs))

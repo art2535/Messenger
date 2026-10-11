@@ -82,7 +82,7 @@ namespace Messenger.API.Consumers
                     SenderId = savedMessage.SenderId,
                     SenderName = msg.SenderName ?? "Пользователь",
                     MessageText = decryptedText,
-                    SentAt = savedMessage.SendTime,
+                    SentAt = UtcDateTime.AsUtc(savedMessage.SendTime),
                     SequenceNumber = savedMessage.SequenceNumber,
                     Status = "Sent",
                     Attachments = msg.Attachments?.Select(a => new AttachmentDto

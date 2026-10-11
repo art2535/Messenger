@@ -205,7 +205,7 @@ namespace Messenger.API.Controllers
                         SenderId = user!.UserId,
                         SenderName = $"{user.FirstName} {user.LastName}".Trim(),
                         MessageText = encryptedText,
-                        SentAt = UtcDateTime.Now,
+                        SentAt = UtcDateTime.AsUtc(UtcDateTime.Now),
                         HasAttachments = attachmentsInfo.Count > 0,
                         Attachments = attachmentsInfo
                     }, cancellationToken);
@@ -233,7 +233,7 @@ namespace Messenger.API.Controllers
                         SenderId = user!.UserId,
                         SenderName = $"{user.FirstName} {user.LastName}".Trim(),
                         MessageText = decryptedText,
-                        SentAt = UtcDateTime.Now,
+                        SentAt = UtcDateTime.AsUtc(UtcDateTime.Now),
                         Status = "Sent",
                         Attachments = attachmentDtos
                     };
@@ -275,7 +275,7 @@ namespace Messenger.API.Controllers
                             SenderId = user!.UserId,
                             SenderName = $"{user.FirstName} {user.LastName}".Trim(),
                             MessageText = string.IsNullOrEmpty(encryptedText) ? null : _encryptionService.TryDecryptSafe(encryptedText),
-                            SentAt = UtcDateTime.Now,
+                            SentAt = UtcDateTime.AsUtc(UtcDateTime.Now),
                             Status = "Sent",
                             Attachments = attachmentDtos
                         }
@@ -435,7 +435,7 @@ namespace Messenger.API.Controllers
                                 SenderId = user.UserId,
                                 SenderName = senderName,
                                 MessageText = encryptedText,
-                                SentAt = UtcDateTime.Now,
+                                SentAt = UtcDateTime.AsUtc(UtcDateTime.Now),
                                 HasAttachments = attachmentsInfo.Count > 0,
                                 Attachments = attachmentsInfo
                             }, cancellationToken);
@@ -452,7 +452,7 @@ namespace Messenger.API.Controllers
                                     SenderId = user.UserId,
                                     SenderName = senderName,
                                     MessageText = plainForDto,
-                                    SentAt = UtcDateTime.Now,
+                                    SentAt = UtcDateTime.AsUtc(UtcDateTime.Now),
                                     Status = "Sent",
                                     Attachments = attachmentsInfo.Select(a => new AttachmentDto
                                     {
@@ -636,7 +636,7 @@ namespace Messenger.API.Controllers
                         : "Удалённый пользователь",
                     MessageText = string.IsNullOrEmpty(m.MessageText) ? null
                         : _encryptionService.TryDecryptSafe(m.MessageText),
-                    SentAt = m.SendTime,
+                    SentAt = UtcDateTime.AsUtc(m.SendTime),
                     SequenceNumber = m.SequenceNumber,
                     Status = m.DeliveryStatus switch
                     {
@@ -822,7 +822,7 @@ namespace Messenger.API.Controllers
                     ChatId = request.ChatId,
                     SenderId = message.SenderId,
                     MessageText = request.MessageText.Trim(),
-                    SentAt = message.SendTime,
+                    SentAt = UtcDateTime.AsUtc(message.SendTime),
                     Status = "Sent"
                 };
 

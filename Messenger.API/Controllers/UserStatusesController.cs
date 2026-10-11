@@ -107,7 +107,7 @@ namespace Messenger.API.Controllers
                 {
                     UserId = user!.UserId,
                     Online = request.Online,
-                    LastActivity = DateTime.Now
+                    LastActivity = UtcDateTime.Now
                 };
 
                 await _userStatusService.UpdateUserStatusAsync(userStatus, cancellationToken);

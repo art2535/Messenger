@@ -3,6 +3,7 @@ using Messenger.Core.Hubs;
 using Messenger.Core.Interfaces;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Options;
+using Messenger.Core.Models;
 
 namespace Messenger.API.Services
 {
@@ -68,7 +69,7 @@ namespace Messenger.API.Services
             var statusService = scope.ServiceProvider.GetRequiredService<IUserStatusService>();
             var loginService = scope.ServiceProvider.GetRequiredService<ILoginService>();
 
-            var olderThan = DateTime.Now - idleThreshold;
+            var olderThan = UtcDateTime.Now - idleThreshold;
 
             var inactive = await statusService.GetInactiveOnlineStatusesAsync(olderThan, ct);
             if (inactive.Count == 0)
@@ -87,7 +88,7 @@ namespace Messenger.API.Services
 
             await loginService.CloseActiveLoginsForUsersAsync(userIds, ct);
 
-            var now = DateTime.Now;
+            var now = UtcDateTime.Now;
             foreach (var userId in userIds)
             {
                 var payload = new
