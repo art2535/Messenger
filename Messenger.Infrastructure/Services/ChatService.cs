@@ -34,7 +34,7 @@ namespace Messenger.Infrastructure.Services
                 Name = name,
                 Type = type,
                 UserId = creatorId,
-                CreationDate = DateTime.Now
+                CreationDate = UtcDateTime.Now
             };
 
             var participant = new ChatParticipant
@@ -42,7 +42,7 @@ namespace Messenger.Infrastructure.Services
                 ChatId = chat.ChatId,
                 UserId = creatorId,
                 Role = "владелец",
-                JoinDate = DateTime.Now
+                JoinDate = UtcDateTime.Now
             };
 
             await _context.Chats.AddAsync(chat, token);
@@ -137,7 +137,11 @@ namespace Messenger.Infrastructure.Services
             foreach (var chat in chats)
             {
                 lastMsgByChat.TryGetValue(chat.ChatId, out var lastMsg);
-                var lastMessageAt = lastMsg?.SendTime ?? chat.CreationDate;
+                DateTime? lastMessageAt = lastMsg != null
+                    ? UtcDateTime.AsUtc(lastMsg.SendTime)
+                    : UtcDateTime.AsUtc(chat.CreationDate);
+                if (lastMessageAt == DateTime.MinValue)
+                    lastMessageAt = null;
 
                 string? decryptedLastMessage = null;
                 if (lastMsg?.MessageText != null)
@@ -158,6 +162,8 @@ namespace Messenger.Infrastructure.Services
 
                 unreadCounts.TryGetValue(chat.ChatId, out var unreadCount);
 
+                var sortKey = lastMessageAt ?? DateTime.MinValue;
+
                 var item = new
                 {
                     chatId = chat.ChatId,
@@ -175,14 +181,14 @@ namespace Messenger.Infrastructure.Services
                         : null,
                     type = chat.Type,
                     lastMessage = decryptedLastMessage,
-                    lastMessageAt = lastMessageAt == DateTime.MinValue ? (DateTime?)null : lastMessageAt,
-                    lastMessageTime = lastMessageAt == DateTime.MinValue ? (DateTime?)null : lastMessageAt,
-                    lastMessageSentAt = lastMessageAt == DateTime.MinValue ? (DateTime?)null : lastMessageAt,
+                    lastMessageAt = lastMessageAt,
+                    lastMessageTime = lastMessageAt,
+                    lastMessageSentAt = lastMessageAt,
                     isOnline = true,
                     unreadCount = unreadCount
                 };
 
-                sortable.Add((lastMessageAt, item));
+                sortable.Add((sortKey, item));
             }
 
             var result = sortable
@@ -216,7 +222,7 @@ namespace Messenger.Infrastructure.Services
                 ChatId = chatId,
                 UserId = userId,
                 Role = role,
-                JoinDate = DateTime.Now
+                JoinDate = UtcDateTime.Now
             };
 
             try

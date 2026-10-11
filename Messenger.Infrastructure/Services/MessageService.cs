@@ -124,7 +124,7 @@ namespace Messenger.Infrastructure.Services
 
         public async Task<int> MarkMessagesAsReadAsync(Guid chatId, Guid readerId, CancellationToken ct = default)
         {
-           var now = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
+           var now = UtcDateTime.Now;
 
             var updated = await _context.Messages
                 .Where(m => m.ChatId == chatId
@@ -164,7 +164,7 @@ namespace Messenger.Infrastructure.Services
                     SenderId = senderId,
                     MessageText = content ?? string.Empty,
                     HasAttachments = hasAttachments,
-                    SendTime = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified),
+                    SendTime = UtcDateTime.Now,
                     DeliveryStatus = MessageDeliveryStatus.Pending
                 };
 
@@ -262,7 +262,7 @@ namespace Messenger.Infrastructure.Services
                     SenderId = m.SenderId,
                     SenderName = senderName,
                     Text = text,
-                    SentAt = m.SendTime,
+                    SentAt = Messenger.Core.Models.UtcDateTime.AsUtc(m.SendTime),
                     Status = m.DeliveryStatus.ToString(),
                     HasAttachments = m.HasAttachments,
                     Attachments = m.Attachments?.Select(a => new
@@ -495,7 +495,7 @@ namespace Messenger.Infrastructure.Services
                     ? $"{m.Sender.FirstName} {m.Sender.LastName}".Trim()
                     : "Пользователь",
                 MessageText = decryptedText,
-                SentAt = m.SendTime,
+                SentAt = Messenger.Core.Models.UtcDateTime.AsUtc(m.SendTime),
                 SequenceNumber = m.SequenceNumber,
                 Status = m.DeliveryStatus.ToString(),
                 Attachments = m.Attachments?.Select(a => new AttachmentDto
