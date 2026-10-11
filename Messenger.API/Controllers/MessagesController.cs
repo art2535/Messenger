@@ -34,11 +34,13 @@ namespace Messenger.API.Controllers
         private readonly IEncryptionService _encryptionService;
         private readonly IAttachmentService _attachmentService;
         private readonly ILogger<MessagesController> _logger;
+        private readonly Messenger.Core.Services.SendMessageRateLimiterService _sendLimiter;
 
         public MessagesController(IMessageService messageService, IConfiguration configuration,
             IHubContext<ChatHub> hubContext, IChatService chatService, IUserService userService,
             IEncryptionService encryptionService, IAttachmentService attachmentService,
-            ILogger<MessagesController> logger)
+            ILogger<MessagesController> logger,
+            Messenger.Core.Services.SendMessageRateLimiterService sendLimiter)
         {
             _messageService = messageService;
             _configuration = configuration;
@@ -48,6 +50,7 @@ namespace Messenger.API.Controllers
             _encryptionService = encryptionService;
             _attachmentService = attachmentService;
             _logger = logger;
+            _sendLimiter = sendLimiter;
         }
 
         /// <summary>
@@ -96,7 +99,7 @@ namespace Messenger.API.Controllers
         /// Отправить сообщение в чат
         /// </summary>
         [HttpPost("{chatId:guid}")]
-        [EnableRateLimiting("send-message")]
+        [DisableRateLimiting]
         [EndpointName("SendMessage")]
         [EndpointSummary("Отправить сообщение в чат")]
         [EndpointDescription("Отправляет текстовое сообщение и/или файлы (вложения) в указанный чат. " +
@@ -106,6 +109,7 @@ namespace Messenger.API.Controllers
         [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
         [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
         [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> SendMessageAsync(
@@ -116,6 +120,21 @@ namespace Messenger.API.Controllers
         {
             try
             {
+                var rateKey = User.FindFirst("sub")?.Value
+                    ?? User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                    ?? HttpContext.Connection.RemoteIpAddress?.ToString()
+                    ?? "anonymous";
+
+                if (!await _sendLimiter.TryAcquireAsync(rateKey))
+                {
+                    _logger.LogWarning("SendMessage rate limit exceeded for {Key}", rateKey);
+                    return StatusCode(StatusCodes.Status429TooManyRequests, new
+                    {
+                        isSuccess = false,
+                        error = "Слишком много запросов. Подождите немного и попробуйте снова."
+                    });
+                }
+
                 var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
                 if (error != null)
                     return error;

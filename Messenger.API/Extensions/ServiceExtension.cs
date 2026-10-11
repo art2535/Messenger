@@ -28,6 +28,7 @@ namespace Messenger.API.Extensions
                 services.AddSingleton<WebPushClient>();
                 services.AddScoped<IPushSubscriptionService, PushSubscriptionService>();
                 services.AddSingleton<TypingRateLimiterService>();
+                services.AddSingleton<SendMessageRateLimiterService>();
 
                 return services;
             }
@@ -51,6 +52,13 @@ namespace Messenger.API.Extensions
                         var logger = sp.GetRequiredService<ILogger<RedisCacheService>>();
                         return new RedisCacheService(mux, logger);
                     });
+
+                    services.AddSingleton<RedisDistributedLock>(sp =>
+                    {
+                        var mux = sp.GetRequiredService<IConnectionMultiplexer>();
+                        var logger = sp.GetRequiredService<ILogger<RedisDistributedLock>>();
+                        return new RedisDistributedLock(mux, logger);
+                    });
                 }
                 else
                 {
@@ -58,6 +66,12 @@ namespace Messenger.API.Extensions
                     {
                         var logger = sp.GetRequiredService<ILogger<RedisCacheService>>();
                         return new RedisCacheService(null, logger);
+                    });
+
+                    services.AddSingleton<RedisDistributedLock>(sp =>
+                    {
+                        var logger = sp.GetRequiredService<ILogger<RedisDistributedLock>>();
+                        return new RedisDistributedLock(null, logger);
                     });
                 }
 

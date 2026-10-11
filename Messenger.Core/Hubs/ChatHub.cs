@@ -15,14 +15,16 @@ namespace Messenger.Core.Hubs
         private readonly IUserStatusService _userStatusService;
         private readonly ILogger<ChatHub> _logger;
         private readonly TypingRateLimiterService _typingLimiter;
+        private readonly SendMessageRateLimiterService _sendMessageLimiter;
 
         public ChatHub(IUserService userService, IUserStatusService userStatusService, ILogger<ChatHub> logger,
-            TypingRateLimiterService typingLimiter)
+            TypingRateLimiterService typingLimiter, SendMessageRateLimiterService sendMessageLimiter)
         {
             _userService = userService;
             _userStatusService = userStatusService;
             _logger = logger;
             _typingLimiter = typingLimiter;
+            _sendMessageLimiter = sendMessageLimiter;
         }
 
         public async Task JoinChat(Guid chatId)
@@ -202,6 +204,16 @@ namespace Messenger.Core.Hubs
                 avatarUrl = newAvatarUrl,
                 displayName = newDisplayName
             });
+        }
+
+        public async Task<bool> TryAcquireSendMessagePermit()
+        {
+            var externalId = Context.User?.FindFirst("sub")?.Value
+                ?? Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(externalId))
+                return false;
+
+            return await _sendMessageLimiter.TryAcquireAsync(externalId);
         }
 
         public async Task StartTyping(string chatId)

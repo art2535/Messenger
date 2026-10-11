@@ -32,8 +32,7 @@ namespace Messenger.API.Extensions
                         {
                             PermitLimit = 30,
                             Window = TimeSpan.FromMinutes(1),
-                            QueueLimit = 5,
-                            QueueProcessingOrder = QueueProcessingOrder.OldestFirst
+                            QueueLimit = 0
                         });
                     });
 
@@ -50,9 +49,9 @@ namespace Messenger.API.Extensions
 
                     options.OnRejected = async (context, ct) =>
                     {
-                        context.HttpContext.Response.ContentType = "application/json";
+                        context.HttpContext.Response.ContentType = "application/json; charset=utf-8";
                         await context.HttpContext.Response.WriteAsync(
-                            """{"isSuccess":false,"error":"Too many requests. Please slow down."}""", ct);
+                            """{"isSuccess":false,"error":"Слишком много запросов. Подождите немного и попробуйте снова."}""", ct);
                     };
                 });
 

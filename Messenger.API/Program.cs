@@ -86,9 +86,9 @@ namespace Messenger.API
             app.UseUploads();
             app.UseCors(WebCorsPolicy);
             app.UseHttpsRedirection();
-            app.UseRateLimiter();
             app.UseAuthentication();
             app.UseAuthorization();
+            app.UseRateLimiter();
             app.MapControllers().RequireRateLimiting("api");
 
             app.MapHub<ChatHub>($"/api/v{apiVersion}/hubs/chat").RequireCors(WebCorsPolicy);
