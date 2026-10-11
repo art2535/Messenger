@@ -345,14 +345,18 @@ async function loadMessages(chatId) {
         setTimeout(() => { scrollToBottom(); }, 10);
         setTimeout(() => { scrollToBottom(); }, 100);
 
-        if (typeof pinnedBarDismissed !== 'undefined') {
-            pinnedBarDismissed.delete(String(chatId));
-        }
-        if (typeof updatePinnedMessageBar === 'function') {
-            updatePinnedMessageBar();
-        }
-        if (typeof highlightPinnedMessageInView === 'function') {
-            highlightPinnedMessageInView();
+        if (typeof syncPinnedMessagesFromServer === 'function') {
+            await syncPinnedMessagesFromServer(chatId);
+        } else {
+            if (typeof pinnedBarDismissed !== 'undefined') {
+                pinnedBarDismissed.delete(String(chatId));
+            }
+            if (typeof updatePinnedMessageBar === 'function') {
+                updatePinnedMessageBar();
+            }
+            if (typeof highlightPinnedMessageInView === 'function') {
+                highlightPinnedMessageInView();
+            }
         }
 
     } catch (err) {

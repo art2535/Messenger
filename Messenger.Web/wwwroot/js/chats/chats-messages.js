@@ -208,6 +208,13 @@ function appendMessage(msg) {
     const div = document.createElement('div');
     div.className = `message-row ${isMyMessage ? 'outgoing-row' : 'incoming-row'}${grouped ? ' grouped' : ''}`;
     if (msg.messageId) div.dataset.mid = msg.messageId;
+    const pinnedFlag = !!(msg.isPinned ?? msg.IsPinned);
+    if (pinnedFlag) {
+        div.classList.add('message-row-pinned');
+        if (currentChatId && typeof applyPinnedLocal === 'function') {
+            applyPinnedLocal(currentChatId, msg.messageId, msg.messageText || msg.MessageText || '', msg.pinnedAt || msg.PinnedAt);
+        }
+    }
     if (senderId) div.dataset.senderId = String(senderId);
     const rawSentAt = msg.sentAt || msg.sentTime || msg.SendTime || msg.SentAt || null;
     if (rawSentAt) {

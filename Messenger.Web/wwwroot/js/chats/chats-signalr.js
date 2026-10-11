@@ -329,7 +329,17 @@ async function startSignalR() {
 
         removeMessageFromUI(mid, chatId, { skipListUpdate: true });
 
+        if (chatId && typeof applyUnpinnedLocal === 'function') {
+            applyUnpinnedLocal(chatId, mid);
+        }
+
         syncChatListAfterDelete(chatId);
+    });
+
+    connection.on('MessagePinned', (data) => {
+        if (typeof handleMessagePinnedEvent === 'function') {
+            handleMessagePinnedEvent(data);
+        }
     });
 
     connection.on('ReactionUpdated', (data) => {
