@@ -13,7 +13,7 @@ public partial class UserStatus
 
     public bool Online { get; set; }
 
-    [Column("Last_Activity", TypeName = "timestamp without time zone")]
+    [Column("Last_Activity", TypeName = "timestamp with time zone")]
     public DateTime? LastActivity { get; set; }
 
     [ForeignKey("UserId")]

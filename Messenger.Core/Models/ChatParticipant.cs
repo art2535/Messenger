@@ -20,7 +20,7 @@ public partial class ChatParticipant
     [StringLength(20)]
     public string? Role { get; set; }
 
-    [Column("Join_Date", TypeName = "timestamp without time zone")]
+    [Column("Join_Date", TypeName = "timestamp with time zone")]
     public DateTime JoinDate { get; set; }
 
     [ForeignKey("ChatId")]

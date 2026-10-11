@@ -79,7 +79,9 @@ public partial class GuapMessengerContext : DbContext
             entity.HasKey(e => e.ChatId).HasName("Chats_pkey");
 
             entity.Property(e => e.ChatId).ValueGeneratedNever();
-            entity.Property(e => e.CreationDate).HasDefaultValueSql("now()");
+            entity.Property(e => e.CreationDate)
+                .HasColumnType("timestamp with time zone")
+                .HasDefaultValueSql("now() at time zone 'utc'");
 
             entity.HasOne(d => d.User).WithMany(p => p.Chats).HasConstraintName("fk_chat_creator");
         });
@@ -88,7 +90,9 @@ public partial class GuapMessengerContext : DbContext
         {
             entity.HasKey(e => new { e.ChatId, e.UserId }).HasName("Chat_Participants_pkey");
 
-            entity.Property(e => e.JoinDate).HasDefaultValueSql("now()");
+            entity.Property(e => e.JoinDate)
+                .HasColumnType("timestamp with time zone")
+                .HasDefaultValueSql("now() at time zone 'utc'");
             entity.Property(e => e.Role).HasDefaultValueSql("'participant'::character varying");
 
             entity.HasIndex(e => e.UserId)
@@ -104,6 +108,8 @@ public partial class GuapMessengerContext : DbContext
             entity.HasKey(e => e.LoginId).HasName("Logins_pkey");
 
             entity.Property(e => e.LoginId).ValueGeneratedNever();
+            entity.Property(e => e.LoginTime).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.LogoutTime).HasColumnType("timestamp with time zone");
 
             entity.HasOne(d => d.User).WithMany(p => p.Logins).HasConstraintName("fk_login_user");
         });
@@ -113,6 +119,8 @@ public partial class GuapMessengerContext : DbContext
             entity.HasKey(e => e.MessageId).HasName("Messages_pkey");
 
             entity.Property(e => e.MessageId).ValueGeneratedNever();
+            entity.Property(e => e.SendTime).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.ReadTime).HasColumnType("timestamp with time zone");
 
             entity.HasIndex(e => new { e.ChatId, e.SequenceNumber })
                 .IsUnique()
@@ -131,10 +139,14 @@ public partial class GuapMessengerContext : DbContext
 
         modelBuilder.Entity<Notification>(entity =>
         {
+            entity.Property(e => e.CreationDate).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.ReadAt).HasColumnType("timestamp with time zone");
             entity.HasKey(e => e.NotificationId).HasName("Notifications_pkey");
 
             entity.Property(e => e.NotificationId).ValueGeneratedNever();
-            entity.Property(e => e.CreationDate).HasDefaultValueSql("now()");
+            entity.Property(e => e.CreationDate)
+                .HasColumnType("timestamp with time zone")
+                .HasDefaultValueSql("now() at time zone 'utc'");
             entity.Property(e => e.Read).HasDefaultValue(false);
 
             entity.HasIndex(e => new { e.UserId, e.Read })
@@ -198,6 +210,7 @@ public partial class GuapMessengerContext : DbContext
 
         modelBuilder.Entity<UserStatus>(entity =>
         {
+            entity.Property(e => e.LastActivity).HasColumnType("timestamp with time zone");
             entity.HasKey(e => e.UserId).HasName("User_Statuses_pkey");
 
             entity.Property(e => e.UserId).ValueGeneratedNever();

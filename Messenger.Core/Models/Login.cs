@@ -20,10 +20,10 @@ public partial class Login
     [StringLength(45)]
     public string IpAddress { get; set; } = null!;
 
-    [Column("Login_Time", TypeName = "timestamp without time zone")]
+    [Column("Login_Time", TypeName = "timestamp with time zone")]
     public DateTime LoginTime { get; set; }
 
-    [Column("Logout_Time", TypeName = "timestamp without time zone")]
+    [Column("Logout_Time", TypeName = "timestamp with time zone")]
     public DateTime? LogoutTime { get; set; }
 
     public bool Active { get; set; }

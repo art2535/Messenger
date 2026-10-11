@@ -22,7 +22,7 @@ public partial class Message
     [Column("Has_Attachments")]
     public bool HasAttachments { get; set; }
 
-    [Column("Send_Time", TypeName = "timestamp without time zone")]
+    [Column("Send_Time", TypeName = "timestamp with time zone")]
     public DateTime SendTime { get; set; }
 
     [Column("Sequence_Number")]
@@ -31,7 +31,7 @@ public partial class Message
     [Column("Delivery_Status")]
     public MessageDeliveryStatus DeliveryStatus { get; set; }
 
-    [Column("Read_Time", TypeName = "timestamp without time zone")]
+    [Column("Read_Time", TypeName = "timestamp with time zone")]
     public DateTime? ReadTime { get; set; }
 
     [InverseProperty("Message")]
