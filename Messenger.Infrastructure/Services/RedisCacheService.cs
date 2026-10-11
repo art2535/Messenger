@@ -39,6 +39,8 @@ namespace Messenger.Infrastructure.Services
             }
         }
 
+        public bool IsEnabled => _enabled;
+
         public async Task<T?> GetAsync<T>(string key, CancellationToken ct = default)
         {
             if (!_enabled || _db is null)
@@ -52,16 +54,19 @@ namespace Messenger.Infrastructure.Services
                 var value = await _db.StringGetAsync(key);
                 if (value.IsNullOrEmpty)
                 {
+                    CacheMetrics.RecordMissForKey(key);
                     _logger.LogDebug("CACHE MISS key={Key} → запрос уйдёт в PostgreSQL", key);
                     return default;
                 }
 
                 var result = JsonSerializer.Deserialize<T>((string)value!, JsonOptions);
+                CacheMetrics.RecordHitForKey(key);
                 _logger.LogDebug("CACHE HIT key={Key} (данные из Redis, PostgreSQL не трогаем)", key);
                 return result;
             }
             catch (Exception ex)
             {
+                CacheMetrics.RecordErrorForKey(key);
                 _logger.LogWarning(ex, "CACHE ERROR key={Key} → fallback PostgreSQL", key);
                 return default;
             }
@@ -83,6 +88,7 @@ namespace Messenger.Infrastructure.Services
             }
             catch (Exception ex)
             {
+                CacheMetrics.RecordErrorForKey(key);
                 _logger.LogWarning(ex, "CACHE SET ERROR key={Key}", key);
             }
         }
