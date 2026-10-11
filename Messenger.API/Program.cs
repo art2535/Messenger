@@ -1,5 +1,7 @@
-﻿using Messenger.API.Extensions;
+using Messenger.API.Extensions;
 using Messenger.Core.Hubs;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
 using System.Text;
 
 namespace Messenger.API
@@ -31,6 +33,19 @@ namespace Messenger.API
             builder.Services.AddMessengerRateLimiting();
             builder.Services.AddSessionCleanup(builder.Configuration);
             builder.Services.AddMessengerHealthChecks();
+
+            builder.Services.AddOpenTelemetry()
+                .ConfigureResource(r => r.AddService(
+                    serviceName: "Messenger.API",
+                    serviceVersion: typeof(Program).Assembly.GetName().Version?.ToString() ?? "1.0.0"))
+                .WithMetrics(metrics =>
+                {
+                    metrics
+                        .AddAspNetCoreInstrumentation()
+                        .AddRuntimeInstrumentation()
+                        .AddMeter("Microsoft.EntityFrameworkCore")
+                        .AddPrometheusExporter();
+                });
 
             const string WebCorsPolicy = "WebClient";
 
@@ -82,6 +97,8 @@ namespace Messenger.API
             });
 
             app.MapMessengerHealthChecks();
+
+            app.MapPrometheusScrapingEndpoint("/metrics");
 
             app.UseUploads();
             app.UseCors(WebCorsPolicy);

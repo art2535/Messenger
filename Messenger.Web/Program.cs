@@ -1,5 +1,9 @@
 using Messenger.Web.Extensions;
 using Messenger.Web.Helpers;
+using Microsoft.AspNetCore.ResponseCompression;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using System.IO.Compression;
 using System.Net.Http.Headers;
 using System.Text;
 
@@ -19,6 +23,20 @@ namespace Messenger.Web
             builder.Services.AddRazorPages();
             builder.Services.AddEtaWebAuthentication(builder.Configuration);
             builder.Services.AddLogging();
+
+            builder.Services.AddOpenTelemetry()
+                .ConfigureResource(r => r.AddService(
+                    serviceName: "Messenger.Web",
+                    serviceVersion: typeof(Program).Assembly.GetName().Version?.ToString() ?? "1.0.0"))
+                .WithMetrics(metrics =>
+                {
+                    metrics
+                        .AddAspNetCoreInstrumentation()
+                        .AddHttpClientInstrumentation()
+                        .AddRuntimeInstrumentation()
+                        .AddPrometheusExporter();
+                });
+
             builder.Services.AddAuthorization();
             builder.Services.AddSignalRService(builder.Configuration);
             builder.Services.AddScoped<ApiHelper>();
@@ -45,6 +63,29 @@ namespace Messenger.Web
                 options.Cookie.SameSite = SameSiteMode.Lax;
             });
 
+            builder.Services.AddResponseCompression(options =>
+            {
+                options.EnableForHttps = true;
+                options.Providers.Add<BrotliCompressionProvider>();
+                options.Providers.Add<GzipCompressionProvider>();
+                options.MimeTypes = ResponseCompressionDefaults.MimeTypes.Concat(new[]
+                {
+                    "application/javascript",
+                    "application/json",
+                    "text/css",
+                    "text/html",
+                    "text/plain",
+                    "image/svg+xml",
+                    "application/font-woff",
+                    "application/font-woff2",
+                    "font/woff",
+                    "font/woff2"
+                });
+            });
+
+            builder.Services.Configure<BrotliCompressionProviderOptions>(o => o.Level = CompressionLevel.Fastest);
+            builder.Services.Configure<GzipCompressionProviderOptions>(o => o.Level = CompressionLevel.Fastest);
+
             var app = builder.Build();
 
             if (!app.Environment.IsDevelopment())
@@ -55,7 +96,34 @@ namespace Messenger.Web
 
             app.UseHttpsRedirection();
 
-            app.UseStaticFiles();
+            app.UseResponseCompression();
+
+            var staticFileOptions = new StaticFileOptions
+            {
+                OnPrepareResponse = ctx =>
+                {
+                    var path = ctx.Context.Request.Path.Value?.ToLowerInvariant() ?? "";
+                    if (path.StartsWith("/lib/") ||
+                        path.StartsWith("/css/") ||
+                        path.StartsWith("/js/") ||
+                        path.StartsWith("/images/") ||
+                        path.EndsWith(".woff") ||
+                        path.EndsWith(".woff2") ||
+                        path.EndsWith(".ttf") ||
+                        path.EndsWith(".eot"))
+                    {
+                        ctx.Context.Response.Headers.CacheControl = "public, max-age=31536000, immutable";
+                        ctx.Context.Response.Headers.Append("Expires", DateTime.UtcNow.AddYears(1).ToString("R"));
+                    }
+                    else
+                    {
+                        ctx.Context.Response.Headers.CacheControl = "public, max-age=86400";
+                    }
+                }
+            };
+
+            app.UseStaticFiles(staticFileOptions);
+
             app.Map("/uploads/{**path}", async (string path, HttpContext ctx, IHttpClientFactory httpClientFactory) =>
             {
                 var apiBase = builder.Configuration["URL:API:HTTPS"]?.TrimEnd('/');
@@ -82,6 +150,8 @@ namespace Messenger.Web
             app.MapRazorPages();
             app.MapStaticAssets();
             app.MapControllers();
+
+            app.MapPrometheusScrapingEndpoint("/metrics");
 
             app.Run();
         }
