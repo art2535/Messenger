@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Text.Json.Serialization;
 
@@ -33,6 +33,12 @@ public partial class Message
 
     [Column("Read_Time", TypeName = "timestamp with time zone")]
     public DateTime? ReadTime { get; set; }
+
+    [Column("Is_Pinned")]
+    public bool IsPinned { get; set; }
+
+    [Column("Pinned_At", TypeName = "timestamp with time zone")]
+    public DateTime? PinnedAt { get; set; }
 
     [InverseProperty("Message")]
     [JsonIgnore]

@@ -1,4 +1,4 @@
-﻿using MassTransit;
+using MassTransit;
 using Messenger.Core.Models;
 using Microsoft.EntityFrameworkCore;
 
@@ -131,6 +131,18 @@ public partial class GuapMessengerContext : DbContext
 
             entity.HasIndex(e => new { e.ChatId, e.ReadTime })
                 .HasDatabaseName("IX_Messages_ChatId_ReadTime");
+
+            entity.Property(e => e.IsPinned)
+                .HasColumnName("Is_Pinned")
+                .HasDefaultValue(false);
+
+            entity.Property(e => e.PinnedAt)
+                .HasColumnName("Pinned_At")
+                .HasColumnType("timestamp with time zone");
+
+            entity.HasIndex(e => new { e.ChatId, e.IsPinned })
+                .HasDatabaseName("IX_Messages_ChatId_IsPinned")
+                .HasFilter("\"Is_Pinned\" = true");
 
             entity.HasOne(d => d.Chat).WithMany(p => p.Messages).HasConstraintName("fk_chat_messages");
 
