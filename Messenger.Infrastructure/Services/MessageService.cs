@@ -25,6 +25,8 @@ namespace Messenger.Infrastructure.Services
 
         private static readonly TimeSpan LatestMessagesTtl = TimeSpan.FromSeconds(25);
 
+        private const int SearchScanLimit = 300;
+
         private static readonly JsonSerializerOptions JsonOptions = new()
         {
             WriteIndented = true,
@@ -91,7 +93,19 @@ namespace Messenger.Infrastructure.Services
 
             query = query.Trim().ToLowerInvariant();
 
-            var (messages, _) = await GetMessagesByChatIdPagedAsync(chatId, null, 300, token);
+            var messages = await _context.Messages
+                .AsNoTracking()
+                .Where(m => m.ChatId == chatId)
+                .OrderByDescending(m => m.SequenceNumber)
+                .Take(SearchScanLimit)
+                .Include(m => m.Sender)
+                .Include(m => m.Reactions)
+                    .ThenInclude(r => r.User)
+                .Include(m => m.Attachments)
+                .AsSplitQuery()
+                .ToListAsync(token);
+
+            messages.Reverse();
 
             var filtered = new List<MessageDto>();
 
@@ -110,24 +124,20 @@ namespace Messenger.Infrastructure.Services
 
         public async Task<int> MarkMessagesAsReadAsync(Guid chatId, Guid readerId, CancellationToken ct = default)
         {
-            var messages = await _context.Messages
+           var now = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
+
+            var updated = await _context.Messages
                 .Where(m => m.ChatId == chatId
                          && m.SenderId != readerId
                          && m.ReadTime == null)
-                .ToListAsync(ct);
-
-            var now = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
-            foreach (var msg in messages)
-            {
-                msg.ReadTime = now;
-                msg.DeliveryStatus = MessageDeliveryStatus.Read;
-            }
-
-            await _context.SaveChangesAsync(ct);
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(m => m.ReadTime, now)
+                    .SetProperty(m => m.DeliveryStatus, MessageDeliveryStatus.Read), ct);
+            
             await _cache.RemoveAsync($"user:{readerId:N}:chats", ct);
             _logger.LogInformation("MarkAsRead: chatId={ChatId} count={Count}, messages cache kept, user chats cache invalidated",
-                chatId, messages.Count);
-            return messages.Count;
+                chatId, updated);
+            return updated;
         }
 
         public async Task<IEnumerable<Message>> GetMessagesAsync(Guid chatId, CancellationToken token = default)

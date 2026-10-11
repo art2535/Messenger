@@ -128,14 +128,6 @@ namespace Messenger.Core.Hubs
             await base.OnDisconnectedAsync(exception);
         }
 
-        public async Task NotifyBlockStatus(string actorId, string targetId, bool isBlocked)
-        {
-            await Clients.Group($"User_{actorId.ToLowerInvariant()}")
-                .SendAsync("UserBlockStatusChanged", new { actorId, targetId, isBlocked });
-            await Clients.Group($"User_{targetId.ToLowerInvariant()}")
-                .SendAsync("UserBlockStatusChanged", new { actorId, targetId, isBlocked });
-        }
-
         public async Task NotifyParticipantRemoved(Guid chatId, Guid removedUserId)
         {
             await Clients.Group(chatId.ToString()).SendAsync("ParticipantRemoved", new

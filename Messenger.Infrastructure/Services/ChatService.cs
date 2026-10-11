@@ -9,18 +9,16 @@ namespace Messenger.Infrastructure.Services
     public class ChatService : IChatService
     {
         private readonly GuapMessengerContext _context;
-        private readonly IUserService _userService;
         private readonly IEncryptionService _encryptionService;
         private readonly ICacheService _cache;
         private readonly ILogger<ChatService> _logger;
 
         private static readonly TimeSpan ChatsListTtl = TimeSpan.FromSeconds(45);
 
-        public ChatService(GuapMessengerContext context, IUserService userService,
-            IEncryptionService encryptionService, ICacheService cache, ILogger<ChatService> logger)
+        public ChatService(GuapMessengerContext context, IEncryptionService encryptionService, 
+            ICacheService cache, ILogger<ChatService> logger)
         {
             _context = context;
-            _userService = userService;
             _encryptionService = encryptionService;
             _cache = cache;
             _logger = logger;
@@ -141,18 +139,6 @@ namespace Messenger.Infrastructure.Services
                 lastMsgByChat.TryGetValue(chat.ChatId, out var lastMsg);
                 var lastMessageAt = lastMsg?.SendTime ?? chat.CreationDate;
 
-                bool isBlocked = false;
-                if (chat.Type == "private")
-                {
-                    var otherParticipant = chat.ChatParticipants.FirstOrDefault(p => p.UserId != userId);
-                    if (otherParticipant != null)
-                    {
-                        bool blockedByMe = await _userService.IsBlockedByAsync(userId, otherParticipant.UserId, token);
-                        bool blockedByThem = await _userService.IsBlockedByAsync(otherParticipant.UserId, userId, token);
-                        isBlocked = blockedByMe || blockedByThem;
-                    }
-                }
-
                 string? decryptedLastMessage = null;
                 if (lastMsg?.MessageText != null)
                 {
@@ -193,7 +179,6 @@ namespace Messenger.Infrastructure.Services
                     lastMessageTime = lastMessageAt == DateTime.MinValue ? (DateTime?)null : lastMessageAt,
                     lastMessageSentAt = lastMessageAt == DateTime.MinValue ? (DateTime?)null : lastMessageAt,
                     isOnline = true,
-                    isBlocked = isBlocked,
                     unreadCount = unreadCount
                 };
 

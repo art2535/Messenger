@@ -52,12 +52,12 @@ namespace Messenger.Infrastructure.Services
                 var value = await _db.StringGetAsync(key);
                 if (value.IsNullOrEmpty)
                 {
-                    _logger.LogInformation("CACHE MISS key={Key} → запрос уйдёт в PostgreSQL", key);
+                    _logger.LogDebug("CACHE MISS key={Key} → запрос уйдёт в PostgreSQL", key);
                     return default;
                 }
 
                 var result = JsonSerializer.Deserialize<T>((string)value!, JsonOptions);
-                _logger.LogInformation("CACHE HIT key={Key} (данные из Redis, PostgreSQL не трогаем)", key);
+                _logger.LogDebug("CACHE HIT key={Key} (данные из Redis, PostgreSQL не трогаем)", key);
                 return result;
             }
             catch (Exception ex)
@@ -79,7 +79,7 @@ namespace Messenger.Infrastructure.Services
             {
                 var json = JsonSerializer.Serialize(value, JsonOptions);
                 await _db.StringSetAsync(key, json, ttl);
-                _logger.LogInformation("CACHE SET key={Key} ttl={TtlSeconds}s", key, (int)ttl.TotalSeconds);
+                _logger.LogDebug("CACHE SET key={Key} ttl={TtlSeconds}s", key, (int)ttl.TotalSeconds);
             }
             catch (Exception ex)
             {
@@ -94,7 +94,7 @@ namespace Messenger.Infrastructure.Services
             try
             {
                 var deleted = await _db.KeyDeleteAsync(key);
-                _logger.LogInformation("CACHE INVALIDATE key={Key} deleted={Deleted}", key, deleted);
+                _logger.LogDebug("CACHE INVALIDATE key={Key} deleted={Deleted}", key, deleted);
             }
             catch (Exception ex)
             {
@@ -112,7 +112,7 @@ namespace Messenger.Infrastructure.Services
             try
             {
                 var deleted = await _db.KeyDeleteAsync(arr);
-                _logger.LogInformation("CACHE INVALIDATE keys={Count} deleted={Deleted} sample={Sample}",
+                _logger.LogDebug("CACHE INVALIDATE keys={Count} deleted={Deleted} sample={Sample}",
                     arr.Length, deleted, arr.Length > 0 ? (string)arr[0]! : "");
             }
             catch (Exception ex)

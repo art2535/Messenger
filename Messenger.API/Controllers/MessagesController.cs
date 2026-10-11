@@ -148,27 +148,6 @@ namespace Messenger.API.Controllers
                     return Forbid();
                 }
 
-                if (chat.Type == "private")
-                {
-                    var recipientId = chat.ChatParticipants.FirstOrDefault(p => p.UserId != user!.UserId)?.UserId;
-                    if (recipientId != null)
-                    {
-                        bool blockedByRecipient = await _userService.IsBlockedByAsync(recipientId.Value, user!.UserId, cancellationToken);
-                        bool blockedByMe = await _userService.IsBlockedByAsync(user!.UserId, recipientId.Value, cancellationToken);
-
-                        if (blockedByRecipient || blockedByMe)
-                        {
-                            return BadRequest(new ErrorResponse
-                            {
-                                IsSuccess = false,
-                                Error = blockedByMe
-                                    ? "Вы не можете отправить сообщение, так как заблокировали этого пользователя."
-                                    : "Вы не можете отправлять сообщения этому пользователю — вы в его чёрном списке."
-                            });
-                        }
-                    }
-                }
-
                 var contentToSave = string.IsNullOrWhiteSpace(messageText)
                     ? null
                     : _encryptionService.Encrypt(messageText.Trim());
@@ -226,7 +205,7 @@ namespace Messenger.API.Controllers
                         SenderId = user!.UserId,
                         SenderName = $"{user.FirstName} {user.LastName}".Trim(),
                         MessageText = encryptedText,
-                        SentAt = DateTime.UtcNow,
+                        SentAt = UtcDateTime.Now,
                         HasAttachments = attachmentsInfo.Count > 0,
                         Attachments = attachmentsInfo
                     }, cancellationToken);
@@ -254,7 +233,7 @@ namespace Messenger.API.Controllers
                         SenderId = user!.UserId,
                         SenderName = $"{user.FirstName} {user.LastName}".Trim(),
                         MessageText = decryptedText,
-                        SentAt = DateTime.UtcNow,
+                        SentAt = UtcDateTime.Now,
                         Status = "Sent",
                         Attachments = attachmentDtos
                     };
@@ -296,7 +275,7 @@ namespace Messenger.API.Controllers
                             SenderId = user!.UserId,
                             SenderName = $"{user.FirstName} {user.LastName}".Trim(),
                             MessageText = string.IsNullOrEmpty(encryptedText) ? null : _encryptionService.TryDecryptSafe(encryptedText),
-                            SentAt = DateTime.UtcNow,
+                            SentAt = UtcDateTime.Now,
                             Status = "Sent",
                             Attachments = attachmentDtos
                         }
@@ -456,7 +435,7 @@ namespace Messenger.API.Controllers
                                 SenderId = user.UserId,
                                 SenderName = senderName,
                                 MessageText = encryptedText,
-                                SentAt = DateTime.UtcNow,
+                                SentAt = UtcDateTime.Now,
                                 HasAttachments = attachmentsInfo.Count > 0,
                                 Attachments = attachmentsInfo
                             }, cancellationToken);
@@ -473,7 +452,7 @@ namespace Messenger.API.Controllers
                                     SenderId = user.UserId,
                                     SenderName = senderName,
                                     MessageText = plainForDto,
-                                    SentAt = DateTime.UtcNow,
+                                    SentAt = UtcDateTime.Now,
                                     Status = "Sent",
                                     Attachments = attachmentsInfo.Select(a => new AttachmentDto
                                     {
