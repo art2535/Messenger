@@ -53,7 +53,43 @@ namespace Messenger.Infrastructure.Services
                 .Select(limit => LatestMessagesCacheKey(chatId, limit))
                 .ToArray();
             await _cache.RemoveAsync(keys, token);
-            _logger.LogInformation("Messages cache invalidated chatId={ChatId}", chatId);
+            _logger.LogDebug("Messages cache invalidated chatId={ChatId}", chatId);
+        }
+
+        private async Task PrependMessageToCachesAsync(Message message, CancellationToken token = default)
+        {
+            var item = ToCacheItem(message);
+            var limits = new[] { 1, 20, 30, 50, 100, 200 };
+
+            foreach (var limit in limits)
+            {
+                var key = LatestMessagesCacheKey(message.ChatId, limit);
+                var page = await _cache.GetAsync<CachedMessagesPage>(key, token);
+                if (page is null || page.Items is null)
+                    continue;
+
+                if (page.Items.Any(x => x.MessageId == item.MessageId))
+                    continue;
+
+                page.Items.Add(item);
+                if (page.Items.Count > limit)
+                {
+                    page.Items = page.Items
+                        .OrderBy(x => x.SequenceNumber)
+                        .TakeLast(limit)
+                        .ToList();
+                    page.HasMore = true;
+                }
+                else
+                {
+                    page.Items = page.Items.OrderBy(x => x.SequenceNumber).ToList();
+                }
+
+                await _cache.SetAsync(key, page, LatestMessagesTtl, token);
+            }
+
+            _logger.LogDebug("Messages cache prepended chatId={ChatId} messageId={MessageId}",
+                message.ChatId, message.MessageId);
         }
 
         private async Task InvalidateUserChatsCacheAsync(Guid chatId, CancellationToken token = default)
@@ -132,7 +168,8 @@ namespace Messenger.Infrastructure.Services
                          && m.ReadTime == null)
                 .ExecuteUpdateAsync(s => s
                     .SetProperty(m => m.ReadTime, now)
-                    .SetProperty(m => m.DeliveryStatus, MessageDeliveryStatus.Read), ct);
+                    .SetProperty(m => m.DeliveryStatus, MessageDeliveryStatus.Read),
+                ct);
             
             await _cache.RemoveAsync($"user:{readerId:N}:chats", ct);
             _logger.LogInformation("MarkAsRead: chatId={ChatId} count={Count}, messages cache kept, user chats cache invalidated",
@@ -534,7 +571,20 @@ namespace Messenger.Infrastructure.Services
                 await _context.Messages.AddAsync(message, token);
                 await _context.SaveChangesAsync(token);
                 await transaction.CommitAsync(token);
-                await InvalidateMessageCachesAsync(message.ChatId, token);
+
+                var forCache = await _context.Messages
+                    .AsNoTracking()
+                    .Include(m => m.Sender)
+                    .Include(m => m.Attachments)
+                    .Include(m => m.Reactions).ThenInclude(r => r.User)
+                    .FirstOrDefaultAsync(m => m.MessageId == message.MessageId, token);
+
+                if (forCache is not null)
+                    await PrependMessageToCachesAsync(forCache, token);
+                else
+                    await InvalidateMessageCachesAsync(message.ChatId, token);
+
+                await InvalidateUserChatsCacheAsync(message.ChatId, token);
             }
             catch
             {
@@ -558,19 +608,19 @@ namespace Messenger.Infrastructure.Services
                 if (cached is not null && cached.Items is { Count: > 0 })
                 {
                     var fromCache = cached.Items.Select(ToMessage).ToList();
-                    _logger.LogInformation(
+                    _logger.LogDebug(
                         "GetMessages: source=Redis chatId={ChatId} limit={Limit} count={Count}",
                         chatId, limit, fromCache.Count);
                     return (fromCache, cached.HasMore);
                 }
 
-                _logger.LogInformation(
+                _logger.LogDebug(
                     "GetMessages: source=PostgreSQL chatId={ChatId} limit={Limit} (cache miss)",
                     chatId, limit);
             }
             else
             {
-                _logger.LogInformation(
+                _logger.LogDebug(
                     "GetMessages: source=PostgreSQL chatId={ChatId} beforeSeq={Before} limit={Limit} (cursor page, без кэша)",
                     chatId, beforeSequence, limit);
             }
