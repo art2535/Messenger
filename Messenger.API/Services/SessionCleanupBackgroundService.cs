@@ -1,9 +1,10 @@
-﻿using Messenger.API.Options;
+using Messenger.API.Options;
 using Messenger.Core.Hubs;
 using Messenger.Core.Interfaces;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Options;
 using Messenger.Core.Models;
+using Messenger.Infrastructure.Services;
 
 namespace Messenger.API.Services
 {
@@ -13,14 +14,19 @@ namespace Messenger.API.Services
         private readonly IHubContext<ChatHub> _hubContext;
         private readonly ILogger<SessionCleanupBackgroundService> _logger;
         private readonly SessionCleanupOptions _options;
+        private readonly RedisDistributedLock _lock;
+
+        private const string LockKey = "messenger:lock:session-cleanup";
 
         public SessionCleanupBackgroundService(IServiceScopeFactory scopeFactory, IHubContext<ChatHub> hubContext,
-            IOptions<SessionCleanupOptions> options, ILogger<SessionCleanupBackgroundService> logger)
+            IOptions<SessionCleanupOptions> options, ILogger<SessionCleanupBackgroundService> logger,
+            RedisDistributedLock distributedLock)
         {
             _scopeFactory = scopeFactory;
             _hubContext = hubContext;
             _options = options.Value;
             _logger = logger;
+            _lock = distributedLock;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -38,7 +44,16 @@ namespace Messenger.API.Services
             {
                 try
                 {
-                    await CleanupOnceAsync(idleThreshold, stoppingToken);
+                    var lockTtl = interval + TimeSpan.FromSeconds(30);
+                    await using var handle = await _lock.TryAcquireAsync(LockKey, lockTtl, stoppingToken);
+                    if (handle is null)
+                    {
+                        _logger.LogDebug("SessionCleanup: тик пропущен — другая реплика держит lock");
+                    }
+                    else
+                    {
+                        await CleanupOnceAsync(idleThreshold, stoppingToken);
+                    }
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {
