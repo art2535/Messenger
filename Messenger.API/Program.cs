@@ -2,6 +2,8 @@ using Messenger.API.Extensions;
 using Messenger.Core.Hubs;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
+using System.Runtime.InteropServices;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 
 namespace Messenger.API
@@ -16,6 +18,37 @@ namespace Messenger.API
             }
 
             var builder = WebApplication.CreateBuilder(args);
+
+            Console.WriteLine("=============================================================");
+            Console.WriteLine($"[API DEBUG] Среда: {builder.Environment.EnvironmentName}");
+            Console.WriteLine($"[API DEBUG] Путь к сертификату: '{builder.Configuration["Kestrel:Certificates:Default:Path"]}'");
+            Console.WriteLine($"[API DEBUG] Длина пароля: {builder.Configuration["Kestrel:Certificates:Default:Password"]?.Length ?? 0}");
+            Console.WriteLine($"[API DEBUG] ASPNETCORE_URLS: '{builder.Configuration["ASPNETCORE_URLS"]}'");
+            Console.WriteLine($"[API DEBUG] ASPNETCORE_HTTPS_PORTS: '{builder.Configuration["ASPNETCORE_HTTPS_PORTS"]}'");
+            Console.WriteLine("=============================================================");
+
+            bool isLinux = RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
+            string osKey = isLinux ? "Linux" : "Windows";
+
+            string certPath = builder.Configuration[$"CertificateProfiles:{osKey}:Path"];
+            string certPassword = builder.Configuration[$"CertificateProfiles:{osKey}:Password"];
+
+            if (!string.IsNullOrEmpty(certPath) && File.Exists(certPath))
+            {
+                Console.WriteLine($"[Kestrel Config] Загружается сертификат для {osKey}: {certPath}");
+                
+                builder.WebHost.ConfigureKestrel(serverOptions =>
+                {
+                    serverOptions.ConfigureHttpsDefaults(listenOptions =>
+                    {
+                        listenOptions.ServerCertificate = new X509Certificate2(certPath, certPassword);
+                    });
+                });
+            }
+            else
+            {
+                Console.WriteLine($"[Kestrel Config] Файл сертификата не найден по пути: {certPath}. Используется стандартный dev-сертификат.");
+            }
 
             builder.EnsureSharedDevelopmentEncryptionKey();
             builder.Services.AddControllers();

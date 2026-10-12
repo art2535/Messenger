@@ -5,6 +5,8 @@ using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using System.IO.Compression;
 using System.Net.Http.Headers;
+using System.Runtime.InteropServices;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 
 namespace Messenger.Web
@@ -19,6 +21,34 @@ namespace Messenger.Web
             }
 
             var builder = WebApplication.CreateBuilder(args);
+
+            Console.WriteLine("=============================================================");
+            Console.WriteLine($"[WEB DEBUG] Путь к сертификату: '{builder.Configuration["Kestrel:Certificates:Default:Path"]}'");
+            Console.WriteLine($"[WEB DEBUG] Длина пароля: {builder.Configuration["Kestrel:Certificates:Default:Password"]?.Length ?? 0}");
+            Console.WriteLine("=============================================================");
+
+            bool isLinux = RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
+            string osKey = isLinux ? "Linux" : "Windows";
+
+            string certPath = builder.Configuration[$"CertificateProfiles:{osKey}:Path"];
+            string certPassword = builder.Configuration[$"CertificateProfiles:{osKey}:Password"];
+
+            if (!string.IsNullOrEmpty(certPath) && File.Exists(certPath))
+            {
+                Console.WriteLine($"[Kestrel Config] Загружается сертификат для {osKey}: {certPath}");
+                
+                builder.WebHost.ConfigureKestrel(serverOptions =>
+                {
+                    serverOptions.ConfigureHttpsDefaults(listenOptions =>
+                    {
+                        listenOptions.ServerCertificate = new X509Certificate2(certPath, certPassword);
+                    });
+                });
+            }
+            else
+            {
+                Console.WriteLine($"[Kestrel Config] Файл сертификата не найден по пути: {certPath}. Используется стандартный dev-сертификат.");
+            }
 
             builder.Services.AddRazorPages();
             builder.Services.AddEtaWebAuthentication(builder.Configuration);
