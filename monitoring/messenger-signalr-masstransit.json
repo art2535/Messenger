@@ -1,0 +1,95 @@
+{
+  "title": "Messenger - SignalR & MassTransit",
+  "panels": [
+    {
+      "title": "Active SignalR Connections",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [{
+        "expr": "sum(messenger_signalr_active_connections) by (hub) or vector(0)",
+        "legendFormat": "{{hub}}"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 50 },
+              { "color": "red", "value": 200 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "SignalR Errors (last 5m)",
+      "type": "stat",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [{
+        "expr": "sum(increase(messenger_signalr_errors_total[5m])) or vector(0)",
+        "legendFormat": "Errors"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Hub Action Duration (p95)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [{
+        "expr": "histogram_quantile(0.95, sum(rate(messenger_hub_action_duration_bucket[5m])) by (le, action)) or vector(0)",
+        "legendFormat": "{{action}} p95"
+      }],
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    },
+    {
+      "title": "Notifications Sent (last 5m)",
+      "type": "stat",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [{
+        "expr": "sum(increase(messenger_notifications_sent_total[5m])) or vector(0)",
+        "legendFormat": "Notifications"
+      }]
+    },
+    {
+      "title": "MassTransit Consume Duration (p95)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "targets": [{
+        "expr": "histogram_quantile(0.95, sum(rate(messaging_masstransit_consume_duration_milliseconds_bucket[5m])) by (le, messaging_masstransit_consumer_type)) or vector(0)",
+        "legendFormat": "{{messaging_masstransit_consumer_type}} p95"
+      }],
+      "fieldConfig": { "defaults": { "unit": "ms" } }
+    },
+    {
+      "title": "MassTransit Messages Consumed/sec",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "targets": [{
+        "expr": "sum(rate(messaging_masstransit_consume_ea_total[1m])) by (messaging_masstransit_consumer_type) or vector(0)",
+        "legendFormat": "{{messaging_masstransit_consumer_type}}"
+      }]
+    },
+    {
+      "title": "MassTransit Delivery Duration (p95)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 24 },
+      "targets": [{
+        "expr": "histogram_quantile(0.95, sum(rate(messaging_masstransit_delivery_duration_milliseconds_bucket[5m])) by (le, messaging_masstransit_consumer_type)) or vector(0)",
+        "legendFormat": "{{messaging_masstransit_consumer_type}} delivery p95"
+      }],
+      "fieldConfig": { "defaults": { "unit": "ms" } }
+    }
+  ],
+  "time": { "from": "now-15m", "to": "now" },
+  "tags": ["messenger", "signalr", "masstransit"]
+}

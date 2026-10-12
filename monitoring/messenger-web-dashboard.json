@@ -6,48 +6,73 @@
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
       "targets": [{
-        "expr": "dotnet_process_memory_working_set_bytes{job=\"messenger-web\"} / 1024 / 1024",
+        "expr": "dotnet_process_memory_working_set_bytes{job=\"messenger-web\"} / 1024 / 1024 or vector(0)",
         "legendFormat": "Working Set"
       }],
-      "fieldConfig": { "defaults": { "unit": "decmbytes" } }
+      "fieldConfig": {
+        "defaults": {
+          "unit": "decmbytes",
+          "nullValueMode": "asZero"
+        }
+      }
     },
     {
       "title": "Web - CPU Usage (%)",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
       "targets": [{
-        "expr": "rate(dotnet_process_cpu_time_seconds_total{job=\"messenger-web\"}[1m]) * 100",
+        "expr": "rate(dotnet_process_cpu_time_seconds_total{job=\"messenger-web\"}[1m]) * 100 or vector(0)",
         "legendFormat": "{{cpu_mode}}"
-      }]
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "nullValueMode": "asZero"
+        }
+      }
     },
     {
       "title": "Web - Incoming HTTP Requests/sec",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
       "targets": [{
-        "expr": "sum(rate(http_server_request_duration_seconds_count{job=\"messenger-web\"}[1m]))",
+        "expr": "sum(rate(http_server_request_duration_seconds_count{job=\"messenger-web\"}[1m])) or vector(0)",
         "legendFormat": "RPS"
-      }]
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "nullValueMode": "asZero"
+        }
+      }
     },
     {
       "title": "Web - Incoming HTTP 95th Percentile Latency",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
       "targets": [{
-        "expr": "histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket{job=\"messenger-web\"}[5m])) by (le))",
+        "expr": "histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket{job=\"messenger-web\"}[5m])) by (le)) or vector(0)",
         "legendFormat": "p95"
       }],
-      "fieldConfig": { "defaults": { "unit": "s" } }
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "nullValueMode": "asZero"
+        }
+      }
     },
     {
       "title": "Web - Outgoing HTTP to API (Duration p95)",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 },
       "targets": [{
-        "expr": "histogram_quantile(0.95, sum(rate(http_client_request_duration_seconds_bucket{job=\"messenger-web\"}[5m])) by (le))",
+        "expr": "histogram_quantile(0.95, sum(rate(http_client_request_duration_seconds_bucket{job=\"messenger-web\"}[5m])) by (le)) or vector(0)",
         "legendFormat": "API Call p95"
       }],
-      "fieldConfig": { "defaults": { "unit": "s" } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "nullValueMode": "asZero"
+        }
+      },
       "description": "Сколько времени Web-приложение ждет ответа от API"
     },
     {
@@ -55,18 +80,34 @@
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
       "targets": [{
-        "expr": "sum(rate(http_client_request_duration_seconds_count{job=\"messenger-web\", http_response_status_code=~\"5..\"}[5m]))",
+        "expr": "sum(rate(http_client_request_duration_seconds_count{job=\"messenger-web\", http_response_status_code=~\"5..\"}[5m])) or vector(0)",
         "legendFormat": "API 5xx Errors"
-      }]
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "nullValueMode": "asZero",
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 0.01 }
+            ]
+          }
+        }
+      }
     },
     {
       "title": "Web - GC Collections",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
       "targets": [{
-        "expr": "rate(dotnet_gc_collections_total{job=\"messenger-web\"}[5m])",
+        "expr": "rate(dotnet_gc_collections_total{job=\"messenger-web\"}[5m]) or vector(0)",
         "legendFormat": "{{gc_heap_generation}}"
-      }]
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "nullValueMode": "asZero"
+        }
+      }
     }
   ],
   "time": { "from": "now-15m", "to": "now" },

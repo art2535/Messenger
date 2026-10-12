@@ -20,6 +20,7 @@
       "fieldConfig": {
         "defaults": {
           "unit": "decmbytes",
+          "nullValueMode": "asZero",
           "thresholds": {
             "steps": [
               { "color": "green", "value": null },
@@ -39,7 +40,12 @@
           "expr": "rate(dotnet_process_cpu_time_seconds_total[1m]) * 100",
           "legendFormat": "{{cpu_mode}}"
         }
-      ]
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "nullValueMode": "asZero"
+        }
+      }
     },
     {
       "title": "HTTP Requests/sec",
@@ -47,10 +53,15 @@
       "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
       "targets": [
         {
-          "expr": "sum(rate(http_server_request_duration_seconds_count[1m]))",
+          "expr": "sum(rate(http_server_request_duration_seconds_count[1m])) or vector(0)",
           "legendFormat": "RPS"
         }
-      ]
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "nullValueMode": "asZero"
+        }
+      }
     },
     {
       "title": "HTTP 95th Percentile Latency",
@@ -58,12 +69,15 @@
       "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket[5m])) by (le))",
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket[5m])) by (le)) or vector(0)",
           "legendFormat": "p95"
         }
       ],
       "fieldConfig": {
-        "defaults": { "unit": "s" }
+        "defaults": {
+          "unit": "s",
+          "nullValueMode": "asZero"
+        }
       }
     },
     {
@@ -72,10 +86,21 @@
       "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 },
       "targets": [
         {
-          "expr": "sum(rate(http_server_request_duration_seconds_count{http_response_status_code=~\"5..\"}[5m]))",
+          "expr": "sum(rate(http_server_request_duration_seconds_count{http_response_status_code=~\"5..\"}[5m])) or vector(0)",
           "legendFormat": "5xx errors"
         }
-      ]
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "nullValueMode": "asZero",
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 0.01 }
+            ]
+          }
+        }
+      }
     },
     {
       "title": "GC Collections",
@@ -83,10 +108,15 @@
       "gridPos": { "h": 8, "w": 8, "x": 0, "y": 16 },
       "targets": [
         {
-          "expr": "rate(dotnet_gc_collections_total[5m])",
+          "expr": "rate(dotnet_gc_collections_total[5m]) or vector(0)",
           "legendFormat": "{{gc_heap_generation}}"
         }
-      ]
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "nullValueMode": "asZero"
+        }
+      }
     },
     {
       "title": "Thread Pool Threads",
@@ -94,10 +124,15 @@
       "gridPos": { "h": 8, "w": 8, "x": 8, "y": 16 },
       "targets": [
         {
-          "expr": "dotnet_thread_pool_thread_count_total",
+          "expr": "dotnet_thread_pool_thread_count_total or vector(0)",
           "legendFormat": "Threads"
         }
-      ]
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "nullValueMode": "asZero"
+        }
+      }
     },
     {
       "title": "Exceptions",
@@ -105,10 +140,15 @@
       "gridPos": { "h": 8, "w": 8, "x": 16, "y": 16 },
       "targets": [
         {
-          "expr": "rate(dotnet_exceptions_total[5m])",
+          "expr": "rate(dotnet_exceptions_total[5m]) or vector(0)",
           "legendFormat": "{{error_type}}"
         }
-      ]
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "nullValueMode": "asZero"
+        }
+      }
     },
     {
       "title": "EF Core Queries/sec",
@@ -116,10 +156,15 @@
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
       "targets": [
         {
-          "expr": "rate(microsoft_entityframeworkcore_queries_total[1m])",
+          "expr": "rate(microsoft_entityframeworkcore_queries_total[1m]) or vector(0)",
           "legendFormat": "Queries"
         }
-      ]
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "nullValueMode": "asZero"
+        }
+      }
     },
     {
       "title": "Kestrel Active Connections",
@@ -127,10 +172,15 @@
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
       "targets": [
         {
-          "expr": "kestrel_active_connections",
+          "expr": "kestrel_active_connections or vector(0)",
           "legendFormat": "Connections"
         }
-      ]
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "nullValueMode": "asZero"
+        }
+      }
     }
   ],
   "schemaVersion": 38,
