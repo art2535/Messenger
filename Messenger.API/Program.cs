@@ -77,6 +77,8 @@ namespace Messenger.API
                         .AddAspNetCoreInstrumentation()
                         .AddRuntimeInstrumentation()
                         .AddMeter("Microsoft.EntityFrameworkCore")
+                        .AddMeter("MassTransit")
+                        .AddMeter("Messenger")
                         .AddPrometheusExporter();
                 });
 

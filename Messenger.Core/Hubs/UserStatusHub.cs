@@ -1,4 +1,5 @@
 ﻿using Messenger.Core.Interfaces;
+using Messenger.Core.Metrics;
 using Messenger.Core.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
@@ -18,6 +19,9 @@ namespace Messenger.Core.Hubs
 
         public override async Task OnConnectedAsync()
         {
+            MessengerMetrics.SignalRActiveConnections.Add(1, 
+                new KeyValuePair<string, object?>("hub", "userstatus"));
+                
             var userId = Guid.Parse(Context.User!.FindFirst(ClaimTypes.NameIdentifier)!.Value);
 
             var status = new UserStatus
@@ -37,6 +41,16 @@ namespace Messenger.Core.Hubs
 
         public override async Task OnDisconnectedAsync(Exception? exception)
         {
+            MessengerMetrics.SignalRActiveConnections.Add(-1, 
+                new KeyValuePair<string, object?>("hub", "userstatus"));
+
+            if (exception != null)
+            {
+                MessengerMetrics.SignalRErrors.Add(1, 
+                    new KeyValuePair<string, object?>("hub", "userstatus"),
+                    new KeyValuePair<string, object?>("error_type", exception.GetType().Name));
+            }
+            
             var userId = Guid.Parse(Context.User!.FindFirst(ClaimTypes.NameIdentifier)!.Value);
 
             var status = new UserStatus

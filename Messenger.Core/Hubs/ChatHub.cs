@@ -1,4 +1,5 @@
 ﻿using Messenger.Core.Interfaces;
+using Messenger.Core.Metrics;
 using Messenger.Core.Models;
 using Messenger.Core.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -29,12 +30,32 @@ namespace Messenger.Core.Hubs
 
         public async Task JoinChat(Guid chatId)
         {
-            await Groups.AddToGroupAsync(Context.ConnectionId, chatId.ToString());
+            var startTime = DateTime.UtcNow;
+            try
+            {
+                await Groups.AddToGroupAsync(Context.ConnectionId, chatId.ToString());
+            }
+            finally
+            {
+                var duration = (DateTime.UtcNow - startTime).TotalSeconds;
+                MessengerMetrics.HubActionDuration.Record(duration,
+                    new KeyValuePair<string, object?>("action", "join_chat"));
+            }
         }
 
         public async Task LeaveChat(Guid chatId)
         {
-            await Groups.RemoveFromGroupAsync(Context.ConnectionId, chatId.ToString());
+            var startTime = DateTime.UtcNow;
+            try
+            {
+                await Groups.RemoveFromGroupAsync(Context.ConnectionId, chatId.ToString());
+            }
+            finally
+            {
+                var duration = (DateTime.UtcNow - startTime).TotalSeconds;
+                MessengerMetrics.HubActionDuration.Record(duration,
+                    new KeyValuePair<string, object?>("action", "leave_chat"));
+            }
         }
 
         public override async Task OnConnectedAsync()
@@ -62,6 +83,9 @@ namespace Messenger.Core.Hubs
                 var userId = user.UserId;
 
                 _logger.LogInformation("OnConnectedAsync: {UserId} подключился", userId);
+
+                MessengerMetrics.SignalRActiveConnections.Add(1, 
+                    new KeyValuePair<string, object?>("hub", "chat"));
 
                 await Groups.AddToGroupAsync(Context.ConnectionId, $"User_{userId}");
 
@@ -104,6 +128,9 @@ namespace Messenger.Core.Hubs
                     {
                         var userId = user.UserId;
 
+                        MessengerMetrics.SignalRActiveConnections.Add(-1, 
+                            new KeyValuePair<string, object?>("hub", "chat"));
+
                         await _userStatusService.UpdateUserStatusAsync(new UserStatus
                         {
                             UserId = userId,
@@ -120,6 +147,13 @@ namespace Messenger.Core.Hubs
 
                         await Clients.All.SendAsync("UserOnlineStatusChanged", statusData);
                     }
+                }
+
+                if (exception != null)
+                {
+                    MessengerMetrics.SignalRErrors.Add(1, 
+                        new KeyValuePair<string, object?>("hub", "chat"),
+                        new KeyValuePair<string, object?>("error_type", exception.GetType().Name));
                 }
             }
             catch (Exception ex)
@@ -218,50 +252,66 @@ namespace Messenger.Core.Hubs
 
         public async Task StartTyping(string chatId)
         {
-            var externalId = Context.User?.FindFirst("sub")?.Value 
-                ?? Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (string.IsNullOrEmpty(externalId))
-                return;
-
-            if (!await _typingLimiter.TryAcquireAsync(externalId))
+            var startTime = DateTime.UtcNow;
+            try
             {
-                return;
+                var externalId = Context.User?.FindFirst("sub")?.Value 
+                    ?? Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (string.IsNullOrEmpty(externalId))
+                    return;
+
+                if (!await _typingLimiter.TryAcquireAsync(externalId))
+                    return;
+
+                var user = await _userService.GetUserByExternalIdAsync(externalId);
+                if (user == null)
+                    return;
+
+                await Clients.Group(chatId).SendAsync("UserIsTyping", new
+                {
+                    chatId,
+                    userId = user.UserId.ToString(),
+                    isTyping = true
+                });
             }
-
-            var user = await _userService.GetUserByExternalIdAsync(externalId);
-            if (user == null)
-                return;
-
-            await Clients.Group(chatId).SendAsync("UserIsTyping", new
+            finally
             {
-                chatId,
-                userId = user.UserId.ToString(),
-                isTyping = true
-            });
+                var duration = (DateTime.UtcNow - startTime).TotalSeconds;
+                MessengerMetrics.HubActionDuration.Record(duration,
+                    new KeyValuePair<string, object?>("action", "start_typing"));
+            }
         }
 
         public async Task StopTyping(string chatId)
         {
-            var externalId = Context.User?.FindFirst("sub")?.Value 
-                ?? Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (string.IsNullOrEmpty(externalId)) 
-                return;
-
-            if (!await _typingLimiter.TryAcquireAsync(externalId))
+            var startTime = DateTime.UtcNow;
+            try
             {
-                return;
+                var externalId = Context.User?.FindFirst("sub")?.Value 
+                    ?? Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (string.IsNullOrEmpty(externalId)) 
+                    return;
+
+                if (!await _typingLimiter.TryAcquireAsync(externalId))
+                    return;
+
+                var user = await _userService.GetUserByExternalIdAsync(externalId);
+                if (user == null) 
+                    return;
+
+                await Clients.Group(chatId).SendAsync("UserIsTyping", new
+                {
+                    chatId,
+                    userId = user.UserId.ToString(),
+                    isTyping = false
+                });
             }
-
-            var user = await _userService.GetUserByExternalIdAsync(externalId);
-            if (user == null) 
-                return;
-
-            await Clients.Group(chatId).SendAsync("UserIsTyping", new
+            finally
             {
-                chatId,
-                userId = user.UserId.ToString(),
-                isTyping = false
-            });
+                var duration = (DateTime.UtcNow - startTime).TotalSeconds;
+                MessengerMetrics.HubActionDuration.Record(duration,
+                    new KeyValuePair<string, object?>("action", "stop_typing"));
+            }
         }
 
         public async Task RequestAndBroadcastUserStatus(Guid userId)
