@@ -40,18 +40,10 @@ else
     messengerDb = builder.AddConnectionString("DefaultConnection");
     rabbitmq = builder.AddConnectionString("RabbitMQ");
     redis = builder.AddConnectionString("Redis");
-
-    redisReady = builder.AddExecutable("redis-ready", "wsl", ".",
-        "-d", "Ubuntu-26.04", "bash", "-lc",
-        "redis-cli -p 6379 ping 2>/dev/null | grep -q PONG " +
-        "|| (sudo service redis-server start 2>/dev/null; sleep 1; redis-cli -p 6379 ping | grep -q PONG)");
-
-    builder.AddExecutable("redis-cli-monitor", "wsl", ".",
-        "-d", "Ubuntu-26.04", "redis-cli", "-p", "6379", "monitor");
 }
 
 var api = builder.AddProject<Projects.Messenger_API>("messenger-api")
-    .WithEndpoint("https", e => e.Port = apiHttpsPort)
+    .WithHttpsEndpoint(port: apiHttpsPort, isProxied: false)
     .WithEndpoint("http", e => e.Port = apiHttpPort)
     .WithUrlForEndpoint("https", url =>
     {
@@ -77,7 +69,7 @@ if (redisReady is not null)
 }
 
 builder.AddProject<Projects.Messenger_Web>("messenger-web")
-    .WithEndpoint("https", e => e.Port = webHttpsPort)
+    .WithHttpsEndpoint(port: webHttpsPort, isProxied: false)
     .WithEndpoint("http", e => e.Port = webHttpPort)
     .WithUrlForEndpoint("https", url =>
     {
