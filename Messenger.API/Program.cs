@@ -1,5 +1,7 @@
 using Messenger.API.Extensions;
 using Messenger.Core.Hubs;
+using Messenger.Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using System.Runtime.InteropServices;
@@ -105,6 +107,12 @@ namespace Messenger.API
             });
 
             var app = builder.Build();
+
+            using (var migrationScope = app.Services.CreateScope())
+            {
+                var db = migrationScope.ServiceProvider.GetRequiredService<GuapMessengerContext>();
+                db.Database.Migrate();
+            }
 
             if (app.Environment.IsDevelopment())
             {
