@@ -262,33 +262,10 @@ namespace Messenger.Infrastructure.Migrations
                     b.HasKey("AttachmentId")
                         .HasName("Attachments_pkey");
 
-                    b.HasIndex("MessageId");
+                    b.HasIndex("MessageId")
+                        .HasDatabaseName("IX_Attachments_MessageId");
 
                     b.ToTable("Attachments");
-                });
-
-            modelBuilder.Entity("Messenger.Core.Models.Blacklist", b =>
-                {
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("User_ID");
-
-                    b.Property<Guid>("BlockedUserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("Blocked_User_ID");
-
-                    b.Property<DateTime?>("BlockDate")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("Block_Date")
-                        .HasDefaultValueSql("now()");
-
-                    b.HasKey("UserId", "BlockedUserId")
-                        .HasName("Blacklist_pkey");
-
-                    b.HasIndex("BlockedUserId");
-
-                    b.ToTable("Blacklist");
                 });
 
             modelBuilder.Entity("Messenger.Core.Models.Broadcast", b =>
@@ -376,9 +353,9 @@ namespace Messenger.Infrastructure.Migrations
 
                     b.Property<DateTime>("CreationDate")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp without time zone")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("Creation_Date")
-                        .HasDefaultValueSql("now()");
+                        .HasDefaultValueSql("now() at time zone 'utc'");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -414,9 +391,9 @@ namespace Messenger.Infrastructure.Migrations
 
                     b.Property<DateTime>("JoinDate")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp without time zone")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("Join_Date")
-                        .HasDefaultValueSql("now()");
+                        .HasDefaultValueSql("now() at time zone 'utc'");
 
                     b.Property<string>("Role")
                         .ValueGeneratedOnAdd()
@@ -427,7 +404,8 @@ namespace Messenger.Infrastructure.Migrations
                     b.HasKey("ChatId", "UserId")
                         .HasName("Chat_Participants_pkey");
 
-                    b.HasIndex("UserId");
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("IX_ChatParticipants_UserId");
 
                     b.ToTable("Chat_Participants");
                 });
@@ -448,11 +426,11 @@ namespace Messenger.Infrastructure.Migrations
                         .HasColumnName("IP_Address");
 
                     b.Property<DateTime>("LoginTime")
-                        .HasColumnType("timestamp without time zone")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("Login_Time");
 
                     b.Property<DateTime?>("LogoutTime")
-                        .HasColumnType("timestamp without time zone")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("Logout_Time");
 
                     b.Property<string>("Token")
@@ -489,17 +467,27 @@ namespace Messenger.Infrastructure.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("Has_Attachments");
 
+                    b.Property<bool>("IsPinned")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("Is_Pinned");
+
                     b.Property<string>("MessageText")
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("Message_Text");
 
+                    b.Property<DateTime?>("PinnedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("Pinned_At");
+
                     b.Property<DateTime?>("ReadTime")
-                        .HasColumnType("timestamp without time zone")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("Read_Time");
 
                     b.Property<DateTime>("SendTime")
-                        .HasColumnType("timestamp without time zone")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("Send_Time");
 
                     b.Property<Guid>("SenderId")
@@ -514,6 +502,10 @@ namespace Messenger.Infrastructure.Migrations
                         .HasName("Messages_pkey");
 
                     b.HasIndex("SenderId");
+
+                    b.HasIndex("ChatId", "IsPinned")
+                        .HasDatabaseName("IX_Messages_ChatId_IsPinned")
+                        .HasFilter("\"Is_Pinned\" = true");
 
                     b.HasIndex("ChatId", "ReadTime")
                         .HasDatabaseName("IX_Messages_ChatId_ReadTime");
@@ -536,9 +528,9 @@ namespace Messenger.Infrastructure.Migrations
 
                     b.Property<DateTime>("CreationDate")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp without time zone")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("Creation_Date")
-                        .HasDefaultValueSql("now()");
+                        .HasDefaultValueSql("now() at time zone 'utc'");
 
                     b.Property<bool>("Read")
                         .ValueGeneratedOnAdd()
@@ -546,7 +538,7 @@ namespace Messenger.Infrastructure.Migrations
                         .HasDefaultValue(false);
 
                     b.Property<DateTime?>("ReadAt")
-                        .HasColumnType("timestamp without time zone")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("Read_At");
 
                     b.Property<string>("Text")
@@ -560,7 +552,8 @@ namespace Messenger.Infrastructure.Migrations
                     b.HasKey("NotificationId")
                         .HasName("Notifications_pkey");
 
-                    b.HasIndex("UserId");
+                    b.HasIndex("UserId", "Read")
+                        .HasDatabaseName("IX_Notifications_UserId_Read");
 
                     b.ToTable("Notifications");
                 });
@@ -594,7 +587,8 @@ namespace Messenger.Infrastructure.Migrations
                     b.HasKey("Id")
                         .HasName("PushSubscriptions_pkey");
 
-                    b.HasIndex("UserId");
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("IX_PushSubscriptions_UserId");
 
                     b.ToTable("PushSubscriptions");
                 });
@@ -650,6 +644,44 @@ namespace Messenger.Infrastructure.Migrations
                         .HasName("Roles_pkey");
 
                     b.ToTable("Roles");
+
+                    b.HasData(
+                        new
+                        {
+                            RoleId = new Guid("a1b2c3d4-e5f6-7890-abcd-ef1234567890"),
+                            Description = "Роль абитуриента (ROLE_ENTRANT)",
+                            Name = "Абитуриент"
+                        },
+                        new
+                        {
+                            RoleId = new Guid("b2c3d4e5-f6a7-8901-bcde-f12345678901"),
+                            Description = "Роль студента (ROLE_STUDENT)",
+                            Name = "Студент"
+                        },
+                        new
+                        {
+                            RoleId = new Guid("c3d4e5f6-a7b8-9012-cdef-123456789012"),
+                            Description = "Роль преподавателя (ROLE_TEACHER)",
+                            Name = "Преподаватель"
+                        },
+                        new
+                        {
+                            RoleId = new Guid("d4e5f6a7-b8c9-0123-defa-234567890123"),
+                            Description = "Роль сотрудника (ROLE_EMPLOYEE)",
+                            Name = "Сотрудник"
+                        },
+                        new
+                        {
+                            RoleId = new Guid("e5f6a7b8-c9d0-1234-efab-345678901234"),
+                            Description = "Полный доступ к системе (ROLE_ADMIN)",
+                            Name = "Администратор"
+                        },
+                        new
+                        {
+                            RoleId = new Guid("f6a7b8c9-d0e1-2345-fabc-456789012345"),
+                            Description = "Стандартный доступ пользователя (ROLE_USER)",
+                            Name = "Пользователь"
+                        });
                 });
 
             modelBuilder.Entity("Messenger.Core.Models.User", b =>
@@ -702,7 +734,7 @@ namespace Messenger.Infrastructure.Migrations
                         .HasColumnName("User_ID");
 
                     b.Property<DateTime?>("LastActivity")
-                        .HasColumnType("timestamp without time zone")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("Last_Activity");
 
                     b.Property<bool>("Online")
@@ -754,27 +786,6 @@ namespace Messenger.Infrastructure.Migrations
                         .HasConstraintName("fk_attachment_message");
 
                     b.Navigation("Message");
-                });
-
-            modelBuilder.Entity("Messenger.Core.Models.Blacklist", b =>
-                {
-                    b.HasOne("Messenger.Core.Models.User", "BlockedUser")
-                        .WithMany("BlacklistBlockedUsers")
-                        .HasForeignKey("BlockedUserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_blocked_to");
-
-                    b.HasOne("Messenger.Core.Models.User", "User")
-                        .WithMany("BlacklistUsers")
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_blocked_by");
-
-                    b.Navigation("BlockedUser");
-
-                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("Messenger.Core.Models.Broadcast", b =>
@@ -987,10 +998,6 @@ namespace Messenger.Infrastructure.Migrations
 
             modelBuilder.Entity("Messenger.Core.Models.User", b =>
                 {
-                    b.Navigation("BlacklistBlockedUsers");
-
-                    b.Navigation("BlacklistUsers");
-
                     b.Navigation("BroadcastRecipients");
 
                     b.Navigation("BroadcastsCreated");
