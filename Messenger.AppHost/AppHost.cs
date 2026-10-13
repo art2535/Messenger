@@ -35,6 +35,16 @@ if (useDocker)
         .WithDataVolume()
         .WithRedisInsight();
 }
+else if (OperatingSystem.IsWindows())
+{
+    messengerDb = builder.AddConnectionString("DefaultConnection");
+    rabbitmq = builder.AddConnectionString("RabbitMQ");
+
+    redisReady = builder.AddExecutable("redis-wsl", "wsl", Environment.CurrentDirectory,
+        "-d", "Ubuntu-26.04", "sh", "-c", "sudo pkill -f redis-server 2>/dev/null; exec redis-server --port 6379");
+
+    redis = builder.AddConnectionString("Redis");
+}
 else
 {
     messengerDb = builder.AddConnectionString("DefaultConnection");
@@ -57,15 +67,18 @@ var api = builder.AddProject<Projects.Messenger_API>("messenger-api")
         url.DisplayLocation = UrlDisplayLocation.DetailsOnly;
     })
     .WithReference(messengerDb)
-    .WaitFor(messengerDb)
     .WithEnvironment("Redis__ConnectionString", redis.Resource.ConnectionStringExpression)
-    .WaitFor(redis)
-    .WithReference(rabbitmq)
-    .WaitFor(rabbitmq);
+    .WithReference(rabbitmq);
 
-if (redisReady is not null)
+if (useDocker)
 {
-    api = api.WaitForCompletion(redisReady);
+    api = api.WaitFor(messengerDb)
+             .WaitFor(redis)
+             .WaitFor(rabbitmq);
+}
+else if (redisReady is not null)
+{
+    api = api.WaitFor(redisReady);
 }
 
 builder.AddProject<Projects.Messenger_Web>("messenger-web")
