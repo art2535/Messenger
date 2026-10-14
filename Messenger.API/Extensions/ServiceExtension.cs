@@ -43,6 +43,7 @@ namespace Messenger.API.Extensions
                     {
                         var options = ConfigurationOptions.Parse(redisCs);
                         options.AbortOnConnectFail = false;
+                        options.AllowAdmin = true;
                         return ConnectionMultiplexer.Connect(options);
                     });
 

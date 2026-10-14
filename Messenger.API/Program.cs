@@ -43,6 +43,7 @@ namespace Messenger.API
             builder.Services.AddMessengerRateLimiting();
             builder.Services.AddSessionCleanup(builder.Configuration);
             builder.Services.AddMessengerHealthChecks();
+            builder.Services.AddRedisMetrics();
             builder.Services.AddMetricsProtection(builder.Configuration);
 
             builder.Services.AddOpenTelemetry()
@@ -57,6 +58,7 @@ namespace Messenger.API
                         .AddMeter("Microsoft.EntityFrameworkCore")
                         .AddMeter("MassTransit")
                         .AddMeter("Messenger")
+                        .AddMeter("Messenger.Redis")
                         .AddPrometheusExporter();
                 });
 
