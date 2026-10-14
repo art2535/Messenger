@@ -17,6 +17,8 @@ services:
       - "host.docker.internal:host-gateway"
     networks:
       - monitoring_net
+    depends_on:
+      - redis-exporter
 
   grafana:
     image: grafana/grafana:latest
@@ -34,6 +36,38 @@ services:
       - monitoring_net
     depends_on:
       - prometheus
+    restart: unless-stopped
+
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: messenger-redis-exporter
+    ports:
+      - "9121:9121"
+    environment:
+      REDIS_ADDR: redis://host.docker.internal:6379
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - monitoring_net
+    restart: unless-stopped
+
+  rabbitmq-exporter:
+    image: kbudde/rabbitmq-exporter:latest
+    container_name: messenger-rabbitmq-exporter
+    ports:
+      - "9419:9419"
+    environment:
+      RABBIT_URL: http://host.docker.internal:15672
+      RABBIT_USER: guest
+      RABBIT_PASSWORD: guest
+      PUBLISH_PORT: "9419"
+      RABBIT_CAPABILITIES: bert,no_sort
+      RABBIT_EXPORTERS: exchange,node,overview,queue
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - monitoring_net
+    restart: unless-stopped
 
 volumes:
   prometheus_data:
