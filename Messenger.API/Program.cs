@@ -43,6 +43,7 @@ namespace Messenger.API
             builder.Services.AddMessengerRateLimiting();
             builder.Services.AddSessionCleanup(builder.Configuration);
             builder.Services.AddMessengerHealthChecks();
+            builder.Services.AddMetricsProtection(builder.Configuration);
 
             builder.Services.AddOpenTelemetry()
                 .ConfigureResource(r => r.AddService(
@@ -116,7 +117,7 @@ namespace Messenger.API
 
             app.MapMessengerHealthChecks();
 
-            app.MapPrometheusScrapingEndpoint("/metrics");
+            app.MapProtectedPrometheusScrapingEndpoint("/metrics");
 
             app.UseUploads();
             app.UseCors(WebCorsPolicy);

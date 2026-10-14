@@ -7,6 +7,9 @@ scrape_configs:
     scheme: https
     tls_config:
       insecure_skip_verify: true
+    basic_auth:
+      username: ${METRICS_USERNAME}
+      password: ${METRICS_PASSWORD}
     static_configs:
       - targets: ['host.docker.internal:7001']
     metrics_path: '/metrics'
@@ -15,6 +18,9 @@ scrape_configs:
     scheme: https
     tls_config:
       insecure_skip_verify: true
+    basic_auth:
+      username: ${METRICS_USERNAME}
+      password: ${METRICS_PASSWORD}
     static_configs:
       - targets: ['host.docker.internal:7010']
     metrics_path: '/metrics'
