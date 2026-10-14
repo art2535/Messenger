@@ -8,13 +8,22 @@
   "liveNow": false,
   "panels": [
     {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 100,
+      "title": "Process",
+      "type": "row"
+    },
+    {
       "title": "Memory Usage (MB)",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "id": 1,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 1 },
       "targets": [
         {
           "expr": "dotnet_process_memory_working_set_bytes / 1024 / 1024",
-          "legendFormat": "Working Set"
+          "legendFormat": "Working Set",
+          "refId": "A"
         }
       ],
       "fieldConfig": {
@@ -22,6 +31,7 @@
           "unit": "decmbytes",
           "nullValueMode": "asZero",
           "thresholds": {
+            "mode": "absolute",
             "steps": [
               { "color": "green", "value": null },
               { "color": "yellow", "value": 256 },
@@ -34,43 +44,55 @@
     {
       "title": "CPU Usage (%)",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "id": 2,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 1 },
       "targets": [
         {
           "expr": "rate(dotnet_process_cpu_time_seconds_total[1m]) * 100",
-          "legendFormat": "{{cpu_mode}}"
+          "legendFormat": "{{cpu_mode}}",
+          "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
+          "unit": "percent",
           "nullValueMode": "asZero"
         }
       }
     },
     {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 9 },
+      "id": 101,
+      "title": "HTTP",
+      "type": "row"
+    },
+    {
       "title": "HTTP Requests/sec",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
+      "id": 3,
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 10 },
       "targets": [
         {
           "expr": "sum(rate(http_server_request_duration_seconds_count[1m])) or vector(0)",
-          "legendFormat": "RPS"
+          "legendFormat": "RPS",
+          "refId": "A"
         }
       ],
       "fieldConfig": {
-        "defaults": {
-          "nullValueMode": "asZero"
-        }
+        "defaults": { "nullValueMode": "asZero" }
       }
     },
     {
       "title": "HTTP 95th Percentile Latency",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
+      "id": 4,
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 10 },
       "targets": [
         {
           "expr": "histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket[5m])) by (le)) or vector(0)",
-          "legendFormat": "p95"
+          "legendFormat": "p95",
+          "refId": "A"
         }
       ],
       "fieldConfig": {
@@ -83,17 +105,20 @@
     {
       "title": "HTTP Errors (5xx)",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 },
+      "id": 5,
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 10 },
       "targets": [
         {
           "expr": "sum(rate(http_server_request_duration_seconds_count{http_response_status_code=~\"5..\"}[5m])) or vector(0)",
-          "legendFormat": "5xx errors"
+          "legendFormat": "5xx errors",
+          "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
           "nullValueMode": "asZero",
           "thresholds": {
+            "mode": "absolute",
             "steps": [
               { "color": "green", "value": null },
               { "color": "red", "value": 0.01 }
@@ -103,94 +128,713 @@
       }
     },
     {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 18 },
+      "id": 102,
+      "title": "Runtime / GC",
+      "type": "row"
+    },
+    {
       "title": "GC Collections",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 16 },
+      "id": 6,
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 19 },
       "targets": [
         {
           "expr": "rate(dotnet_gc_collections_total[5m]) or vector(0)",
-          "legendFormat": "{{gc_heap_generation}}"
+          "legendFormat": "{{gc_heap_generation}}",
+          "refId": "A"
         }
       ],
       "fieldConfig": {
-        "defaults": {
-          "nullValueMode": "asZero"
-        }
+        "defaults": { "nullValueMode": "asZero" }
       }
     },
     {
       "title": "Thread Pool Threads",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 16 },
+      "id": 7,
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 19 },
       "targets": [
         {
           "expr": "dotnet_thread_pool_thread_count_total or vector(0)",
-          "legendFormat": "Threads"
+          "legendFormat": "Threads",
+          "refId": "A"
         }
       ],
       "fieldConfig": {
-        "defaults": {
-          "nullValueMode": "asZero"
-        }
+        "defaults": { "nullValueMode": "asZero" }
       }
     },
     {
       "title": "Exceptions",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 16 },
+      "id": 8,
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 19 },
       "targets": [
         {
           "expr": "rate(dotnet_exceptions_total[5m]) or vector(0)",
-          "legendFormat": "{{error_type}}"
+          "legendFormat": "{{error_type}}",
+          "refId": "A"
         }
       ],
       "fieldConfig": {
-        "defaults": {
-          "nullValueMode": "asZero"
-        }
+        "defaults": { "nullValueMode": "asZero" }
       }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 27 },
+      "id": 103,
+      "title": "EF Core / Kestrel",
+      "type": "row"
     },
     {
       "title": "EF Core Queries/sec",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+      "id": 9,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 28 },
       "targets": [
         {
           "expr": "rate(microsoft_entityframeworkcore_queries_total[1m]) or vector(0)",
-          "legendFormat": "Queries"
+          "legendFormat": "Queries",
+          "refId": "A"
         }
       ],
       "fieldConfig": {
-        "defaults": {
-          "nullValueMode": "asZero"
-        }
+        "defaults": { "nullValueMode": "asZero" }
       }
     },
     {
       "title": "Kestrel Active Connections",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+      "id": 10,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 28 },
       "targets": [
         {
-          "expr": "kestrel_active_connections or vector(0)",
-          "legendFormat": "Connections"
+          "expr": "sum(kestrel_active_connections) or vector(0)",
+          "legendFormat": "Connections",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "nullValueMode": "asZero" }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 36 },
+      "id": 200,
+      "title": "Redis",
+      "type": "row"
+    },
+    {
+      "title": "Redis Connected",
+      "type": "stat",
+      "id": 20,
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 37 },
+      "targets": [
+        {
+          "expr": "messenger_redis_connected or vector(0)",
+          "legendFormat": "connected",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": { "text": "DOWN", "color": "red" },
+                "1": { "text": "UP", "color": "green" }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Redis Ping (ms)",
+      "type": "stat",
+      "id": 21,
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 37 },
+      "targets": [
+        {
+          "expr": "messenger_redis_ping_ms_milliseconds or messenger_redis_ping_ms or vector(0)",
+          "legendFormat": "ping",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 5 },
+              { "color": "red", "value": 20 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Keyspace Hit Rate %",
+      "type": "stat",
+      "id": 22,
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 37 },
+      "targets": [
+        {
+          "expr": "messenger_redis_keyspace_hit_rate_percent or vector(0)",
+          "legendFormat": "hit %",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 70 },
+              { "color": "green", "value": 90 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Connected Clients",
+      "type": "stat",
+      "id": 23,
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 37 },
+      "targets": [
+        {
+          "expr": "messenger_redis_connected_clients or vector(0)",
+          "legendFormat": "clients",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "title": "Ops / sec",
+      "type": "stat",
+      "id": 24,
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 37 },
+      "targets": [
+        {
+          "expr": "messenger_redis_instantaneous_ops_per_sec_per_second or messenger_redis_instantaneous_ops_per_sec or vector(0)",
+          "legendFormat": "ops/s",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "title": "Keys Total",
+      "type": "stat",
+      "id": 25,
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 37 },
+      "targets": [
+        {
+          "expr": "messenger_redis_keys or vector(0)",
+          "legendFormat": "keys",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "title": "Redis Memory",
+      "type": "timeseries",
+      "id": 26,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 41 },
+      "targets": [
+        {
+          "expr": "messenger_redis_used_memory_bytes or vector(0)",
+          "legendFormat": "used",
+          "refId": "A"
+        },
+        {
+          "expr": "messenger_redis_used_memory_peak_bytes or vector(0)",
+          "legendFormat": "peak",
+          "refId": "B"
         }
       ],
       "fieldConfig": {
         "defaults": {
+          "unit": "bytes",
+          "nullValueMode": "asZero"
+        }
+      }
+    },
+    {
+      "title": "Redis Ping (ms) over time",
+      "type": "timeseries",
+      "id": 27,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 41 },
+      "targets": [
+        {
+          "expr": "messenger_redis_ping_ms_milliseconds or messenger_redis_ping_ms or vector(0)",
+          "legendFormat": "ping ms",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "nullValueMode": "asZero"
+        }
+      }
+    },
+    {
+      "title": "Redis Ops / sec",
+      "type": "timeseries",
+      "id": 28,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 49 },
+      "targets": [
+        {
+          "expr": "messenger_redis_instantaneous_ops_per_sec_per_second or messenger_redis_instantaneous_ops_per_sec or vector(0)",
+          "legendFormat": "ops/s",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "nullValueMode": "asZero" }
+      }
+    },
+    {
+      "title": "Keyspace Hit Rate %",
+      "type": "timeseries",
+      "id": 29,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 49 },
+      "targets": [
+        {
+          "expr": "messenger_redis_keyspace_hit_rate_percent or vector(0)",
+          "legendFormat": "hit %",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "nullValueMode": "asZero"
+        }
+      }
+    },
+    {
+      "title": "Expired / Evicted Keys",
+      "type": "timeseries",
+      "id": 30,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 57 },
+      "targets": [
+        {
+          "expr": "messenger_redis_expired_keys or vector(0)",
+          "legendFormat": "expired",
+          "refId": "A"
+        },
+        {
+          "expr": "messenger_redis_evicted_keys or vector(0)",
+          "legendFormat": "evicted",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "nullValueMode": "asZero" }
+      }
+    },
+    {
+      "title": "Redis Clients & Keys",
+      "type": "timeseries",
+      "id": 31,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 57 },
+      "targets": [
+        {
+          "expr": "messenger_redis_connected_clients or vector(0)",
+          "legendFormat": "clients",
+          "refId": "A"
+        },
+        {
+          "expr": "messenger_redis_keys or vector(0)",
+          "legendFormat": "keys",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "nullValueMode": "asZero" }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 65 },
+      "id": 300,
+      "title": "SignalR",
+      "type": "row"
+    },
+    {
+      "title": "Active SignalR Connections",
+      "type": "timeseries",
+      "id": 40,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 66 },
+      "targets": [
+        {
+          "expr": "sum(messenger_signalr_active_connections) by (hub) or vector(0)",
+          "legendFormat": "{{hub}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "nullValueMode": "asZero",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 50 },
+              { "color": "red", "value": 200 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "SignalR Errors (last 5m)",
+      "type": "stat",
+      "id": 41,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 66 },
+      "targets": [
+        {
+          "expr": "sum(increase(messenger_signalr_errors_total[5m])) or vector(0)",
+          "legendFormat": "Errors",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Hub Action Duration (p95)",
+      "type": "timeseries",
+      "id": 42,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 74 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(messenger_hub_action_duration_bucket[5m])) by (le, action)) or histogram_quantile(0.95, sum(rate(messenger_hub_action_duration_seconds_bucket[5m])) by (le, action)) or vector(0)",
+          "legendFormat": "{{action}} p95",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "nullValueMode": "asZero"
+        }
+      }
+    },
+    {
+      "title": "Notifications Sent (last 5m)",
+      "type": "stat",
+      "id": 43,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 74 },
+      "targets": [
+        {
+          "expr": "sum(increase(messenger_notifications_sent_total[5m])) or vector(0)",
+          "legendFormat": "Notifications",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 82 },
+      "id": 400,
+      "title": "MassTransit / RabbitMQ",
+      "type": "row"
+    },
+    {
+      "title": "MassTransit Consume Duration (p95)",
+      "type": "timeseries",
+      "id": 50,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 83 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(messaging_masstransit_consume_duration_milliseconds_bucket[5m])) by (le, messaging_masstransit_consumer_type)) or vector(0)",
+          "legendFormat": "{{messaging_masstransit_consumer_type}} p95",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "nullValueMode": "asZero"
+        }
+      }
+    },
+    {
+      "title": "MassTransit Messages Consumed/sec",
+      "type": "timeseries",
+      "id": 51,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 83 },
+      "targets": [
+        {
+          "expr": "sum(rate(messaging_masstransit_consume_ea_total[1m])) by (messaging_masstransit_consumer_type) or sum(rate(messaging_masstransit_consume_total[1m])) by (messaging_masstransit_consumer_type) or vector(0)",
+          "legendFormat": "{{messaging_masstransit_consumer_type}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "nullValueMode": "asZero" }
+      }
+    },
+    {
+      "title": "MassTransit Delivery Duration (p95)",
+      "type": "timeseries",
+      "id": 52,
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 91 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(messaging_masstransit_delivery_duration_milliseconds_bucket[5m])) by (le, messaging_masstransit_consumer_type)) or vector(0)",
+          "legendFormat": "{{messaging_masstransit_consumer_type}} delivery p95",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "nullValueMode": "asZero"
+        }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 100 },
+      "id": 500,
+      "title": "RabbitMQ (broker)",
+      "type": "row"
+    },
+    {
+      "title": "RabbitMQ Connections",
+      "type": "stat",
+      "id": 60,
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 101 },
+      "targets": [
+        {
+          "expr": "rabbitmq_connections or vector(0)",
+          "legendFormat": "connections",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "title": "RabbitMQ Channels",
+      "type": "stat",
+      "id": 61,
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 101 },
+      "targets": [
+        {
+          "expr": "rabbitmq_channels or vector(0)",
+          "legendFormat": "channels",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "title": "Queues",
+      "type": "stat",
+      "id": 62,
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 101 },
+      "targets": [
+        {
+          "expr": "rabbitmq_queues or vector(0)",
+          "legendFormat": "queues",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "title": "Consumers",
+      "type": "stat",
+      "id": 63,
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 101 },
+      "targets": [
+        {
+          "expr": "rabbitmq_consumers or vector(0)",
+          "legendFormat": "consumers",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "title": "Messages Ready / Unacked",
+      "type": "timeseries",
+      "id": 64,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 105 },
+      "targets": [
+        {
+          "expr": "sum(rabbitmq_queue_messages_ready) or vector(0)",
+          "legendFormat": "ready",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rabbitmq_queue_messages_unacked) or vector(0)",
+          "legendFormat": "unacked",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "nullValueMode": "asZero" }
+      }
+    },
+    {
+      "title": "Publish / Deliver rate",
+      "type": "timeseries",
+      "id": 65,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 105 },
+      "targets": [
+        {
+          "expr": "sum(rate(rabbitmq_queue_messages_published_total[1m])) or vector(0)",
+          "legendFormat": "published/s",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(rabbitmq_queue_messages_delivered_total[1m])) or vector(0)",
+          "legendFormat": "delivered/s",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "nullValueMode": "asZero" }
+      }
+    },
+    {
+      "title": "Messages per Queue",
+      "type": "timeseries",
+      "id": 66,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 113 },
+      "targets": [
+        {
+          "expr": "rabbitmq_queue_messages or vector(0)",
+          "legendFormat": "{{queue}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "nullValueMode": "asZero" }
+      }
+    },
+    {
+      "title": "Node Memory",
+      "type": "timeseries",
+      "id": 67,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 113 },
+      "targets": [
+        {
+          "expr": "rabbitmq_node_mem_used or vector(0)",
+          "legendFormat": "mem used",
+          "refId": "A"
+        },
+        {
+          "expr": "rabbitmq_node_mem_limit or vector(0)",
+          "legendFormat": "mem limit",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
           "nullValueMode": "asZero"
         }
       }
     }
   ],
-  "schemaVersion": 38,
+  "schemaVersion": 39,
   "style": "dark",
-  "tags": ["dotnet", "messenger-api"],
+  "tags": ["dotnet", "messenger-api", "redis", "signalr", "masstransit", "rabbitmq"],
   "templating": { "list": [] },
   "time": { "from": "now-15m", "to": "now" },
   "timepicker": {},
-  "timezone": "",
+  "timezone": "browser",
   "title": "Messenger API Dashboard",
   "uid": "messenger-api-otel",
-  "version": 1
+  "version": 4
 }
