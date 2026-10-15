@@ -3,6 +3,7 @@ using NpgsqlTypes;
 using Serilog;
 using Serilog.Debugging;
 using Serilog.Events;
+using Serilog.Filters;
 using Serilog.Sinks.PostgreSQL;
 using Serilog.Sinks.PostgreSQL.ColumnWriters;
 using Serilog.Ui.Core.Extensions;
@@ -19,6 +20,10 @@ public static class SerilogExtension
         configuration.GetConnectionString("DefaultConnection")
         ?? configuration["ConnectionStrings:DefaultConnection"]
         ?? configuration["PostgresConnectionString"];
+
+    private static bool IsEfSqlLog(LogEvent e) =>
+        Matching.FromSource("Microsoft.EntityFrameworkCore.Database.Command")(e)
+        || Matching.FromSource("Microsoft.EntityFrameworkCore.Database.Connection")(e);
 
     extension(WebApplicationBuilder builder)
     {
@@ -52,6 +57,8 @@ public static class SerilogExtension
                     .Enrich.WithEnvironmentName()
                     .Enrich.WithMachineName()
                     .Enrich.WithProperty("Application", applicationName)
+                    .WriteTo.Console(
+                        outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {SourceContext}: {Message:lj}{NewLine}{Exception}")
                     .WriteTo.File(
                         path: Path.Combine(context.HostingEnvironment.ContentRootPath, "logs", $"{applicationName.ToLowerInvariant()}-.log"),
                         rollingInterval: RollingInterval.Day,
@@ -61,15 +68,17 @@ public static class SerilogExtension
 
                 if (hasDb)
                 {
-                    configuration.WriteTo.PostgreSQL(
-                        connectionString: connectionString!,
-                        tableName: "Logs",
-                        columnOptions: columnOptions,
-                        schemaName: "logging",
-                        needAutoCreateTable: false,
-                        restrictedToMinimumLevel: LogEventLevel.Information,
-                        period: TimeSpan.FromSeconds(5),
-                        batchSizeLimit: 50);
+                    configuration.WriteTo.Logger(db => db
+                        .Filter.ByExcluding(IsEfSqlLog)
+                        .WriteTo.PostgreSQL(
+                            connectionString: connectionString!,
+                            tableName: "Logs",
+                            columnOptions: columnOptions,
+                            schemaName: "logging",
+                            needAutoCreateTable: false,
+                            restrictedToMinimumLevel: LogEventLevel.Information,
+                            period: TimeSpan.FromSeconds(5),
+                            batchSizeLimit: 50));
                 }
             },
             writeToProviders: true);

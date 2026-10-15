@@ -12,6 +12,9 @@ namespace Messenger.API.Extensions
 {
     public static class ServiceExtension
     {
+        private static string? GetRedisConnectionString(IConfiguration configuration) =>
+            configuration.GetConnectionString("Redis") ?? configuration["ConnectionStrings:Redis"];
+
         extension(IServiceCollection services)
         {
             public IServiceCollection AddServices()
@@ -35,7 +38,7 @@ namespace Messenger.API.Extensions
 
             public IServiceCollection AddRedisCache(IConfiguration configuration)
             {
-                var redisCs = configuration["Redis:ConnectionString"];
+                var redisCs = GetRedisConnectionString(configuration);
 
                 if (!string.IsNullOrWhiteSpace(redisCs))
                 {
@@ -88,8 +91,8 @@ namespace Messenger.API.Extensions
 
             public IServiceCollection AddSignalRService(IConfiguration configuration)
             {
-                var redisCs = configuration["Redis:ConnectionString"];
-                var channelPrefix = configuration["Redis:ChannelPrefix"] ?? "Messenger";
+                var redisCs = GetRedisConnectionString(configuration);
+                var channelPrefix = configuration["SignalR:ChannelPrefix"] ?? "Messenger";
 
                 var signalR = services.AddSignalR(options =>
                 {
