@@ -6,6 +6,7 @@ using OpenTelemetry.Resources;
 using System.IO.Compression;
 using System.Net.Http.Headers;
 using System.Text;
+using Serilog;
 
 namespace Messenger.Web
 {
@@ -28,9 +29,19 @@ namespace Messenger.Web
 
             builder.ConfigureDevelopmentCertificate();
 
+            builder.AddMessengerSerilog("Messenger.Web");
+            builder.Services.AddLogging(logging =>
+            {
+                logging.ClearProviders();
+                logging.AddSimpleConsole(o =>
+                {
+                    o.SingleLine = true;
+                    o.TimestampFormat = "HH:mm:ss ";
+                });
+            });
+
             builder.Services.AddRazorPages();
             builder.Services.AddEtaWebAuthentication(builder.Configuration);
-            builder.Services.AddLogging();
 
             builder.Services.AddOpenTelemetry()
                 .ConfigureResource(r => r.AddService(
@@ -97,6 +108,8 @@ namespace Messenger.Web
 
             var app = builder.Build();
 
+            app.UseSerilogRequestLogging();
+
             if (!app.Environment.IsDevelopment())
             {
                 app.UseExceptionHandler("/Error");
@@ -162,7 +175,20 @@ namespace Messenger.Web
 
             app.MapProtectedPrometheusScrapingEndpoint("/metrics");
 
-            app.Run();
+            try
+            {
+                Log.Information("Messenger.Web starting...");
+                app.Run();
+            }
+            catch (Exception ex)
+            {
+                Log.Fatal(ex, "Messenger.Web terminated unexpectedly");
+                throw;
+            }
+            finally
+            {
+                Log.CloseAndFlush();
+            }
         }
     }
 }

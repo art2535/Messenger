@@ -4,6 +4,8 @@ using Messenger.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
+using Serilog;
+using Serilog.Ui.Web.Extensions;
 using System.Text;
 
 namespace Messenger.API
@@ -27,6 +29,18 @@ namespace Messenger.API
 
             builder.ConfigureDevelopmentCertificate();
 
+            builder.AddMessengerSerilog("Messenger.API");
+            builder.AddMessengerSerilogUi();
+            builder.Services.AddLogging(logging =>
+            {
+                logging.ClearProviders();
+                logging.AddSimpleConsole(o =>
+                {
+                    o.SingleLine = true;
+                    o.TimestampFormat = "HH:mm:ss ";
+                });
+            });
+
             builder.EnsureSharedDevelopmentEncryptionKey();
             builder.Services.AddControllers();
             builder.Services.AddValidation();
@@ -36,12 +50,12 @@ namespace Messenger.API
             builder.Services.AddPostgreSQL(builder.Configuration);
             builder.Services.AddServices();
             builder.Services.AddEncryption(builder.Configuration);
-            builder.Services.AddLogging();
             builder.Services.AddRabbitMQ(builder.Configuration);
             builder.Services.AddHttpClient();
             builder.Services.AddEtaApiAuthentication(builder.Configuration, !builder.Environment.IsDevelopment());
             builder.Services.AddMessengerRateLimiting();
             builder.Services.AddSessionCleanup(builder.Configuration);
+            builder.Services.AddLogRetention(builder.Configuration);
             builder.Services.AddMessengerHealthChecks();
             builder.Services.AddRedisMetrics();
             builder.Services.AddMetricsProtection(builder.Configuration);
@@ -86,6 +100,11 @@ namespace Messenger.API
 
             var app = builder.Build();
 
+            app.UseSerilogRequestLogging(options =>
+            {
+                options.MessageTemplate = "HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000} ms";
+            });
+
             using (var migrationScope = app.Services.CreateScope())
             {
                 var db = migrationScope.ServiceProvider.GetRequiredService<GuapMessengerContext>();
@@ -126,6 +145,12 @@ namespace Messenger.API
             app.UseHttpsRedirection();
             app.UseAuthentication();
             app.UseAuthorization();
+
+            if (app.Environment.IsDevelopment())
+            {
+                app.UseSerilogUi(options => options.WithRoutePrefix("serilog-ui"));
+            }
+
             app.UseRateLimiter();
             app.MapControllers().RequireRateLimiting("api");
 
@@ -133,7 +158,20 @@ namespace Messenger.API
             app.MapHub<UserStatusHub>($"/api/v{apiVersion}/hubs/userstatus").RequireCors(WebCorsPolicy);
             app.MapHub<NotificationHub>($"/api/v{apiVersion}/hubs/notification").RequireCors(WebCorsPolicy);
 
-            app.Run();
+            try
+            {
+                Log.Information("Messenger.API starting...");
+                app.Run();
+            }
+            catch (Exception ex)
+            {
+                Log.Fatal(ex, "Messenger.API terminated unexpectedly");
+                throw;
+            }
+            finally
+            {
+                Log.CloseAndFlush();
+            }
         }
     }
 }
