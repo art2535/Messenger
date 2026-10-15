@@ -15,6 +15,7 @@ IResourceBuilder<IResourceWithConnectionString> messengerDb;
 IResourceBuilder<IResourceWithConnectionString> rabbitmq;
 IResourceBuilder<IResourceWithConnectionString> redis;
 IResourceBuilder<ExecutableResource>? redisReady = null;
+IResourceBuilder<ExecutableResource>? rabbitmqReady = null;
 
 if (useDocker)
 {
@@ -38,10 +39,16 @@ if (useDocker)
 else if (OperatingSystem.IsWindows())
 {
     messengerDb = builder.AddConnectionString("DefaultConnection");
+
+    rabbitmqReady = builder.AddExecutable("rabbitmq-wsl", "wsl", Environment.CurrentDirectory,
+        "-d", "Ubuntu-26.04", "sh", "-c", "sudo pkill -f rabbitmq-server 2>/dev/null; " +
+        "sudo rabbitmq-server");
+
     rabbitmq = builder.AddConnectionString("RabbitMQ");
 
     redisReady = builder.AddExecutable("redis-wsl", "wsl", Environment.CurrentDirectory,
-        "-d", "Ubuntu-26.04", "sh", "-c", "sudo pkill -f redis-server 2>/dev/null; exec redis-server --port 6379");
+        "-d", "Ubuntu-26.04", "sh", "-c",
+        "sudo pkill -f redis-server 2>/dev/null; exec redis-server --port 6379");
 
     redis = builder.AddConnectionString("Redis");
 }
@@ -76,9 +83,13 @@ if (useDocker)
              .WaitFor(redis)
              .WaitFor(rabbitmq);
 }
-else if (redisReady is not null)
+else
 {
-    api = api.WaitFor(redisReady);
+    if (redisReady is not null)
+        api = api.WaitFor(redisReady);
+
+    if (rabbitmqReady is not null)
+        api = api.WaitFor(rabbitmqReady);
 }
 
 builder.AddProject<Projects.Messenger_Web>("messenger-web")
