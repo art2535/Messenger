@@ -17,7 +17,7 @@ namespace Messenger.Infrastructure.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.12")
+                .HasAnnotation("ProductVersion", "10.0.13")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "uuid-ossp");
@@ -408,6 +408,69 @@ namespace Messenger.Infrastructure.Migrations
                         .HasDatabaseName("IX_ChatParticipants_UserId");
 
                     b.ToTable("Chat_Participants");
+                });
+
+            modelBuilder.Entity("Messenger.Core.Models.Log", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("Id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<string>("Application")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("Application");
+
+                    b.Property<string>("Environment")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("Environment");
+
+                    b.Property<string>("Exception")
+                        .HasColumnType("text")
+                        .HasColumnName("Exception");
+
+                    b.Property<string>("Level")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("Level");
+
+                    b.Property<string>("LogEvent")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("LogEvent");
+
+                    b.Property<string>("MachineName")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("MachineName");
+
+                    b.Property<string>("Message")
+                        .HasColumnType("text")
+                        .HasColumnName("Message");
+
+                    b.Property<string>("MessageTemplate")
+                        .HasColumnType("text")
+                        .HasColumnName("MessageTemplate");
+
+                    b.Property<DateTime>("Timestamp")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("Timestamp");
+
+                    b.HasKey("Id")
+                        .HasName("logs_pkey");
+
+                    b.HasIndex("Application")
+                        .HasDatabaseName("IX_logs_application");
+
+                    b.HasIndex("Level")
+                        .HasDatabaseName("IX_logs_level");
+
+                    b.HasIndex("Timestamp")
+                        .HasDatabaseName("IX_logs_timestamp");
+
+                    b.ToTable("Logs", "logging");
                 });
 
             modelBuilder.Entity("Messenger.Core.Models.Login", b =>
