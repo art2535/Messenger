@@ -1,7 +1,6 @@
 ﻿using MassTransit;
 using Messenger.API.Consumers;
 using Messenger.Infrastructure.Data;
-using Microsoft.EntityFrameworkCore;
 
 namespace Messenger.API.Extensions
 {
@@ -30,32 +29,28 @@ namespace Messenger.API.Extensions
 
                     x.AddConsumer<ChatMessageSentConsumer>();
 
-                    x.AddConfigureEndpointsCallback((name, cfg) =>
+                    x.AddConfigureEndpointsCallback((_, cfg) =>
                     {
                         if (cfg is IRabbitMqReceiveEndpointConfigurator rmq)
-                        {
                             rmq.SetQuorumQueue(1);
-                        }
                     });
 
                     x.UsingRabbitMq((context, cfg) =>
                     {
-                        var connectionString = configuration.GetConnectionString("RabbitMQ");
+                        var connectionString =
+                            configuration.GetConnectionString("RabbitMQ")
+                            ?? configuration["ConnectionStrings:RabbitMQ"];
 
-                        if (!string.IsNullOrWhiteSpace(connectionString))
+                        if (string.IsNullOrWhiteSpace(connectionString))
                         {
-                            cfg.Host(new Uri(connectionString));
+                            throw new InvalidOperationException(
+                                "Не задана строка подключения RabbitMQ. " +
+                                "Укажите ConnectionStrings:RabbitMQ " +
+                                "(например amqp://guest:guest@localhost:5672) " +
+                                "или передайте её через Aspire / user-secrets / env.");
                         }
-                        else
-                        {
-                            var rabbitConfig = configuration.GetSection("RabbitMQ");
 
-                            cfg.Host(rabbitConfig["Host"], ushort.Parse(rabbitConfig["Port"] ?? "5672"), "/", h =>
-                            {
-                                h.Username(rabbitConfig["Username"] ?? "guest");
-                                h.Password(rabbitConfig["Password"] ?? "guest");
-                            });
-                        }
+                        cfg.Host(new Uri(connectionString));
 
                         cfg.UseMessageRetry(r =>
                         {
