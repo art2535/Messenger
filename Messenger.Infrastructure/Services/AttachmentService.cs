@@ -24,6 +24,7 @@ namespace Messenger.Infrastructure.Services
             CancellationToken cancellationToken = default)
         {
             return await _context.Attachments
+                .AsNoTracking()
                 .Where(a => a.MessageId == messageId)
                 .ToListAsync(cancellationToken);
         }

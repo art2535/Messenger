@@ -11,10 +11,23 @@ namespace Messenger.Core.Hubs
     public class UserStatusHub : Hub
     {
         private readonly IUserStatusService _userStatusService;
+        private readonly IChatService _chatService;
 
-        public UserStatusHub(IUserStatusService userStatusService)
+        public UserStatusHub(IUserStatusService userStatusService, IChatService chatService)
         {
             _userStatusService = userStatusService;
+            _chatService = chatService;
+        }
+
+        private async Task SendPresenceToPeersAsync(Guid userId, string method, object payload, CancellationToken ct)
+        {
+            var peerIds = await _chatService.GetPeerUserIdsAsync(userId, ct);
+            var groups = peerIds.Select(id => $"User_{id}").ToList();
+            await Groups.AddToGroupAsync(Context.ConnectionId, $"User_{userId}");
+            if (groups.Count > 0)
+                await Clients.Groups(groups).SendAsync(method, payload, ct);
+            else
+                await Clients.Group($"User_{userId}").SendAsync(method, payload, ct);
         }
 
         public override async Task OnConnectedAsync()
@@ -34,7 +47,7 @@ namespace Messenger.Core.Hubs
             var cancellationToken = Context.GetHttpContext()?.RequestAborted ?? CancellationToken.None;
 
             await _userStatusService.UpdateUserStatusAsync(status, cancellationToken);
-            await Clients.All.SendAsync("UserOnline", userId);
+            await SendPresenceToPeersAsync(userId, "UserOnline", userId, cancellationToken);
 
             await base.OnConnectedAsync();
         }
@@ -63,7 +76,7 @@ namespace Messenger.Core.Hubs
             var cancellationToken = Context.GetHttpContext()?.RequestAborted ?? CancellationToken.None;
 
             await _userStatusService.UpdateUserStatusAsync(status, cancellationToken);
-            await Clients.All.SendAsync("UserOffline", userId);
+            await SendPresenceToPeersAsync(userId, "UserOffline", userId, cancellationToken);
 
             await base.OnDisconnectedAsync(exception);
         }

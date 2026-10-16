@@ -426,7 +426,7 @@ namespace Messenger.API.Controllers
 
                 await _chatService.UpdateChatAsync(chat, ct);
 
-                await _hubContext.Clients.All.SendAsync("ChatUpdated", new
+                await _hubContext.Clients.Group(chatId.ToString()).SendAsync("ChatUpdated", new
                 {
                     chatId,
                     name = request.Name
@@ -477,7 +477,7 @@ namespace Messenger.API.Controllers
 
                 await _chatService.DeleteChatAsync(chat, cancellationToken);
 
-                await _hubContext.Clients.All.SendAsync("ChatDeleted", chatId, cancellationToken);
+                await _hubContext.Clients.Group(chatId.ToString()).SendAsync("ChatDeleted", chatId, cancellationToken);
 
                 return Ok(new DeleteChatSuccessResponse
                 {

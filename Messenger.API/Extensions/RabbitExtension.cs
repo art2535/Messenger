@@ -58,7 +58,7 @@ namespace Messenger.API.Extensions
                         });
 
                         cfg.UseConcurrencyLimit(30);
-                        cfg.PrefetchCount = 15;
+                        cfg.PrefetchCount = 32;
 
                         cfg.ConfigureEndpoints(context);
                     });

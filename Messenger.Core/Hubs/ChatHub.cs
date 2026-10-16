@@ -14,18 +14,32 @@ namespace Messenger.Core.Hubs
     {
         private readonly IUserService _userService;
         private readonly IUserStatusService _userStatusService;
+        private readonly IChatService _chatService;
         private readonly ILogger<ChatHub> _logger;
         private readonly TypingRateLimiterService _typingLimiter;
         private readonly SendMessageRateLimiterService _sendMessageLimiter;
 
-        public ChatHub(IUserService userService, IUserStatusService userStatusService, ILogger<ChatHub> logger,
-            TypingRateLimiterService typingLimiter, SendMessageRateLimiterService sendMessageLimiter)
+        public ChatHub(IUserService userService, IUserStatusService userStatusService, IChatService chatService,
+            ILogger<ChatHub> logger, TypingRateLimiterService typingLimiter, SendMessageRateLimiterService sendMessageLimiter)
         {
             _userService = userService;
             _userStatusService = userStatusService;
+            _chatService = chatService;
             _logger = logger;
             _typingLimiter = typingLimiter;
             _sendMessageLimiter = sendMessageLimiter;
+        }
+
+        private async Task SendToPeersAsync(Guid userId, string method, object payload, CancellationToken ct = default)
+        {
+            var peerIds = await _chatService.GetPeerUserIdsAsync(userId, ct);
+            var groups = peerIds.Select(id => $"User_{id}").ToList();
+            if (groups.Count == 0)
+            {
+                await Clients.Group($"User_{userId}").SendAsync(method, payload, ct);
+                return;
+            }
+            await Clients.Groups(groups).SendAsync(method, payload, ct);
         }
 
         public async Task JoinChat(Guid chatId)
@@ -103,8 +117,7 @@ namespace Messenger.Core.Hubs
                     lastActivity = DateTime.UtcNow
                 };
 
-                await Clients.All.SendAsync("UserOnlineStatusChanged", statusData);
-                await Clients.User(userId.ToString()).SendAsync("UserOnlineStatusChanged", statusData);
+                await SendToPeersAsync(userId, "UserOnlineStatusChanged", statusData);
             }
             catch (Exception ex)
             {
@@ -145,7 +158,7 @@ namespace Messenger.Core.Hubs
                             lastActivity = DateTime.UtcNow
                         };
 
-                        await Clients.All.SendAsync("UserOnlineStatusChanged", statusData);
+                        await SendToPeersAsync(userId, "UserOnlineStatusChanged", statusData);
                     }
                 }
 
@@ -214,30 +227,32 @@ namespace Messenger.Core.Hubs
 
         public async Task NotifyAvatarUpdated(string userId, string newAvatarUrl)
         {
-            await Clients.All.SendAsync("AvatarUpdated", new
+            if (!Guid.TryParse(userId, out var uid))
             {
-                userId,
-                avatarUrl = newAvatarUrl
-            });
+                await Clients.All.SendAsync("AvatarUpdated", new { userId, avatarUrl = newAvatarUrl });
+                return;
+            }
+            await SendToPeersAsync(uid, "AvatarUpdated", new { userId, avatarUrl = newAvatarUrl });
         }
 
         public async Task NotifyProfileNameUpdated(string userId, string newDisplayName)
         {
-            await Clients.All.SendAsync("ProfileNameUpdated", new
+            if (!Guid.TryParse(userId, out var uid))
             {
-                userId,
-                displayName = newDisplayName
-            });
+                await Clients.All.SendAsync("ProfileNameUpdated", new { userId, displayName = newDisplayName });
+                return;
+            }
+            await SendToPeersAsync(uid, "ProfileNameUpdated", new { userId, displayName = newDisplayName });
         }
 
         public async Task NotifyProfileUpdated(string userId, string? newAvatarUrl, string newDisplayName)
         {
-            await Clients.All.SendAsync("ProfileUpdated", new
+            if (!Guid.TryParse(userId, out var uid))
             {
-                userId,
-                avatarUrl = newAvatarUrl,
-                displayName = newDisplayName
-            });
+                await Clients.All.SendAsync("ProfileUpdated", new { userId, avatarUrl = newAvatarUrl, displayName = newDisplayName });
+                return;
+            }
+            await SendToPeersAsync(uid, "ProfileUpdated", new { userId, avatarUrl = newAvatarUrl, displayName = newDisplayName });
         }
 
         public async Task<bool> TryAcquireSendMessagePermit()
@@ -329,8 +344,7 @@ namespace Messenger.Core.Hubs
                     lastActivity = status.LastActivity ?? DateTime.UtcNow
                 };
 
-                await Clients.All.SendAsync("UserOnlineStatusChanged", statusData);
-                await Clients.User(userId.ToString()).SendAsync("UserOnlineStatusChanged", statusData);
+                await SendToPeersAsync(userId, "UserOnlineStatusChanged", statusData);
 
                 _logger.LogInformation("RequestAndBroadcastUserStatus: отправлен статус для {UserId}", userId);
             }

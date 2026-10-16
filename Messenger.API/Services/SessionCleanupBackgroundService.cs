@@ -83,6 +83,7 @@ namespace Messenger.API.Services
 
             var statusService = scope.ServiceProvider.GetRequiredService<IUserStatusService>();
             var loginService = scope.ServiceProvider.GetRequiredService<ILoginService>();
+            var chatService = scope.ServiceProvider.GetRequiredService<IChatService>();
 
             var olderThan = UtcDateTime.Now - idleThreshold;
 
@@ -115,9 +116,12 @@ namespace Messenger.API.Services
 
                 try
                 {
-                    await _hubContext.Clients.All.SendAsync("UserOnlineStatusChanged", payload, ct);
-                    await _hubContext.Clients.User(userId.ToString())
-                        .SendAsync("UserOnlineStatusChanged", payload, ct);
+                    var peerIds = await chatService.GetPeerUserIdsAsync(userId, ct);
+                    var groups = peerIds.Select(id => $"User_{id}").ToList();
+                    if (groups.Count > 0)
+                        await _hubContext.Clients.Groups(groups).SendAsync("UserOnlineStatusChanged", payload, ct);
+                    else
+                        await _hubContext.Clients.Group($"User_{userId}").SendAsync("UserOnlineStatusChanged", payload, ct);
                 }
                 catch (Exception ex)
                 {

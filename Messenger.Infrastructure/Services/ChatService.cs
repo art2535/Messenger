@@ -302,5 +302,38 @@ namespace Messenger.Infrastructure.Services
 
             await _cache.RemoveAsync(userIds.Select(UserChatsCacheKey), token);
         }
+
+        public async Task<IReadOnlyList<Guid>> GetPeerUserIdsAsync(Guid userId, CancellationToken token = default)
+        {
+            var chatIds = await _context.ChatParticipants
+                .AsNoTracking()
+                .Where(p => p.UserId == userId)
+                .Select(p => p.ChatId)
+                .ToListAsync(token);
+
+            if (chatIds.Count == 0)
+                return new[] { userId };
+
+            var peerIds = await _context.ChatParticipants
+                .AsNoTracking()
+                .Where(p => chatIds.Contains(p.ChatId))
+                .Select(p => p.UserId)
+                .Distinct()
+                .ToListAsync(token);
+
+            if (!peerIds.Contains(userId))
+                peerIds.Add(userId);
+
+            return peerIds;
+        }
+
+        public async Task<IReadOnlyList<Guid>> GetChatParticipantUserIdsAsync(Guid chatId, CancellationToken token = default)
+        {
+            return await _context.ChatParticipants
+                .AsNoTracking()
+                .Where(p => p.ChatId == chatId)
+                .Select(p => p.UserId)
+                .ToListAsync(token);
+        }
     }
 }

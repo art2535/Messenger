@@ -78,7 +78,7 @@ namespace Messenger.Web.Pages.Authorization
                                     isOnline = false,
                                     lastActivity = DateTime.UtcNow
                                 };
-                                await _hubContext.Clients.All.SendAsync("UserOnlineStatusChanged", payload);
+                                await _hubContext.Clients.Group($"User_{userId}").SendAsync("UserOnlineStatusChanged", payload);
                             }
                             catch (Exception hubEx)
                             {
