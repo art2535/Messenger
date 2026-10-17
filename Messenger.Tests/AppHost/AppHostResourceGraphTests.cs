@@ -25,6 +25,19 @@ namespace Messenger.Tests.AppHost
             throw new FileNotFoundException("Messenger.AppHost/AppHost.cs не найден для структурных тестов");
         }
 
+        private static string? GetAppHostCsprojPath()
+        {
+            var candidates = new[]
+            {
+                Path.Combine(AppContext.BaseDirectory, "AppHostSource", "Messenger.AppHost.csproj"),
+                Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "Messenger.AppHost", "Messenger.AppHost.csproj"),
+                Path.Combine(Directory.GetCurrentDirectory(), "Messenger.AppHost", "Messenger.AppHost.csproj"),
+                "/tmp/Messenger/Messenger.AppHost/Messenger.AppHost.csproj"
+            };
+
+            return candidates.Select(Path.GetFullPath).FirstOrDefault(File.Exists);
+        }
+
         [Fact]
         public void AppHost_DefinesExpectedProjectResources()
         {
@@ -35,14 +48,14 @@ namespace Messenger.Tests.AppHost
         }
 
         [Fact]
-        public void AppHost_DockerMode_DefinesPostgresRedisRabbit()
+        public void AppHost_DefinesCoreInfrastructure()
         {
             var source = ReadAppHostSource();
 
-            source.Should().Contain("AddPostgres(\"postgres\")");
+            source.Should().Contain("AddPostgres(\"postgres\"");
             source.Should().Contain("AddDatabase(\"DefaultConnection\"");
             source.Should().Contain("AddRabbitMQ(\"RabbitMQ\"");
-            source.Should().Contain("AddRedis(\"Redis\")");
+            source.Should().Contain("AddRedis(\"Redis\"");
         }
 
         [Fact]
@@ -50,47 +63,62 @@ namespace Messenger.Tests.AppHost
         {
             var source = ReadAppHostSource();
 
+            source.Should().Contain(".WithReference(messengerDb)");
             source.Should().Contain(".WaitFor(messengerDb)");
-            source.Should().Contain(".WaitFor(redis)");
+            source.Should().Contain(".WithReference(rabbitmq)");
             source.Should().Contain(".WaitFor(rabbitmq)");
+            source.Should().Contain(".WithReference(redis)");
+            source.Should().Contain(".WaitFor(redis)");
+        }
+
+        [Fact]
+        public void AppHost_WebWaitsForAPI()
+        {
+            var source = ReadAppHostSource();
+
             source.Should().Contain(".WithReference(api)");
             source.Should().Contain(".WaitFor(api)");
+            source.Should().Contain("WithExternalHttpEndpoints()");
         }
 
         [Fact]
         public void AppHost_ExposesScalarDocsUrl()
         {
             var source = ReadAppHostSource();
+            
             source.Should().Contain("/scalar");
             source.Should().Contain("Scalar API Docs");
         }
 
         [Fact]
-        public void AppHost_SupportsNonDockerConnectionStrings()
+        public void AppHost_DefinesMonitoringStack()
         {
             var source = ReadAppHostSource();
-            source.Should().Contain("AddConnectionString(\"DefaultConnection\")");
-            source.Should().Contain("AddConnectionString(\"RabbitMQ\")");
-            source.Should().Contain("AddConnectionString(\"Redis\")");
+
+            source.Should().Contain("AddDockerComposeEnvironment(\"compose\")");
+
+            source.Should().Contain("AddContainer(\"rabbitmq-exporter\"");
+            source.Should().Contain("AddContainer(\"redis-exporter\"");
+
+            source.Should().Contain("AddContainer(\"prometheus\"");
+            source.Should().Contain("AddContainer(\"grafana\"");
+            
+            source.Should().Contain(".WaitFor(rabbitmqExporter)");
+            source.Should().Contain(".WaitFor(redisExporter)");
+            source.Should().Contain(".WaitFor(prometheus)");
         }
 
         [Fact]
-        public void AppHostCsproj_ReferencesAPIAndWeb()
+        public void AppHostCsproj_ReferencesProjectsAndAspirePackages()
         {
-            var candidates = new[]
-            {
-                Path.Combine(AppContext.BaseDirectory, "AppHostSource", "Messenger.AppHost.csproj"),
-                Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "Messenger.AppHost", "Messenger.AppHost.csproj"),
-                Path.Combine(Directory.GetCurrentDirectory(), "Messenger.AppHost", "Messenger.AppHost.csproj"),
-                "/tmp/Messenger/Messenger.AppHost/Messenger.AppHost.csproj"
-            };
-
-            var path = candidates.Select(Path.GetFullPath).FirstOrDefault(File.Exists);
+            var path = GetAppHostCsprojPath();
             path.Should().NotBeNull("Messenger.AppHost.csproj должен быть доступен");
 
             var csproj = File.ReadAllText(path!);
+            
             csproj.Should().Contain("Messenger.API");
             csproj.Should().Contain("Messenger.Web");
+            
             csproj.Should().Contain("Aspire.Hosting.PostgreSQL");
             csproj.Should().Contain("Aspire.Hosting.Redis");
             csproj.Should().Contain("Aspire.Hosting.RabbitMQ");
