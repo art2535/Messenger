@@ -1,0 +1,206 @@
+services:
+  compose-dashboard:
+    image: "mcr.microsoft.com/dotnet/nightly/aspire-dashboard:13.5"
+    ports:
+      - "18888"
+    expose:
+      - "18889"
+      - "18890"
+    networks:
+      - "aspire"
+    restart: "always"
+  postgres:
+    image: "docker.io/postgres:17"
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: "scram-sha-256"
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=scram-sha-256"
+      POSTGRES_USER: "postgres"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+    expose:
+      - "5432"
+    volumes:
+      - type: "volume"
+        target: "/var/lib/postgresql/data"
+        source: "messenger.apphost-67f09c4087-postgres-data"
+        read_only: false
+    networks:
+      - "aspire"
+  rabbitmq:
+    image: "docker.io/library/rabbitmq:4.3-management"
+    environment:
+      RABBITMQ_DEFAULT_USER: "${RABBITMQ_USERNAME}"
+      RABBITMQ_DEFAULT_PASS: "${RABBITMQ_PASSWORD}"
+    expose:
+      - "5672"
+      - "15672"
+    volumes:
+      - type: "volume"
+        target: "/var/lib/rabbitmq"
+        source: "messenger.apphost-67f09c4087-RabbitMQ-data"
+        read_only: false
+    networks:
+      - "aspire"
+  redis:
+    image: "docker.io/redis:7.4"
+    command:
+      - "-c"
+      - "redis-server --requirepass $$REDIS_PASSWORD --save 60 1"
+    entrypoint:
+      - "/bin/sh"
+    environment:
+      REDIS_PASSWORD: "${REDIS_PASSWORD}"
+    expose:
+      - "6379"
+    volumes:
+      - type: "volume"
+        target: "/data"
+        source: "messenger.apphost-67f09c4087-Redis-data"
+        read_only: false
+    networks:
+      - "aspire"
+  rabbitmq-exporter:
+    image: "kbudde/rabbitmq-exporter:latest"
+    environment:
+      RABBIT_URL: "http://RabbitMQ:15672"
+      RABBIT_USER: "${RABBITMQ_USERNAME}"
+      RABBIT_PASSWORD: "${RABBITMQ_PASSWORD}"
+      PUBLISH_PORT: "9419"
+      RABBIT_CAPABILITIES: "bert,no_sort"
+      RABBIT_EXPORTERS: "exchange,node,overview,queue"
+    expose:
+      - "9419"
+    depends_on:
+      rabbitmq:
+        condition: "service_started"
+    networks:
+      - "aspire"
+  redis-exporter:
+    image: "oliver006/redis_exporter:latest"
+    environment:
+      REDIS_ADDR: "redis://Redis:6379"
+    expose:
+      - "9121"
+    depends_on:
+      redis:
+        condition: "service_started"
+    networks:
+      - "aspire"
+  prometheus:
+    image: "prom/prometheus:latest"
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
+    expose:
+      - "9090"
+    volumes:
+      - type: "bind"
+        target: "/etc/prometheus/prometheus.yml"
+        source: "${PROMETHEUS_BINDMOUNT_0}"
+        read_only: true
+      - type: "volume"
+        target: "/prometheus"
+        source: "prometheus-data"
+        read_only: false
+    depends_on:
+      rabbitmq-exporter:
+        condition: "service_started"
+      redis-exporter:
+        condition: "service_started"
+    networks:
+      - "aspire"
+  grafana:
+    image: "grafana/grafana:latest"
+    environment:
+      GF_SECURITY_ADMIN_USER: "admin"
+      GF_SECURITY_ADMIN_PASSWORD: "admin"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    expose:
+      - "3000"
+    volumes:
+      - type: "bind"
+        target: "/etc/grafana/provisioning"
+        source: "${GRAFANA_BINDMOUNT_0}"
+        read_only: true
+      - type: "volume"
+        target: "/var/lib/grafana"
+        source: "grafana-data"
+        read_only: false
+    depends_on:
+      prometheus:
+        condition: "service_started"
+    networks:
+      - "aspire"
+  messenger-api:
+    image: "${MESSENGER_API_IMAGE}"
+    environment:
+      OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY: "in_memory"
+      ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
+      HTTP_PORTS: "${MESSENGER_API_PORT}"
+      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Username=postgres;Password=${POSTGRES_PASSWORD};Database=GUAP_Messenger"
+      DEFAULTCONNECTION_HOST: "postgres"
+      DEFAULTCONNECTION_PORT: "5432"
+      DEFAULTCONNECTION_USERNAME: "postgres"
+      DEFAULTCONNECTION_PASSWORD: "${POSTGRES_PASSWORD}"
+      DEFAULTCONNECTION_URI: "postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/GUAP_Messenger"
+      DEFAULTCONNECTION_JDBCCONNECTIONSTRING: "jdbc:postgresql://postgres:5432/GUAP_Messenger"
+      DEFAULTCONNECTION_DATABASENAME: "GUAP_Messenger"
+      ConnectionStrings__RabbitMQ: "amqp://${RABBITMQ_USERNAME}:${RABBITMQ_PASSWORD}@RabbitMQ:5672"
+      RABBITMQ_HOST: "RabbitMQ"
+      RABBITMQ_PORT: "5672"
+      RABBITMQ_USERNAME: "${RABBITMQ_USERNAME}"
+      RABBITMQ_PASSWORD: "${RABBITMQ_PASSWORD}"
+      RABBITMQ_URI: "amqp://${RABBITMQ_USERNAME}:${RABBITMQ_PASSWORD}@RabbitMQ:5672"
+      ConnectionStrings__Redis: "Redis:6379,password=${REDIS_PASSWORD}"
+      REDIS_HOST: "Redis"
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: "${REDIS_PASSWORD}"
+      REDIS_URI: "redis://:${REDIS_PASSWORD}@Redis:6379"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://compose-dashboard:18889"
+      OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
+      OTEL_SERVICE_NAME: "messenger-api"
+    expose:
+      - "${MESSENGER_API_PORT}"
+    depends_on:
+      postgres:
+        condition: "service_started"
+      rabbitmq:
+        condition: "service_started"
+      redis:
+        condition: "service_started"
+    networks:
+      - "aspire"
+  messenger-web:
+    image: "${MESSENGER_WEB_IMAGE}"
+    environment:
+      OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY: "in_memory"
+      ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
+      HTTP_PORTS: "${MESSENGER_WEB_PORT}"
+      MESSENGER_API_HTTP: "http://messenger-api:${MESSENGER_API_PORT}"
+      services__messenger-api__http__0: "http://messenger-api:${MESSENGER_API_PORT}"
+      MESSENGER_API_HTTPS: "https://messenger-api:${MESSENGER_API_PORT}"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://compose-dashboard:18889"
+      OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
+      OTEL_SERVICE_NAME: "messenger-web"
+    ports:
+      - "5207:${MESSENGER_WEB_PORT}"
+      - "7010:${MESSENGER_WEB_PORT}"
+    depends_on:
+      messenger-api:
+        condition: "service_started"
+    networks:
+      - "aspire"
+networks:
+  aspire:
+    driver: "bridge"
+volumes:
+  messenger.apphost-67f09c4087-postgres-data:
+    driver: "local"
+  messenger.apphost-67f09c4087-RabbitMQ-data:
+    driver: "local"
+  messenger.apphost-67f09c4087-Redis-data:
+    driver: "local"
+  prometheus-data:
+    driver: "local"
+  grafana-data:
+    driver: "local"
