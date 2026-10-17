@@ -15,6 +15,7 @@ namespace Messenger.Tests.API
     public class UsersControllerTests
     {
         private readonly Mock<IUserService> _userService = new();
+        private readonly Mock<IChatService> _сhatService = new();
         private readonly Mock<IHubContext<ChatHub>> _hub = new();
         private readonly UsersController _controller;
 
@@ -24,7 +25,7 @@ namespace Messenger.Tests.API
             var clientProxy = new Mock<IClientProxy>();
             clients.Setup(c => c.User(It.IsAny<string>())).Returns(clientProxy.Object);
             _hub.Setup(h => h.Clients).Returns(clients.Object);
-            _controller = new UsersController(_userService.Object, _hub.Object);
+            _controller = new UsersController(_userService.Object, _сhatService.Object, _hub.Object);
         }
 
         [Fact]
