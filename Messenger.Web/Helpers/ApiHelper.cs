@@ -56,8 +56,30 @@ namespace Messenger.Web.Helpers
         {
             var response = await GetRawAsync(path, accessToken, ct);
             response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<T>(JsonOptions, ct);
+
+            if (response.StatusCode == System.Net.HttpStatusCode.NoContent
+                || response.Content.Headers.ContentLength == 0)
+            {
+                return default;
+            }
+
+            var contentType = response.Content.Headers.ContentType?.MediaType;
+            if (contentType is not null
+                && !contentType.Contains("json", StringComparison.OrdinalIgnoreCase))
+            {
+                var preview = await response.Content.ReadAsStringAsync(ct);
+                throw new InvalidOperationException(
+                    $"Ожидался JSON, получен Content-Type={contentType}. Body: {Truncate(preview, 300)}");
+            }
+
+            var json = await response.Content.ReadAsStringAsync(ct);
+            if (string.IsNullOrWhiteSpace(json))
+                return default;
+
+            return JsonSerializer.Deserialize<T>(json, JsonOptions);
         }
+
+        private static string Truncate(string s, int max) => s.Length <= max ? s : s[..max] + "...";
 
         public async Task<HttpResponseMessage> PostRawAsync<TRequest>(string path, TRequest body, string? accessToken = null,
             CancellationToken ct = default)
