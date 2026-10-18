@@ -84,7 +84,6 @@ namespace Messenger.Infrastructure.Services
             {
                 user.Account = new AccountSetting
                 {
-                    SettingId = Guid.NewGuid(),
                     AccountId = userId
                 };
                 _context.AccountSettings.Add(user.Account);
@@ -225,7 +224,6 @@ namespace Messenger.Infrastructure.Services
                 RegistrationDate = DateOnly.FromDateTime(DateTime.UtcNow),
                 Account = new AccountSetting
                 {
-                    SettingId = Guid.NewGuid(),
                     AccountId = userId
                 },
                 UserStatus = new UserStatus

@@ -59,9 +59,7 @@ public partial class GuapMessengerContext : DbContext
 
         modelBuilder.Entity<AccountSetting>(entity =>
         {
-            entity.HasKey(e => e.SettingId).HasName("Account_Settings_pkey");
-
-            entity.Property(e => e.SettingId).ValueGeneratedNever();
+            entity.HasKey(e => e.AccountId).HasName("Account_Settings_pkey");
         });
 
         modelBuilder.Entity<Attachment>(entity =>
@@ -236,10 +234,11 @@ public partial class GuapMessengerContext : DbContext
 
             entity.Property(e => e.UserId).ValueGeneratedNever();
 
-            entity.HasOne(d => d.Account).WithMany(p => p.Users)
-                .HasPrincipalKey(p => p.AccountId)
-                .HasForeignKey(d => d.AccountId)
-                .HasConstraintName("fk_account");
+            entity.HasOne(d => d.Account)
+                .WithOne(p => p.User)
+                .HasForeignKey<AccountSetting>(a => a.AccountId)   // shared PK
+                .HasConstraintName("fk_account")
+                .OnDelete(DeleteBehavior.Cascade);
 
             entity.HasMany(d => d.Roles).WithMany(p => p.Users)
                 .UsingEntity<Dictionary<string, object>>(

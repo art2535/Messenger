@@ -193,10 +193,6 @@ namespace Messenger.Infrastructure.Migrations
 
             modelBuilder.Entity("Messenger.Core.Models.AccountSetting", b =>
                 {
-                    b.Property<Guid>("SettingId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("Setting_ID");
-
                     b.Property<Guid>("AccountId")
                         .HasColumnType("uuid")
                         .HasColumnName("Account_ID");
@@ -220,7 +216,7 @@ namespace Messenger.Infrastructure.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("Push_Enabled");
 
-                    b.HasKey("SettingId")
+                    b.HasKey("AccountId")
                         .HasName("Account_Settings_pkey");
 
                     b.HasIndex(new[] { "AccountId" }, "Account_Settings_Account_ID_key")
@@ -785,8 +781,6 @@ namespace Messenger.Infrastructure.Migrations
                     b.HasKey("UserId")
                         .HasName("Users_pkey");
 
-                    b.HasIndex("AccountId");
-
                     b.ToTable("Users");
                 });
 
@@ -837,6 +831,18 @@ namespace Messenger.Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("InboxMessageId", "InboxConsumerId")
                         .HasPrincipalKey("MessageId", "ConsumerId");
+                });
+
+            modelBuilder.Entity("Messenger.Core.Models.AccountSetting", b =>
+                {
+                    b.HasOne("Messenger.Core.Models.User", "User")
+                        .WithOne("Account")
+                        .HasForeignKey("Messenger.Core.Models.AccountSetting", "AccountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_account");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("Messenger.Core.Models.Attachment", b =>
@@ -995,19 +1001,6 @@ namespace Messenger.Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("Messenger.Core.Models.User", b =>
-                {
-                    b.HasOne("Messenger.Core.Models.AccountSetting", "Account")
-                        .WithMany("Users")
-                        .HasForeignKey("AccountId")
-                        .HasPrincipalKey("AccountId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_account");
-
-                    b.Navigation("Account");
-                });
-
             modelBuilder.Entity("Messenger.Core.Models.UserStatus", b =>
                 {
                     b.HasOne("Messenger.Core.Models.User", "User")
@@ -1035,11 +1028,6 @@ namespace Messenger.Infrastructure.Migrations
                         .HasConstraintName("fk_userrole_user");
                 });
 
-            modelBuilder.Entity("Messenger.Core.Models.AccountSetting", b =>
-                {
-                    b.Navigation("Users");
-                });
-
             modelBuilder.Entity("Messenger.Core.Models.Broadcast", b =>
                 {
                     b.Navigation("Recipients");
@@ -1061,6 +1049,9 @@ namespace Messenger.Infrastructure.Migrations
 
             modelBuilder.Entity("Messenger.Core.Models.User", b =>
                 {
+                    b.Navigation("Account")
+                        .IsRequired();
+
                     b.Navigation("BroadcastRecipients");
 
                     b.Navigation("BroadcastsCreated");

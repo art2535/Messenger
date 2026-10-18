@@ -32,7 +32,7 @@ public partial class User
     public string? ExternalId { get; set; }
 
     [ForeignKey("AccountId")]
-    [InverseProperty("Users")]
+    [InverseProperty("User")]
     [JsonIgnore]
     public virtual AccountSetting Account { get; set; } = null!;
 
