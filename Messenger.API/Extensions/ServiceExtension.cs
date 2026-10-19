@@ -12,6 +12,9 @@ namespace Messenger.API.Extensions
 {
     public static class ServiceExtension
     {
+        private static string? GetRedisConnectionString(IConfiguration configuration) =>
+            configuration.GetConnectionString("Redis") ?? configuration["ConnectionStrings:Redis"];
+
         extension(IServiceCollection services)
         {
             public IServiceCollection AddServices()
@@ -28,13 +31,14 @@ namespace Messenger.API.Extensions
                 services.AddSingleton<WebPushClient>();
                 services.AddScoped<IPushSubscriptionService, PushSubscriptionService>();
                 services.AddSingleton<TypingRateLimiterService>();
+                services.AddSingleton<SendMessageRateLimiterService>();
 
                 return services;
             }
 
             public IServiceCollection AddRedisCache(IConfiguration configuration)
             {
-                var redisCs = configuration["Redis:ConnectionString"];
+                var redisCs = GetRedisConnectionString(configuration);
 
                 if (!string.IsNullOrWhiteSpace(redisCs))
                 {
@@ -42,6 +46,7 @@ namespace Messenger.API.Extensions
                     {
                         var options = ConfigurationOptions.Parse(redisCs);
                         options.AbortOnConnectFail = false;
+                        options.AllowAdmin = true;
                         return ConnectionMultiplexer.Connect(options);
                     });
 
@@ -51,6 +56,13 @@ namespace Messenger.API.Extensions
                         var logger = sp.GetRequiredService<ILogger<RedisCacheService>>();
                         return new RedisCacheService(mux, logger);
                     });
+
+                    services.AddSingleton<RedisDistributedLock>(sp =>
+                    {
+                        var mux = sp.GetRequiredService<IConnectionMultiplexer>();
+                        var logger = sp.GetRequiredService<ILogger<RedisDistributedLock>>();
+                        return new RedisDistributedLock(mux, logger);
+                    });
                 }
                 else
                 {
@@ -58,6 +70,12 @@ namespace Messenger.API.Extensions
                     {
                         var logger = sp.GetRequiredService<ILogger<RedisCacheService>>();
                         return new RedisCacheService(null, logger);
+                    });
+
+                    services.AddSingleton<RedisDistributedLock>(sp =>
+                    {
+                        var logger = sp.GetRequiredService<ILogger<RedisDistributedLock>>();
+                        return new RedisDistributedLock(null, logger);
                     });
                 }
 
@@ -73,8 +91,8 @@ namespace Messenger.API.Extensions
 
             public IServiceCollection AddSignalRService(IConfiguration configuration)
             {
-                var redisCs = configuration["Redis:ConnectionString"];
-                var channelPrefix = configuration["Redis:ChannelPrefix"] ?? "Messenger";
+                var redisCs = GetRedisConnectionString(configuration);
+                var channelPrefix = configuration["SignalR:ChannelPrefix"] ?? "Messenger";
 
                 var signalR = services.AddSignalR(options =>
                 {

@@ -208,6 +208,13 @@ function appendMessage(msg) {
     const div = document.createElement('div');
     div.className = `message-row ${isMyMessage ? 'outgoing-row' : 'incoming-row'}${grouped ? ' grouped' : ''}`;
     if (msg.messageId) div.dataset.mid = msg.messageId;
+    const pinnedFlag = !!(msg.isPinned ?? msg.IsPinned);
+    if (pinnedFlag) {
+        div.classList.add('message-row-pinned');
+        if (currentChatId && typeof applyPinnedLocal === 'function') {
+            applyPinnedLocal(currentChatId, msg.messageId, msg.messageText || msg.MessageText || '', msg.pinnedAt || msg.PinnedAt);
+        }
+    }
     if (senderId) div.dataset.senderId = String(senderId);
     const rawSentAt = msg.sentAt || msg.sentTime || msg.SendTime || msg.SentAt || null;
     if (rawSentAt) {
@@ -544,18 +551,25 @@ const MONTHS_RU = [
 let lastRenderedDateKey = null;
 
 function parseMessageDate(dateValue) {
-    if (!dateValue) return null;
+    if (dateValue == null || dateValue === '') return null;
     try {
-        let date;
-        if (typeof dateValue === 'string') {
-            let str = dateValue.trim();
-            if (!str.endsWith('Z') && !str.includes('+') && !str.includes('-', 10)) {
-                str += 'Z';
-            }
-            date = new Date(str);
-        } else {
-            date = new Date(dateValue);
+        if (dateValue instanceof Date) {
+            return isNaN(dateValue.getTime()) ? null : dateValue;
         }
+        if (typeof dateValue === 'number') {
+            const d = new Date(dateValue < 1e12 ? dateValue * 1000 : dateValue);
+            return isNaN(d.getTime()) ? null : d;
+        }
+        let str = String(dateValue).trim();
+        if (!str) return null;
+        if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(str)) {
+            str = str.replace(' ', 'T');
+        }
+        const hasTz = /[zZ]$/.test(str) || /[+-]\d{2}:?\d{2}$/.test(str);
+        if (!hasTz && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(str)) {
+            str += 'Z';
+        }
+        const date = new Date(str);
         if (isNaN(date.getTime())) return null;
         return date;
     } catch {

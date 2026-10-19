@@ -29,7 +29,7 @@ namespace Messenger.Infrastructure.Services
                 NotificationId = Guid.NewGuid(),
                 UserId = userId,
                 Text = encryptedText,
-                CreationDate = Notification.Now,
+                CreationDate = UtcDateTime.Now,
                 Read = false
             };
 
@@ -59,7 +59,7 @@ namespace Messenger.Infrastructure.Services
                 .Where(n => n.NotificationId == notificationId)
                 .ExecuteUpdateAsync(property => property
                     .SetProperty(n => n.Read, true)
-                    .SetProperty(n => n.ReadAt, Notification.Now),
+                    .SetProperty(n => n.ReadAt, UtcDateTime.Now),
                 token);
 
             if (updatedRows == 0)

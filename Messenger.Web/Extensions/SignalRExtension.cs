@@ -6,12 +6,15 @@ namespace Messenger.Web.Extensions
 {
     public static class SignalRExtension
     {
+        private static string? GetRedisConnectionString(IConfiguration configuration) =>
+            configuration.GetConnectionString("Redis") ?? configuration["ConnectionStrings:Redis"];
+
         extension(IServiceCollection services)
         {
             public IServiceCollection AddSignalRService(IConfiguration configuration)
             {
-                var redisCs = configuration["Redis:ConnectionString"];
-                var channelPrefix = configuration["Redis:ChannelPrefix"] ?? "Messenger";
+                var redisCs = GetRedisConnectionString(configuration);
+                var channelPrefix = configuration["SignalR:ChannelPrefix"] ?? "Messenger";
 
                 var signalR = services.AddSignalR(options =>
                 {

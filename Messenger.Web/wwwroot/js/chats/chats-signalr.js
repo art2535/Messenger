@@ -329,7 +329,17 @@ async function startSignalR() {
 
         removeMessageFromUI(mid, chatId, { skipListUpdate: true });
 
+        if (chatId && typeof applyUnpinnedLocal === 'function') {
+            applyUnpinnedLocal(chatId, mid);
+        }
+
         syncChatListAfterDelete(chatId);
+    });
+
+    connection.on('MessagePinned', (data) => {
+        if (typeof handleMessagePinnedEvent === 'function') {
+            handleMessagePinnedEvent(data);
+        }
     });
 
     connection.on('ReactionUpdated', (data) => {
@@ -799,19 +809,28 @@ function updateCurrentChatSubtitle() {
 }
 
 function parseActivityDate(value) {
+    if (typeof parseMessageDate === 'function') {
+        return parseMessageDate(value);
+    }
     if (value == null || value === '') return null;
     if (typeof value === 'number') {
         const d = new Date(value < 1e12 ? value * 1000 : value);
         return isNaN(d.getTime()) ? null : d;
     }
+    if (value instanceof Date) {
+        return isNaN(value.getTime()) ? null : value;
+    }
     let s = String(value).trim();
+    if (!s) return null;
     if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(s)) {
         s = s.replace(' ', 'T');
     }
+    const hasTz = /[zZ]$/.test(s) || /[+-]\d{2}:?\d{2}$/.test(s);
+    if (!hasTz && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s)) {
+        s += 'Z';
+    }
     const d = new Date(s);
-    if (!isNaN(d.getTime())) return d;
-    const d2 = new Date(s.endsWith('Z') ? s : s + 'Z');
-    return isNaN(d2.getTime()) ? null : d2;
+    return isNaN(d.getTime()) ? null : d;
 }
 
 function formatLastSeen(isoString) {

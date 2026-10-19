@@ -1,4 +1,5 @@
 ﻿using Messenger.Core.Interfaces;
+using Messenger.Core.Metrics;
 using Messenger.Core.Models;
 using Messenger.Core.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -13,26 +14,62 @@ namespace Messenger.Core.Hubs
     {
         private readonly IUserService _userService;
         private readonly IUserStatusService _userStatusService;
+        private readonly IChatService _chatService;
         private readonly ILogger<ChatHub> _logger;
         private readonly TypingRateLimiterService _typingLimiter;
+        private readonly SendMessageRateLimiterService _sendMessageLimiter;
 
-        public ChatHub(IUserService userService, IUserStatusService userStatusService, ILogger<ChatHub> logger,
-            TypingRateLimiterService typingLimiter)
+        public ChatHub(IUserService userService, IUserStatusService userStatusService, IChatService chatService,
+            ILogger<ChatHub> logger, TypingRateLimiterService typingLimiter, SendMessageRateLimiterService sendMessageLimiter)
         {
             _userService = userService;
             _userStatusService = userStatusService;
+            _chatService = chatService;
             _logger = logger;
             _typingLimiter = typingLimiter;
+            _sendMessageLimiter = sendMessageLimiter;
+        }
+
+        private async Task SendToPeersAsync(Guid userId, string method, object payload, CancellationToken ct = default)
+        {
+            var peerIds = await _chatService.GetPeerUserIdsAsync(userId, ct);
+            var groups = peerIds.Select(id => $"User_{id}").ToList();
+            if (groups.Count == 0)
+            {
+                await Clients.Group($"User_{userId}").SendAsync(method, payload, ct);
+                return;
+            }
+            await Clients.Groups(groups).SendAsync(method, payload, ct);
         }
 
         public async Task JoinChat(Guid chatId)
         {
-            await Groups.AddToGroupAsync(Context.ConnectionId, chatId.ToString());
+            var startTime = DateTime.UtcNow;
+            try
+            {
+                await Groups.AddToGroupAsync(Context.ConnectionId, chatId.ToString());
+            }
+            finally
+            {
+                var duration = (DateTime.UtcNow - startTime).TotalSeconds;
+                MessengerMetrics.HubActionDuration.Record(duration,
+                    new KeyValuePair<string, object?>("action", "join_chat"));
+            }
         }
 
         public async Task LeaveChat(Guid chatId)
         {
-            await Groups.RemoveFromGroupAsync(Context.ConnectionId, chatId.ToString());
+            var startTime = DateTime.UtcNow;
+            try
+            {
+                await Groups.RemoveFromGroupAsync(Context.ConnectionId, chatId.ToString());
+            }
+            finally
+            {
+                var duration = (DateTime.UtcNow - startTime).TotalSeconds;
+                MessengerMetrics.HubActionDuration.Record(duration,
+                    new KeyValuePair<string, object?>("action", "leave_chat"));
+            }
         }
 
         public override async Task OnConnectedAsync()
@@ -61,6 +98,9 @@ namespace Messenger.Core.Hubs
 
                 _logger.LogInformation("OnConnectedAsync: {UserId} подключился", userId);
 
+                MessengerMetrics.SignalRActiveConnections.Add(1, 
+                    new KeyValuePair<string, object?>("hub", "chat"));
+
                 await Groups.AddToGroupAsync(Context.ConnectionId, $"User_{userId}");
 
                 await _userStatusService.UpdateUserStatusAsync(new UserStatus
@@ -77,8 +117,7 @@ namespace Messenger.Core.Hubs
                     lastActivity = DateTime.UtcNow
                 };
 
-                await Clients.All.SendAsync("UserOnlineStatusChanged", statusData);
-                await Clients.User(userId.ToString()).SendAsync("UserOnlineStatusChanged", statusData);
+                await SendToPeersAsync(userId, "UserOnlineStatusChanged", statusData);
             }
             catch (Exception ex)
             {
@@ -102,6 +141,9 @@ namespace Messenger.Core.Hubs
                     {
                         var userId = user.UserId;
 
+                        MessengerMetrics.SignalRActiveConnections.Add(-1, 
+                            new KeyValuePair<string, object?>("hub", "chat"));
+
                         await _userStatusService.UpdateUserStatusAsync(new UserStatus
                         {
                             UserId = userId,
@@ -116,8 +158,15 @@ namespace Messenger.Core.Hubs
                             lastActivity = DateTime.UtcNow
                         };
 
-                        await Clients.All.SendAsync("UserOnlineStatusChanged", statusData);
+                        await SendToPeersAsync(userId, "UserOnlineStatusChanged", statusData);
                     }
+                }
+
+                if (exception != null)
+                {
+                    MessengerMetrics.SignalRErrors.Add(1, 
+                        new KeyValuePair<string, object?>("hub", "chat"),
+                        new KeyValuePair<string, object?>("error_type", exception.GetType().Name));
                 }
             }
             catch (Exception ex)
@@ -126,14 +175,6 @@ namespace Messenger.Core.Hubs
             }
 
             await base.OnDisconnectedAsync(exception);
-        }
-
-        public async Task NotifyBlockStatus(string actorId, string targetId, bool isBlocked)
-        {
-            await Clients.Group($"User_{actorId.ToLowerInvariant()}")
-                .SendAsync("UserBlockStatusChanged", new { actorId, targetId, isBlocked });
-            await Clients.Group($"User_{targetId.ToLowerInvariant()}")
-                .SendAsync("UserBlockStatusChanged", new { actorId, targetId, isBlocked });
         }
 
         public async Task NotifyParticipantRemoved(Guid chatId, Guid removedUserId)
@@ -186,78 +227,106 @@ namespace Messenger.Core.Hubs
 
         public async Task NotifyAvatarUpdated(string userId, string newAvatarUrl)
         {
-            await Clients.All.SendAsync("AvatarUpdated", new
+            if (!Guid.TryParse(userId, out var uid))
             {
-                userId,
-                avatarUrl = newAvatarUrl
-            });
+                await Clients.All.SendAsync("AvatarUpdated", new { userId, avatarUrl = newAvatarUrl });
+                return;
+            }
+            await SendToPeersAsync(uid, "AvatarUpdated", new { userId, avatarUrl = newAvatarUrl });
         }
 
         public async Task NotifyProfileNameUpdated(string userId, string newDisplayName)
         {
-            await Clients.All.SendAsync("ProfileNameUpdated", new
+            if (!Guid.TryParse(userId, out var uid))
             {
-                userId,
-                displayName = newDisplayName
-            });
+                await Clients.All.SendAsync("ProfileNameUpdated", new { userId, displayName = newDisplayName });
+                return;
+            }
+            await SendToPeersAsync(uid, "ProfileNameUpdated", new { userId, displayName = newDisplayName });
         }
 
         public async Task NotifyProfileUpdated(string userId, string? newAvatarUrl, string newDisplayName)
         {
-            await Clients.All.SendAsync("ProfileUpdated", new
+            if (!Guid.TryParse(userId, out var uid))
             {
-                userId,
-                avatarUrl = newAvatarUrl,
-                displayName = newDisplayName
-            });
+                await Clients.All.SendAsync("ProfileUpdated", new { userId, avatarUrl = newAvatarUrl, displayName = newDisplayName });
+                return;
+            }
+            await SendToPeersAsync(uid, "ProfileUpdated", new { userId, avatarUrl = newAvatarUrl, displayName = newDisplayName });
+        }
+
+        public async Task<bool> TryAcquireSendMessagePermit()
+        {
+            var externalId = Context.User?.FindFirst("sub")?.Value
+                ?? Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(externalId))
+                return false;
+
+            return await _sendMessageLimiter.TryAcquireAsync(externalId);
         }
 
         public async Task StartTyping(string chatId)
         {
-            var externalId = Context.User?.FindFirst("sub")?.Value 
-                ?? Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (string.IsNullOrEmpty(externalId))
-                return;
-
-            if (!await _typingLimiter.TryAcquireAsync(externalId))
+            var startTime = DateTime.UtcNow;
+            try
             {
-                return;
+                var externalId = Context.User?.FindFirst("sub")?.Value 
+                    ?? Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (string.IsNullOrEmpty(externalId))
+                    return;
+
+                if (!await _typingLimiter.TryAcquireAsync(externalId))
+                    return;
+
+                var user = await _userService.GetUserByExternalIdAsync(externalId);
+                if (user == null)
+                    return;
+
+                await Clients.Group(chatId).SendAsync("UserIsTyping", new
+                {
+                    chatId,
+                    userId = user.UserId.ToString(),
+                    isTyping = true
+                });
             }
-
-            var user = await _userService.GetUserByExternalIdAsync(externalId);
-            if (user == null)
-                return;
-
-            await Clients.Group(chatId).SendAsync("UserIsTyping", new
+            finally
             {
-                chatId,
-                userId = user.UserId.ToString(),
-                isTyping = true
-            });
+                var duration = (DateTime.UtcNow - startTime).TotalSeconds;
+                MessengerMetrics.HubActionDuration.Record(duration,
+                    new KeyValuePair<string, object?>("action", "start_typing"));
+            }
         }
 
         public async Task StopTyping(string chatId)
         {
-            var externalId = Context.User?.FindFirst("sub")?.Value 
-                ?? Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (string.IsNullOrEmpty(externalId)) 
-                return;
-
-            if (!await _typingLimiter.TryAcquireAsync(externalId))
+            var startTime = DateTime.UtcNow;
+            try
             {
-                return;
+                var externalId = Context.User?.FindFirst("sub")?.Value 
+                    ?? Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (string.IsNullOrEmpty(externalId)) 
+                    return;
+
+                if (!await _typingLimiter.TryAcquireAsync(externalId))
+                    return;
+
+                var user = await _userService.GetUserByExternalIdAsync(externalId);
+                if (user == null) 
+                    return;
+
+                await Clients.Group(chatId).SendAsync("UserIsTyping", new
+                {
+                    chatId,
+                    userId = user.UserId.ToString(),
+                    isTyping = false
+                });
             }
-
-            var user = await _userService.GetUserByExternalIdAsync(externalId);
-            if (user == null) 
-                return;
-
-            await Clients.Group(chatId).SendAsync("UserIsTyping", new
+            finally
             {
-                chatId,
-                userId = user.UserId.ToString(),
-                isTyping = false
-            });
+                var duration = (DateTime.UtcNow - startTime).TotalSeconds;
+                MessengerMetrics.HubActionDuration.Record(duration,
+                    new KeyValuePair<string, object?>("action", "stop_typing"));
+            }
         }
 
         public async Task RequestAndBroadcastUserStatus(Guid userId)
@@ -275,8 +344,7 @@ namespace Messenger.Core.Hubs
                     lastActivity = status.LastActivity ?? DateTime.UtcNow
                 };
 
-                await Clients.All.SendAsync("UserOnlineStatusChanged", statusData);
-                await Clients.User(userId.ToString()).SendAsync("UserOnlineStatusChanged", statusData);
+                await SendToPeersAsync(userId, "UserOnlineStatusChanged", statusData);
 
                 _logger.LogInformation("RequestAndBroadcastUserStatus: отправлен статус для {UserId}", userId);
             }

@@ -19,7 +19,7 @@ public partial class Chat
     [Column("User_ID")]
     public Guid UserId { get; set; }
 
-    [Column("Creation_Date", TypeName = "timestamp without time zone")]
+    [Column("Creation_Date", TypeName = "timestamp with time zone")]
     public DateTime CreationDate { get; set; }
 
     [InverseProperty("Chat")]

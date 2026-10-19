@@ -88,8 +88,8 @@ async function loadChats() {
             if (partnerId) div.dataset.partnerId = partnerId;
             if (lastMessageTime) {
                 try {
-                    const d = new Date(lastMessageTime);
-                    if (!isNaN(d.getTime())) div.dataset.lastMessageAt = d.toISOString();
+                    const d = typeof parseMessageDate === 'function' ? parseMessageDate(lastMessageTime) : new Date(lastMessageTime);
+                    if (d && !isNaN(d.getTime())) div.dataset.lastMessageAt = d.toISOString();
                 } catch (_) {}
             }
 
@@ -179,8 +179,8 @@ async function loadChats() {
                     if (partnerId) div.dataset.partnerId = partnerId;
                     if (lastMessageTime) {
                         try {
-                            const d = new Date(lastMessageTime);
-                            if (!isNaN(d.getTime())) div.dataset.lastMessageAt = d.toISOString();
+                            const d = typeof parseMessageDate === 'function' ? parseMessageDate(lastMessageTime) : new Date(lastMessageTime);
+                            if (d && !isNaN(d.getTime())) div.dataset.lastMessageAt = d.toISOString();
                         } catch (_) {}
                     }
                     div.onclick = () => openChat(div);
@@ -345,14 +345,18 @@ async function loadMessages(chatId) {
         setTimeout(() => { scrollToBottom(); }, 10);
         setTimeout(() => { scrollToBottom(); }, 100);
 
-        if (typeof pinnedBarDismissed !== 'undefined') {
-            pinnedBarDismissed.delete(String(chatId));
-        }
-        if (typeof updatePinnedMessageBar === 'function') {
-            updatePinnedMessageBar();
-        }
-        if (typeof highlightPinnedMessageInView === 'function') {
-            highlightPinnedMessageInView();
+        if (typeof syncPinnedMessagesFromServer === 'function') {
+            await syncPinnedMessagesFromServer(chatId);
+        } else {
+            if (typeof pinnedBarDismissed !== 'undefined') {
+                pinnedBarDismissed.delete(String(chatId));
+            }
+            if (typeof updatePinnedMessageBar === 'function') {
+                updatePinnedMessageBar();
+            }
+            if (typeof highlightPinnedMessageInView === 'function') {
+                highlightPinnedMessageInView();
+            }
         }
 
     } catch (err) {

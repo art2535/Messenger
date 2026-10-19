@@ -2,7 +2,6 @@ feather.replace();
 
 const API_BASE = window.API_BASE_URL;
 
-let myBlockedUsers = new Set();
 let allChats = [];
 let unreadCounts = new Map();
 
@@ -575,6 +574,8 @@ function safeChatId(chatId) {
     return chatId;
 }
 
+const RATE_LIMIT_MESSAGE = 'Слишком много запросов. Подождите немного и попробуйте снова.';
+
 async function fetchWithAuth(url, options = {}) {
     const headers = {
         'Authorization': `Bearer ${token}`,
@@ -591,12 +592,15 @@ async function fetchWithAuth(url, options = {}) {
 
     if (response.status === 429) {
         console.warn('Rate limited:', url);
+        let message = RATE_LIMIT_MESSAGE;
         try {
             const body = await response.clone().json();
-            showToast(body?.error || 'Слишком много запросов. Подождите немного.', 'warning');
-        } catch {
-            showToast('Слишком много запросов. Подождите немного.', 'warning');
-        }
+            if (body?.error && typeof body.error === 'string') {
+                message = body.error;
+            }
+        } catch { }
+
+        response.__rateLimitMessage = message;
     }
 
     return response;
@@ -604,6 +608,10 @@ async function fetchWithAuth(url, options = {}) {
 
 function isRateLimited(res) {
     return res && res.status === 429;
+}
+
+function getRateLimitMessage(res) {
+    return (res && res.__rateLimitMessage) || RATE_LIMIT_MESSAGE;
 }
 
 fileInput.onchange = function () {

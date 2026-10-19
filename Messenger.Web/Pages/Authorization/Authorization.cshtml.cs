@@ -255,9 +255,7 @@ namespace Messenger.Web.Pages.Authorization
                     lastActivity = DateTime.UtcNow
                 };
 
-                await _hubContext.Clients.All.SendAsync("UserOnlineStatusChanged", payload);
-                await _hubContext.Clients.User(userId.ToString())
-                    .SendAsync("UserOnlineStatusChanged", payload);
+                await _hubContext.Clients.Group($"User_{userId}").SendAsync("UserOnlineStatusChanged", payload);
 
                 _logger.LogInformation("SignalR уведомление о входе отправлено для пользователя {UserId}", userId);
             }

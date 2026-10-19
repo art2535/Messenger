@@ -1,4 +1,4 @@
-﻿using Messenger.Core.Models;
+using Messenger.Core.Models;
 
 namespace Messenger.Core.DTOs.Cache
 {
@@ -15,6 +15,8 @@ namespace Messenger.Core.DTOs.Cache
         public MessageDeliveryStatus DeliveryStatus { get; set; }
         public DateTime? ReadTime { get; set; }
         public bool HasAttachments { get; set; }
+        public bool IsPinned { get; set; }
+        public DateTime? PinnedAt { get; set; }
         public List<CachedAttachmentItem> Attachments { get; set; } = new();
         public List<CachedReactionItem> Reactions { get; set; } = new();
     }

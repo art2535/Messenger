@@ -32,7 +32,7 @@ namespace Messenger.Infrastructure.Services
                 .Where(us => ids.Contains(us.UserId) && us.Online)
                 .ExecuteUpdateAsync(s => s
                     .SetProperty(us => us.Online, false)
-                    .SetProperty(us => us.LastActivity, DateTime.Now),
+                    .SetProperty(us => us.LastActivity, UtcDateTime.Now),
                     cancellationToken);
         }
 
@@ -42,7 +42,7 @@ namespace Messenger.Infrastructure.Services
                 .Where(us => us.UserId == userStatus.UserId)
                 .ExecuteUpdateAsync(s => s
                     .SetProperty(us => us.Online, userStatus.Online)
-                    .SetProperty(us => us.LastActivity, DateTime.Now),
+                    .SetProperty(us => us.LastActivity, UtcDateTime.Now),
                     cancellationToken);
 
             if (rowsAffected == 0)
@@ -51,7 +51,7 @@ namespace Messenger.Infrastructure.Services
                 {
                     UserId = userStatus.UserId,
                     Online = userStatus.Online,
-                    LastActivity = DateTime.Now
+                    LastActivity = UtcDateTime.Now
                 };
 
                 _context.UserStatuses.Add(newStatus);

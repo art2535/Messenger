@@ -1,5 +1,11 @@
-﻿using Messenger.API.Extensions;
+using Messenger.API.Extensions;
 using Messenger.Core.Hubs;
+using Messenger.Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using Serilog;
+using Serilog.Ui.Web.Extensions;
 using System.Text;
 
 namespace Messenger.API
@@ -15,6 +21,26 @@ namespace Messenger.API
 
             var builder = WebApplication.CreateBuilder(args);
 
+            Console.WriteLine("=============================================================");
+            Console.WriteLine($"[API DEBUG] Среда: {builder.Environment.EnvironmentName}");
+            Console.WriteLine($"[API DEBUG] ASPNETCORE_URLS: '{builder.Configuration["ASPNETCORE_URLS"]}'");
+            Console.WriteLine($"[API DEBUG] ASPNETCORE_HTTPS_PORTS: '{builder.Configuration["ASPNETCORE_HTTPS_PORTS"]}'");
+            Console.WriteLine("=============================================================");
+
+            builder.ConfigureDevelopmentCertificate();
+
+            builder.AddMessengerSerilog("Messenger.API");
+            builder.AddMessengerSerilogUi();
+            builder.Services.AddLogging(logging =>
+            {
+                logging.ClearProviders();
+                logging.AddSimpleConsole(o =>
+                {
+                    o.SingleLine = true;
+                    o.TimestampFormat = "HH:mm:ss ";
+                });
+            });
+
             builder.EnsureSharedDevelopmentEncryptionKey();
             builder.Services.AddControllers();
             builder.Services.AddValidation();
@@ -24,13 +50,31 @@ namespace Messenger.API
             builder.Services.AddPostgreSQL(builder.Configuration);
             builder.Services.AddServices();
             builder.Services.AddEncryption(builder.Configuration);
-            builder.Services.AddLogging();
             builder.Services.AddRabbitMQ(builder.Configuration);
             builder.Services.AddHttpClient();
             builder.Services.AddEtaApiAuthentication(builder.Configuration, !builder.Environment.IsDevelopment());
             builder.Services.AddMessengerRateLimiting();
             builder.Services.AddSessionCleanup(builder.Configuration);
+            builder.Services.AddLogRetention(builder.Configuration);
             builder.Services.AddMessengerHealthChecks();
+            builder.Services.AddRedisMetrics();
+            builder.Services.AddMetricsProtection(builder.Configuration);
+
+            builder.Services.AddOpenTelemetry()
+                .ConfigureResource(r => r.AddService(
+                    serviceName: "Messenger.API",
+                    serviceVersion: typeof(Program).Assembly.GetName().Version?.ToString() ?? "1.0.0"))
+                .WithMetrics(metrics =>
+                {
+                    metrics
+                        .AddAspNetCoreInstrumentation()
+                        .AddRuntimeInstrumentation()
+                        .AddMeter("Microsoft.EntityFrameworkCore")
+                        .AddMeter("MassTransit")
+                        .AddMeter("Messenger")
+                        .AddMeter("Messenger.Redis")
+                        .AddPrometheusExporter();
+                });
 
             const string WebCorsPolicy = "WebClient";
 
@@ -55,6 +99,17 @@ namespace Messenger.API
             });
 
             var app = builder.Build();
+
+            app.UseSerilogRequestLogging(options =>
+            {
+                options.MessageTemplate = "HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000} ms";
+            });
+
+            using (var migrationScope = app.Services.CreateScope())
+            {
+                var db = migrationScope.ServiceProvider.GetRequiredService<GuapMessengerContext>();
+                db.Database.Migrate();
+            }
 
             if (app.Environment.IsDevelopment())
             {
@@ -83,19 +138,40 @@ namespace Messenger.API
 
             app.MapMessengerHealthChecks();
 
+            app.MapProtectedPrometheusScrapingEndpoint("/metrics");
+
             app.UseUploads();
             app.UseCors(WebCorsPolicy);
             app.UseHttpsRedirection();
-            app.UseRateLimiter();
             app.UseAuthentication();
             app.UseAuthorization();
+
+            if (app.Environment.IsDevelopment())
+            {
+                app.UseSerilogUi(options => options.WithRoutePrefix("serilog-ui"));
+            }
+
+            app.UseRateLimiter();
             app.MapControllers().RequireRateLimiting("api");
 
             app.MapHub<ChatHub>($"/api/v{apiVersion}/hubs/chat").RequireCors(WebCorsPolicy);
             app.MapHub<UserStatusHub>($"/api/v{apiVersion}/hubs/userstatus").RequireCors(WebCorsPolicy);
             app.MapHub<NotificationHub>($"/api/v{apiVersion}/hubs/notification").RequireCors(WebCorsPolicy);
 
-            app.Run();
+            try
+            {
+                Log.Information("Messenger.API starting...");
+                app.Run();
+            }
+            catch (Exception ex)
+            {
+                Log.Fatal(ex, "Messenger.API terminated unexpectedly");
+                throw;
+            }
+            finally
+            {
+                Log.CloseAndFlush();
+            }
         }
     }
 }

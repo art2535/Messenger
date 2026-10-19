@@ -15,12 +15,12 @@ public partial class Notification
 
     public string Text { get; set; } = null!;
 
-    [Column("Creation_Date", TypeName = "timestamp without time zone")]
+    [Column("Creation_Date", TypeName = "timestamp with time zone")]
     public DateTime CreationDate { get; set; }
 
     public bool Read { get; set; }
 
-    [Column("Read_At", TypeName = "timestamp without time zone")]
+    [Column("Read_At", TypeName = "timestamp with time zone")]
     public DateTime? ReadAt { get; set; }
 
     [ForeignKey("UserId")]
@@ -28,5 +28,4 @@ public partial class Notification
     [JsonIgnore]
     public virtual User User { get; set; } = null!;
 
-    public static DateTime Now => DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
 }

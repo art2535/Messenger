@@ -220,14 +220,6 @@ async function initSignalR() {
     const myUserId = '@(Model.CurrentUser?.UserId ?? "")';
     const myDisplayName = '@fullName'.replace(/&#x27;/g, "'");
 
-    connection.on('UserBlockStatusChanged', (data) => {
-        const me = myUserId.toLowerCase();
-        if (data.targetId?.toLowerCase() === me) {
-            showToast(data.isBlocked ? "Вас добавили в чёрный список" : "Вас убрали из чёрного списка",
-                data.isBlocked ? "warning" : "info");
-        }
-    });
-
     function applyProfileUpdate(data) {
         if (!data?.userId) return;
         if (String(data.userId).toLowerCase() !== myUserId.toLowerCase()) return;

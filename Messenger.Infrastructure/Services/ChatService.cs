@@ -9,18 +9,16 @@ namespace Messenger.Infrastructure.Services
     public class ChatService : IChatService
     {
         private readonly GuapMessengerContext _context;
-        private readonly IUserService _userService;
         private readonly IEncryptionService _encryptionService;
         private readonly ICacheService _cache;
         private readonly ILogger<ChatService> _logger;
 
         private static readonly TimeSpan ChatsListTtl = TimeSpan.FromSeconds(45);
 
-        public ChatService(GuapMessengerContext context, IUserService userService,
-            IEncryptionService encryptionService, ICacheService cache, ILogger<ChatService> logger)
+        public ChatService(GuapMessengerContext context, IEncryptionService encryptionService, 
+            ICacheService cache, ILogger<ChatService> logger)
         {
             _context = context;
-            _userService = userService;
             _encryptionService = encryptionService;
             _cache = cache;
             _logger = logger;
@@ -36,7 +34,7 @@ namespace Messenger.Infrastructure.Services
                 Name = name,
                 Type = type,
                 UserId = creatorId,
-                CreationDate = DateTime.Now
+                CreationDate = UtcDateTime.Now
             };
 
             var participant = new ChatParticipant
@@ -44,7 +42,7 @@ namespace Messenger.Infrastructure.Services
                 ChatId = chat.ChatId,
                 UserId = creatorId,
                 Role = "владелец",
-                JoinDate = DateTime.Now
+                JoinDate = UtcDateTime.Now
             };
 
             await _context.Chats.AddAsync(chat, token);
@@ -139,19 +137,11 @@ namespace Messenger.Infrastructure.Services
             foreach (var chat in chats)
             {
                 lastMsgByChat.TryGetValue(chat.ChatId, out var lastMsg);
-                var lastMessageAt = lastMsg?.SendTime ?? chat.CreationDate;
-
-                bool isBlocked = false;
-                if (chat.Type == "private")
-                {
-                    var otherParticipant = chat.ChatParticipants.FirstOrDefault(p => p.UserId != userId);
-                    if (otherParticipant != null)
-                    {
-                        bool blockedByMe = await _userService.IsBlockedByAsync(userId, otherParticipant.UserId, token);
-                        bool blockedByThem = await _userService.IsBlockedByAsync(otherParticipant.UserId, userId, token);
-                        isBlocked = blockedByMe || blockedByThem;
-                    }
-                }
+                DateTime? lastMessageAt = lastMsg != null
+                    ? UtcDateTime.AsUtc(lastMsg.SendTime)
+                    : UtcDateTime.AsUtc(chat.CreationDate);
+                if (lastMessageAt == DateTime.MinValue)
+                    lastMessageAt = null;
 
                 string? decryptedLastMessage = null;
                 if (lastMsg?.MessageText != null)
@@ -172,6 +162,8 @@ namespace Messenger.Infrastructure.Services
 
                 unreadCounts.TryGetValue(chat.ChatId, out var unreadCount);
 
+                var sortKey = lastMessageAt ?? DateTime.MinValue;
+
                 var item = new
                 {
                     chatId = chat.ChatId,
@@ -189,15 +181,14 @@ namespace Messenger.Infrastructure.Services
                         : null,
                     type = chat.Type,
                     lastMessage = decryptedLastMessage,
-                    lastMessageAt = lastMessageAt == DateTime.MinValue ? (DateTime?)null : lastMessageAt,
-                    lastMessageTime = lastMessageAt == DateTime.MinValue ? (DateTime?)null : lastMessageAt,
-                    lastMessageSentAt = lastMessageAt == DateTime.MinValue ? (DateTime?)null : lastMessageAt,
+                    lastMessageAt = lastMessageAt,
+                    lastMessageTime = lastMessageAt,
+                    lastMessageSentAt = lastMessageAt,
                     isOnline = true,
-                    isBlocked = isBlocked,
                     unreadCount = unreadCount
                 };
 
-                sortable.Add((lastMessageAt, item));
+                sortable.Add((sortKey, item));
             }
 
             var result = sortable
@@ -231,7 +222,7 @@ namespace Messenger.Infrastructure.Services
                 ChatId = chatId,
                 UserId = userId,
                 Role = role,
-                JoinDate = DateTime.Now
+                JoinDate = UtcDateTime.Now
             };
 
             try
@@ -310,6 +301,39 @@ namespace Messenger.Infrastructure.Services
             if (userIds.Count == 0) return;
 
             await _cache.RemoveAsync(userIds.Select(UserChatsCacheKey), token);
+        }
+
+        public async Task<IReadOnlyList<Guid>> GetPeerUserIdsAsync(Guid userId, CancellationToken token = default)
+        {
+            var chatIds = await _context.ChatParticipants
+                .AsNoTracking()
+                .Where(p => p.UserId == userId)
+                .Select(p => p.ChatId)
+                .ToListAsync(token);
+
+            if (chatIds.Count == 0)
+                return new[] { userId };
+
+            var peerIds = await _context.ChatParticipants
+                .AsNoTracking()
+                .Where(p => chatIds.Contains(p.ChatId))
+                .Select(p => p.UserId)
+                .Distinct()
+                .ToListAsync(token);
+
+            if (!peerIds.Contains(userId))
+                peerIds.Add(userId);
+
+            return peerIds;
+        }
+
+        public async Task<IReadOnlyList<Guid>> GetChatParticipantUserIdsAsync(Guid chatId, CancellationToken token = default)
+        {
+            return await _context.ChatParticipants
+                .AsNoTracking()
+                .Where(p => p.ChatId == chatId)
+                .Select(p => p.UserId)
+                .ToListAsync(token);
         }
     }
 }

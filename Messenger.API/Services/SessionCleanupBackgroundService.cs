@@ -1,8 +1,10 @@
-﻿using Messenger.API.Options;
+using Messenger.API.Options;
 using Messenger.Core.Hubs;
 using Messenger.Core.Interfaces;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Options;
+using Messenger.Core.Models;
+using Messenger.Infrastructure.Services;
 
 namespace Messenger.API.Services
 {
@@ -12,14 +14,19 @@ namespace Messenger.API.Services
         private readonly IHubContext<ChatHub> _hubContext;
         private readonly ILogger<SessionCleanupBackgroundService> _logger;
         private readonly SessionCleanupOptions _options;
+        private readonly RedisDistributedLock _lock;
+
+        private const string LockKey = "messenger:lock:session-cleanup";
 
         public SessionCleanupBackgroundService(IServiceScopeFactory scopeFactory, IHubContext<ChatHub> hubContext,
-            IOptions<SessionCleanupOptions> options, ILogger<SessionCleanupBackgroundService> logger)
+            IOptions<SessionCleanupOptions> options, ILogger<SessionCleanupBackgroundService> logger,
+            RedisDistributedLock distributedLock)
         {
             _scopeFactory = scopeFactory;
             _hubContext = hubContext;
             _options = options.Value;
             _logger = logger;
+            _lock = distributedLock;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -37,7 +44,16 @@ namespace Messenger.API.Services
             {
                 try
                 {
-                    await CleanupOnceAsync(idleThreshold, stoppingToken);
+                    var lockTtl = interval + TimeSpan.FromSeconds(30);
+                    await using var handle = await _lock.TryAcquireAsync(LockKey, lockTtl, stoppingToken);
+                    if (handle is null)
+                    {
+                        _logger.LogDebug("SessionCleanup: тик пропущен — другая реплика держит lock");
+                    }
+                    else
+                    {
+                        await CleanupOnceAsync(idleThreshold, stoppingToken);
+                    }
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {
@@ -67,8 +83,9 @@ namespace Messenger.API.Services
 
             var statusService = scope.ServiceProvider.GetRequiredService<IUserStatusService>();
             var loginService = scope.ServiceProvider.GetRequiredService<ILoginService>();
+            var chatService = scope.ServiceProvider.GetRequiredService<IChatService>();
 
-            var olderThan = DateTime.Now - idleThreshold;
+            var olderThan = UtcDateTime.Now - idleThreshold;
 
             var inactive = await statusService.GetInactiveOnlineStatusesAsync(olderThan, ct);
             if (inactive.Count == 0)
@@ -87,7 +104,7 @@ namespace Messenger.API.Services
 
             await loginService.CloseActiveLoginsForUsersAsync(userIds, ct);
 
-            var now = DateTime.Now;
+            var now = UtcDateTime.Now;
             foreach (var userId in userIds)
             {
                 var payload = new
@@ -99,9 +116,12 @@ namespace Messenger.API.Services
 
                 try
                 {
-                    await _hubContext.Clients.All.SendAsync("UserOnlineStatusChanged", payload, ct);
-                    await _hubContext.Clients.User(userId.ToString())
-                        .SendAsync("UserOnlineStatusChanged", payload, ct);
+                    var peerIds = await chatService.GetPeerUserIdsAsync(userId, ct);
+                    var groups = peerIds.Select(id => $"User_{id}").ToList();
+                    if (groups.Count > 0)
+                        await _hubContext.Clients.Groups(groups).SendAsync("UserOnlineStatusChanged", payload, ct);
+                    else
+                        await _hubContext.Clients.Group($"User_{userId}").SendAsync("UserOnlineStatusChanged", payload, ct);
                 }
                 catch (Exception ex)
                 {

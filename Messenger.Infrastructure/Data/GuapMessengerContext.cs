@@ -1,4 +1,4 @@
-﻿using MassTransit;
+using MassTransit;
 using Messenger.Core.Models;
 using Microsoft.EntityFrameworkCore;
 
@@ -18,8 +18,6 @@ public partial class GuapMessengerContext : DbContext
     public virtual DbSet<AccountSetting> AccountSettings { get; set; }
 
     public virtual DbSet<Attachment> Attachments { get; set; }
-
-    public virtual DbSet<Blacklist> Blacklists { get; set; }
 
     public virtual DbSet<Chat> Chats { get; set; }
 
@@ -45,6 +43,8 @@ public partial class GuapMessengerContext : DbContext
 
     public virtual DbSet<PushSubscription> PushSubscriptions { get; set; }
 
+    public virtual DbSet<Log> Logs { get; set; }
+
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
     }
@@ -59,9 +59,7 @@ public partial class GuapMessengerContext : DbContext
 
         modelBuilder.Entity<AccountSetting>(entity =>
         {
-            entity.HasKey(e => e.SettingId).HasName("Account_Settings_pkey");
-
-            entity.Property(e => e.SettingId).ValueGeneratedNever();
+            entity.HasKey(e => e.AccountId).HasName("Account_Settings_pkey");
         });
 
         modelBuilder.Entity<Attachment>(entity =>
@@ -70,18 +68,10 @@ public partial class GuapMessengerContext : DbContext
 
             entity.Property(e => e.AttachmentId).ValueGeneratedNever();
 
+            entity.HasIndex(e => e.MessageId)
+                .HasDatabaseName("IX_Attachments_MessageId");
+
             entity.HasOne(d => d.Message).WithMany(p => p.Attachments).HasConstraintName("fk_attachment_message");
-        });
-
-        modelBuilder.Entity<Blacklist>(entity =>
-        {
-            entity.HasKey(e => new { e.UserId, e.BlockedUserId }).HasName("Blacklist_pkey");
-
-            entity.Property(e => e.BlockDate).HasDefaultValueSql("now()");
-
-            entity.HasOne(d => d.BlockedUser).WithMany(p => p.BlacklistBlockedUsers).HasConstraintName("fk_blocked_to");
-
-            entity.HasOne(d => d.User).WithMany(p => p.BlacklistUsers).HasConstraintName("fk_blocked_by");
         });
 
         modelBuilder.Entity<Chat>(entity =>
@@ -89,7 +79,9 @@ public partial class GuapMessengerContext : DbContext
             entity.HasKey(e => e.ChatId).HasName("Chats_pkey");
 
             entity.Property(e => e.ChatId).ValueGeneratedNever();
-            entity.Property(e => e.CreationDate).HasDefaultValueSql("now()");
+            entity.Property(e => e.CreationDate)
+                .HasColumnType("timestamp with time zone")
+                .HasDefaultValueSql("now() at time zone 'utc'");
 
             entity.HasOne(d => d.User).WithMany(p => p.Chats).HasConstraintName("fk_chat_creator");
         });
@@ -98,8 +90,13 @@ public partial class GuapMessengerContext : DbContext
         {
             entity.HasKey(e => new { e.ChatId, e.UserId }).HasName("Chat_Participants_pkey");
 
-            entity.Property(e => e.JoinDate).HasDefaultValueSql("now()");
+            entity.Property(e => e.JoinDate)
+                .HasColumnType("timestamp with time zone")
+                .HasDefaultValueSql("now() at time zone 'utc'");
             entity.Property(e => e.Role).HasDefaultValueSql("'participant'::character varying");
+
+            entity.HasIndex(e => e.UserId)
+                .HasDatabaseName("IX_ChatParticipants_UserId");
 
             entity.HasOne(d => d.Chat).WithMany(p => p.ChatParticipants).HasConstraintName("fk_participant_chat");
 
@@ -111,6 +108,8 @@ public partial class GuapMessengerContext : DbContext
             entity.HasKey(e => e.LoginId).HasName("Logins_pkey");
 
             entity.Property(e => e.LoginId).ValueGeneratedNever();
+            entity.Property(e => e.LoginTime).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.LogoutTime).HasColumnType("timestamp with time zone");
 
             entity.HasOne(d => d.User).WithMany(p => p.Logins).HasConstraintName("fk_login_user");
         });
@@ -120,6 +119,8 @@ public partial class GuapMessengerContext : DbContext
             entity.HasKey(e => e.MessageId).HasName("Messages_pkey");
 
             entity.Property(e => e.MessageId).ValueGeneratedNever();
+            entity.Property(e => e.SendTime).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.ReadTime).HasColumnType("timestamp with time zone");
 
             entity.HasIndex(e => new { e.ChatId, e.SequenceNumber })
                 .IsUnique()
@@ -131,6 +132,18 @@ public partial class GuapMessengerContext : DbContext
             entity.HasIndex(e => new { e.ChatId, e.ReadTime })
                 .HasDatabaseName("IX_Messages_ChatId_ReadTime");
 
+            entity.Property(e => e.IsPinned)
+                .HasColumnName("Is_Pinned")
+                .HasDefaultValue(false);
+
+            entity.Property(e => e.PinnedAt)
+                .HasColumnName("Pinned_At")
+                .HasColumnType("timestamp with time zone");
+
+            entity.HasIndex(e => new { e.ChatId, e.IsPinned })
+                .HasDatabaseName("IX_Messages_ChatId_IsPinned")
+                .HasFilter("\"Is_Pinned\" = true");
+
             entity.HasOne(d => d.Chat).WithMany(p => p.Messages).HasConstraintName("fk_chat_messages");
 
             entity.HasOne(d => d.Sender).WithMany(p => p.MessageSenders).HasConstraintName("fk_sender");
@@ -138,11 +151,18 @@ public partial class GuapMessengerContext : DbContext
 
         modelBuilder.Entity<Notification>(entity =>
         {
+            entity.Property(e => e.CreationDate).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.ReadAt).HasColumnType("timestamp with time zone");
             entity.HasKey(e => e.NotificationId).HasName("Notifications_pkey");
 
             entity.Property(e => e.NotificationId).ValueGeneratedNever();
-            entity.Property(e => e.CreationDate).HasDefaultValueSql("now()");
+            entity.Property(e => e.CreationDate)
+                .HasColumnType("timestamp with time zone")
+                .HasDefaultValueSql("now() at time zone 'utc'");
             entity.Property(e => e.Read).HasDefaultValue(false);
+
+            entity.HasIndex(e => new { e.UserId, e.Read })
+                .HasDatabaseName("IX_Notifications_UserId_Read");
 
             entity.HasOne(d => d.User).WithMany(p => p.Notifications).HasConstraintName("fk_notification_user");
         });
@@ -169,16 +189,56 @@ public partial class GuapMessengerContext : DbContext
             entity.Property(e => e.RoleId).ValueGeneratedNever();
         });
 
+        modelBuilder.Entity<Role>().HasData(
+            new Role
+            {
+                RoleId = Guid.Parse("a1b2c3d4-e5f6-7890-abcd-ef1234567890"),
+                Name = "Абитуриент",
+                Description = "Роль абитуриента (ROLE_ENTRANT)"
+            },
+            new Role
+            {
+                RoleId = Guid.Parse("b2c3d4e5-f6a7-8901-bcde-f12345678901"),
+                Name = "Студент",
+                Description = "Роль студента (ROLE_STUDENT)"
+            },
+            new Role
+            {
+                RoleId = Guid.Parse("c3d4e5f6-a7b8-9012-cdef-123456789012"),
+                Name = "Преподаватель",
+                Description = "Роль преподавателя (ROLE_TEACHER)"
+            },
+            new Role
+            {
+                RoleId = Guid.Parse("d4e5f6a7-b8c9-0123-defa-234567890123"),
+                Name = "Сотрудник",
+                Description = "Роль сотрудника (ROLE_EMPLOYEE)"
+            },
+            new Role
+            {
+                RoleId = Guid.Parse("e5f6a7b8-c9d0-1234-efab-345678901234"),
+                Name = "Администратор",
+                Description = "Полный доступ к системе (ROLE_ADMIN)"
+            },
+            new Role
+            {
+                RoleId = Guid.Parse("f6a7b8c9-d0e1-2345-fabc-456789012345"),
+                Name = "Пользователь",
+                Description = "Стандартный доступ пользователя (ROLE_USER)"
+            }
+        );
+
         modelBuilder.Entity<User>(entity =>
         {
             entity.HasKey(e => e.UserId).HasName("Users_pkey");
 
             entity.Property(e => e.UserId).ValueGeneratedNever();
 
-            entity.HasOne(d => d.Account).WithMany(p => p.Users)
-                .HasPrincipalKey(p => p.AccountId)
-                .HasForeignKey(d => d.AccountId)
-                .HasConstraintName("fk_account");
+            entity.HasOne(d => d.Account)
+                .WithOne(p => p.User)
+                .HasForeignKey<AccountSetting>(a => a.AccountId)   // shared PK
+                .HasConstraintName("fk_account")
+                .OnDelete(DeleteBehavior.Cascade);
 
             entity.HasMany(d => d.Roles).WithMany(p => p.Users)
                 .UsingEntity<Dictionary<string, object>>(
@@ -202,6 +262,7 @@ public partial class GuapMessengerContext : DbContext
 
         modelBuilder.Entity<UserStatus>(entity =>
         {
+            entity.Property(e => e.LastActivity).HasColumnType("timestamp with time zone");
             entity.HasKey(e => e.UserId).HasName("User_Statuses_pkey");
 
             entity.Property(e => e.UserId).ValueGeneratedNever();
@@ -272,11 +333,56 @@ public partial class GuapMessengerContext : DbContext
 
             entity.Property(e => e.Id).ValueGeneratedNever();
 
+            entity.HasIndex(e => e.UserId)
+                .HasDatabaseName("IX_PushSubscriptions_UserId");
+
             entity.HasOne(d => d.User)
                 .WithMany(p => p.PushSubscriptions)
                 .HasForeignKey(d => d.UserId)
                 .OnDelete(DeleteBehavior.Cascade)
                 .HasConstraintName("fk_push_subscription_user");
+        });
+
+        modelBuilder.Entity<Log>(entity =>
+        {
+            entity.ToTable("Logs", "logging");
+
+            entity.HasKey(e => e.Id).HasName("logs_pkey");
+
+            entity.Property(e => e.Id)
+                .HasColumnName("Id")
+                .HasColumnType("uuid")
+                .HasDefaultValueSql("gen_random_uuid()")
+                .ValueGeneratedOnAdd();
+
+            entity.Property(e => e.Message).HasColumnName("Message");
+            entity.Property(e => e.MessageTemplate).HasColumnName("MessageTemplate");
+            entity.Property(e => e.Level)
+                .HasColumnName("Level")
+                .HasMaxLength(32);
+            entity.Property(e => e.Timestamp)
+                .HasColumnName("Timestamp")
+                .HasColumnType("timestamp with time zone");
+            entity.Property(e => e.Exception).HasColumnName("Exception");
+            entity.Property(e => e.LogEvent)
+                .HasColumnName("LogEvent")
+                .HasColumnType("jsonb");
+            entity.Property(e => e.Application)
+                .HasColumnName("Application")
+                .HasMaxLength(128);
+            entity.Property(e => e.MachineName)
+                .HasColumnName("MachineName")
+                .HasMaxLength(128);
+            entity.Property(e => e.Environment)
+                .HasColumnName("Environment")
+                .HasMaxLength(64);
+
+            entity.HasIndex(e => e.Timestamp)
+                .HasDatabaseName("IX_logs_timestamp");
+            entity.HasIndex(e => e.Level)
+                .HasDatabaseName("IX_logs_level");
+            entity.HasIndex(e => e.Application)
+                .HasDatabaseName("IX_logs_application");
         });
 
         OnModelCreatingPartial(modelBuilder);

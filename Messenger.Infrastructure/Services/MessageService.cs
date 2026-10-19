@@ -25,6 +25,8 @@ namespace Messenger.Infrastructure.Services
 
         private static readonly TimeSpan LatestMessagesTtl = TimeSpan.FromSeconds(25);
 
+        private const int SearchScanLimit = 300;
+
         private static readonly JsonSerializerOptions JsonOptions = new()
         {
             WriteIndented = true,
@@ -51,7 +53,43 @@ namespace Messenger.Infrastructure.Services
                 .Select(limit => LatestMessagesCacheKey(chatId, limit))
                 .ToArray();
             await _cache.RemoveAsync(keys, token);
-            _logger.LogInformation("Messages cache invalidated chatId={ChatId}", chatId);
+            _logger.LogDebug("Messages cache invalidated chatId={ChatId}", chatId);
+        }
+
+        private async Task PrependMessageToCachesAsync(Message message, CancellationToken token = default)
+        {
+            var item = ToCacheItem(message);
+            var limits = new[] { 1, 20, 30, 50, 100, 200 };
+
+            foreach (var limit in limits)
+            {
+                var key = LatestMessagesCacheKey(message.ChatId, limit);
+                var page = await _cache.GetAsync<CachedMessagesPage>(key, token);
+                if (page is null || page.Items is null)
+                    continue;
+
+                if (page.Items.Any(x => x.MessageId == item.MessageId))
+                    continue;
+
+                page.Items.Add(item);
+                if (page.Items.Count > limit)
+                {
+                    page.Items = page.Items
+                        .OrderBy(x => x.SequenceNumber)
+                        .TakeLast(limit)
+                        .ToList();
+                    page.HasMore = true;
+                }
+                else
+                {
+                    page.Items = page.Items.OrderBy(x => x.SequenceNumber).ToList();
+                }
+
+                await _cache.SetAsync(key, page, LatestMessagesTtl, token);
+            }
+
+            _logger.LogDebug("Messages cache prepended chatId={ChatId} messageId={MessageId}",
+                message.ChatId, message.MessageId);
         }
 
         private async Task InvalidateUserChatsCacheAsync(Guid chatId, CancellationToken token = default)
@@ -70,18 +108,8 @@ namespace Messenger.Infrastructure.Services
 
         public async Task PublishChatMessageAsync(ChatMessageSent message, CancellationToken cancellationToken = default)
         {
-            await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
-            try
-            {
-                await _publishEndpoint.Publish(message, cancellationToken);
-                await _context.SaveChangesAsync(cancellationToken);
-                await transaction.CommitAsync(cancellationToken);
-            }
-            catch
-            {
-                await transaction.RollbackAsync(cancellationToken);
-                throw;
-            }
+            await _publishEndpoint.Publish(message, cancellationToken);
+            await _context.SaveChangesAsync(cancellationToken);
         }
 
         public async Task<List<MessageDto>> SearchMessagesAsync(Guid chatId, string query, CancellationToken token = default)
@@ -91,7 +119,19 @@ namespace Messenger.Infrastructure.Services
 
             query = query.Trim().ToLowerInvariant();
 
-            var (messages, _) = await GetMessagesByChatIdPagedAsync(chatId, null, 300, token);
+            var messages = await _context.Messages
+                .AsNoTracking()
+                .Where(m => m.ChatId == chatId)
+                .OrderByDescending(m => m.SequenceNumber)
+                .Take(SearchScanLimit)
+                .Include(m => m.Sender)
+                .Include(m => m.Reactions)
+                    .ThenInclude(r => r.User)
+                .Include(m => m.Attachments)
+                .AsSplitQuery()
+                .ToListAsync(token);
+
+            messages.Reverse();
 
             var filtered = new List<MessageDto>();
 
@@ -110,24 +150,21 @@ namespace Messenger.Infrastructure.Services
 
         public async Task<int> MarkMessagesAsReadAsync(Guid chatId, Guid readerId, CancellationToken ct = default)
         {
-            var messages = await _context.Messages
+           var now = UtcDateTime.Now;
+
+            var updated = await _context.Messages
                 .Where(m => m.ChatId == chatId
                          && m.SenderId != readerId
                          && m.ReadTime == null)
-                .ToListAsync(ct);
-
-            var now = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
-            foreach (var msg in messages)
-            {
-                msg.ReadTime = now;
-                msg.DeliveryStatus = MessageDeliveryStatus.Read;
-            }
-
-            await _context.SaveChangesAsync(ct);
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(m => m.ReadTime, now)
+                    .SetProperty(m => m.DeliveryStatus, MessageDeliveryStatus.Read),
+                ct);
+            
             await _cache.RemoveAsync($"user:{readerId:N}:chats", ct);
             _logger.LogInformation("MarkAsRead: chatId={ChatId} count={Count}, messages cache kept, user chats cache invalidated",
-                chatId, messages.Count);
-            return messages.Count;
+                chatId, updated);
+            return updated;
         }
 
         public async Task<IEnumerable<Message>> GetMessagesAsync(Guid chatId, CancellationToken token = default)
@@ -154,7 +191,7 @@ namespace Messenger.Infrastructure.Services
                     SenderId = senderId,
                     MessageText = content ?? string.Empty,
                     HasAttachments = hasAttachments,
-                    SendTime = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified),
+                    SendTime = UtcDateTime.Now,
                     DeliveryStatus = MessageDeliveryStatus.Pending
                 };
 
@@ -252,7 +289,7 @@ namespace Messenger.Infrastructure.Services
                     SenderId = m.SenderId,
                     SenderName = senderName,
                     Text = text,
-                    SentAt = m.SendTime,
+                    SentAt = Messenger.Core.Models.UtcDateTime.AsUtc(m.SendTime),
                     Status = m.DeliveryStatus.ToString(),
                     HasAttachments = m.HasAttachments,
                     Attachments = m.Attachments?.Select(a => new
@@ -485,7 +522,7 @@ namespace Messenger.Infrastructure.Services
                     ? $"{m.Sender.FirstName} {m.Sender.LastName}".Trim()
                     : "Пользователь",
                 MessageText = decryptedText,
-                SentAt = m.SendTime,
+                SentAt = Messenger.Core.Models.UtcDateTime.AsUtc(m.SendTime),
                 SequenceNumber = m.SequenceNumber,
                 Status = m.DeliveryStatus.ToString(),
                 Attachments = m.Attachments?.Select(a => new AttachmentDto
@@ -496,7 +533,11 @@ namespace Messenger.Infrastructure.Services
                     SizeInBytes = a.SizeInBytes ?? 0,
                     Url = a.Url
                 }).ToList() ?? new List<AttachmentDto>(),
-                Reactions = reactionGroups
+                Reactions = reactionGroups,
+                IsPinned = m.IsPinned,
+                PinnedAt = m.PinnedAt.HasValue
+                    ? Messenger.Core.Models.UtcDateTime.AsUtc(m.PinnedAt.Value)
+                    : null
             };
         }
         private async Task AddMessageAsync(Message message, CancellationToken token = default)
@@ -520,7 +561,20 @@ namespace Messenger.Infrastructure.Services
                 await _context.Messages.AddAsync(message, token);
                 await _context.SaveChangesAsync(token);
                 await transaction.CommitAsync(token);
-                await InvalidateMessageCachesAsync(message.ChatId, token);
+
+                var forCache = await _context.Messages
+                    .AsNoTracking()
+                    .Include(m => m.Sender)
+                    .Include(m => m.Attachments)
+                    .Include(m => m.Reactions).ThenInclude(r => r.User)
+                    .FirstOrDefaultAsync(m => m.MessageId == message.MessageId, token);
+
+                if (forCache is not null)
+                    await PrependMessageToCachesAsync(forCache, token);
+                else
+                    await InvalidateMessageCachesAsync(message.ChatId, token);
+
+                await InvalidateUserChatsCacheAsync(message.ChatId, token);
             }
             catch
             {
@@ -544,19 +598,19 @@ namespace Messenger.Infrastructure.Services
                 if (cached is not null && cached.Items is { Count: > 0 })
                 {
                     var fromCache = cached.Items.Select(ToMessage).ToList();
-                    _logger.LogInformation(
+                    _logger.LogDebug(
                         "GetMessages: source=Redis chatId={ChatId} limit={Limit} count={Count}",
                         chatId, limit, fromCache.Count);
                     return (fromCache, cached.HasMore);
                 }
 
-                _logger.LogInformation(
+                _logger.LogDebug(
                     "GetMessages: source=PostgreSQL chatId={ChatId} limit={Limit} (cache miss)",
                     chatId, limit);
             }
             else
             {
-                _logger.LogInformation(
+                _logger.LogDebug(
                     "GetMessages: source=PostgreSQL chatId={ChatId} beforeSeq={Before} limit={Limit} (cursor page, без кэша)",
                     chatId, beforeSequence, limit);
             }
@@ -613,6 +667,8 @@ namespace Messenger.Infrastructure.Services
             DeliveryStatus = m.DeliveryStatus,
             ReadTime = m.ReadTime,
             HasAttachments = m.HasAttachments,
+            IsPinned = m.IsPinned,
+            PinnedAt = m.PinnedAt,
             Attachments = (m.Attachments ?? Enumerable.Empty<Attachment>())
                 .Select(a => new CachedAttachmentItem
                 {
@@ -643,6 +699,8 @@ namespace Messenger.Infrastructure.Services
             DeliveryStatus = c.DeliveryStatus,
             ReadTime = c.ReadTime,
             HasAttachments = c.HasAttachments,
+            IsPinned = c.IsPinned,
+            PinnedAt = c.PinnedAt,
             Sender = new User
             {
                 UserId = c.SenderId,
@@ -669,5 +727,62 @@ namespace Messenger.Infrastructure.Services
                 }
             }).ToList()
         };
+
+        public async Task<Message?> PinMessageAsync(Guid messageId, Guid userId, CancellationToken token = default)
+        {
+            var message = await _context.Messages
+                .FirstOrDefaultAsync(m => m.MessageId == messageId, token);
+            if (message == null)
+                return null;
+
+            var isParticipant = await _context.ChatParticipants
+                .AsNoTracking()
+                .AnyAsync(p => p.ChatId == message.ChatId && p.UserId == userId, token);
+            if (!isParticipant)
+                throw new UnauthorizedAccessException("Вы не участник этого чата");
+
+            if (message.IsPinned)
+                return message;
+
+            message.IsPinned = true;
+            message.PinnedAt = Messenger.Core.Models.UtcDateTime.Now;
+            await _context.SaveChangesAsync(token);
+            await InvalidateMessageCachesAsync(message.ChatId, token);
+            return message;
+        }
+
+        public async Task<Message?> UnpinMessageAsync(Guid messageId, Guid userId, CancellationToken token = default)
+        {
+            var message = await _context.Messages
+                .FirstOrDefaultAsync(m => m.MessageId == messageId, token);
+            if (message == null)
+                return null;
+
+            var isParticipant = await _context.ChatParticipants
+                .AsNoTracking()
+                .AnyAsync(p => p.ChatId == message.ChatId && p.UserId == userId, token);
+            if (!isParticipant)
+                throw new UnauthorizedAccessException("Вы не участник этого чата");
+
+            if (!message.IsPinned)
+                return message;
+
+            message.IsPinned = false;
+            message.PinnedAt = null;
+            await _context.SaveChangesAsync(token);
+            await InvalidateMessageCachesAsync(message.ChatId, token);
+            return message;
+        }
+
+        public async Task<List<Message>> GetPinnedMessagesAsync(Guid chatId, CancellationToken token = default)
+        {
+            return await _context.Messages
+                .AsNoTracking()
+                .Where(m => m.ChatId == chatId && m.IsPinned)
+                .OrderBy(m => m.PinnedAt)
+                .ThenBy(m => m.SequenceNumber)
+                .Include(m => m.Sender)
+                .ToListAsync(token);
+        }
     }
 }

@@ -7,11 +7,7 @@ namespace Messenger.Core.Interfaces
     public interface IUserService
     {
         Task<User?> GetUserByIdAsync(Guid id, CancellationToken token = default);
-        Task<bool> IsBlockedByAsync(Guid blockerId, Guid blockedId, CancellationToken token = default);
-        Task<IEnumerable<User>> GetBlockedUsersAsync(Guid userId, CancellationToken token = default);
         Task<IEnumerable<User>> GetAllUsersAsync(CancellationToken token = default);
-        Task BlockUserAsync(Guid userId, Guid blockedUserId, CancellationToken token = default);
-        Task UnblockUserAsync(Guid userId, Guid blockedUserId, CancellationToken token = default);
         Task UpdateProfileAsync(Guid userId, UpdateUserProfileRequest request, string? avatarUrl = null, 
             CancellationToken token = default);
         Task<string> UploadAvatarAsync(Guid userId, IFormFile file, CancellationToken token = default);

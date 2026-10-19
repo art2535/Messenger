@@ -42,22 +42,6 @@ namespace Messenger.Infrastructure.Services
             }
         }
 
-        public async Task BlockUserAsync(Guid userId, Guid blockedUserId, CancellationToken token = default)
-        {
-            bool alreadyExists = await _context.Blacklists
-                .AnyAsync(b => b.UserId == userId && b.BlockedUserId == blockedUserId, token);
-            if (!alreadyExists)
-            {
-                _context.Blacklists.Add(new Blacklist
-                {
-                    UserId = userId,
-                    BlockedUserId = blockedUserId,
-                    BlockDate = DateTime.Now
-                });
-                await _context.SaveChangesAsync(token);
-            }
-        }
-
         public async Task DeleteAccountAsync(Guid userId, CancellationToken token = default)
         {
             var userToDelete = await _context.Users.FindAsync(userId);
@@ -100,7 +84,6 @@ namespace Messenger.Infrastructure.Services
             {
                 user.Account = new AccountSetting
                 {
-                    SettingId = Guid.NewGuid(),
                     AccountId = userId
                 };
                 _context.AccountSettings.Add(user.Account);
@@ -162,17 +145,6 @@ namespace Messenger.Infrastructure.Services
             await _context.SaveChangesAsync(token);
         }
 
-        public async Task UnblockUserAsync(Guid userId, Guid blockedUserId, CancellationToken token = default)
-        {
-            var blockedUser = await _context.Blacklists
-                .FirstOrDefaultAsync(b => b.UserId == userId && b.BlockedUserId == blockedUserId, token);
-            if (blockedUser != null)
-            {
-                _context.Blacklists.Remove(blockedUser);
-                await _context.SaveChangesAsync(token);
-            }
-        }
-
         public async Task<IEnumerable<UserSearch>> SearchUsersAsync(string search, CancellationToken token = default)
         {
             if (string.IsNullOrWhiteSpace(search))
@@ -206,17 +178,6 @@ namespace Messenger.Infrastructure.Services
                 .ToList();
         }
 
-        public async Task<IEnumerable<User>> GetBlockedUsersAsync(Guid userId, CancellationToken token = default)
-        {
-            return await _context.Blacklists
-                .AsNoTracking()
-                .Where(b => b.UserId == userId)
-                .Include(b => b.BlockedUser)
-                    .ThenInclude(u => u.Account)
-                .Select(b => b.BlockedUser!)
-                .ToListAsync(token);
-        }
-
         public async Task UpdateProfileAsync(Guid userId, UpdateUserProfileRequest request,
             string? avatarUrl = null, CancellationToken token = default)
         {
@@ -236,12 +197,6 @@ namespace Messenger.Infrastructure.Services
 
             _context.Users.Update(user);
             await _context.SaveChangesAsync(token);
-        }
-
-        public async Task<bool> IsBlockedByAsync(Guid blockerId, Guid blockedId, CancellationToken token = default)
-        {
-            return await _context.Blacklists
-                .AnyAsync(ub => ub.UserId == blockerId && ub.BlockedUserId == blockedId, token);
         }
 
         public async Task<User?> GetUserByExternalIdAsync(string externalId)
@@ -269,7 +224,6 @@ namespace Messenger.Infrastructure.Services
                 RegistrationDate = DateOnly.FromDateTime(DateTime.UtcNow),
                 Account = new AccountSetting
                 {
-                    SettingId = Guid.NewGuid(),
                     AccountId = userId
                 },
                 UserStatus = new UserStatus

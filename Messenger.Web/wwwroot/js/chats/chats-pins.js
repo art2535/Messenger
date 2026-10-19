@@ -163,28 +163,27 @@ function setPinnedViewIndex(chatId, idx) {
     pinnedViewIndex.set(String(chatId), n);
 }
 
-function pinMessage(chatId, messageId, text) {
+function applyPinnedLocal(chatId, messageId, text, pinnedAt) {
     if (!chatId || !messageId) return;
     let list = getPinnedMessages(chatId);
     if (list.some(p => String(p.messageId) === String(messageId))) {
-        showToast('Уже закреплено', 'info');
         updatePinnedMessageBar();
+        highlightPinnedMessageInView();
         return;
     }
     list = list.concat([{
         messageId: String(messageId),
         text: (text || '').slice(0, 200),
-        pinnedAt: Date.now()
+        pinnedAt: pinnedAt ? new Date(pinnedAt).getTime() : Date.now()
     }]);
     setPinnedMessages(chatId, list);
     setPinnedViewIndex(chatId, list.length - 1);
     pinnedBarDismissed.delete(String(chatId));
     updatePinnedMessageBar();
     highlightPinnedMessageInView();
-    showToast('Сообщение закреплено', 'success');
 }
 
-function unpinMessage(chatId, messageId) {
+function applyUnpinnedLocal(chatId, messageId) {
     if (!chatId) return;
     let list = getPinnedMessages(chatId);
     if (messageId) {
@@ -199,7 +198,95 @@ function unpinMessage(chatId, messageId) {
     updatePinnedMessageBar();
     document.querySelectorAll('.message-row-pinned').forEach(el => el.classList.remove('message-row-pinned'));
     highlightPinnedMessageInView();
-    showToast('Сообщение откреплено', 'info');
+}
+
+async function pinMessage(chatId, messageId, text) {
+    if (!chatId || !messageId) return;
+    if (isMessagePinned(chatId, messageId)) {
+        showToast('Уже закреплено', 'info');
+        updatePinnedMessageBar();
+        return;
+    }
+    applyPinnedLocal(chatId, messageId, text, Date.now());
+    try {
+        const res = await fetchWithAuth(`${API_BASE}/messages/${messageId}/pin`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            applyUnpinnedLocal(chatId, messageId);
+            throw new Error(err.error || err.Error || `HTTP ${res.status}`);
+        }
+        const body = await res.json().catch(() => ({}));
+        const data = body.data || body.Data || {};
+        if (data.text) applyPinnedLocal(chatId, messageId, data.text, data.pinnedAt || data.PinnedAt);
+        showToast('Сообщение закреплено', 'success');
+    } catch (err) {
+        console.error('Ошибка закрепления:', err);
+        showToast(err.message || 'Не удалось закрепить', 'error');
+    }
+}
+
+async function unpinMessage(chatId, messageId) {
+    if (!chatId) return;
+    const mid = messageId || (getPinnedMessages(chatId)[getPinnedViewIndex(chatId)] || {}).messageId;
+    if (!mid) return;
+    applyUnpinnedLocal(chatId, mid);
+    try {
+        const res = await fetchWithAuth(`${API_BASE}/messages/${mid}/pin`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.error || err.Error || `HTTP ${res.status}`);
+        }
+        showToast('Сообщение откреплено', 'info');
+    } catch (err) {
+        console.error('Ошибка открепления:', err);
+        showToast(err.message || 'Не удалось открепить', 'error');
+    }
+}
+
+async function syncPinnedMessagesFromServer(chatId) {
+    if (!chatId || typeof fetchWithAuth !== 'function' || !API_BASE) return;
+    try {
+        const res = await fetchWithAuth(`${API_BASE}/messages/${chatId}/pinned`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!res.ok) return;
+        const body = await res.json().catch(() => ({}));
+        const list = body.data || body.Data || [];
+        const mapped = (Array.isArray(list) ? list : []).map(p => ({
+            messageId: String(p.messageId || p.MessageId),
+            text: (p.text || p.Text || '').slice(0, 200),
+            pinnedAt: p.pinnedAt || p.PinnedAt
+                ? new Date(p.pinnedAt || p.PinnedAt).getTime()
+                : Date.now()
+        }));
+        setPinnedMessages(chatId, mapped);
+        if (mapped.length) setPinnedViewIndex(chatId, 0);
+        else pinnedViewIndex.delete(String(chatId));
+        pinnedBarDismissed.delete(String(chatId));
+        updatePinnedMessageBar();
+        highlightPinnedMessageInView();
+    } catch (err) {
+        console.warn('syncPinnedMessagesFromServer failed', err);
+    }
+}
+
+function handleMessagePinnedEvent(data) {
+    if (!data) return;
+    const chatId = String(data.chatId || data.ChatId || '');
+    const messageId = String(data.messageId || data.MessageId || '');
+    const isPinned = !!(data.isPinned ?? data.IsPinned);
+    if (!chatId || !messageId) return;
+    if (isPinned) {
+        applyPinnedLocal(chatId, messageId, data.text || data.Text || '', data.pinnedAt || data.PinnedAt);
+    } else {
+        applyUnpinnedLocal(chatId, messageId);
+    }
 }
 
 function updatePinnedMessageBar() {

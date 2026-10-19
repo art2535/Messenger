@@ -1,7 +1,9 @@
 using Messenger.Infrastructure.Data;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using StackExchange.Redis;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 
 namespace Messenger.API.Extensions
@@ -12,12 +14,20 @@ namespace Messenger.API.Extensions
         {
             public IServiceCollection AddMessengerHealthChecks()
             {
-                services.AddHealthChecks()
+                var builder = services.AddHealthChecks()
                     .AddCheck("self", () => HealthCheckResult.Healthy("API is running"), tags: new[] { "live" })
                     .AddDbContextCheck<GuapMessengerContext>(
                         name: "postgresql",
                         failureStatus: HealthStatus.Unhealthy,
                         tags: new[] { "ready", "db" });
+
+                if (services.Any(d => d.ServiceType == typeof(IConnectionMultiplexer)))
+                {
+                    builder.AddCheck<RedisHealthCheck>(
+                        name: "redis",
+                        failureStatus: HealthStatus.Degraded,
+                        tags: new[] { "ready", "cache" });
+                }
 
                 return services;
             }
@@ -46,7 +56,14 @@ namespace Messenger.API.Extensions
 
                 return app;
             }
-        }        
+        }
+
+        private static readonly JsonSerializerOptions HealthJsonOptions = new()
+        {
+            WriteIndented = true,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+        };
 
         private static async Task WriteJsonResponse(HttpContext context, HealthReport report)
         {
@@ -63,16 +80,13 @@ namespace Messenger.API.Extensions
                         status = e.Value.Status.ToString(),
                         description = e.Value.Description,
                         duration = e.Value.Duration.ToString(),
-                        error = e.Value.Exception?.Message
+                        error = e.Value.Exception?.Message,
+                        data = e.Value.Data.Count > 0 ? e.Value.Data : null
                     })
             };
 
             await context.Response.WriteAsync(
-                JsonSerializer.Serialize(payload, new JsonSerializerOptions
-                {
-                    WriteIndented = true,
-                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-                }),
+                JsonSerializer.Serialize(payload, HealthJsonOptions),
                 Encoding.UTF8);
         }
     }

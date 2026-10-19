@@ -10,9 +10,6 @@ namespace Messenger.Core.Models;
 public partial class AccountSetting
 {
     [Key]
-    [Column("Setting_ID")]
-    public Guid SettingId { get; set; }
-
     [Column("Account_ID")]
     public Guid AccountId { get; set; }
 
@@ -32,5 +29,5 @@ public partial class AccountSetting
 
     [InverseProperty("Account")]
     [JsonIgnore]
-    public virtual ICollection<User> Users { get; set; } = new List<User>();
+    public virtual User User { get; set; } = null!;
 }

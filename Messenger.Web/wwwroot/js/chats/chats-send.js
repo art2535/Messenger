@@ -85,8 +85,8 @@ async function fetchLastVisibleMessage(chatId) {
         const sa = Number(a.sequenceNumber ?? a.SequenceNumber ?? 0);
         const sb = Number(b.sequenceNumber ?? b.SequenceNumber ?? 0);
         if (sa || sb) return sa >= sb ? a : b;
-        const ta = new Date(a.sentAt || a.SentAt || 0).getTime();
-        const tb = new Date(b.sentAt || b.SentAt || 0).getTime();
+        const ta = (typeof parseMessageDate === 'function' ? parseMessageDate(a.sentAt || a.SentAt) : new Date(a.sentAt || a.SentAt || 0))?.getTime() || 0;
+        const tb = (typeof parseMessageDate === 'function' ? parseMessageDate(b.sentAt || b.SentAt) : new Date(b.sentAt || b.SentAt || 0))?.getTime() || 0;
         return ta >= tb ? a : b;
     });
 }
@@ -146,8 +146,8 @@ async function runChatListSyncAfterDelete(chatId) {
     chatItem.dataset.lastMessageId = String(last.messageId || last.MessageId || '');
     chatItem.dataset.lastMessageStatus = status || '';
     if (sentAt) {
-        const d = new Date(sentAt);
-        if (!isNaN(d.getTime())) chatItem.dataset.lastMessageAt = d.toISOString();
+        const d = typeof parseMessageDate === 'function' ? parseMessageDate(sentAt) : new Date(sentAt);
+        if (d && !isNaN(d.getTime())) chatItem.dataset.lastMessageAt = d.toISOString();
     }
     if (typeof reorderUnpinnedChatsByLastActivity === 'function') reorderUnpinnedChatsByLastActivity();
 }
@@ -200,7 +200,13 @@ function refreshChatListPreviewFromDom(chatId, options = {}) {
         updateChatLastMessagePreview(chatId, text, attachments, sentAt, isMine, status);
         chatItem.dataset.lastMessageId = mid;
         chatItem.dataset.lastMessageStatus = status || '';
-        if (sentAt) chatItem.dataset.lastMessageAt = sentAt;
+        if (sentAt) {
+            try {
+                const d = typeof parseMessageDate === 'function' ? parseMessageDate(sentAt) : new Date(sentAt);
+                if (d && !isNaN(d.getTime())) chatItem.dataset.lastMessageAt = d.toISOString();
+                else chatItem.dataset.lastMessageAt = String(sentAt);
+            } catch (_) { chatItem.dataset.lastMessageAt = String(sentAt); }
+        }
         if (doReorder && typeof reorderUnpinnedChatsByLastActivity === 'function') {
             reorderUnpinnedChatsByLastActivity();
         }
@@ -235,8 +241,8 @@ function refreshChatListPreviewFromDom(chatId, options = {}) {
                     const sa = a.sequenceNumber ?? a.SequenceNumber ?? 0;
                     const sb = b.sequenceNumber ?? b.SequenceNumber ?? 0;
                     if (sa || sb) return sa >= sb ? a : b;
-                    const ta = new Date(a.sentAt || a.SentAt || a.sendTime || a.SendTime || 0).getTime();
-                    const tb = new Date(b.sentAt || b.SentAt || b.sendTime || b.SendTime || 0).getTime();
+                    const ta = (typeof parseMessageDate === 'function' ? parseMessageDate(a.sentAt || a.SentAt || a.sendTime || a.SendTime) : new Date(a.sentAt || a.SentAt || a.sendTime || a.SendTime || 0))?.getTime() || 0;
+                    const tb = (typeof parseMessageDate === 'function' ? parseMessageDate(b.sentAt || b.SentAt || b.sendTime || b.SendTime) : new Date(b.sentAt || b.SentAt || b.sendTime || b.SendTime || 0))?.getTime() || 0;
                     return ta >= tb ? a : b;
                 });
             }
@@ -260,8 +266,8 @@ function refreshChatListPreviewFromDom(chatId, options = {}) {
             chatItem.dataset.lastMessageStatus = status || '';
             if (sentAt) {
                 try {
-                    const d = new Date(sentAt);
-                    if (!isNaN(d.getTime())) chatItem.dataset.lastMessageAt = d.toISOString();
+                    const d = typeof parseMessageDate === 'function' ? parseMessageDate(sentAt) : new Date(sentAt);
+                    if (d && !isNaN(d.getTime())) chatItem.dataset.lastMessageAt = d.toISOString();
                 } catch (_) {}
             }
         })
@@ -449,19 +455,67 @@ async function sendMessage() {
         if (text) formData.append('messageText', text);
         selectedFiles.forEach(file => formData.append('files', file));
 
-        const res = await fetchWithAuth(`${API_BASE}/messages/${currentChatId}`, {
-            method: 'POST',
-            body: formData
-        });
+        const controller = new AbortController();
+        const abortTimer = setTimeout(() => controller.abort(), 12000);
+
+        let res;
+        try {
+            res = await fetchWithAuth(`${API_BASE}/messages/${currentChatId}`, {
+                method: 'POST',
+                body: formData,
+                signal: controller.signal
+            });
+        } catch (fetchErr) {
+            if (fetchErr && (fetchErr.name === 'AbortError' || controller.signal.aborted)) {
+                updateMessageStatus(tempId, 'failed', 'Лимит отправки');
+                const msg = 'Слишком много запросов. Подождите немного и попробуйте снова.';
+                if (typeof showAlert === 'function') {
+                    showAlert(msg, { type: 'warning', title: 'Слишком часто', okText: 'Понятно' });
+                } else if (typeof showToast === 'function') {
+                    showToast(msg, 'warning', 6000);
+                }
+                return;
+            }
+            throw fetchErr;
+        } finally {
+            clearTimeout(abortTimer);
+        }
 
         if (!res) throw new Error('Нет ответа от сервера');
 
         if (isRateLimited(res)) {
-            updateMessageStatus(tempId, 'failed', 'Слишком часто');
+            const msg = typeof getRateLimitMessage === 'function'
+                ? getRateLimitMessage(res)
+                : 'Слишком много запросов. Подождите немного и попробуйте снова.';
+
+            updateMessageStatus(tempId, 'failed', 'Лимит отправки');
+
+            if (text && messageInput && !messageInput.value.trim()) {
+                const plain = (typeof parseReplyPayload === 'function')
+                    ? (parseReplyPayload(text).text || text)
+                    : text;
+                messageInput.value = plain;
+            }
+
+            if (typeof showAlert === 'function') {
+                showAlert(msg, { type: 'warning', title: 'Слишком часто', okText: 'Понятно' });
+            } else if (typeof showToast === 'function') {
+                showToast(msg, 'warning', 6000);
+            } else {
+                console.warn(msg);
+            }
             return;
         }
 
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) {
+            let serverError = `Ошибка сервера (${res.status})`;
+            try {
+                const errBody = await res.json();
+                if (errBody?.error) serverError = errBody.error;
+                else if (errBody?.message) serverError = errBody.message;
+            } catch { }
+            throw new Error(serverError);
+        }
 
         const result = await res.json();
         const serverMessageId = result?.data?.messageId || result?.messageId;
@@ -475,7 +529,9 @@ async function sendMessage() {
     } catch (err) {
         console.error('Ошибка отправки:', err);
         updateMessageStatus(tempId, 'failed', err.message || 'Ошибка');
-        showToast('Не удалось отправить сообщение', 'error');
+        if (typeof showToast === 'function') {
+            showToast(err.message || 'Не удалось отправить сообщение', 'error', 5000);
+        }
     } finally {
         isSending = false;
         sendButton.disabled = false;
@@ -757,8 +813,8 @@ function updateChatLastMessagePreview(chatId, messageText, attachments = [], sen
         if (sentAt === '' || sentAt === false) chatItem.dataset.lastMessageAt = '';
     } else {
         try {
-            const d = new Date(sentAt);
-            if (!isNaN(d.getTime())) chatItem.dataset.lastMessageAt = d.toISOString();
+            const d = typeof parseMessageDate === 'function' ? parseMessageDate(sentAt) : new Date(sentAt);
+            if (d && !isNaN(d.getTime())) chatItem.dataset.lastMessageAt = d.toISOString();
         } catch (_) {
             chatItem.dataset.lastMessageAt = String(sentAt);
         }
@@ -855,10 +911,10 @@ function appendOptimisticMessage(text, files, tempId) {
         if (stillExists) {
             const statusEl = stillExists.querySelector('.message-status');
             if (statusEl && statusEl.textContent.includes('Отправляется')) {
-                updateMessageStatus(tempId, 'failed', 'Таймаут подтверждения от сервера');
+                updateMessageStatus(tempId, 'failed', 'Нет ответа сервера');
             }
         }
-    }, 15000);
+    }, 20000);
 }
 
 function removeEmptyStateIfNeeded() {

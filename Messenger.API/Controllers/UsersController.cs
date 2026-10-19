@@ -23,12 +23,26 @@ namespace Messenger.API.Controllers
     public class UsersController : ControllerBase
     {
         private readonly IUserService _userService;
+        private readonly IChatService _chatService;
         private readonly IHubContext<ChatHub> _hubContext;
 
-        public UsersController(IUserService userService, IHubContext<ChatHub> hubContext)
+        public UsersController(IUserService userService, IChatService chatService, IHubContext<ChatHub> hubContext)
         {
             _userService = userService;
+            _chatService = chatService;
             _hubContext = hubContext;
+        }
+
+        private async Task SendProfileToPeersAsync(Guid userId, string method, object payload, CancellationToken token)
+        {
+            var peerIds = await _chatService.GetPeerUserIdsAsync(userId, token);
+            var groups = peerIds.Select(id => $"User_{id}").ToList();
+            if (groups.Count == 0)
+            {
+                await _hubContext.Clients.Group($"User_{userId}").SendAsync(method, payload, token);
+                return;
+            }
+            await _hubContext.Clients.Groups(groups).SendAsync(method, payload, token);
         }
 
         /// <summary>
@@ -306,7 +320,7 @@ namespace Messenger.API.Controllers
                 var newDisplayName = $"{updatedUser.FirstName} {updatedUser.LastName}".Trim();
                 var currentAvatar = updatedUser.Account?.Avatar;
 
-                await _hubContext.Clients.All.SendAsync("ProfileUpdated", new
+                await SendProfileToPeersAsync(user!.UserId, "ProfileUpdated", new
                 {
                     userId = user!.UserId.ToString(),
                     avatarUrl = currentAvatar,
@@ -372,7 +386,7 @@ namespace Messenger.API.Controllers
 
                 var avatarUrl = await _userService.UploadAvatarAsync(user!.UserId, avatarFile, token);
 
-                await _hubContext.Clients.All.SendAsync("AvatarUpdated", new
+                await SendProfileToPeersAsync(user!.UserId, "AvatarUpdated", new
                 {
                     userId = user!.UserId.ToString(),
                     avatarUrl = avatarUrl
@@ -464,11 +478,11 @@ namespace Messenger.API.Controllers
 
                 await _userService.DeleteAvatarAsync(user!.UserId, token);
 
-                await _hubContext.Clients.All.SendAsync("AvatarUpdated", new
+                await SendProfileToPeersAsync(user!.UserId, "AvatarUpdated", new
                 {
                     userId = user!.UserId.ToString(),
                     avatarUrl = (string?)null
-                });
+                }, token);
 
                 return Ok(new DeleteAvatarSuccessResponse
                 {

@@ -22,5 +22,8 @@ namespace Messenger.Core.Interfaces
         Task<int> MarkMessagesAsReadAsync(Guid chatId, Guid readerId, CancellationToken ct = default);
         Task<ChatExportResult> ExportChatAsync(Guid chatId, string format, string? chatName = null, CancellationToken token = default);
         Task PublishChatMessageAsync(ChatMessageSent message, CancellationToken cancellationToken = default);
+        Task<Message?> PinMessageAsync(Guid messageId, Guid userId, CancellationToken token = default);
+        Task<Message?> UnpinMessageAsync(Guid messageId, Guid userId, CancellationToken token = default);
+        Task<List<Message>> GetPinnedMessagesAsync(Guid chatId, CancellationToken token = default);
     }
 }

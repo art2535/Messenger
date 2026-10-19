@@ -399,3 +399,5 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+# Serilog file sinks
+**/logs/
