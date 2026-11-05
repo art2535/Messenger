@@ -21,12 +21,6 @@ namespace Messenger.Web
 
             var builder = WebApplication.CreateBuilder(args);
 
-            Console.WriteLine("=============================================================");
-            Console.WriteLine($"[WEB DEBUG] Среда: {builder.Environment.EnvironmentName}");
-            Console.WriteLine($"[WEB DEBUG] ASPNETCORE_URLS: '{builder.Configuration["ASPNETCORE_URLS"]}'");
-            Console.WriteLine($"[WEB DEBUG] ASPNETCORE_HTTPS_PORTS: '{builder.Configuration["ASPNETCORE_HTTPS_PORTS"]}'");
-            Console.WriteLine("=============================================================");
-
             builder.ConfigureDevelopmentCertificate();
 
             builder.AddMessengerSerilog("Messenger.Web");
