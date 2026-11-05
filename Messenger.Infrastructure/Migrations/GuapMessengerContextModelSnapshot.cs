@@ -749,10 +749,6 @@ namespace Messenger.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("User_ID");
 
-                    b.Property<Guid>("AccountId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("Account_ID");
-
                     b.Property<string>("ExternalId")
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)")

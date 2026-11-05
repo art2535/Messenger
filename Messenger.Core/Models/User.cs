@@ -10,9 +10,6 @@ public partial class User
     [Column("User_ID")]
     public Guid UserId { get; set; }
 
-    [Column("Account_ID")]
-    public Guid AccountId { get; set; }
-
     [Column("Last_Name")]
     [StringLength(50)]
     public string LastName { get; set; } = null!;
@@ -31,7 +28,6 @@ public partial class User
     [StringLength(255)]
     public string? ExternalId { get; set; }
 
-    [ForeignKey("AccountId")]
     [InverseProperty("User")]
     [JsonIgnore]
     public virtual AccountSetting Account { get; set; } = null!;
