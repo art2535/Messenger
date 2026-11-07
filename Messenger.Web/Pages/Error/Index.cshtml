@@ -1,5 +1,5 @@
-﻿@page
-@model ErrorModel
+﻿@page "/error"
+@model Messenger.Web.Pages.Error.ErrorModel
 @{
     ViewData["Title"] = "Ошибка";
     Layout = "_Layout";
@@ -28,7 +28,7 @@
             </p>
             <div class="error-actions">
                 <a href="/" class="btn-guap-primary">На главную</a>
-                <a href="/Authorization" class="btn-guap-secondary">Войти в мессенджер</a>
+                <a href="/login" class="btn-guap-secondary">Войти в мессенджер</a>
             </div>
             <div class="error-hint">
                 Мессенджер ГУАП при локальной отладке включите окружение

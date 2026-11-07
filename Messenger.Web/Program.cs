@@ -106,7 +106,7 @@ namespace Messenger.Web
 
             if (!app.Environment.IsDevelopment())
             {
-                app.UseExceptionHandler("/Error");
+                app.UseExceptionHandler("/Error/Index");
                 app.UseHsts();
             }
 

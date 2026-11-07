@@ -1,6 +1,6 @@
-@page
+@page "/login"
 @using System.Text.Json;
-@model Messenger.Web.Pages.Authorization.AuthorizationModel
+@model Messenger.Web.Pages.Login.IndexModel
 @{
     ViewData["Title"] = "Вход в систему";
     Layout = "_Layout";
@@ -21,7 +21,7 @@
         <h1>GUAP Messenger</h1>
         <p class="auth-subtitle">Войдите через систему ЕТА ГУАП</p>
 
-        <a href="/Authorization/Authorization?handler=EtaLogin" class="auth-login-btn">
+        <a href="/login/eta" class="auth-login-btn">
             <i data-feather="log-in"></i>
             <span>Войти через ЕТА ГУАП</span>
         </a>
@@ -31,13 +31,18 @@
 </div>
 
 <script>
-    // После выхода очищаем клиентский token, чтобы session-cleanup и SignalR не слали запросы
     (function () {
         try {
             const params = new URLSearchParams(window.location.search);
             if (params.get('loggedOut') === 'true' || params.get('loggedOut') === 'True') {
                 localStorage.removeItem('token');
+                if (window.history && window.history.replaceState) {
+                    window.history.replaceState({}, document.title, '/login');
+                }
             }
+        } catch (e) { }
+        try {
+            localStorage.removeItem('token');
         } catch (e) { }
     })();
     window.AUTH_ERRORS = [];

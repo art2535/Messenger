@@ -13,14 +13,14 @@ using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Security.Claims;
 
-namespace Messenger.Web.Pages.Authorization
+namespace Messenger.Web.Pages.Login
 {
     [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
     [AllowAnonymous]
-    public class AuthorizationModel : PageModel
+    public class IndexModel : PageModel
     {
         private readonly ApiHelper _api;
-        private readonly ILogger<AuthorizationModel> _logger;
+        private readonly ILogger<IndexModel> _logger;
         private readonly IHubContext<ChatHub> _hubContext;
 
         public string ErrorMessage { get; private set; } = string.Empty;
@@ -28,7 +28,7 @@ namespace Messenger.Web.Pages.Authorization
         [BindProperty(SupportsGet = true)]
         public bool LoggedOut { get; set; }
 
-        public AuthorizationModel(ApiHelper api, ILogger<AuthorizationModel> logger, IHubContext<ChatHub> hubContext)
+        public IndexModel(ApiHelper api, ILogger<IndexModel> logger, IHubContext<ChatHub> hubContext)
         {
             _api = api;
             _logger = logger;
@@ -56,26 +56,28 @@ namespace Messenger.Web.Pages.Authorization
 
                 if (!string.IsNullOrEmpty(accessToken))
                 {
-                    var loginRequest = new CreateLoginRequest
-                    {
-                        Token = accessToken,
-                        IpAddress = GetLocalIPv4()
-                    };
-
-                    var response = await LoginAsync(loginRequest);
-                    if (!response.IsSuccessStatusCode)
-                    {
-                        _logger.LogWarning("Не удалось записать вход, но пользователь аутентифицирован. Продолжаем.");
-                    }
-                    else
-                    {
-                        await SendToSignalRAsync(accessToken, new UpdateStatusRequest { Online = true });
-                    }
-
                     HttpContext.Session.SetString("ACCESS_TOKEN", accessToken);
+                    var tokenCopy = accessToken;
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            var loginRequest = new CreateLoginRequest
+                            {
+                                Token = tokenCopy,
+                                IpAddress = GetLocalIPv4()
+                            };
+                            await LoginAsync(loginRequest);
+                            await SendToSignalRAsync(tokenCopy, new UpdateStatusRequest { Online = true });
+                        }
+                        catch (Exception bgEx)
+                        {
+                            _logger.LogWarning(bgEx, "Фоновая запись входа при уже аутентифицированном OnGet");
+                        }
+                    });
                 }
 
-                return RedirectToPage("/Account/Chats", new { tokenSaved = true });
+                return RedirectToPage("/Inside/Chats/Index");
             }
 
             return Page();
@@ -86,34 +88,29 @@ namespace Messenger.Web.Pages.Authorization
             if (User.Identity?.IsAuthenticated == true)
             {
                 var accessToken = await HttpContext.GetTokenAsync("access_token");
-
                 if (!string.IsNullOrEmpty(accessToken))
                 {
-                    var loginRequest = new CreateLoginRequest
-                    {
-                        Token = accessToken,
-                        IpAddress = GetLocalIPv4()
-                    };
-
-                    var response = await LoginAsync(loginRequest);
-                    if (!response.IsSuccessStatusCode)
-                    {
-                        ErrorMessage = "Ошибка записи входа в аккаунт";
-                        _logger.LogError("Ошибка записи входа в аккаунт");
-                        return Page();
-                    }
-
-                    await SendToSignalRAsync(accessToken, new UpdateStatusRequest { Online = true });
-
                     HttpContext.Session.SetString("ACCESS_TOKEN", accessToken!);
+                    var tokenCopy = accessToken;
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await LoginAsync(new CreateLoginRequest { Token = tokenCopy, IpAddress = GetLocalIPv4() });
+                            await SendToSignalRAsync(tokenCopy, new UpdateStatusRequest { Online = true });
+                        }
+                        catch (Exception bgEx)
+                        {
+                            _logger.LogWarning(bgEx, "Фоновая запись входа (EtaLogin)");
+                        }
+                    });
                 }
-                
-                return RedirectToPage("/Account/Chats", new { tokenSaved = true });
+                return RedirectToPage("/Inside/Chats/Index");
             }
 
             var properties = new AuthenticationProperties
             {
-                RedirectUri = Url.Page("/Authorization/Authorization", "Callback")
+                RedirectUri = Url.Page("/Login/Index", "Callback")
             };
 
             return Challenge(properties, OpenIdConnectDefaults.AuthenticationScheme);
@@ -126,7 +123,7 @@ namespace Messenger.Web.Pages.Authorization
             if (string.IsNullOrEmpty(externalId))
             {
                 ErrorMessage = "Нет externalId";
-                return RedirectToPage("/Authorization/Authorization", new { error = "Нет externalId" });
+                return RedirectToPage("/Login/Index", new { error = "Нет externalId" });
             }
 
             var firstName = User.FindFirst(ClaimTypes.GivenName)?.Value ?? "ЕТА";
@@ -163,23 +160,26 @@ namespace Messenger.Web.Pages.Authorization
                     return Page();
                 }
 
-                var loginRequest = new CreateLoginRequest
-                {
-                    Token = accessToken,
-                    IpAddress = GetLocalIPv4()
-                };
-
-                var loginResponse = await LoginAsync(loginRequest);
-                if (!loginResponse.IsSuccessStatusCode)
-                {
-                    var error = await loginResponse.Content.ReadAsStringAsync();
-                    _logger.LogWarning("Ошибка записи входа: {StatusCode} - {Error}",
-                        loginResponse.StatusCode, error);
-                }
-
-                await SendToSignalRAsync(accessToken, new UpdateStatusRequest { Online = true });
-
                 HttpContext.Session.SetString("ACCESS_TOKEN", accessToken);
+
+                var tokenCopy = accessToken;
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        var loginRequest = new CreateLoginRequest
+                        {
+                            Token = tokenCopy,
+                            IpAddress = GetLocalIPv4()
+                        };
+                        await LoginAsync(loginRequest);
+                        await SendToSignalRAsync(tokenCopy, new UpdateStatusRequest { Online = true });
+                    }
+                    catch (Exception bgEx)
+                    {
+                        _logger.LogWarning(bgEx, "Фоновая запись входа/статуса после OIDC");
+                    }
+                });
             }
             catch (Exception ex)
             {
@@ -188,7 +188,7 @@ namespace Messenger.Web.Pages.Authorization
                 return Page();
             }
 
-            return RedirectToPage("/Account/Chats", new { tokenSaved = true });
+            return RedirectToPage("/Inside/Chats/Index");
         }
 
         private List<string> ExtractRolesFromClaims(ClaimsPrincipal user)

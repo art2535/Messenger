@@ -54,7 +54,7 @@ async function exportChat(chatId, format) {
         });
 
         if (res.status === 401 || res.status === 403) {
-            window.location.href = "/Authorization/Authorization";
+            window.location.href = "/login";
             return;
         }
         if (!res.ok) {

@@ -70,7 +70,7 @@ function getAuthToken() {
 
 async function fetchFreshToken() {
     try {
-        const res = await fetch('/Account/Settings?handler=Token', {
+        const res = await fetch('/inside/settings/profile?handler=Token', {
             credentials: 'same-origin',
             cache: 'no-store',
             headers: { 'Accept': 'application/json' }

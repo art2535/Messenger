@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
-namespace Messenger.Web.Pages
+namespace Messenger.Web.Pages.Privacy
 {
     public class PrivacyModel : PageModel
     {

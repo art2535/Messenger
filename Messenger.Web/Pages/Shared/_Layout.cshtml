@@ -4,7 +4,7 @@
     bool isPublicHeader = currentPath.Equals("/", StringComparison.OrdinalIgnoreCase)
         || currentPath.Equals("/Index", StringComparison.OrdinalIgnoreCase)
         || currentPath.Equals("/Privacy", StringComparison.OrdinalIgnoreCase)
-        || currentPath.StartsWith("/Authorization", StringComparison.OrdinalIgnoreCase);
+        || currentPath.StartsWith("/login", StringComparison.OrdinalIgnoreCase);
     bool isIndexPage = isPublicHeader;
 }
 
@@ -49,10 +49,10 @@
                     @if (isIndexPage)
                     {
                         <div class="d-none d-md-flex align-items-center gap-1 gap-lg-2">
-                            <a class="nav-link-header" asp-area="" asp-page="/Authorization/Authorization">Вход в систему</a>
+                            <a class="nav-link-header" asp-area="" asp-page="/Login/Index">Вход в систему</a>
                             <a class="nav-link-header" href="https://guap.ru/" target="_blank" rel="noopener">Сайт ГУАП</a>
                             <a class="nav-link-header" href="https://pro.guap.ru/inside/profile" target="_blank" rel="noopener">Личный кабинет ГУАП</a>
-                            <a class="nav-link-header" asp-area="" asp-page="/Privacy">Конфиденциальность</a>
+                            <a class="nav-link-header" asp-area="" asp-page="/Privacy/Index">Конфиденциальность</a>
                         </div>
                     }
 
@@ -76,10 +76,10 @@
         {
             <div id="mobileNav" class="d-md-none" aria-label="Мобильное меню">
                 <ul class="mobile-nav-list">
-                    <li><a class="mobile-nav-item" asp-area="" asp-page="/Authorization/Authorization">Вход в систему</a></li>
+                    <li><a class="mobile-nav-item" asp-area="" asp-page="/Login/Index">Вход в систему</a></li>
                     <li><a class="mobile-nav-item" href="https://guap.ru/" target="_blank" rel="noopener">Сайт ГУАП</a></li>
                     <li><a class="mobile-nav-item" href="https://pro.guap.ru/inside/profile" target="_blank" rel="noopener">Личный кабинет ГУАП</a></li>
-                    <li><a class="mobile-nav-item" asp-area="" asp-page="/Privacy">Конфиденциальность</a></li>
+                    <li><a class="mobile-nav-item" asp-area="" asp-page="/Privacy/Index">Конфиденциальность</a></li>
                     <li><a class="mobile-nav-item" asp-area="" asp-page="/Index">На главную</a></li>
                 </ul>
             </div>

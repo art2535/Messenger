@@ -6,11 +6,11 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using System.Security.Claims;
 
-namespace Messenger.Web.Pages.Account
+namespace Messenger.Web.Pages.Inside.Chats
 {
     [Authorize]
     [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
-    public class ChatsModel : PageModel
+    public class IndexModel : PageModel
     {
         private readonly ApiHelper _api;
         private static readonly Dictionary<string, string> RoleDisplayNames = new(StringComparer.OrdinalIgnoreCase)
@@ -37,13 +37,13 @@ namespace Messenger.Web.Pages.Account
         public string? UserRole { get; set; } = string.Empty;
         public string? AvatarUrl { get; set; }
 
-        [BindProperty(SupportsGet = true)]
-        public bool TokenSaved { get; set; }
-
         public string ApiBaseUrl { get; private set; } = string.Empty;
         public string HubUrl { get; private set; } = string.Empty;
 
-        public ChatsModel(ApiHelper api)
+        [BindProperty(SupportsGet = true)]
+        public Guid? ChatId { get; set; }
+
+        public IndexModel(ApiHelper api)
         {
             _api = api;
         }
@@ -69,8 +69,8 @@ namespace Messenger.Web.Pages.Account
 
         public async Task<IActionResult> OnGetAsync()
         {
-            if (User.Identity?.IsAuthenticated != true && !TokenSaved)
-                return RedirectToPage("/Authorization/Authorization");
+            if (User.Identity?.IsAuthenticated != true)
+                return RedirectToPage("/Login/Index");
 
             if (User.Identity?.IsAuthenticated == true)
             {

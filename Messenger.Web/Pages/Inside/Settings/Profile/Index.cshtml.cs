@@ -9,15 +9,15 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace Messenger.Web.Pages.Account
+namespace Messenger.Web.Pages.Inside.Settings.Profile
 {
     [Authorize]
     [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
-    public class SettingsModel : PageModel
+    public class IndexModel : PageModel
     {
         private readonly ApiHelper _api;
 
-        public SettingsModel(ApiHelper api)
+        public IndexModel(ApiHelper api)
         {
             _api = api;
         }
@@ -34,9 +34,6 @@ namespace Messenger.Web.Pages.Account
         [BindProperty]
         public bool DeleteAvatar { get; set; }
 
-        [BindProperty(SupportsGet = true)]
-        public bool TokenSaved { get; set; }
-
         public bool HasAvatar { get; private set; }
         public string? AvatarUrl { get; private set; }
         public UserProfileDto? CurrentUser { get; private set; }
@@ -47,10 +44,10 @@ namespace Messenger.Web.Pages.Account
         public async Task<IActionResult> OnGetAsync()
         {
             if (Request.Query.ContainsKey("handler") || Request.Query.ContainsKey("refreshed"))
-                return RedirectToPage("/Account/Settings", new { TokenSaved = true });
+                return RedirectToPage("/Inside/Settings/Profile/Index");
 
-            if (User.Identity?.IsAuthenticated != true && !TokenSaved)
-                return Redirect("/Authorization/Authorization");
+            if (User.Identity?.IsAuthenticated != true)
+                return Redirect("/login");
 
             await InitializeAsync();
             await LoadProfileAsync();
@@ -181,7 +178,7 @@ namespace Messenger.Web.Pages.Account
                 if (response.IsSuccessStatusCode)
                 {
                     TempData["SuccessMessage"] = "Настройки успешно сохранены";
-                    return RedirectToPage("/Account/Settings", new { TokenSaved = true });
+                    return RedirectToPage("/Inside/Settings/Profile/Index");
                 }
 
                 ModelState.AddModelError("", $"Ошибка обновления профиля: {response.StatusCode}");

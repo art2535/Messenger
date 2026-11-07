@@ -352,7 +352,7 @@
 
             if (!res) throw new Error('Нет ответа от сервера');
             if (res.status === 401) {
-                window.location.href = '/Authorization/Authorization';
+                window.location.href = '/login';
                 throw new Error('Сессия истекла');
             }
             if (!res.ok) {

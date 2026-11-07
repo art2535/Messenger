@@ -1,5 +1,5 @@
-﻿@page "{chatId?}"
-@model Messenger.Web.Pages.Account.ChatsModel
+﻿@page "/inside/chats/{chatId:guid?}"
+@model Messenger.Web.Pages.Inside.Chats.IndexModel
 @{
     ViewData["Title"] = "Чаты";
     Layout = null;
@@ -59,7 +59,7 @@
                         <i data-feather="moon" class="w-5 h-5 theme-icon-dark hidden"></i>
                         <i data-feather="sun" class="w-5 h-5 theme-icon-light"></i>
                     </button>
-                    <a asp-page="/Account/Settings" asp-route-TokenSaved="true" class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200" title="Настройки"><i data-feather="settings" class="w-5 h-5"></i></a>
+                    <a asp-page="/Inside/Settings/Index"  class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200" title="Настройки"><i data-feather="settings" class="w-5 h-5"></i></a>
                 </div>
             </div>
 
@@ -121,7 +121,7 @@
                             Подключение...
                         </div>
                     </div>
-                    <form asp-page="/Authorization/Logout" method="post" class="ml-2" data-logout="true">
+                    <form asp-page="/Logout" method="post" class="ml-2" data-logout="true">
                         <button type="submit" class="text-gray-500 dark:text-gray-400 hover:text-red-600"><i data-feather="log-out" class="w-5 h-5"></i></button>
                     </form>
                 </div>
@@ -625,11 +625,11 @@
         }
 
         const isAuthenticated = @User.Identity?.IsAuthenticated.ToString().ToLower();
-        const tokenSaved = @Model.TokenSaved.ToString().ToLower();
+        const hasClientToken = !!(localStorage.getItem('token') || sessionToken);
 
-        if (!isAuthenticated && !tokenSaved) {
+        if (!isAuthenticated && !hasClientToken) {
             console.warn("Неавторизованный доступ - редирект на авторизацию");
-            window.location.href = "/Authorization/Authorization";
+            window.location.href = "/login";
         }
 
         var token = sessionToken || localStorage.getItem('token') || '';
@@ -641,7 +641,8 @@
             userId: me,
             accessToken: token,
             apiBaseUrl: window.API_BASE_URL,
-            hubUrl: window.HUB_URL
+            hubUrl: window.HUB_URL,
+            initialChatId: '@(Model.ChatId?.ToString() ?? "")'
         };
     </script>
     <script src="~/js/ui-dialogs.js" asp-append-version="true"></script>
