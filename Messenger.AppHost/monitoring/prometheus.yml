@@ -1,3 +1,4 @@
+
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
@@ -8,7 +9,7 @@ scrape_configs:
     tls_config:
       insecure_skip_verify: true
     static_configs:
-      - targets: ['host.docker.internal:7001']
+      - targets: ['aspire.dev.internal:7001']
     metrics_path: '/metrics'
 
   - job_name: 'messenger-web'
@@ -16,7 +17,7 @@ scrape_configs:
     tls_config:
       insecure_skip_verify: true
     static_configs:
-      - targets: ['host.docker.internal:7010']
+      - targets: ['aspire.dev.internal:7010']
     metrics_path: '/metrics'
 
   - job_name: 'redis'
