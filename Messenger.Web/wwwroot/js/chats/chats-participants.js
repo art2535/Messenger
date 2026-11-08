@@ -662,6 +662,7 @@ function closeCurrentChat() {
 
     currentChatId = null;
     currentChatInfo = null;
+    if (typeof setChatUrl === 'function') setChatUrl(null);
 
     document.getElementById('chat-header').classList.add('hidden');
     document.getElementById('messages-wrapper').classList.add('hidden');

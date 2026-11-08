@@ -1,0 +1,351 @@
+﻿@page "/inside/settings/profile"
+@model Messenger.Web.Pages.Inside.Settings.Profile.IndexModel
+@{
+    Layout = null;
+    var hasAvatar = Model.HasAvatar;
+    var avatarUrl = Model.AvatarUrl;
+    var lastName = Model.Profile.LastName;
+    var firstName = Model.Profile.FirstName;
+    var fullName = $"{lastName} {firstName}";
+    ViewData["Title"] = "Настройки аккаунта";
+}
+
+<!DOCTYPE html>
+<html lang="ru" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#111827" media="(prefers-color-scheme: dark)">
+    <meta name="access-token" content="@Model.AccessToken">
+    <title>@ViewData["Title"]</title>
+
+    <script>
+        (function () {
+            const saved = localStorage.getItem('theme');
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            if (saved === 'dark' || (!saved && prefersDark)) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        })();
+    </script>
+
+    <partial name="_LayoutPWA" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+            tailwind.config = { darkMode: 'class' }
+    </script>
+    <script src="https://unpkg.com/feather-icons"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="~/css/settings.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/ui-dialogs.css" asp-append-version="true" />
+
+</head>
+<body class="flex bg-gray-50 dark:bg-gray-900">
+    <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+    <aside id="sidebar" class="sidebar">
+        <div class="p-5 text-center border-b border-gray-200 dark:border-gray-700">
+            <div class="guap-gradient w-11 h-11 rounded-full flex items-center justify-center mx-auto mb-2.5">
+                <i data-feather="message-square" class="w-5 h-5 text-white"></i>
+            </div>
+            <h1 class="text-lg font-bold text-gray-800 dark:text-white">GUAP Messenger</h1>
+        </div>
+
+        <nav class="flex-1 p-3 overflow-y-auto">
+            <a asp-page="/Inside/Chats/Index"  
+               class="block py-2.5 px-4 text-gray-600 dark:text-gray-300 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition active:scale-[0.98]">
+                Чаты
+            </a>
+            <a href="#" class="block py-2.5 px-4 bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 rounded-xl font-medium">
+                Настройки
+            </a>
+
+            <div class="pl-4 mt-3 space-y-0.5">
+                <a asp-page="/Inside/Settings/Profile/Index" class="sidebar-link block py-2 px-4 text-sm bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 rounded-lg font-medium">
+                    Профиль
+                </a>
+                <a asp-page="/Inside/Settings/Security/Index" class="sidebar-link block py-2 px-4 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
+                    Безопасность
+                </a>
+                <a asp-page="/Inside/Settings/Notifications/Index" class="sidebar-link block py-2 px-4 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
+                    Уведомления
+                </a>
+            </div>
+        </nav>
+
+        <div class="p-4 border-t border-gray-200 dark:border-gray-700 space-y-3">
+            <p class="text-sm text-gray-600 dark:text-gray-400 truncate text-center">@fullName</p>
+            <form asp-page="/Logout" method="post" data-logout="true" class="w-full">
+                <button type="submit"
+                        class="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 transition active:scale-[0.98] font-medium text-sm"
+                        title="Выйти из аккаунта">
+                    <i data-feather="log-out" class="w-4 h-4"></i>
+                    <span>Выйти</span>
+                </button>
+            </form>
+        </div>
+    </aside>
+
+    <div class="flex-1 flex flex-col min-w-0">
+        <div class="mobile-header">
+            <button id="menu-toggle" type="button"
+                    class="w-11 h-11 flex items-center justify-center rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+                    aria-label="Открыть меню">
+                <i data-feather="menu" class="w-6 h-6 text-gray-700 dark:text-gray-200"></i>
+            </button>
+            <h1 class="text-lg font-semibold text-gray-800 dark:text-white truncate">Настройки</h1>
+            <div class="w-11"></div>
+        </div>
+
+        <main class="main-content">
+            @if (TempData["SuccessMessage"] != null)
+            {
+                <script>
+                    window.__profileJustSaved = true;
+                    window.__savedAvatarUrl = @Html.Raw(hasAvatar && !string.IsNullOrEmpty(avatarUrl)
+                                            ? $"'{avatarUrl.Replace("'", "\\'")}'"
+                                            : "null");
+                    window.__savedDisplayName = @Html.Raw($"'{fullName.Replace("'", "\\'")}'");
+                    document.addEventListener('DOMContentLoaded', () => {
+                        showToast(@Html.Raw(System.Text.Json.JsonSerializer.Serialize(TempData["SuccessMessage"]?.ToString() ?? "")), 'success');
+                    });
+                </script>
+            }
+
+            <div class="max-w-4xl mx-auto px-2 sm:px-0">
+                <h2 class="text-2xl sm:text-3xl font-bold text-gray-800 dark:text-white mb-6 sm:mb-8 hidden sm:block">
+                    Настройки аккаунта
+                </h2>
+            </div>
+
+            <form method="post" enctype="multipart/form-data" asp-page-handler="Save" class="max-w-4xl mx-auto space-y-6 sm:space-y-8">
+
+                <section id="profile" class="bg-white dark:bg-gray-800 rounded-2xl shadow-md p-5 sm:p-8">
+                    <h3 class="text-xl sm:text-2xl font-semibold text-gray-800 dark:text-white mb-6 sm:mb-8">Профиль</h3>
+
+                    <div class="flex flex-col md:flex-row gap-8 md:gap-10 items-start">
+                        <div class="flex flex-col items-center space-y-4 w-full md:w-auto">
+                            <div class="relative">
+                                @if (hasAvatar && !string.IsNullOrEmpty(avatarUrl))
+                                {
+                                    <img id="current-avatar"
+                                         src="@avatarUrl?t=@DateTime.Now.Ticks"
+                                         alt="Аватар"
+                                         class="w-36 h-36 sm:w-40 sm:h-40 rounded-full object-cover border-4 border-gray-200 dark:border-gray-600 shadow-xl"
+                                         onerror="document.getElementById('default-avatar').style.display='flex';">
+                                }
+                                else
+                                {
+                                    <div id="current-avatar" class="guap-gradient w-36 h-36 sm:w-40 sm:h-40 rounded-full flex items-center justify-center shadow-xl">
+                                        <i data-feather="user" class="w-16 h-16 sm:w-20 sm:h-20 text-white"></i>
+                                    </div>
+                                }
+
+                                <div id="default-avatar"
+                                     class="guap-gradient w-36 h-36 sm:w-40 sm:h-40 rounded-full flex items-center justify-center shadow-xl absolute inset-0 @(hasAvatar && !string.IsNullOrEmpty(avatarUrl) ? "hidden" : "flex")">
+                                    <i data-feather="user" class="w-16 h-16 sm:w-20 sm:h-20 text-white"></i>
+                                </div>
+
+                                <div id="avatar-preview-container" class="hidden absolute inset-0 rounded-full overflow-hidden border-4 border-blue-500 shadow-2xl z-20 pointer-events-none" style="background:#e5e7eb;">
+                                    <img id="avatar-preview" src="" alt="Предпросмотр" class="w-full h-full object-cover" style="display:block;">
+                                </div>
+                            </div>
+
+                            <div class="flex flex-col space-y-2.5 w-full max-w-xs">
+                                <input type="file" id="avatarInput" name="AvatarFile" accept="image/*" class="hidden">
+                                <label for="avatarInput"
+                                       class="guap-gradient text-white py-3 px-6 rounded-xl hover:opacity-90 active:scale-[0.98] cursor-pointer font-medium text-center transition text-sm sm:text-base">
+                                    Изменить фото
+                                </label>
+                                <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400 text-center">
+                                    JPG, PNG, GIF, WEBP · до 2 МБ
+                                </p>
+                                <button type="button" id="cancel-preview"
+                                        class="text-sm text-gray-600 dark:text-gray-400 hover:underline hidden py-1">
+                                    Отменить выбор
+                                </button>
+                                <button type="button" id="delete-avatar-trigger"
+                                        class="text-sm text-red-600 hover:text-red-800 hover:underline py-1 @(hasAvatar ? "" : "hidden")">
+                                    Удалить фото
+                                </button>
+                            </div>
+                            <input type="hidden" name="DeleteAvatar" id="delete-avatar-flag" value="false" />
+                        </div>
+
+                        <div class="flex-1 space-y-5 w-full">
+                            <div class="grid sm:grid-cols-2 gap-5">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Фамилия</label>
+                                    <input asp-for="Profile.LastName" class="input-field" readonly>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Имя</label>
+                                    <input asp-for="Profile.FirstName" class="input-field" readonly>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Логин (email)</label>
+                                <input asp-for="Profile.Login" type="email" class="input-field" readonly>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <section id="notifications" class="bg-white dark:bg-gray-800 rounded-2xl shadow-md p-5 sm:p-8">
+                    <h3 class="text-xl sm:text-2xl font-semibold text-gray-800 dark:text-white mb-5 sm:mb-6">Уведомления</h3>
+                    <div class="space-y-5">
+                        <div id="ios-push-hint" class="hidden rounded-xl border border-amber-200 dark:border-amber-700/50 bg-amber-50 dark:bg-amber-900/20 p-4 text-sm text-amber-900 dark:text-amber-100">
+                            <p class="font-medium mb-1.5">На iPhone / iPad push работают только из установленного приложения</p>
+                            <ol class="list-decimal list-inside space-y-1 text-amber-800 dark:text-amber-200/90">
+                                <li>Откройте сайт в <strong>Safari</strong></li>
+                                <li>Нажмите «Поделиться» → <strong>«На экран „Домой“»</strong></li>
+                                <li>Откройте GUAP Messenger с иконки на экране</li>
+                                <li>Включите push в настройках</li>
+                            </ol>
+                            <p class="mt-2 text-xs text-amber-700 dark:text-amber-300">Нужен iOS 16.4+. В обычной вкладке Safari push недоступны.</p>
+                        </div>
+
+                        <div id="push-unsupported-hint" class="hidden rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/40 p-4 text-sm text-gray-600 dark:text-gray-300">
+                            Этот браузер не поддерживает Web Push. Попробуйте Chrome / Edge на Android или Safari (как приложение) на iOS 16.4+.
+                        </div>
+
+                        <div class="flex items-center justify-between py-3 border-t border-gray-100 dark:border-gray-700">
+                            <div class="pr-4">
+                                <p class="font-medium text-gray-800 dark:text-gray-100">Push-уведомления</p>
+                                <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5" id="push-status-text">
+                                    Получать уведомления даже когда приложение закрыто
+                                </p>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                                <input type="checkbox" id="push-toggle" class="sr-only peer">
+                                <div id="push-toggle-slider"
+                                     class="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 transition-colors">
+                                </div>
+                            </label>
+                        </div>
+
+                        <div id="notification-types" class="hidden">
+                            <div class="space-y-4 pl-4 sm:pl-6 border-l-2 border-gray-100 dark:border-gray-700">
+                                <label class="flex items-center justify-between cursor-pointer py-1">
+                                    <span class="font-medium">Сообщения</span>
+                                    <input type="checkbox" id="notifyMessages" class="h-5 w-5 text-blue-600 rounded">
+                                </label>
+                                <label class="flex items-center justify-between cursor-pointer py-1">
+                                    <span class="font-medium">Групповые чаты</span>
+                                    <input type="checkbox" id="notifyGroup" class="h-5 w-5 text-blue-600 rounded">
+                                </label>
+                                <label class="flex items-center justify-between cursor-pointer py-1">
+                                    <span class="font-medium">Упоминания</span>
+                                    <input type="checkbox" id="notifyMentions" class="h-5 w-5 text-blue-600 rounded">
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <section id="appearance" class="bg-white dark:bg-gray-800 rounded-2xl shadow-md p-5 sm:p-8">
+                    <h3 class="text-xl sm:text-2xl font-semibold text-gray-800 dark:text-white mb-5 sm:mb-6">Внешний вид</h3>
+                    <div class="flex items-center justify-between py-2 gap-4">
+                        <div class="pr-2">
+                            <p class="font-medium text-gray-800 dark:text-gray-100">Тема оформления</p>
+                            <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                                Светлая или тёмная тема для всего приложения
+                            </p>
+                        </div>
+                        <button id="theme-toggle-settings" type="button"
+                                class="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 active:scale-[0.98] transition flex-shrink-0">
+                            <i data-feather="sun" class="w-5 h-5 text-amber-500 theme-icon-light"></i>
+                            <i data-feather="moon" class="w-5 h-5 text-indigo-400 theme-icon-dark hidden"></i>
+                            <span id="theme-label" class="font-medium text-gray-700 dark:text-gray-200 text-sm sm:text-base">Светлая</span>
+                        </button>
+                    </div>
+                </section>
+
+                <section id="privacy" class="bg-white dark:bg-gray-800 rounded-2xl shadow-md p-5 sm:p-8">
+                    <h3 class="text-xl sm:text-2xl font-semibold text-gray-800 dark:text-white mb-5 sm:mb-6">Приватность</h3>
+                    <div class="space-y-5">
+                        <label class="flex items-center justify-between cursor-pointer py-1">
+                            <div class="flex items-center">
+                                <input type="checkbox" checked class="h-5 w-5 text-blue-600 rounded">
+                                <span class="ml-3 font-medium">Показывать профиль</span>
+                            </div>
+                        </label>
+                        <label class="flex items-center justify-between cursor-pointer py-1">
+                            <div class="flex items-center">
+                                <input type="checkbox" checked class="h-5 w-5 text-blue-600 rounded">
+                                <span class="ml-3 font-medium">Показывать статус онлайн</span>
+                            </div>
+                        </label>
+                    </div>
+                </section>
+
+                <div class="form-actions flex justify-end gap-3 sm:gap-4 py-4 sm:py-6">
+                    <button type="button" onclick="history.back()"
+                            class="px-6 py-3.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-xl hover:bg-gray-300 dark:hover:bg-gray-600 font-medium active:scale-[0.98] transition">
+                        Отмена
+                    </button>
+                    <button type="submit"
+                            class="px-8 py-3.5 guap-gradient text-white rounded-xl hover:opacity-90 font-medium active:scale-[0.98] transition">
+                        Сохранить изменения
+                    </button>
+                </div>
+            </form>
+        </main>
+    </div>
+
+    <div id="toast-container"></div>
+
+    <div id="confirmModal" class="modal-overlay">
+        <div class="modal-content p-6 sm:p-8 text-center">
+            <h3 class="text-lg sm:text-xl font-semibold mb-3" id="confirmTitle">Подтвердите действие</h3>
+            <p class="text-gray-600 dark:text-gray-400 mb-6 sm:mb-8 text-sm sm:text-base" id="confirmMessage"></p>
+            <div class="flex flex-col-reverse sm:flex-row justify-center gap-3">
+                <button onclick="closeConfirm(false)"
+                        class="px-6 py-3 bg-gray-200 dark:bg-gray-600 rounded-xl hover:bg-gray-300 dark:hover:bg-gray-500 font-medium">
+                    Отмена
+                </button>
+                <button id="confirmYesBtn"
+                        class="px-6 py-3 guap-gradient text-white rounded-xl hover:opacity-90 font-medium">
+                    Подтвердить
+                </button>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        const sessionToken = '@(HttpContext.Session.GetString("ACCESS_TOKEN") ?? "")';
+        const modelToken = '@Model.AccessToken';
+        (function persistToken() {
+            const t = (modelToken || sessionToken || localStorage.getItem('token') || '').trim();
+            if (t) {
+                try { localStorage.setItem('token', t.replace(/^Bearer\s+/i, '')); } catch (_) {}
+            }
+        })();
+        const isAuthenticated = @User.Identity?.IsAuthenticated.ToString().ToLower();
+        const hasClientToken = !!(localStorage.getItem('token') || sessionToken || modelToken);
+        if (!isAuthenticated && !hasClientToken) {
+            console.warn("Settings: Неавторизованный доступ - редирект");
+            window.location.href = "/login";
+        }
+        function getAuthToken() {
+            const raw = (modelToken || localStorage.getItem('token') || sessionToken || '').trim();
+            if (!raw) return '';
+            return raw.startsWith('Bearer ') ? raw : raw;
+        }
+        window.API_BASE_URL = '@Model.ApiBaseUrl';
+        window.HUB_URL = '@Model.HubUrl';
+    </script>
+    <script src="~/js/ui-dialogs.js" asp-append-version="true"></script>
+    <script src="~/app.js"></script>
+    <script src="~/js/session-cleanup.js"></script>
+    <script src="~/js/settings.js" asp-append-version="true"></script>
+</body>
+</html>

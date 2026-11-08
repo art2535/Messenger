@@ -26,7 +26,7 @@ self.addEventListener('message', event => {
 
 const STATIC_ASSETS = [
     '/', '/Index', '/Privacy', '/Error',
-    '/Authorization/Authorization', '/Authorization', '/Authorization/Logout',
+    '/login', '/login', '/login/Logout',
     '/manifest.json',
     '/images/web-app-manifest-192x192.png',
     '/images/web-app-manifest-512x512.png',
@@ -123,17 +123,17 @@ async function offlineNavigationFallback(url) {
     const candidates = [
         path,
         path === '/Index' ? '/' : null,
-        path.startsWith('/Authorization') ? '/Authorization/Authorization' : null,
-        path.startsWith('/Account/Settings') ? '/Account/Settings' : null,
-        path.startsWith('/Account') ? '/Account/Chats' : null,
-        '/Account/Chats', '/', '/Index', '/Privacy', '/Error'
+        path.startsWith('/login') ? '/login' : null,
+        path.startsWith('/inside/settings') ? '/inside/settings' : null,
+        path.startsWith('/inside') ? '/inside/chats' : null,
+        '/inside/chats', '/', '/Index', '/Privacy', '/Error'
     ].filter(Boolean);
     for (const c of candidates) {
         const hit = await caches.match(c, { ignoreSearch: true });
         if (hit) return hit;
     }
     return new Response(
-        '<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Offline</title><style>body{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#0f172a;color:#e2e8f0;text-align:center;padding:1.5rem}a{color:#38bdf8}</style></head><body><div><h1>Нет сети</h1><p>GUAP Messenger недоступен offline.</p><p><a href="/">На главную</a> · <a href="/Account/Chats">Чаты</a></p></div></body></html>',
+        '<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Offline</title><style>body{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#0f172a;color:#e2e8f0;text-align:center;padding:1.5rem}a{color:#38bdf8}</style></head><body><div><h1>Нет сети</h1><p>GUAP Messenger недоступен offline.</p><p><a href="/">На главную</a> · <a href="/inside/chats">Чаты</a></p></div></body></html>',
         { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
     );
 }
@@ -170,12 +170,12 @@ self.addEventListener('fetch', event => {
     }
     if (isApiRequest(url) || url.pathname.includes('/api/')) return;
 
-    if (url.pathname.startsWith('/Authorization')) {
+    if (url.pathname.startsWith('/login')) {
         event.respondWith(
             fetch(request).catch(async () => {
                 return (await caches.match(request)) ||
-                    (await caches.match('/Authorization/Authorization')) ||
-                    (await caches.match('/Authorization')) ||
+                    (await caches.match('/login')) ||
+                    (await caches.match('/login')) ||
                     new Response('Нет сети. Проверьте подключение.', {
                         status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' }
                     });
@@ -218,17 +218,17 @@ self.addEventListener('fetch', event => {
                     const candidates = [
                         path,
                         path === '/Index' ? '/' : null,
-                        path.startsWith('/Authorization') ? '/Authorization/Authorization' : null,
-                        path.startsWith('/Account/Settings') ? '/Account/Settings' : null,
-                        path.startsWith('/Account') ? '/Account/Chats' : null,
-                        '/Account/Chats', '/', '/Index', '/Privacy', '/Error'
+                        path.startsWith('/login') ? '/login' : null,
+                        path.startsWith('/inside/settings') ? '/inside/settings' : null,
+                        path.startsWith('/inside') ? '/inside/chats' : null,
+                        '/inside/chats', '/', '/Index', '/Privacy', '/Error'
                     ].filter(Boolean);
                     for (const c of candidates) {
                         const hit = await caches.match(c);
                         if (hit) return hit;
                     }
                     return new Response(
-                        '<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Offline</title><style>body{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#0f172a;color:#e2e8f0;text-align:center;padding:1.5rem}a{color:#38bdf8}</style></head><body><div><h1>Нет сети</h1><p>GUAP Messenger недоступен offline.</p><p><a href="/">На главную</a> · <a href="/Account/Chats">Чаты</a></p></div></body></html>',
+                        '<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Offline</title><style>body{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#0f172a;color:#e2e8f0;text-align:center;padding:1.5rem}a{color:#38bdf8}</style></head><body><div><h1>Нет сети</h1><p>GUAP Messenger недоступен offline.</p><p><a href="/">На главную</a> · <a href="/inside/chats">Чаты</a></p></div></body></html>',
                         { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
                     );
                 }
@@ -274,7 +274,7 @@ function parsePushPayload(event) {
         notificationId: null,
         messageId: null,
         icon: '/images/web-app-manifest-192x192.png',
-        url: '/Account/Chats'
+        url: '/inside/chats'
     };
     if (!event.data) return data;
     try {
@@ -299,8 +299,8 @@ function parsePushPayload(event) {
     }
     if (!data.url) {
         data.url = data.chatId
-            ? '/Account/Chats?chatId=' + encodeURIComponent(data.chatId)
-            : '/Account/Chats';
+            ? '/inside/chats?chatId=' + encodeURIComponent(data.chatId)
+            : '/inside/chats';
     }
     return data;
 }
@@ -420,11 +420,11 @@ self.addEventListener('notificationclick', event => {
     const chatId = nData.chatId;
     const notificationId = nData.notificationId;
     const targetUrl = nData.url
-        || (chatId ? '/Account/Chats?chatId=' + encodeURIComponent(chatId) : '/Account/Chats');
+        || (chatId ? '/inside/chats?chatId=' + encodeURIComponent(chatId) : '/inside/chats');
     event.waitUntil(
         clients.matchAll({ type: 'window', includeUncontrolled: true }).then(existingClients => {
             for (const client of existingClients) {
-                if (client.url.includes('/Account/Chats') || client.url.includes('/Account/Settings')) {
+                if (client.url.includes('/inside/chats') || client.url.includes('/inside/settings')) {
                     client.postMessage({
                         type: 'OPEN_SPECIFIC_CHAT',
                         chatId: chatId,

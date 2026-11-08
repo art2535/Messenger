@@ -9,7 +9,7 @@ async function startSignalR() {
         let freshToken = (typeof token === 'string' && token) ? token : (localStorage.getItem('token') || '');
         if (!freshToken) {
             console.warn("Токен пропал — редирект");
-            window.location.href = "/Authorization/Authorization";
+            window.location.href = "/login";
             return null;
         }
         return freshToken;

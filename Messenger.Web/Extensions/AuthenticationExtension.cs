@@ -22,7 +22,7 @@ namespace Messenger.Web.Extensions
                 })
                 .AddCookie(options =>
                 {
-                    options.LoginPath = "/Authorization";
+                    options.LoginPath = "/login";
                     options.ExpireTimeSpan = TimeSpan.FromHours(12);
                     options.SlidingExpiration = true;
 
@@ -44,7 +44,7 @@ namespace Messenger.Web.Extensions
                     options.SignedOutCallbackPath = configuration["AzureAd:SignedOutCallbackPath"];
                     options.ResponseType = "code";
                     options.SaveTokens = true;
-                    options.GetClaimsFromUserInfoEndpoint = true;
+                    options.GetClaimsFromUserInfoEndpoint = false;
 
                     options.Scope.Add("openid");
                     options.Scope.Add("profile");

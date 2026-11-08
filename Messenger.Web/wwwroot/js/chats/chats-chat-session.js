@@ -184,6 +184,10 @@ async function openChat(item) {
     saveCurrentDraft();
     currentChatId = chatId;
     modalChatId = null;
+    if (typeof setChatUrl === 'function') {
+        const pathId = typeof getChatIdFromPath === 'function' ? getChatIdFromPath() : null;
+        setChatUrl(chatId, pathId === String(chatId));
+    }
 
     clearUnread(chatId);
     markChatAsRead(chatId);

@@ -553,6 +553,75 @@ const lightboxImg = document.getElementById('lightbox-img');
 
 let pendingMessages = new Map();
 let currentChatId = null;
+
+const CHATS_BASE_PATH = '/inside/chats';
+
+function chatsUrlFor(chatId) {
+    if (chatId) return CHATS_BASE_PATH + '/' + encodeURIComponent(String(chatId));
+    return CHATS_BASE_PATH;
+}
+
+function setChatUrl(chatId, replace = false) {
+    try {
+        const url = chatsUrlFor(chatId);
+        const current = window.location.pathname.replace(/\/$/, '') || '/';
+        const target = url.replace(/\/$/, '') || '/';
+        if (current === target) return;
+        if (replace) {
+            history.replaceState({ chatId: chatId || null }, '', url);
+        } else {
+            history.pushState({ chatId: chatId || null }, '', url);
+        }
+    } catch (e) {
+        console.warn('setChatUrl failed', e);
+    }
+}
+
+function getChatIdFromPath() {
+    try {
+        const m = window.location.pathname.match(/\/inside\/chats\/([0-9a-fA-F-]{36})\/?$/);
+        return m ? m[1] : null;
+    } catch (_) {
+        return null;
+    }
+}
+
+async function openChatFromUrlIfNeeded(replaceUrl = true) {
+    const fromConfig = (window.CHATS_CONFIG && window.CHATS_CONFIG.initialChatId) || '';
+    const fromPath = typeof getChatIdFromPath === 'function' ? getChatIdFromPath() : null;
+    const chatId = fromPath || (fromConfig && fromConfig.trim()) || null;
+    if (!chatId) return;
+
+    const item = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
+    if (!item) {
+        return;
+    }
+    if (String(currentChatId) === String(chatId)) {
+        if (replaceUrl && typeof setChatUrl === 'function') setChatUrl(chatId, true);
+        return;
+    }
+    if (typeof openChat === 'function') {
+        await openChat(item);
+        if (replaceUrl && typeof setChatUrl === 'function') setChatUrl(chatId, true);
+    }
+}
+
+window.addEventListener('popstate', (e) => {
+    const chatId = (e.state && e.state.chatId) || (typeof getChatIdFromPath === 'function' ? getChatIdFromPath() : null);
+    if (chatId) {
+        const item = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
+        if (item && typeof openChat === 'function') openChat(item);
+    } else if (currentChatId && typeof closeCurrentChat === 'function') {
+        const prev = currentChatId;
+        const orig = window.setChatUrl;
+        if (typeof orig === 'function') {
+            window.setChatUrl = function (id, replace) { return orig(id, true); };
+        }
+        closeCurrentChat();
+        if (typeof orig === 'function') window.setChatUrl = orig;
+    }
+});
+
 let userStatuses = new Map();
 let selectedFiles = [];
 let connection = null;
@@ -586,7 +655,7 @@ async function fetchWithAuth(url, options = {}) {
 
     if (response.status === 401 || response.status === 403) {
         console.warn('Токен недействителен — редирект на логин');
-        window.location.href = "/Authorization/Authorization";
+        window.location.href = "/login";
         return null;
     }
 

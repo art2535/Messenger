@@ -99,8 +99,8 @@
         const icon = opts.icon || '/images/web-app-manifest-192x192.png';
         const chatId = opts.chatId;
         const url = chatId
-            ? '/Account/Chats?chatId=' + encodeURIComponent(chatId)
-            : '/Account/Chats';
+            ? '/inside/chats?chatId=' + encodeURIComponent(chatId)
+            : '/inside/chats';
 
         let n;
         try {

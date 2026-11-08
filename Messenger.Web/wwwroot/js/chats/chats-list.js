@@ -114,6 +114,11 @@ async function loadChats() {
         renderAllDraftPreviews();
 
         setTimeout(updateAllOnlineIndicators, 300);
+
+        if (typeof openChatFromUrlIfNeeded === 'function') {
+            openChatFromUrlIfNeeded(true).catch(() => {});
+        }
+
     } catch (err) {
         console.error("Ошибка загрузки:", err);
         try {
