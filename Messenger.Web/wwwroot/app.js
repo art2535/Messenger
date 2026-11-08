@@ -65,35 +65,45 @@ async function initializePushNotifications(registration) {
     }
 
     try {
-        const permission = Notification.permission;
+        if (!('Notification' in window) || !('PushManager' in window)) {
+            console.warn('Push API недоступен');
+            return;
+        }
 
-        if (permission === 'denied') {
+        if (Notification.permission === 'denied') {
             console.warn('Push уведомления запрещены пользователем');
             return;
         }
 
-        if (permission !== 'granted') {
+        if (Notification.permission !== 'granted') {
             console.log('Push: permission не granted — автоматическая подписка пропущена');
             return;
         }
 
-        let subscription = await registration.pushManager.getSubscription();
-        const storedEndpoint = localStorage.getItem('pushSubscriptionEndpoint') || '';
-        const alreadySynced = localStorage.getItem('pushSubscribed') === 'true';
-
-        if (subscription && alreadySynced && storedEndpoint && subscription.endpoint === storedEndpoint) {
-            console.log('Push: подписка уже активна и синхронизирована, повторная отправка пропущена');
-            return;
+        let serverPushEnabled = true;
+        try {
+            const settingsRes = await fetch(`${API_BASE_URL}/push/settings`, {
+                method: 'GET',
+                headers: { 'Authorization': token }
+            });
+            if (settingsRes.ok) {
+                const settings = await settingsRes.json();
+                if (settings && settings.pushEnabled === false) {
+                    serverPushEnabled = false;
+                    console.log('Push: на сервере отключены — авто-подписка пропущена');
+                    return;
+                }
+            }
+        } catch (e) {
+            console.warn('Push: не удалось прочитать настройки, продолжаем синхронизацию', e);
         }
+
+        let subscription = await registration.pushManager.getSubscription();
 
         if (!subscription) {
             const keyResponse = await fetch(`${API_BASE_URL}/push/vapid-public-key`, {
-                method: 'GET',
-                headers: {
-                    'Authorization': token
-                }
+                method: 'GET'
             });
-
             if (!keyResponse.ok) throw new Error('Не удалось получить VAPID ключ');
             const publicKey = (await keyResponse.text()).trim();
 
@@ -122,14 +132,14 @@ async function initializePushNotifications(registration) {
         });
 
         if (response.ok) {
-            console.log('✅ Push-подписка успешно отправлена на сервер');
+            console.log('✅ Push-подписка успешно синхронизирована с сервером');
             localStorage.setItem('pushSubscribed', 'true');
             localStorage.setItem('pushSubscriptionEndpoint', subscription.endpoint);
         } else {
             const errorText = await response.text();
             console.error('❌ Ошибка при отправке подписки:', errorText);
+            localStorage.removeItem('pushSubscribed');
         }
-
     } catch (err) {
         console.error('❌ Ошибка при инициализации Push-уведомлений:', err);
     }

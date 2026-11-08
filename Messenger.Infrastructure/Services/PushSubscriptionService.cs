@@ -52,6 +52,32 @@ namespace Messenger.Infrastructure.Services
             await _context.SaveChangesAsync(ct);
         }
 
+        public async Task EnsurePushEnabledAsync(Guid userId, CancellationToken token = default)
+        {
+            var settings = await _context.AccountSettings
+                .FirstOrDefaultAsync(s => s.AccountId == userId, token);
+
+            if (settings == null)
+            {
+                _context.AccountSettings.Add(new AccountSetting
+                {
+                    AccountId = userId,
+                    PushEnabled = true,
+                    NotifyMessages = true,
+                    NotifyGroupChats = true,
+                    NotifyMentions = true
+                });
+                await _context.SaveChangesAsync(token);
+                return;
+            }
+
+            if (!settings.PushEnabled)
+            {
+                settings.PushEnabled = true;
+                await _context.SaveChangesAsync(token);
+            }
+        }
+
         public async Task RemoveSubscriptionAsync(Guid id, CancellationToken ct = default)
         {
             var sub = await _context.PushSubscriptions.FindAsync(new object[] { id }, ct);
@@ -82,24 +108,19 @@ namespace Messenger.Infrastructure.Services
 
         public async Task<AccountSetting?> GetPushSettingsAsync(Guid userId, CancellationToken token = default)
         {
-            var user = await _userService.GetUserByIdAsync(userId, token);
-            if (user?.AccountId == null)
-                return null;
-
             return await _context.AccountSettings
-                .FirstOrDefaultAsync(s => s.AccountId == user.AccountId, token);
+                .FirstOrDefaultAsync(s => s.AccountId == userId, token);
         }
 
-        public async Task SavePushSettingsAsync(Guid userId, Guid accountId, PushSubscriptionUpdateRequest request, 
-            CancellationToken token = default)
+        public async Task SavePushSettingsAsync(Guid userId, PushSubscriptionUpdateRequest request, CancellationToken token = default)
         {
             var settings = await _context.AccountSettings
-                .FirstOrDefaultAsync(s => s.AccountId == accountId, token);
+                .FirstOrDefaultAsync(s => s.AccountId == userId, token);
             if (settings == null)
             {
                 settings = new AccountSetting
                 {
-                    AccountId = accountId,
+                    AccountId = userId,
                     PushEnabled = request.PushEnabled,
                     NotifyMessages = request.NotifyMessages,
                     NotifyGroupChats = request.NotifyGroupChats,
@@ -166,25 +187,29 @@ namespace Messenger.Infrastructure.Services
                 {
                     var settings = await GetPushSettingsAsync(participant.UserId, cancellationToken);
 
-                    if (settings == null || !settings.PushEnabled)
+                    if (settings != null && !settings.PushEnabled)
                     {
                         _logger.LogWarning("Пропуск пользователя {UserId}: Push-уведомления полностью отключены", participant.UserId);
                         continue;
                     }
 
-                    if (isGroupChat && !settings.NotifyGroupChats)
+                    bool notifyGroup = settings?.NotifyGroupChats ?? true;
+                    bool notifyMessages = settings?.NotifyMessages ?? true;
+                    bool notifyMentions = settings?.NotifyMentions ?? true;
+
+                    if (isGroupChat && !notifyGroup)
                     {
                         _logger.LogWarning("Пропуск пользователя {UserId}: Групповые уведомления отключены", participant.UserId);
                         continue;
                     }
 
-                    if (!isGroupChat && !settings.NotifyMessages)
+                    if (!isGroupChat && !notifyMessages)
                     {
                         _logger.LogWarning("Пропуск пользователя {UserId}: Уведомления о сообщениях отключены", participant.UserId);
                         continue;
                     }
 
-                    if (isMention && !settings.NotifyMentions)
+                    if (isMention && !notifyMentions)
                     {
                         _logger.LogWarning("Пропуск пользователя {UserId}: Уведомления об упоминаниях отключены", participant.UserId);
                         continue;

@@ -82,6 +82,7 @@ namespace Messenger.API.Controllers
             await _subscriptionService.RemoveByEndpointAsync(subscriptionDto.Endpoint);
 
             await _subscriptionService.AddSubscriptionAsync(subscription);
+            await _subscriptionService.EnsurePushEnabledAsync(user!.UserId);
 
             _logger.LogInformation("Push-подписка успешно сохранена для пользователя {UserId}. P256dh length: {Len}",
                 user!.UserId, subscription.P256dh.Length);
@@ -141,10 +142,10 @@ namespace Messenger.API.Controllers
             var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
             var user = await _userService.GetUserByExternalIdAsync(userIdClaim);
 
-            if (user == null || user?.AccountId == null)
+            if (user == null)
                 return Ok(new PushSubscriptionUpdateRequest());
 
-            var settings = await _subscriptionService.GetPushSettingsAsync(user.AccountId, token);
+            var settings = await _subscriptionService.GetPushSettingsAsync(user.UserId, token);
 
             if (settings == null)
             {
@@ -183,7 +184,10 @@ namespace Messenger.API.Controllers
             var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
             var user = await _userService.GetUserByExternalIdAsync(userIdClaim);
 
-            await _subscriptionService.SavePushSettingsAsync(user.UserId, user.AccountId, request, token);
+            if (user == null)
+                return Unauthorized();
+
+            await _subscriptionService.SavePushSettingsAsync(user.UserId, request, token);
 
             _logger.LogInformation("Настройки push-уведомлений обновлены для пользователя {UserId}", user.UserId);
 
