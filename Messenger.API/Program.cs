@@ -21,12 +21,6 @@ namespace Messenger.API
 
             var builder = WebApplication.CreateBuilder(args);
 
-            Console.WriteLine("=============================================================");
-            Console.WriteLine($"[API DEBUG] Среда: {builder.Environment.EnvironmentName}");
-            Console.WriteLine($"[API DEBUG] ASPNETCORE_URLS: '{builder.Configuration["ASPNETCORE_URLS"]}'");
-            Console.WriteLine($"[API DEBUG] ASPNETCORE_HTTPS_PORTS: '{builder.Configuration["ASPNETCORE_HTTPS_PORTS"]}'");
-            Console.WriteLine("=============================================================");
-
             builder.ConfigureDevelopmentCertificate();
 
             builder.AddMessengerSerilog("Messenger.API");
