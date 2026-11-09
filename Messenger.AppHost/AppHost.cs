@@ -106,6 +106,7 @@ var web = builder.AddProject<Projects.Messenger_Web>("messenger-web")
     .WithUrlForEndpoint("https", url => url.DisplayText = "Messenger Web")
     .WithUrlForEndpoint("http", url => url.DisplayText = "Web HTTP")
     .WithReference(api).WaitFor(api)
+    .WithReference(redis).WaitFor(redis)
     .WithExternalHttpEndpoints();
 
 prometheus.WithReference(api.GetEndpoint("https"));
