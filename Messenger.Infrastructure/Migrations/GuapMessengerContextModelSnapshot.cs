@@ -200,6 +200,18 @@ namespace Messenger.Infrastructure.Migrations
                     b.Property<string>("Avatar")
                         .HasColumnType("text");
 
+                    b.Property<bool>("CompactList")
+                        .HasColumnType("boolean")
+                        .HasColumnName("Compact_List");
+
+                    b.Property<bool>("IdleLogout")
+                        .HasColumnType("boolean")
+                        .HasColumnName("Idle_Logout");
+
+                    b.Property<bool>("LargeFont")
+                        .HasColumnType("boolean")
+                        .HasColumnName("Large_Font");
+
                     b.Property<bool>("NotifyGroupChats")
                         .HasColumnType("boolean")
                         .HasColumnName("Notify_GroupChats");
@@ -212,9 +224,47 @@ namespace Messenger.Infrastructure.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("Notify_Messages");
 
+                    b.Property<bool>("NotifyPreview")
+                        .HasColumnType("boolean")
+                        .HasColumnName("Notify_Preview");
+
+                    b.Property<bool>("NotifyReactions")
+                        .HasColumnType("boolean")
+                        .HasColumnName("Notify_Reactions");
+
+                    b.Property<bool>("NotifySound")
+                        .HasColumnType("boolean")
+                        .HasColumnName("Notify_Sound");
+
+                    b.Property<bool>("NotifySystem")
+                        .HasColumnType("boolean")
+                        .HasColumnName("Notify_System");
+
                     b.Property<bool>("PushEnabled")
                         .HasColumnType("boolean")
                         .HasColumnName("Push_Enabled");
+
+                    b.Property<bool>("ReadReceipts")
+                        .HasColumnType("boolean")
+                        .HasColumnName("Read_Receipts");
+
+                    b.Property<bool>("ShowOnline")
+                        .HasColumnType("boolean")
+                        .HasColumnName("Show_Online");
+
+                    b.Property<bool>("ShowTyping")
+                        .HasColumnType("boolean")
+                        .HasColumnName("Show_Typing");
+
+                    b.Property<bool>("SuppressOpenChat")
+                        .HasColumnType("boolean")
+                        .HasColumnName("Suppress_Open_Chat");
+
+                    b.Property<string>("Theme")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("Theme");
 
                     b.HasKey("AccountId")
                         .HasName("Account_Settings_pkey");
