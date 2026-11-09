@@ -57,6 +57,10 @@ public static class SerilogExtension
                     .Enrich.WithEnvironmentName()
                     .Enrich.WithMachineName()
                     .Enrich.WithProperty("Application", applicationName)
+                    .Filter.ByExcluding(IsEfSqlLog)
+                    .MinimumLevel.Override("Microsoft.EntityFrameworkCore", LogEventLevel.Warning)
+                    .MinimumLevel.Override("Microsoft.EntityFrameworkCore.Database.Command", LogEventLevel.Warning)
+                    .MinimumLevel.Override("Npgsql", LogEventLevel.Warning)
                     .WriteTo.Console(
                         outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {SourceContext}: {Message:lj}{NewLine}{Exception}")
                     .WriteTo.File(

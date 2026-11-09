@@ -25,6 +25,7 @@ namespace Messenger.API.Extensions
                 services.AddScoped<IAttachmentService, AttachmentService>();
                 services.AddScoped<IReactionService, ReactionService>();
                 services.AddScoped<ILoginService, LoginService>();
+                services.AddScoped<IAccountSettingsService, AccountSettingsService>();
                 services.AddScoped<IUserStatusService, UserStatusService>();
                 services.AddScoped<IBroadcastService, BroadcastService>();
                 services.AddScoped<IMessageService, MessageService>();
