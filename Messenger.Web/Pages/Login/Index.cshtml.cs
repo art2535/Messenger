@@ -58,6 +58,8 @@ namespace Messenger.Web.Pages.Login
                 {
                     HttpContext.Session.SetString("ACCESS_TOKEN", accessToken);
                     var tokenCopy = accessToken;
+                    var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                                 ?? User.FindFirst("sub")?.Value;
                     _ = Task.Run(async () =>
                     {
                         try
@@ -68,7 +70,7 @@ namespace Messenger.Web.Pages.Login
                                 IpAddress = GetLocalIPv4()
                             };
                             await LoginAsync(loginRequest);
-                            await SendToSignalRAsync(tokenCopy, new UpdateStatusRequest { Online = true });
+                            await SendToSignalRAsync(tokenCopy, new UpdateStatusRequest { Online = true }, userIdStr);
                         }
                         catch (Exception bgEx)
                         {
@@ -92,12 +94,14 @@ namespace Messenger.Web.Pages.Login
                 {
                     HttpContext.Session.SetString("ACCESS_TOKEN", accessToken!);
                     var tokenCopy = accessToken;
+                    var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                                 ?? User.FindFirst("sub")?.Value;
                     _ = Task.Run(async () =>
                     {
                         try
                         {
                             await LoginAsync(new CreateLoginRequest { Token = tokenCopy, IpAddress = GetLocalIPv4() });
-                            await SendToSignalRAsync(tokenCopy, new UpdateStatusRequest { Online = true });
+                            await SendToSignalRAsync(tokenCopy, new UpdateStatusRequest { Online = true }, userIdStr);
                         }
                         catch (Exception bgEx)
                         {
@@ -163,6 +167,8 @@ namespace Messenger.Web.Pages.Login
                 HttpContext.Session.SetString("ACCESS_TOKEN", accessToken);
 
                 var tokenCopy = accessToken;
+                var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                             ?? User.FindFirst("sub")?.Value;
                 _ = Task.Run(async () =>
                 {
                     try
@@ -173,7 +179,7 @@ namespace Messenger.Web.Pages.Login
                             IpAddress = GetLocalIPv4()
                         };
                         await LoginAsync(loginRequest);
-                        await SendToSignalRAsync(tokenCopy, new UpdateStatusRequest { Online = true });
+                        await SendToSignalRAsync(tokenCopy, new UpdateStatusRequest { Online = true }, userIdStr);
                     }
                     catch (Exception bgEx)
                     {
@@ -233,15 +239,15 @@ namespace Messenger.Web.Pages.Login
             return await _api.PostRawAsync("logins", request, request.Token, token);
         }
 
-        private async Task SendToSignalRAsync(string? accessToken, UpdateStatusRequest request)
+        private async Task SendToSignalRAsync(string? accessToken, UpdateStatusRequest request, string? userIdStr = null)
         {
             var statusResponse = await _api.PutRawAsync("userstatuses", request, accessToken);
 
             if (!statusResponse.IsSuccessStatusCode)
                 return;
 
-            var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                         ?? User.FindFirst("sub")?.Value;
+            if (string.IsNullOrEmpty(userIdStr))
+                return;
 
             if (!Guid.TryParse(userIdStr, out Guid userId))
                 return;

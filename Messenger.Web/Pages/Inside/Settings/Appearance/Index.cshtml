@@ -1,0 +1,154 @@
+@page "/inside/settings/appearance"
+@model Messenger.Web.Pages.Inside.Settings.Appearance.IndexModel
+@{
+    Layout = null;
+    ViewData["Title"] = "Внешний вид";
+}
+
+<!DOCTYPE html>
+<html lang="ru" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#111827" media="(prefers-color-scheme: dark)">
+    <title>@ViewData["Title"]</title>
+    <script>
+        (function () {
+            const saved = localStorage.getItem('theme');
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            if (saved === 'dark' || (!saved && prefersDark)) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        })();
+    </script>
+    <partial name="_LayoutPWA" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>tailwind.config = { darkMode: 'class' }</script>
+    <script src="https://unpkg.com/feather-icons"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="~/css/settings.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/ui-dialogs.css" asp-append-version="true" />
+</head>
+<body class="flex bg-gray-50 dark:bg-gray-900">
+    <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+    <aside id="sidebar" class="sidebar">
+        <div class="p-5 text-center border-b border-gray-200 dark:border-gray-700">
+            <div class="guap-gradient w-11 h-11 rounded-full flex items-center justify-center mx-auto mb-2.5">
+                <i data-feather="message-square" class="w-5 h-5 text-white"></i>
+            </div>
+            <h1 class="text-lg font-bold text-gray-800 dark:text-white">GUAP Messenger</h1>
+        </div>
+        <nav class="flex-1 p-3 overflow-y-auto">
+            <a asp-page="/Inside/Chats/Index" class="block py-2.5 px-4 text-gray-600 dark:text-gray-300 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition">Чаты</a>
+            <a href="#" class="block py-2.5 px-4 bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 rounded-xl font-medium">Настройки</a>
+            <div class="pl-4 mt-3 space-y-0.5">
+                <a asp-page="/Inside/Settings/Profile/Index" class="sidebar-link block py-2 px-4 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">Профиль</a>
+                <a asp-page="/Inside/Settings/Security/Index" class="sidebar-link block py-2 px-4 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">Безопасность</a>
+                <a asp-page="/Inside/Settings/Notifications/Index" class="sidebar-link block py-2 px-4 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">Уведомления</a>
+                <a asp-page="/Inside/Settings/Appearance/Index" class="sidebar-link block py-2 px-4 text-sm bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 rounded-lg font-medium">Внешний вид</a>
+                <a asp-page="/Inside/Settings/Privacy/Index" class="sidebar-link block py-2 px-4 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">Конфиденциальность</a>
+            </div>
+        </nav>
+        <div class="p-4 border-t border-gray-200 dark:border-gray-700">
+            <form asp-page="/Logout" method="post" data-logout="true" class="w-full">
+                <button type="submit" class="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 transition font-medium text-sm">
+                    <i data-feather="log-out" class="w-4 h-4"></i><span>Выйти</span>
+                </button>
+            </form>
+        </div>
+    </aside>
+
+    <div class="flex-1 flex flex-col min-w-0">
+        <div class="mobile-header">
+            <button id="menu-toggle" type="button" class="w-11 h-11 flex items-center justify-center rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition" aria-label="Меню">
+                <i data-feather="menu" class="w-6 h-6 text-gray-700 dark:text-gray-200"></i>
+            </button>
+            <h1 class="text-lg font-semibold text-gray-800 dark:text-white truncate">Внешний вид</h1>
+            <div class="w-11"></div>
+        </div>
+
+        <main class="main-content p-4 sm:p-6">
+            <div class="max-w-4xl mx-auto space-y-5 sm:space-y-6">
+                <h2 class="text-xl sm:text-2xl font-semibold text-gray-800 dark:text-white hidden sm:block">Внешний вид</h2>
+
+                <section class="settings-card">
+                    <div class="settings-card-header">
+                        <div class="settings-icon-wrap bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400">
+                            <i data-feather="moon" class="w-5 h-5"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <h3 class="settings-card-title">Тема</h3>
+                            <p class="settings-card-desc">Светлая, тёмная или как в системе</p>
+                        </div>
+                    </div>
+
+                    <div class="theme-grid" role="radiogroup" aria-label="Тема оформления">
+                        <button type="button" class="theme-option" data-theme="light" aria-pressed="false">
+                            <span class="theme-preview theme-preview-light"></span>
+                            <span class="theme-option-label">Светлая</span>
+                        </button>
+                        <button type="button" class="theme-option" data-theme="dark" aria-pressed="false">
+                            <span class="theme-preview theme-preview-dark"></span>
+                            <span class="theme-option-label">Тёмная</span>
+                        </button>
+                        <button type="button" class="theme-option" data-theme="system" aria-pressed="false">
+                            <span class="theme-preview theme-preview-system"></span>
+                            <span class="theme-option-label">Системная</span>
+                        </button>
+                    </div>
+                </section>
+
+                <section class="settings-card">
+                    <div class="settings-card-header">
+                        <div class="settings-icon-wrap bg-sky-50 dark:bg-sky-900/30 text-sky-600 dark:text-sky-400">
+                            <i data-feather="type" class="w-5 h-5"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <h3 class="settings-card-title">Текст и чаты</h3>
+                            <p class="settings-card-desc">Удобство чтения на телефоне</p>
+                        </div>
+                    </div>
+                    <div class="settings-row">
+                        <div class="settings-row-text">
+                            <span class="settings-row-label">Крупный шрифт в чатах</span>
+                            <span class="settings-row-hint">Увеличить размер сообщений</span>
+                        </div>
+                        <label class="toggle">
+                            <input type="checkbox" class="toggle-input pref-toggle" data-pref="appearance.largeFont">
+                            <span class="toggle-track"></span>
+                        </label>
+                    </div>
+                    <div class="settings-row border-0">
+                        <div class="settings-row-text">
+                            <span class="settings-row-label">Компактный список чатов</span>
+                            <span class="settings-row-hint">Меньше отступов в списке</span>
+                        </div>
+                        <label class="toggle">
+                            <input type="checkbox" class="toggle-input pref-toggle" data-pref="appearance.compactList">
+                            <span class="toggle-track"></span>
+                        </label>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <div id="toast-container"></div>
+    <script src="~/js/ui-dialogs.js" asp-append-version="true"></script>
+    <script src="~/js/settings.js" asp-append-version="true"></script>
+    <script src="~/js/settings-prefs.js" asp-append-version="true"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            if (typeof feather !== 'undefined') feather.replace();
+            if (typeof initPrefToggles === 'function') initPrefToggles();
+            if (typeof initThemePicker === 'function') initThemePicker();
+        });
+    </script>
+</body>
+</html>
