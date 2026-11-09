@@ -48,5 +48,32 @@ namespace Messenger.Infrastructure.Services
             _context.Logins.Update(login);
             await _context.SaveChangesAsync(cancellationToken);
         }
+
+        public async Task<bool> RevokeLoginAsync(Guid userId, Guid loginId, CancellationToken cancellationToken = default)
+        {
+            var login = await _context.Logins
+                .FirstOrDefaultAsync(l => l.LoginId == loginId && l.UserId == userId, cancellationToken);
+            if (login == null)
+                return false;
+
+            login.Active = false;
+            login.LogoutTime = UtcDateTime.Now;
+            login.Token = string.Empty;
+            await _context.SaveChangesAsync(cancellationToken);
+            return true;
+        }
+
+        public async Task<int> RevokeOtherLoginsAsync(Guid userId, Guid? keepLoginId, CancellationToken cancellationToken = default)
+        {
+            var q = _context.Logins.Where(l => l.UserId == userId && l.Active);
+            if (keepLoginId.HasValue)
+                q = q.Where(l => l.LoginId != keepLoginId.Value);
+
+            return await q.ExecuteUpdateAsync(s => s
+                .SetProperty(l => l.Active, false)
+                .SetProperty(l => l.LogoutTime, UtcDateTime.Now)
+                .SetProperty(l => l.Token, string.Empty),
+                cancellationToken);
+        }
     }
 }

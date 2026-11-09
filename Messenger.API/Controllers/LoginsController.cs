@@ -168,5 +168,53 @@ namespace Messenger.API.Controllers
                 });
             }
         }
+
+        /// <summary>
+        /// Завершить конкретную сессию по Login_ID
+        /// </summary>
+        [HttpDelete("{loginId:guid}")]
+        [EndpointName("RevokeLogin")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> RevokeLoginAsync(Guid loginId, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
+                if (error != null) return error;
+
+                var ok = await _loginService.RevokeLoginAsync(user!.UserId, loginId, cancellationToken);
+                if (!ok)
+                    return NotFound(new ErrorResponse { IsSuccess = false, Error = "Сессия не найдена" });
+
+                return Ok(new { isSuccess = true, message = "Сессия завершена" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new ErrorResponse { IsSuccess = false, Error = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// Завершить все сессии, кроме текущей (по loginId, если передан)
+        /// </summary>
+        [HttpPost("revoke-others")]
+        [EndpointName("RevokeOtherLogins")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        public async Task<IActionResult> RevokeOthersAsync([FromQuery] Guid? keepLoginId = null, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
+                if (error != null) return error;
+
+                var n = await _loginService.RevokeOtherLoginsAsync(user!.UserId, keepLoginId, cancellationToken);
+                return Ok(new { isSuccess = true, revoked = n });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new ErrorResponse { IsSuccess = false, Error = ex.Message });
+            }
+        }
     }
 }
