@@ -41,6 +41,7 @@
     <partial name="_LayoutPWA" />
 
     <link rel="stylesheet" href="~/css/chats.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/settings-sync.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/ui-dialogs.css" asp-append-version="true" />
 
 </head>
@@ -55,10 +56,6 @@
                     <h1 class="font-bold text-lg text-gray-900 dark:text-white">GUAP Messenger</h1>
                 </div>
                 <div class="flex items-center space-x-2">
-                    <button id="theme-toggle" type="button" class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition" title="Переключить тему">
-                        <i data-feather="moon" class="w-5 h-5 theme-icon-dark hidden"></i>
-                        <i data-feather="sun" class="w-5 h-5 theme-icon-light"></i>
-                    </button>
                     <a asp-page="/Inside/Settings/Index"  class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200" title="Настройки"><i data-feather="settings" class="w-5 h-5"></i></a>
                 </div>
             </div>
@@ -663,5 +660,6 @@
     <script src="~/js/offline-store.js" asp-append-version="true"></script>
     <script src="~/js/chats-offline.js" asp-append-version="true"></script>
     <script src="~/js/desktop-notifications.js" asp-append-version="true"></script>
+    <script src="~/js/settings-prefs.js" asp-append-version="true"></script>
 </body>
 </html>
