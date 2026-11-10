@@ -1,11 +1,7 @@
-/**
- * Настройки аккаунта: API + локальный кэш + применение на страницах.
- * API_BASE_URL = origin API с суффиксом /api/v{version} (как в chats/settings.js).
- * Без тостов.
- */
 (function () {
-    const CACHE_KEY = 'guap.accountSettings';
+    const CACHE_KEY = 'guap.accountSettings.v2';
     const PREFIX = 'guap.settings.';
+    try { localStorage.removeItem('guap.accountSettings'); } catch (_) { /* */ }
 
     const PREF_TO_API = {
         'notif.messages': 'notifyMessages',
@@ -47,14 +43,12 @@
     }
 
     function apiRoot() {
-        // Ожидается: https://host/api/v1.0  (как ApiHelper.GetApiUrl)
         var base = (window.API_BASE_URL || '').replace(/\/$/, '');
         if (!base) {
             var m = document.querySelector('meta[name="api-base"]');
             if (m && m.content) base = m.content.trim().replace(/\/$/, '');
         }
         if (!base) return '';
-        // если передали только host — добавим /api/v1.0
         if (!/\/api\/v\d/i.test(base)) {
             base = base + '/api/v1.0';
         }
@@ -418,7 +412,6 @@ window.AccountSettings = {
     };
 
     applyToDocument(readCache());
-    // не дергаем API до DOM: токен/meta могут появиться в inline-скрипте страницы
     document.addEventListener('DOMContentLoaded', function () {
         setTimeout(function () { loadSettings().catch(function () {}); }, 0);
     });

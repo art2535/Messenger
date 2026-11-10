@@ -40,3 +40,19 @@ html.settings-compact-list .chat-item .avatar {
 @media (min-width: 640px) {
   .sessions-scroll { max-height: 20rem; }
 }
+
+html.settings-large-font body { font-size: 1.0625rem; }
+html.settings-large-font .chat-list-item .chat-name,
+html.settings-large-font .chat-item .font-medium,
+html.settings-large-font #chat-title { font-size: 1.05em; }
+html.settings-large-font .settings-row-label { font-size: 1rem; }
+
+html.settings-compact-list .chat-list-item .chat-last-message,
+html.settings-compact-list .chat-item .text-sm {
+  font-size: 0.75rem !important;
+  line-height: 1.25 !important;
+}
+html.settings-compact-list .chat-list-item .chat-name,
+html.settings-compact-list .chat-item .font-medium {
+  font-size: 0.875rem !important;
+}

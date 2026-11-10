@@ -5,7 +5,6 @@ function getApiUrl() {
         if (meta && meta.content) base = meta.content.trim().replace(/\/$/, '');
     }
     if (!base) return '';
-    // ApiHelper.GetApiUrl() уже содержит /api/v1.0
     if (!/\/api\/v\d/i.test(base)) base += '/api/v1.0';
     return base;
 }
@@ -588,7 +587,6 @@ async function loadPushSettings() {
         } catch (_) {
             settings = null;
         }
-        // fallback: account-settings
         if (!settings || settings.pushEnabled === undefined) {
             try {
                 const full = await apiFetch('/account-settings');
@@ -619,7 +617,6 @@ async function loadPushSettings() {
                 el.checked = !!map[key];
             }
         });
-        // legacy ids
         const nm = document.getElementById('notifyMessages');
         const ng = document.getElementById('notifyGroup');
         const nmen = document.getElementById('notifyMentions');
@@ -673,12 +670,22 @@ async function togglePushNotifications() {
     }
 }
 
+function prefChecked(pref, fallbackId) {
+    const byPref = document.querySelector(`.pref-toggle[data-pref="${pref}"]`);
+    if (byPref) return !!byPref.checked;
+    if (fallbackId) {
+        const el = document.getElementById(fallbackId);
+        if (el) return !!el.checked;
+    }
+    return true;
+}
+
 async function saveNotificationSettings() {
     const dto = {
         pushEnabled: !!(document.getElementById('push-toggle')?.checked),
-        notifyMessages: !!(document.getElementById('notifyMessages')?.checked),
-        notifyGroupChats: !!(document.getElementById('notifyGroup')?.checked),
-        notifyMentions: !!(document.getElementById('notifyMentions')?.checked)
+        notifyMessages: prefChecked('notif.messages', 'notifyMessages'),
+        notifyGroupChats: prefChecked('notif.groupChats', 'notifyGroup'),
+        notifyMentions: prefChecked('notif.mentions', 'notifyMentions')
     };
 
     try {
@@ -686,9 +693,19 @@ async function saveNotificationSettings() {
             method: 'POST',
             body: JSON.stringify(dto)
         });
+        if (window.AccountSettings && typeof AccountSettings.save === 'function') {
+            AccountSettings.save({
+                pushEnabled: dto.pushEnabled,
+                notifyMessages: dto.notifyMessages,
+                notifyGroupChats: dto.notifyGroupChats,
+                notifyMentions: dto.notifyMentions
+            });
+        }
     } catch (err) {
         console.error('Ошибка сохранения настроек:', err);
-        showToast('Не удалось сохранить настройки уведомлений', 'error');
+        if (typeof showToast === 'function') {
+            showToast('Не удалось сохранить настройки уведомлений', 'error');
+        }
     }
 }
 
@@ -697,10 +714,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const pushToggleEl = document.getElementById('push-toggle');
     if (pushToggleEl) {
-        // сразу скрыть подразделы, если push выключен (до ответа API)
         setNotificationTypesVisible(!!pushToggleEl.checked);
         pushToggleEl.addEventListener('change', async (e) => {
-            // сначала UI, затем подписка/API
             setNotificationTypesVisible(!!pushToggleEl.checked);
             if (typeof togglePushNotifications === 'function') {
                 await togglePushNotifications();
@@ -713,9 +728,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     document.querySelectorAll('#notification-types input[type="checkbox"], #notification-inapp input[type="checkbox"]').forEach(cb => {
         cb.addEventListener('change', () => {
-            if (typeof saveNotificationSettings === 'function') saveNotificationSettings();
-            if (window.AccountSettings && cb.classList.contains('pref-toggle')) {
-                // AccountSettings already bound via initPrefToggles
+            const pref = cb.getAttribute('data-pref') || '';
+            const isPushType = pref === 'notif.messages' || pref === 'notif.groupChats' || pref === 'notif.mentions'
+                || cb.id === 'notifyMessages' || cb.id === 'notifyGroup' || cb.id === 'notifyMentions';
+            if (isPushType && typeof saveNotificationSettings === 'function') {
+                saveNotificationSettings();
             }
         });
     });
@@ -723,7 +740,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     initSignalR();
     await loadPushSettings();
     await checkPushStatus();
-    // синхронизация видимости после загрузки
     setNotificationTypesVisible(!!document.getElementById('push-toggle')?.checked);
 
     document.getElementById('confirmYesBtn') && (document.getElementById('confirmYesBtn').onclick = () => closeConfirm(true));

@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.SignalR;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Security.Claims;
+using Messenger.Web.Services;
 
 namespace Messenger.Web.Pages.Login
 {
@@ -58,6 +59,7 @@ namespace Messenger.Web.Pages.Login
                 {
                     HttpContext.Session.SetString("ACCESS_TOKEN", accessToken);
                     var tokenCopy = accessToken;
+                    var sessionKey = await EnsureSessionKeyAsync();
                     var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
                                  ?? User.FindFirst("sub")?.Value;
                     _ = Task.Run(async () =>
@@ -66,7 +68,7 @@ namespace Messenger.Web.Pages.Login
                         {
                             var loginRequest = new CreateLoginRequest
                             {
-                                Token = tokenCopy,
+                                Token = sessionKey, // ключ UserTokenStore для отзыва refresh при revoke
                                 IpAddress = GetLocalIPv4()
                             };
                             await LoginAsync(loginRequest);
@@ -94,13 +96,14 @@ namespace Messenger.Web.Pages.Login
                 {
                     HttpContext.Session.SetString("ACCESS_TOKEN", accessToken!);
                     var tokenCopy = accessToken;
+                    var sessionKey = await EnsureSessionKeyAsync();
                     var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
                                  ?? User.FindFirst("sub")?.Value;
                     _ = Task.Run(async () =>
                     {
                         try
                         {
-                            await LoginAsync(new CreateLoginRequest { Token = tokenCopy, IpAddress = GetLocalIPv4() });
+                            await LoginAsync(new CreateLoginRequest { Token = sessionKey, IpAddress = GetLocalIPv4() });
                             await SendToSignalRAsync(tokenCopy, new UpdateStatusRequest { Online = true }, userIdStr);
                         }
                         catch (Exception bgEx)
@@ -167,6 +170,7 @@ namespace Messenger.Web.Pages.Login
                 HttpContext.Session.SetString("ACCESS_TOKEN", accessToken);
 
                 var tokenCopy = accessToken;
+                var sessionKey = await EnsureSessionKeyAsync();
                 var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
                              ?? User.FindFirst("sub")?.Value;
                 _ = Task.Run(async () =>
@@ -175,7 +179,7 @@ namespace Messenger.Web.Pages.Login
                     {
                         var loginRequest = new CreateLoginRequest
                         {
-                            Token = tokenCopy,
+                            Token = sessionKey,
                             IpAddress = GetLocalIPv4()
                         };
                         await LoginAsync(loginRequest);
@@ -270,6 +274,33 @@ namespace Messenger.Web.Pages.Login
                 _logger.LogWarning(
                     "Не удалось отправить SignalR уведомление о входе: {Message}", ex.Message);
             }
+        }
+
+        private async Task<string> EnsureSessionKeyAsync()
+        {
+            var auth = await HttpContext.AuthenticateAsync(
+                Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationDefaults.AuthenticationScheme);
+            var props = auth.Properties ?? new AuthenticationProperties();
+            if (!props.Items.TryGetValue(UserTokenStore.StoreKeyItem, out var key) || string.IsNullOrEmpty(key))
+            {
+                key = Guid.NewGuid().ToString("N");
+                props.Items[UserTokenStore.StoreKeyItem] = key;
+                if (auth.Principal != null)
+                {
+                    await HttpContext.SignInAsync(
+                        Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationDefaults.AuthenticationScheme,
+                        auth.Principal, props);
+                }
+            }
+
+            var access = await HttpContext.GetTokenAsync("access_token") ?? "";
+            var refresh = await HttpContext.GetTokenAsync("refresh_token") ?? "";
+            if (!string.IsNullOrEmpty(access) && !string.IsNullOrEmpty(refresh))
+            {
+                var store = HttpContext.RequestServices.GetRequiredService<UserTokenStore>();
+                store.GetOrAdd(key!, access, refresh).LastSeenUtc = DateTime.UtcNow;
+            }
+            return key!;
         }
 
         private static string GetLocalIPv4()

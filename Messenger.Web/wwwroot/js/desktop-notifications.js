@@ -55,10 +55,34 @@
         return String(currentChatId) === String(chatId);
     }
 
+    function shouldSuppressOpenChat() {
+        if (typeof window.__suppressOpenChat === 'boolean') return window.__suppressOpenChat;
+        try {
+            if (document.documentElement.dataset.suppressOpenChat === '0') return false;
+        } catch (_) {}
+        return true;
+    }
+
+    function shouldPlaySound() {
+        if (typeof window.__notifSound === 'boolean') return window.__notifSound;
+        try {
+            if (document.documentElement.dataset.notifySound === '0') return false;
+        } catch (_) {}
+        return true;
+    }
+
+    function shouldShowPreview() {
+        if (typeof window.__notifyPreview === 'boolean') return window.__notifyPreview;
+        try {
+            if (document.documentElement.dataset.notifyPreview === '0') return false;
+        } catch (_) {}
+        return true;
+    }
+
     function shouldShowOsNotification(chatId) {
         if (typeof document === 'undefined') return false;
-        if (document.hidden) return false;
-        if (isViewingChat(chatId)) return false;
+        if (isViewingChat(chatId) && shouldSuppressOpenChat()) return false;
+        if (!document.hidden && isViewingChat(chatId)) return false;
         return true;
     }
 
@@ -101,6 +125,7 @@
         const url = chatId
             ? '/inside/chats?chatId=' + encodeURIComponent(chatId)
             : '/inside/chats';
+        const silent = opts.silent != null ? !!opts.silent : !shouldPlaySound();
 
         let n;
         try {
@@ -111,7 +136,7 @@
                 tag: tag,
                 renotify: false,
                 requireInteraction: false,
-                silent: false,
+                silent: silent,
                 data: { url: url, chatId: chatId, messageId: opts.messageId || null, notificationId: opts.notificationId || null }
             });
         } catch (e) {
@@ -151,17 +176,46 @@
         const senderId = msg.senderId || msg.SenderId;
         if (typeof me !== 'undefined' && senderId != null && String(senderId) === String(me)) return;
 
+        const s = window.__accountSettings || {};
+        const chatType = (msg.chatType || msg.ChatType || '').toString().toLowerCase();
+        const isGroup = !!(msg.isGroup || msg.IsGroup || chatType === 'group' ||
+            (typeof currentChatInfo !== 'undefined' && currentChatInfo &&
+                String(currentChatInfo.chatId) === String(msg.chatId || msg.ChatId) &&
+                currentChatInfo.type === 'group'));
+        if (isGroup && s.notifyGroupChats === false) return;
+        if (!isGroup && s.notifyMessages === false) return;
+
         const chatId = msg.chatId || msg.ChatId;
         const mid = msg.messageId || msg.MessageId;
         const text = msg.messageText || msg.MessageText || '';
-        const senderName = msg.senderName || msg.SenderName || msg.sender || msg.Sender || 'Новое сообщение';
-        const preview = String(text).length > 120 ? String(text).slice(0, 117) + '…' : text;
+        const senderName = msg.senderName || msg.SenderName || msg.sender || msg.Sender || 'Сообщение';
+        const chatName = msg.chatName || msg.ChatName ||
+            (typeof currentChatInfo !== 'undefined' && currentChatInfo &&
+                String(currentChatInfo.chatId) === String(chatId)
+                ? (currentChatInfo.name || currentChatInfo.title || '')
+                : '');
+
+        const textPreview = String(text).length > 120 ? String(text).slice(0, 117) + '…' : text;
+        let title;
+        let body;
+        if (isGroup) {
+            const gName = chatName || 'Групповой чат';
+            title = 'Новое сообщение в группе ' + gName;
+            body = shouldShowPreview()
+                ? `${senderName}: ${textPreview || 'вложение'}`
+                : `${senderName}: новое сообщение`;
+        } else {
+            title = 'Новое сообщение от ' + senderName;
+            body = shouldShowPreview()
+                ? (textPreview || 'Вложение')
+                : 'Новое сообщение';
+        }
 
         if (typeof document !== 'undefined' && document.hidden) return;
 
         showMessageNotification({
-            title: senderName,
-            body: preview || 'Вложение',
+            title: title,
+            body: body,
             chatId: chatId,
             messageId: mid
         });

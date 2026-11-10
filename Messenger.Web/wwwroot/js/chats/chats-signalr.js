@@ -128,22 +128,68 @@ async function startSignalR() {
             const typingIndicator = document.getElementById('typing-indicator');
             const typingNameEl = document.getElementById('typing-name');
             const subtitle = document.getElementById('chat-subtitle');
+            const isGroupChat = !!(currentChatInfo && (currentChatInfo.type === 'group' || currentChatInfo.Type === 'group'));
 
             if (data.isTyping) {
-                loadUserName(typingUserId).then(name => {
-                    console.log(`[TYPING] Показываем: ${name} печатает...`);
-                    if (typingNameEl) typingNameEl.textContent = name || "Собеседник";
+                if (isGroupChat) {
+                    loadUserName(typingUserId).then(name => {
+                        console.log(`[TYPING] Группа: ${name} печатает...`);
+                        if (typingNameEl) {
+                            typingNameEl.textContent = name || 'Участник';
+                            typingNameEl.classList.remove('hidden');
+                        }
+                        if (typingIndicator) typingIndicator.classList.remove('hidden');
+                        if (subtitle) subtitle.classList.add('hidden');
+                    });
+                } else {
+                    console.log('[TYPING] Личный чат: печатает...');
+                    if (typingNameEl) {
+                        typingNameEl.textContent = '';
+                        typingNameEl.classList.add('hidden');
+                    }
                     if (typingIndicator) typingIndicator.classList.remove('hidden');
                     if (subtitle) subtitle.classList.add('hidden');
-                });
+                }
             } else {
                 if (typingIndicator) typingIndicator.classList.add('hidden');
+                if (typingNameEl) {
+                    typingNameEl.textContent = '';
+                    typingNameEl.classList.remove('hidden');
+                }
                 if (subtitle) subtitle.classList.remove('hidden');
             }
         }
 
         updateTypingInChatList(data.chatId, typingUserId, data.isTyping);
     });
+
+    window.updateTypingInChatList = window.updateTypingInChatList || function updateTypingInChatList(chatId, userId, isTyping) {
+        const item = document.querySelector(`.chat-list-item[data-chat-id="${chatId}"], [data-chat-id="${chatId}"]`);
+        if (!item) return;
+        const row = item.querySelector('.typing-in-list');
+        if (!row) return;
+        const nameEl = row.querySelector('.typing-name');
+        const isGroup = item.dataset.chatType === 'group' || item.classList.contains('is-group')
+            || (item.dataset.isGroup === '1') || (item.dataset.partnerId == null && item.dataset.partnerId !== '');
+
+        const hasPartner = !!(item.dataset.partnerId && String(item.dataset.partnerId).trim());
+        const groupChat = !hasPartner || isGroup;
+
+        if (isTyping) {
+            if (groupChat && nameEl) {
+                loadUserName(userId).then(name => {
+                    nameEl.textContent = (name || 'Участник') + ' ';
+                    row.classList.remove('hidden');
+                });
+            } else {
+                if (nameEl) nameEl.textContent = '';
+                row.classList.remove('hidden');
+            }
+        } else {
+            row.classList.add('hidden');
+            if (nameEl) nameEl.textContent = '';
+        }
+    };
 
     function normId(id) {
         return String(id || '').toLowerCase().replace(/[{}]/g, '').trim();
@@ -886,12 +932,14 @@ messageInput.addEventListener('input', () => {
 
     if (hasText && (now - lastTypingSentAt) >= TYPING_THROTTLE_MS) {
         lastTypingSentAt = now;
-        if (window.__privacyShowTyping !== false) connection.invoke("StartTyping", currentChatId).catch(() => { });
+        if (window.__privacyShowTyping !== false) {
+            connection.invoke("StartTyping", currentChatId).catch(() => { });
+        }
     }
 
     clearTimeout(typingTimeout);
     typingTimeout = setTimeout(() => {
-        if (connection && currentChatId) {
+        if (connection && currentChatId && window.__privacyShowTyping !== false) {
             connection.invoke("StopTyping", currentChatId).catch(() => { });
         }
     }, 1500);

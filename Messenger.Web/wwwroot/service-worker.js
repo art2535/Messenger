@@ -381,9 +381,20 @@ async function showStackedNotification(title, options, ttlMs) {
 
 self.addEventListener('push', event => {
     const data = parsePushPayload(event);
-    const title = data.sender || data.title || 'GUAP Messenger';
+    const isGroup = data.chatType === 'group' || (data.title && /в группе/i.test(String(data.title)));
+    let title = data.title;
+    if (!title) {
+        if (isGroup) {
+            title = 'Новое сообщение в группе ' + (data.chatName || 'Групповой чат');
+        } else if (data.sender) {
+            title = 'Новое сообщение от ' + data.sender;
+        } else {
+            title = 'GUAP Messenger';
+        }
+    }
     const tag = buildUniqueNotificationTag(data);
     const ttl = 4000 + Math.floor(Math.random() * 4000);
+    const silent = data.silent === true || data.silent === 'true';
 
     const options = {
         body: data.body || 'У вас новое сообщение',
@@ -392,14 +403,15 @@ self.addEventListener('push', event => {
         tag: tag,
         renotify: false,
         requireInteraction: false,
-        silent: false,
-        vibrate: [180, 80, 180],
+        silent: silent,
+        vibrate: silent ? [] : [180, 80, 180],
         timestamp: Date.now(),
         data: {
             url: data.url,
             chatId: data.chatId,
             notificationId: data.notificationId,
             messageId: data.messageId,
+            chatType: data.chatType || (isGroup ? 'group' : 'private'),
             tag: tag
         }
     };
