@@ -18,13 +18,34 @@ namespace Messenger.Infrastructure.Services
         public async Task<AccountSettingsDto> GetByUserIdAsync(Guid userId, CancellationToken cancellationToken = default)
         {
             var settings = await _context.AccountSettings
-                .AsNoTracking()
                 .FirstOrDefaultAsync(x => x.AccountId == userId, cancellationToken);
 
             if (settings == null)
             {
                 settings = new AccountSetting { AccountId = userId };
                 _context.AccountSettings.Add(settings);
+                await _context.SaveChangesAsync(cancellationToken);
+                return Map(settings);
+            }
+
+            var themeEmpty = string.IsNullOrWhiteSpace(settings.Theme);
+            var allPrivacyOff = !settings.ShowOnline && !settings.ShowTyping && !settings.ReadReceipts
+                                && !settings.NotifySound && !settings.NotifyPreview && !settings.IdleLogout;
+            if (themeEmpty || allPrivacyOff)
+            {
+                if (themeEmpty) settings.Theme = "system";
+                if (allPrivacyOff)
+                {
+                    settings.ShowOnline = true;
+                    settings.ShowTyping = true;
+                    settings.ReadReceipts = true;
+                    settings.NotifySound = true;
+                    settings.NotifyPreview = true;
+                    settings.NotifyReactions = true;
+                    settings.NotifySystem = true;
+                    settings.SuppressOpenChat = true;
+                    settings.IdleLogout = true;
+                }
                 await _context.SaveChangesAsync(cancellationToken);
             }
 

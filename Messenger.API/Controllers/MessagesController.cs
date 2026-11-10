@@ -33,12 +33,14 @@ namespace Messenger.API.Controllers
         private readonly IUserService _userService;
         private readonly IEncryptionService _encryptionService;
         private readonly IAttachmentService _attachmentService;
+        private readonly IAccountSettingsService _accountSettingsService;
         private readonly ILogger<MessagesController> _logger;
         private readonly Messenger.Core.Services.SendMessageRateLimiterService _sendLimiter;
 
         public MessagesController(IMessageService messageService, IConfiguration configuration,
             IHubContext<ChatHub> hubContext, IChatService chatService, IUserService userService,
             IEncryptionService encryptionService, IAttachmentService attachmentService,
+            IAccountSettingsService accountSettingsService,
             ILogger<MessagesController> logger,
             Messenger.Core.Services.SendMessageRateLimiterService sendLimiter)
         {
@@ -49,6 +51,7 @@ namespace Messenger.API.Controllers
             _userService = userService;
             _encryptionService = encryptionService;
             _attachmentService = attachmentService;
+            _accountSettingsService = accountSettingsService;
             _logger = logger;
             _sendLimiter = sendLimiter;
         }
@@ -594,20 +597,31 @@ namespace Messenger.API.Controllers
 
                 if (updated > 0)
                 {
-                    var readPayload = new
+                    var sendReceipts = true;
+                    try
                     {
-                        chatId,
-                        readerId = user.UserId,
-                        readAt = DateTime.UtcNow
-                    };
+                        var settings = await _accountSettingsService.GetByUserIdAsync(user.UserId, ct);
+                        sendReceipts = settings.ReadReceipts;
+                    }
+                    catch { }
 
-                    await _hubContext.Clients.Group(chatId.ToString())
-                        .SendAsync("MessagesRead", readPayload, ct);
-
-                    foreach (var participant in chat.ChatParticipants)
+                    if (sendReceipts)
                     {
-                        await _hubContext.Clients.Group($"User_{participant.UserId}")
+                        var readPayload = new
+                        {
+                            chatId,
+                            readerId = user.UserId,
+                            readAt = DateTime.UtcNow
+                        };
+
+                        await _hubContext.Clients.Group(chatId.ToString())
                             .SendAsync("MessagesRead", readPayload, ct);
+
+                        foreach (var participant in chat.ChatParticipants)
+                        {
+                            await _hubContext.Clients.Group($"User_{participant.UserId}")
+                                .SendAsync("MessagesRead", readPayload, ct);
+                        }
                     }
                 }
 

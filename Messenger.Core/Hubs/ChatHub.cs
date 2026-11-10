@@ -15,16 +15,19 @@ namespace Messenger.Core.Hubs
         private readonly IUserService _userService;
         private readonly IUserStatusService _userStatusService;
         private readonly IChatService _chatService;
+        private readonly IAccountSettingsService _accountSettingsService;
         private readonly ILogger<ChatHub> _logger;
         private readonly TypingRateLimiterService _typingLimiter;
         private readonly SendMessageRateLimiterService _sendMessageLimiter;
 
         public ChatHub(IUserService userService, IUserStatusService userStatusService, IChatService chatService,
+            IAccountSettingsService accountSettingsService,
             ILogger<ChatHub> logger, TypingRateLimiterService typingLimiter, SendMessageRateLimiterService sendMessageLimiter)
         {
             _userService = userService;
             _userStatusService = userStatusService;
             _chatService = chatService;
+            _accountSettingsService = accountSettingsService;
             _logger = logger;
             _typingLimiter = typingLimiter;
             _sendMessageLimiter = sendMessageLimiter;
@@ -110,14 +113,27 @@ namespace Messenger.Core.Hubs
                     LastActivity = DateTime.UtcNow
                 });
 
-                var statusData = new
+                var showOnline = true;
+                try
                 {
-                    userId = userId.ToString(),
-                    isOnline = true,
-                    lastActivity = DateTime.UtcNow
-                };
+                    var settings = await _accountSettingsService.GetByUserIdAsync(userId);
+                    showOnline = settings.ShowOnline;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Не удалось загрузить настройки для {UserId}, online по умолчанию", userId);
+                }
 
-                await SendToPeersAsync(userId, "UserOnlineStatusChanged", statusData);
+                if (showOnline)
+                {
+                    var statusData = new
+                    {
+                        userId = userId.ToString(),
+                        isOnline = true,
+                        lastActivity = DateTime.UtcNow
+                    };
+                    await SendToPeersAsync(userId, "UserOnlineStatusChanged", statusData);
+                }
             }
             catch (Exception ex)
             {
@@ -157,7 +173,6 @@ namespace Messenger.Core.Hubs
                             isOnline = false,
                             lastActivity = DateTime.UtcNow
                         };
-
                         await SendToPeersAsync(userId, "UserOnlineStatusChanged", statusData);
                     }
                 }
@@ -282,6 +297,14 @@ namespace Messenger.Core.Hubs
                 if (user == null)
                     return;
 
+                try
+                {
+                    var settings = await _accountSettingsService.GetByUserIdAsync(user.UserId);
+                    if (!settings.ShowTyping)
+                        return;
+                }
+                catch { }
+
                 await Clients.Group(chatId).SendAsync("UserIsTyping", new
                 {
                     chatId,
@@ -314,6 +337,14 @@ namespace Messenger.Core.Hubs
                 if (user == null) 
                     return;
 
+                try
+                {
+                    var settings = await _accountSettingsService.GetByUserIdAsync(user.UserId);
+                    if (!settings.ShowTyping)
+                        return;
+                }
+                catch { }
+
                 await Clients.Group(chatId).SendAsync("UserIsTyping", new
                 {
                     chatId,
@@ -337,10 +368,18 @@ namespace Messenger.Core.Hubs
                 if (status == null) 
                     return;
 
+                var showOnline = true;
+                try
+                {
+                    var settings = await _accountSettingsService.GetByUserIdAsync(userId);
+                    showOnline = settings.ShowOnline;
+                }
+                catch { }
+
                 var statusData = new
                 {
                     userId = userId.ToString(),
-                    isOnline = status.Online,
+                    isOnline = showOnline && status.Online,
                     lastActivity = status.LastActivity ?? DateTime.UtcNow
                 };
 

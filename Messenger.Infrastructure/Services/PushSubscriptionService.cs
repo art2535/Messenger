@@ -196,6 +196,7 @@ namespace Messenger.Infrastructure.Services
                     bool notifyGroup = settings?.NotifyGroupChats ?? true;
                     bool notifyMessages = settings?.NotifyMessages ?? true;
                     bool notifyMentions = settings?.NotifyMentions ?? true;
+                    bool notifyPreview = settings?.NotifyPreview ?? true;
 
                     if (isGroupChat && !notifyGroup)
                     {
@@ -217,7 +218,31 @@ namespace Messenger.Infrastructure.Services
 
                     try
                     {
-                        string notificationText = $"Новое сообщение от {senderName}: {body}";
+                        var groupName = !string.IsNullOrWhiteSpace(chat.Name) ? chat.Name : "Групповой чат";
+                        var pushTitle = isGroupChat
+                            ? $"Новое сообщение в группе \"{groupName}\""
+                            : $"Новое сообщение от {senderName}";
+
+                        string previewBody;
+                        if (notifyPreview)
+                        {
+                            previewBody = isGroupChat
+                                ? $"{senderName}: {body}"
+                                : body;
+                        }
+                        else
+                        {
+                            previewBody = isGroupChat
+                                ? $"{senderName}: новое сообщение"
+                                : "Новое сообщение";
+                        }
+
+                        string notificationText = notifyPreview
+                            ? (isGroupChat
+                                ? $"{pushTitle}: {senderName}: {body}"
+                                : $"{pushTitle}: {body}")
+                            : pushTitle;
+
                         var notificationId = await _notificationService.CreateNotificationAsync(participant.UserId,
                             _encryptionService.Encrypt(notificationText), cancellationToken);
 
@@ -242,11 +267,15 @@ namespace Messenger.Infrastructure.Services
 
                                 var payload = new
                                 {
-                                    title = isGroupChat ? "Новое сообщение в группе" : "Новое сообщение",
-                                    body = body,
+                                    title = pushTitle,
+                                    body = previewBody,
                                     sender = senderName,
                                     chatId = chatId.ToString(),
-                                    notificationId = notificationId.ToString()
+                                    chatType = isGroupChat ? "group" : "private",
+                                    chatName = isGroupChat ? groupName : senderName,
+                                    notificationId = notificationId.ToString(),
+                                    silent = !(settings?.NotifySound ?? true),
+                                    preview = notifyPreview
                                 };
 
                                 await _webPushClient.SendNotificationAsync(pushSubscription, JsonSerializer.Serialize(payload),
