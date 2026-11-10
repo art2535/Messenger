@@ -1,3 +1,4 @@
+using Messenger.Web.Helpers;
 using Microsoft.Extensions.Options;
 
 namespace Messenger.Web.Services
@@ -7,23 +8,20 @@ namespace Messenger.Web.Services
         private readonly UserTokenStore _store;
         private readonly TokenRefresher _refresher;
         private readonly TokenRefreshOptions _options;
-        private readonly IHttpClientFactory _httpClientFactory;
-        private readonly IConfiguration _configuration;
+        private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger<TokenRefreshBackgroundService> _logger;
 
         public TokenRefreshBackgroundService(
             UserTokenStore store,
             TokenRefresher refresher,
             IOptions<TokenRefreshOptions> options,
-            IHttpClientFactory httpClientFactory,
-            IConfiguration configuration,
+            IServiceScopeFactory scopeFactory,
             ILogger<TokenRefreshBackgroundService> logger)
         {
             _store = store;
             _refresher = refresher;
             _options = options.Value;
-            _httpClientFactory = httpClientFactory;
-            _configuration = configuration;
+            _scopeFactory = scopeFactory;
             _logger = logger;
         }
 
@@ -100,6 +98,14 @@ namespace Messenger.Web.Services
                 }
 
                 await _refresher.RefreshIfNeededAsync(entry, cancellationToken);
+
+                if (entry.IsRevoked)
+                {
+                    _store.RevokeSession(entry.Key, entry.Tokens.AccessToken, entry.Tokens.RefreshToken);
+                    _logger.LogInformation(
+                        "[TokenRefresh] Сессия {Key} снята с фонового обновления после отзыва",
+                        entry.Key);
+                }
             }
         }
 
@@ -107,17 +113,11 @@ namespace Messenger.Web.Services
         {
             try
             {
-                var apiBase = (_configuration["URL:API:HTTPS"] ?? string.Empty).TrimEnd('/');
+                await using var scope = _scopeFactory.CreateAsyncScope();
+                var api = scope.ServiceProvider.GetRequiredService<ApiHelper>();
 
-                if (string.IsNullOrEmpty(apiBase))
-                    return null;
-
-                if (!apiBase.Contains("/api/", StringComparison.OrdinalIgnoreCase))
-                    apiBase += "/api/v1.0";
-
-                var url = $"{apiBase}/logins/session/{Uri.EscapeDataString(sessionKey)}/active";
-                var client = _httpClientFactory.CreateClient();
-                using var res = await client.GetAsync(url, ct);
+                var path = "logins/session/" + Uri.EscapeDataString(sessionKey) + "/active";
+                using var res = await api.GetRawAsync(path, accessToken: null, ct);
                 if (!res.IsSuccessStatusCode)
                     return null;
 
