@@ -1,0 +1,42 @@
+html.settings-large-font { font-size: 112.5%; }
+html.settings-large-font .message-text,
+html.settings-large-font .chat-message,
+html.settings-large-font .msg-body { font-size: 1.05em; line-height: 1.45; }
+html.settings-compact-list .chat-list-item,
+html.settings-compact-list .chat-item,
+html.settings-compact-list [data-chat-id] {
+  padding-top: 0.4rem !important;
+  padding-bottom: 0.4rem !important;
+}
+html.settings-compact-list .chat-list-item .avatar,
+html.settings-compact-list .chat-item .avatar {
+  width: 2.5rem !important;
+  height: 2.5rem !important;
+}
+.avatar-placeholder-user {
+  background: #e5e7eb !important;
+  background-image: none !important;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+}
+.dark .avatar-placeholder-user { background: #374151 !important; }
+.avatar-placeholder-user i,
+.avatar-placeholder-user svg {
+  color: #6b7280 !important;
+  width: 48%;
+  height: 48%;
+}
+.dark .avatar-placeholder-user i,
+.dark .avatar-placeholder-user svg { color: #9ca3af !important; }
+
+.sessions-scroll {
+  max-height: 16rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding-right: 0.25rem;
+}
+@media (min-width: 640px) {
+  .sessions-scroll { max-height: 20rem; }
+}

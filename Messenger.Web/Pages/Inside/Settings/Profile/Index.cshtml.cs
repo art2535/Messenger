@@ -95,9 +95,13 @@ namespace Messenger.Web.Pages.Inside.Settings.Profile
                     };
 
                     AvatarUrl = CurrentUser.Account?.Avatar;
+                    if (!string.IsNullOrWhiteSpace(AvatarUrl) && AvatarUrl.StartsWith("/"))
+                    {
+                        var apiOrigin = (_api.GetApiUrl() ?? "").Split(new[] { "/api/" }, StringSplitOptions.None)[0].TrimEnd('/');
+                        AvatarUrl = apiOrigin + AvatarUrl;
+                    }
                     HasAvatar = !string.IsNullOrWhiteSpace(AvatarUrl);
-                    if (HasAvatar)
-                        AvatarUrl += "?t=" + DateTimeOffset.Now.ToUnixTimeSeconds();
+                    // cache-bust только в разметке (один ?t=), иначе URL ломается
                 }
                 else
                 {

@@ -886,7 +886,7 @@ messageInput.addEventListener('input', () => {
 
     if (hasText && (now - lastTypingSentAt) >= TYPING_THROTTLE_MS) {
         lastTypingSentAt = now;
-        connection.invoke("StartTyping", currentChatId).catch(() => { });
+        if (window.__privacyShowTyping !== false) connection.invoke("StartTyping", currentChatId).catch(() => { });
     }
 
     clearTimeout(typingTimeout);

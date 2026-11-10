@@ -1,4 +1,14 @@
-const API_URL = window.API_BASE_URL;
+function getApiUrl() {
+    let base = (window.API_BASE_URL || '').toString().trim().replace(/\/$/, '');
+    if (!base) {
+        const meta = document.querySelector('meta[name="api-base"]');
+        if (meta && meta.content) base = meta.content.trim().replace(/\/$/, '');
+    }
+    if (!base) return '';
+    // ApiHelper.GetApiUrl() уже содержит /api/v1.0
+    if (!/\/api\/v\d/i.test(base)) base += '/api/v1.0';
+    return base;
+}
 let connection = null;
 const avatarInput = document.getElementById('avatarInput');
 let currentAvatar = document.getElementById('current-avatar');
@@ -17,14 +27,14 @@ const overlay = document.getElementById('sidebar-overlay');
 const menuToggle = document.getElementById('menu-toggle');
 
 function openSidebar() {
-    sidebar.classList.add('open');
-    overlay.classList.add('active');
+    sidebar?.classList.add('open');
+    overlay?.classList.add('active');
     document.body.style.overflow = 'hidden';
 }
 
 function closeSidebar() {
-    sidebar.classList.remove('open');
-    overlay.classList.remove('active');
+    sidebar?.classList.remove('open');
+    overlay?.classList.remove('active');
     document.body.style.overflow = '';
 }
 
@@ -98,6 +108,11 @@ async function ensureFreshToken() {
 }
 
 async function apiFetch(endpoint, options = {}, retried = false) {
+    const base = getApiUrl();
+    if (!base) {
+        console.warn('API_BASE_URL не задан, запрос пропущен:', endpoint);
+        throw new Error('API_BASE_URL не задан');
+    }
     await ensureFreshToken();
     const token = getAuthToken();
     const headers = {
@@ -105,7 +120,8 @@ async function apiFetch(endpoint, options = {}, retried = false) {
         'Content-Type': 'application/json',
         ...options.headers
     };
-    const response = await fetch(`${API_URL}${endpoint}`, { ...options, headers });
+    const path = endpoint.startsWith('/') ? endpoint : '/' + endpoint;
+    const response = await fetch(base + path, { ...options, headers });
 
     if (response.status === 401 && !retried && await fetchFreshToken()) {
         return apiFetch(endpoint, options, true);
@@ -113,98 +129,26 @@ async function apiFetch(endpoint, options = {}, retried = false) {
 
     if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(errorText || `Ошибка: ${response.statusText}`);
+        throw new Error(errorText || ('Ошибка: ' + response.statusText));
     }
     return response.json();
 }
 
-function showToast(message, type = 'info', duration = 4000) {
-    if (!message) return;
-
-    let container = document.getElementById('toast-container');
-
-    if (!container) {
-        container = document.createElement('div');
-        container.id = 'toast-container';
-        document.body.appendChild(container);
-    }
-
-    const icons = {
-        success: '✓',
-        error: '✕',
-        warning: '!',
-        info: 'i'
-    };
-
-    const toast = document.createElement('div');
-    toast.className = `toast toast-${type}`;
-
-    toast.innerHTML = `
-        <div class="toast-icon">${icons[type] || icons.info}</div>
-        <div class="toast-content">
-            <div class="toast-message"></div>
-        </div>
-        <button class="toast-close" aria-label="Закрыть">×</button>
-        <div class="toast-progress"></div>
-    `;
-
-    toast.querySelector('.toast-message').textContent = message;
-
-    container.appendChild(toast);
-
-    requestAnimationFrame(() => {
-        toast.classList.add('toast-show');
-    });
-
-    const removeToast = () => {
-        if (!toast.parentElement) return;
-
-        toast.classList.remove('toast-show');
-        toast.classList.add('toast-hide');
-
-        setTimeout(() => {
-            toast.remove();
-
-            if (container.children.length === 0) {
-                container.remove();
-            }
-        }, 300);
-    };
-
-    toast.querySelector('.toast-close').addEventListener('click', removeToast);
-
-    const timer = setTimeout(removeToast, duration);
-
-    let remaining = duration;
-    let startTime = Date.now();
-
-    toast.addEventListener('mouseenter', () => {
-        clearTimeout(timer);
-        remaining -= Date.now() - startTime;
-    });
-
-    toast.addEventListener('mouseleave', () => {
-        startTime = Date.now();
-        setTimeout(removeToast, remaining);
-    });
+function showToast() {
+    /* тосты отключены */
 }
 
-function openConfirm(title, message) {
-    document.getElementById('confirmTitle').textContent = title;
-    document.getElementById('confirmMessage').textContent = message;
-    document.getElementById('confirmModal').classList.add('active');
-    return new Promise(resolve => confirmCallback = resolve);
-}
-
-function closeConfirm(result = false) {
-    document.getElementById('confirmModal').classList.remove('active');
-    if (confirmCallback) {
-        confirmCallback(result);
-        confirmCallback = null;
-    }
-}
 
 async function initSignalR() {
+    if (typeof signalR === 'undefined') {
+        console.debug('SignalR не загружен на странице — пропускаем');
+        return;
+    }
+
+    if (typeof signalR === 'undefined') {
+        console.debug('SignalR не загружен на странице — пропускаем');
+        return;
+    }
     await ensureFreshToken();
     if (!getJwtToken()) {
         console.warn("⚠️ SignalR: Токен не найден");
@@ -257,22 +201,58 @@ async function initSignalR() {
 }
 
 function updateAvatarDisplay(avatarUrl) {
-    const fallback = '/images/logo.png';
-    const urlWithCache = avatarUrl ? `${avatarUrl}?t=${new Date().getTime()}` : fallback;
+    currentAvatar = document.getElementById('current-avatar');
+    const defAv = document.getElementById('default-avatar');
+    const urlWithCache = avatarUrl ? (String(avatarUrl).split('?')[0] + '?t=' + Date.now()) : '';
+
+    if (!urlWithCache) {
+        // удаление: спрятать фото, показать человечка
+        if (currentAvatar && currentAvatar.tagName === 'IMG') {
+            currentAvatar.style.display = 'none';
+        }
+        if (defAv) {
+            defAv.classList.remove('hidden');
+            defAv.style.display = 'flex';
+            defAv.classList.add('flex');
+        }
+        return;
+    }
+
+    if (!currentAvatar) return;
 
     if (currentAvatar.tagName === 'IMG') {
+        currentAvatar.style.display = 'block';
+        currentAvatar.style.opacity = '1';
+        currentAvatar.classList.remove('opacity-0');
+        currentAvatar.style.zIndex = '10';
         currentAvatar.src = urlWithCache;
+        if (defAv) {
+            defAv.classList.add('hidden');
+            defAv.style.display = 'none';
+        }
     } else {
         const img = document.createElement('img');
         img.id = 'current-avatar';
-        img.className = currentAvatar.className;
+        img.alt = 'Аватар';
+        img.className = 'w-36 h-36 sm:w-40 sm:h-40 rounded-full object-cover border-4 border-gray-200 dark:border-gray-600 shadow-xl relative z-10';
+        img.style.display = 'block';
+        img.referrerPolicy = 'no-referrer';
         img.src = urlWithCache;
+        img.onerror = function () {
+            this.style.display = 'none';
+            if (defAv) { defAv.classList.remove('hidden'); defAv.style.display = 'flex'; }
+        };
         currentAvatar.replaceWith(img);
         currentAvatar = img;
+        if (defAv) {
+            defAv.classList.add('hidden');
+            defAv.style.display = 'none';
+        }
     }
 }
 
-avatarInput.addEventListener('change', function (e) {
+
+avatarInput?.addEventListener('change', function (e) {
     const file = e.target.files[0];
     if (!file) return hidePreview();
 
@@ -306,19 +286,19 @@ avatarInput.addEventListener('change', function (e) {
 });
 
 function hidePreview() {
-    previewContainer.classList.add('hidden');
-    previewImg.src = '';
-    cancelPreviewBtn.classList.add('hidden');
+    previewContainer?.classList.add('hidden');
+    if (previewImg) previewImg.src = '';
+    cancelPreviewBtn?.classList.add('hidden');
     if (currentAvatar) currentAvatar.style.visibility = '';
-    if (hasOriginalAvatar) deleteAvatarTrigger.classList.remove('hidden');
+    if (hasOriginalAvatar) deleteAvatarTrigger?.classList.remove('hidden');
 }
 
-cancelPreviewBtn.onclick = () => {
+if (cancelPreviewBtn) cancelPreviewBtn.onclick = () => {
     avatarInput.value = '';
     hidePreview();
 };
 
-deleteAvatarTrigger.onclick = async () => {
+if (deleteAvatarTrigger) if (deleteAvatarTrigger) deleteAvatarTrigger.onclick = async () => {
     const ok = await showConfirm('Удалить аватар?', {
         title: 'Удаление фото',
         okText: 'Удалить',
@@ -383,8 +363,9 @@ function setPushToggleUnavailable(unavailable) {
 }
 
 function setNotificationTypesVisible(visible) {
-    const typesContainer = document.getElementById('notification-types');
-    if (typesContainer) typesContainer.classList.toggle('hidden', !visible);
+    const show = !!visible;
+    document.getElementById('notification-types')?.classList.toggle('hidden', !show);
+    document.getElementById('notification-inapp')?.classList.toggle('hidden', !show);
 }
 
 async function ensureServiceWorker() {
@@ -478,7 +459,7 @@ async function subscribeToPush() {
         }
 
         const registration = await ensureServiceWorker();
-        const keyRes = await fetch(`${API_URL}/push/vapid-public-key`);
+        const keyRes = await fetch(`${getApiUrl()}/push/vapid-public-key`);
         if (!keyRes.ok) throw new Error('Не удалось получить VAPID-ключ');
         const vapidPublicKey = (await keyRes.text()).trim();
         if (!vapidPublicKey) throw new Error('Пустой VAPID-ключ');
@@ -496,7 +477,7 @@ async function subscribeToPush() {
         if (!token) throw new Error('Нет токена авторизации');
 
         const subJson = subscription.toJSON();
-        const res = await fetch(`${API_URL}/push/subscribe`, {
+        const res = await fetch(`${getApiUrl()}/push/subscribe`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -553,7 +534,7 @@ async function unsubscribeFromPush() {
             const token = getAuthToken();
             if (token && endpoint) {
                 try {
-                    await fetch(`${API_URL}/push/unsubscribe`, {
+                    await fetch(`${getApiUrl()}/push/unsubscribe`, {
                         method: 'DELETE',
                         headers: {
                             'Content-Type': 'application/json',
@@ -601,14 +582,44 @@ function urlBase64ToUint8Array(base64String) {
 
 async function loadPushSettings() {
     try {
-        const settings = await apiFetch('/push/settings');
+        let settings = null;
+        try {
+            settings = await apiFetch('/push/settings');
+        } catch (_) {
+            settings = null;
+        }
+        // fallback: account-settings
+        if (!settings || settings.pushEnabled === undefined) {
+            try {
+                const full = await apiFetch('/account-settings');
+                settings = full?.data || full?.Data || full || {};
+            } catch (_) {
+                settings = settings || {};
+            }
+        }
+
         pushToggle = document.getElementById('push-toggle');
         const isEnabled = !!settings.pushEnabled;
-
         if (pushToggle) pushToggle.checked = isEnabled;
-
         setNotificationTypesVisible(isEnabled);
 
+        const map = {
+            'notif.messages': settings.notifyMessages,
+            'notif.groupChats': settings.notifyGroupChats,
+            'notif.mentions': settings.notifyMentions,
+            'notif.reactions': settings.notifyReactions,
+            'notif.system': settings.notifySystem,
+            'notif.sound': settings.notifySound,
+            'notif.suppressOpenChat': settings.suppressOpenChat,
+            'notif.preview': settings.notifyPreview
+        };
+        document.querySelectorAll('.pref-toggle[data-pref]').forEach(el => {
+            const key = el.getAttribute('data-pref');
+            if (key && key in map && map[key] !== undefined && map[key] !== null) {
+                el.checked = !!map[key];
+            }
+        });
+        // legacy ids
         const nm = document.getElementById('notifyMessages');
         const ng = document.getElementById('notifyGroup');
         const nmen = document.getElementById('notifyMentions');
@@ -617,6 +628,7 @@ async function loadPushSettings() {
         if (nmen) nmen.checked = !!settings.notifyMentions;
     } catch (e) {
         console.error('Не удалось загрузить настройки push:', e);
+        setNotificationTypesVisible(!!document.getElementById('push-toggle')?.checked);
     }
 }
 
@@ -681,22 +693,40 @@ async function saveNotificationSettings() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-    feather.replace();
+    if (typeof feather !== 'undefined') feather.replace();
 
     const pushToggleEl = document.getElementById('push-toggle');
     if (pushToggleEl) {
-        pushToggleEl.addEventListener('change', togglePushNotifications);
+        // сразу скрыть подразделы, если push выключен (до ответа API)
+        setNotificationTypesVisible(!!pushToggleEl.checked);
+        pushToggleEl.addEventListener('change', async (e) => {
+            // сначала UI, затем подписка/API
+            setNotificationTypesVisible(!!pushToggleEl.checked);
+            if (typeof togglePushNotifications === 'function') {
+                await togglePushNotifications();
+            }
+            if (window.AccountSettings && typeof AccountSettings.save === 'function') {
+                AccountSettings.save({ pushEnabled: !!pushToggleEl.checked });
+            }
+        });
     }
 
-    document.querySelectorAll('#notification-types input[type="checkbox"]').forEach(cb => {
-        cb.addEventListener('change', saveNotificationSettings);
+    document.querySelectorAll('#notification-types input[type="checkbox"], #notification-inapp input[type="checkbox"]').forEach(cb => {
+        cb.addEventListener('change', () => {
+            if (typeof saveNotificationSettings === 'function') saveNotificationSettings();
+            if (window.AccountSettings && cb.classList.contains('pref-toggle')) {
+                // AccountSettings already bound via initPrefToggles
+            }
+        });
     });
 
     initSignalR();
     await loadPushSettings();
     await checkPushStatus();
+    // синхронизация видимости после загрузки
+    setNotificationTypesVisible(!!document.getElementById('push-toggle')?.checked);
 
-    document.getElementById('confirmYesBtn').onclick = () => closeConfirm(true);
+    document.getElementById('confirmYesBtn') && (document.getElementById('confirmYesBtn').onclick = () => closeConfirm(true));
 
     document.querySelectorAll('.modal-overlay').forEach(m => {
         m.onclick = (e) => {

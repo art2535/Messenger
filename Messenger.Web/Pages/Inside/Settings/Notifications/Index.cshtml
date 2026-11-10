@@ -2,6 +2,7 @@
 @model Messenger.Web.Pages.Inside.Settings.Notifications.IndexModel
 @{
     Layout = null;
+    var fullName = Model.DisplayName;
     ViewData["Title"] = "Уведомления";
 }
 
@@ -9,6 +10,8 @@
 <html lang="ru" class="h-full">
 <head>
     <meta charset="UTF-8">
+    <meta name="access-token" content="@Model.AccessToken">
+    <meta name="api-base" content="@Model.ApiBaseUrl">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -32,6 +35,7 @@
     <script src="https://unpkg.com/feather-icons"></script>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="~/css/settings.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/settings-sync.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/ui-dialogs.css" asp-append-version="true" />
 </head>
 <body class="flex bg-gray-50 dark:bg-gray-900">
@@ -62,6 +66,7 @@
         </nav>
 
         <div class="p-4 border-t border-gray-200 dark:border-gray-700">
+            <p class="text-sm text-gray-600 dark:text-gray-400 truncate text-center">@fullName</p>
             <form asp-page="/Logout" method="post" data-logout="true" class="w-full">
                 <button type="submit" class="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 transition font-medium text-sm active:scale-[0.98]">
                     <i data-feather="log-out" class="w-4 h-4"></i>
@@ -114,7 +119,7 @@
                     </div>
                 </section>
 
-                <section id="notification-types" class="settings-card">
+                <section id="notification-types" class="settings-card hidden">
                     <div class="settings-card-header">
                         <div class="settings-icon-wrap bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400">
                             <i data-feather="list" class="w-5 h-5"></i>
@@ -128,7 +133,7 @@
                     <div class="settings-row">
                         <div class="settings-row-text">
                             <span class="settings-row-label">Новые сообщения</span>
-                            <span class="settings-row-hint">Личные и групповые чаты</span>
+                            <span class="settings-row-hint">Личные чаты</span>
                         </div>
                         <label class="toggle">
                             <input type="checkbox" class="toggle-input pref-toggle" data-pref="notif.messages" checked>
@@ -167,7 +172,7 @@
                     </div>
                 </section>
 
-                <section class="settings-card">
+                <section id="notification-inapp" class="settings-card hidden">
                     <div class="settings-card-header">
                         <div class="settings-icon-wrap bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400">
                             <i data-feather="monitor" class="w-5 h-5"></i>
@@ -176,6 +181,17 @@
                             <h3 class="settings-card-title">В приложении</h3>
                             <p class="settings-card-desc">Поведение при открытой вкладке</p>
                         </div>
+                    </div>
+
+                    <div class="settings-row">
+                        <div class="settings-row-text">
+                            <span class="settings-row-label">Групповые чаты</span>
+                            <span class="settings-row-hint">Групповые чаты</span>
+                        </div>
+                        <label class="toggle">
+                            <input type="checkbox" class="toggle-input pref-toggle" data-pref="notif.groupChats" checked>
+                            <span class="toggle-track"></span>
+                        </label>
                     </div>
 
                     <div class="settings-row">
@@ -211,25 +227,69 @@
                 </section>
 
                 <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400 px-1">
-                    Предпочтения сохраняются на этом устройстве. Push-подписка синхронизируется с сервером при включении.
                 </p>
             </div>
         </main>
     </div>
-
-    <div id="toast-container"></div>
-
-    <script>
-        window.API_BASE_URL = window.API_BASE_URL || '';
+<script>
     </script>
     <script src="~/js/ui-dialogs.js" asp-append-version="true"></script>
+        <script>
+        (function () {
+            const sessionToken = '@(HttpContext.Session.GetString("ACCESS_TOKEN") ?? "")';
+            const modelToken = '@Model.AccessToken';
+            const t = (modelToken || sessionToken || localStorage.getItem('token') || '').trim();
+            if (t) {
+                try { localStorage.setItem('token', t.replace(/^Bearer\s+/i, '')); } catch (_) {}
+            }
+            window.API_BASE_URL = '@Model.ApiBaseUrl';
+            if (typeof getAuthToken !== 'function') {
+                window.getAuthToken = function () {
+                    const raw = (localStorage.getItem('token') || modelToken || sessionToken || '').trim();
+                    if (!raw) return '';
+                    return raw.startsWith('Bearer ') ? raw : ('Bearer ' + raw);
+                };
+            }
+        })();
+    </script>
     <script src="~/js/settings.js" asp-append-version="true"></script>
+        <script>
+        (function () {
+            const sessionToken = '@(HttpContext.Session.GetString("ACCESS_TOKEN") ?? "")';
+            const modelToken = '@Model.AccessToken';
+            const t = (modelToken || sessionToken || localStorage.getItem('token') || '').trim();
+            if (t) {
+                try { localStorage.setItem('token', t.replace(/^Bearer\s+/i, '')); } catch (_) {}
+            }
+            window.API_BASE_URL = '@Model.ApiBaseUrl';
+            if (typeof getAuthToken !== 'function') {
+                window.getAuthToken = function () {
+                    const raw = (localStorage.getItem('token') || modelToken || sessionToken || '').trim();
+                    if (!raw) return '';
+                    return raw.startsWith('Bearer ') ? raw : ('Bearer ' + raw);
+                };
+            }
+        })();
+    </script>
     <script src="~/js/settings-prefs.js" asp-append-version="true"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             if (typeof feather !== 'undefined') feather.replace();
             if (typeof checkPushStatus === 'function') checkPushStatus();
             if (typeof initPrefToggles === 'function') initPrefToggles();
+            const pushEl = document.getElementById('push-toggle');
+            const syncTypes = () => {
+                if (typeof setNotificationTypesVisible === 'function')
+                    setNotificationTypesVisible(!!pushEl?.checked);
+                else {
+                    document.getElementById('notification-types')?.classList.toggle('hidden', !pushEl?.checked);
+                    document.getElementById('notification-inapp')?.classList.toggle('hidden', !pushEl?.checked);
+                }
+            };
+            pushEl?.addEventListener('change', syncTypes);
+            // после загрузки prefs/push-status ещё раз
+            setTimeout(syncTypes, 300);
+            setTimeout(syncTypes, 1000);
         });
     </script>
 </body>

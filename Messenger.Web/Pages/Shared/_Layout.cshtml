@@ -55,13 +55,7 @@
                             <a class="nav-link-header" asp-area="" asp-page="/Privacy/Index">Конфиденциальность</a>
                         </div>
                     }
-
-                    <button id="theme-toggle-layout" type="button" title="Переключить тему" aria-label="Переключить тему">
-                        <span class="theme-icon-layout-light">☀️</span>
-                        <span class="theme-icon-layout-dark" style="display: none;">🌙</span>
-                    </button>
-
-                    @if (isIndexPage)
+@if (isIndexPage)
                     {
                         <button class="navbar-toggler d-md-none ms-1" type="button"
                                 aria-controls="mobileNav" aria-expanded="false" aria-label="Открыть меню">
