@@ -44,6 +44,41 @@
     <link rel="stylesheet" href="~/css/settings-sync.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/ui-dialogs.css" asp-append-version="true" />
 
+<style>
+.chat-folder-tabs {
+  scrollbar-width: thin;
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex-wrap: nowrap;
+  -webkit-overflow-scrolling: touch;
+}
+.chat-folder-tabs::-webkit-scrollbar { height: 4px; }
+.chat-folder-tabs::-webkit-scrollbar-thumb { background: rgba(156,163,175,.5); border-radius: 4px; }
+.chat-folder-tab {
+  flex-shrink: 0; padding: 0.35rem 0.75rem; border-radius: 9999px;
+  font-size: 0.8125rem; font-weight: 500; color: #6b7280;
+  background: transparent; border: none; cursor: pointer; white-space: nowrap;
+}
+.chat-folder-tab:hover { background: rgba(59,130,246,.08); color: #2563eb; }
+.chat-folder-tab.active { background: rgba(59,130,246,.15); color: #2563eb; }
+.dark .chat-folder-tab { color: #9ca3af; }
+.dark .chat-folder-tab:hover, .dark .chat-folder-tab.active { color: #93c5fd; background: rgba(59,130,246,.2); }
+.chat-folder-manage { display: inline-flex; align-items: center; justify-content: center; padding: 0.35rem; }
+.chat-folder-submenu {
+  position: fixed; z-index: 10050; min-width: 180px; max-height: 280px; overflow-y: auto;
+  background: #fff; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,.18);
+  border: 1px solid #e5e7eb; padding: 0.35rem;
+}
+.dark .chat-folder-submenu { background: #1f2937; border-color: #374151; }
+.chat-folder-submenu button {
+  display: block; width: 100%; text-align: left; padding: 0.5rem 0.75rem;
+  border: none; background: transparent; border-radius: 8px; font-size: 0.875rem;
+  color: #111827; cursor: pointer;
+}
+.dark .chat-folder-submenu button { color: #f3f4f6; }
+.chat-folder-submenu button:hover { background: rgba(59,130,246,.1); }
+.chat-folder-submenu .muted { color: #9ca3af; font-size: 0.75rem; padding: 0.5rem 0.75rem; }
+</style>
 </head>
 <body class="h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
     <div class="flex h-full">
@@ -71,6 +106,13 @@
                 </div>
                 <button id="create-chat-btn" class="w-full guap-gradient text-white py-2 px-4 rounded-lg hover:opacity-90 transition flex items-center justify-center">
                     <i data-feather="plus" class="w-4 h-4 mr-2"></i> Создать чат
+                </button>
+            </div>
+
+            <div id="chat-folder-tabs" class="chat-folder-tabs flex items-center gap-1 px-2 py-1.5 border-b border-gray-200 dark:border-gray-700 overflow-x-auto">
+                <button type="button" class="chat-folder-tab active" data-folder-id="">Все</button>
+                <button type="button" id="chat-folder-manage-btn" class="chat-folder-tab chat-folder-manage" title="Управление папками">
+                    <i data-feather="folder" class="w-4 h-4"></i>
                 </button>
             </div>
 
@@ -543,6 +585,12 @@
         <button type="button" id="chat-ctx-export-btn"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ctx-icon"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
             <span>Экспорт чата</span>
         </button>
+                <button type="button" id="chat-ctx-folder-add-btn"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="ctx-icon"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" x2="12" y1="11" y2="17"/><line x1="9" x2="15" y1="14" y2="14"/></svg>
+            <span>Добавить в папку</span>
+        </button>
+        <button type="button" id="chat-ctx-folder-remove-btn"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="ctx-icon"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="9" x2="15" y1="14" y2="14"/></svg>
+            <span>Убрать из папки</span>
+        </button>
         <button type="button" id="chat-ctx-delete-btn" class="danger"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ctx-icon"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
             <span>Удалить</span>
         </button>
@@ -642,6 +690,39 @@
             initialChatId: '@(Model.ChatId?.ToString() ?? "")'
         };
     </script>
+
+    <div id="chat-folder-submenu" class="chat-folder-submenu hidden"></div>
+
+    <div id="chat-folders-modal" class="fixed inset-0 z-[10060] hidden items-center justify-center bg-black/40 p-4">
+        <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-hidden flex flex-col">
+            <div class="px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                <h3 id="chat-folders-modal-title" class="font-semibold text-gray-900 dark:text-white">Папки чатов</h3>
+                <button type="button" id="chat-folders-modal-close" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" aria-label="Закрыть">
+                    <i data-feather="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="p-4 border-b border-gray-100 dark:border-gray-700">
+                <button type="button" id="chat-folders-create-btn" class="w-full guap-gradient text-white py-2.5 px-4 rounded-xl font-medium hover:opacity-90 transition flex items-center justify-center gap-2">
+                    <i data-feather="plus" class="w-4 h-4"></i> Создать папку
+                </button>
+            </div>
+            <div id="chat-folders-modal-list" class="flex-1 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-700 min-h-[120px]"></div>
+            <div id="chat-folders-modal-empty" class="hidden text-center text-sm text-gray-500 dark:text-gray-400 py-8 px-4">Папок пока нет</div>
+
+            <div id="chat-folders-edit-panel" class="hidden border-t border-gray-200 dark:border-gray-700 p-4 space-y-3">
+                <input type="text" id="chat-folders-name-input" maxlength="64" placeholder="Название папки"
+                       class="w-full px-3 py-2 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white outline-none focus:ring-2 focus:ring-blue-500">
+                <input type="text" id="chat-folders-chat-search" placeholder="Поиск чатов…"
+                       class="w-full px-3 py-2 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white outline-none">
+                <div id="chat-folders-chats-picker" class="max-h-40 overflow-y-auto space-y-1 border border-gray-100 dark:border-gray-700 rounded-xl p-2"></div>
+                <div class="flex gap-2 pt-1">
+                    <button type="button" id="chat-folders-edit-cancel" class="flex-1 py-2 rounded-xl border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200">Отмена</button>
+                    <button type="button" id="chat-folders-edit-save" class="flex-1 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-medium">Сохранить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="~/js/ui-dialogs.js" asp-append-version="true"></script>
     <script src="~/app.js"></script>
     <script src="~/js/session-cleanup.js"></script>
@@ -654,6 +735,7 @@
     <script src="~/js/chats/chats-signalr.js" asp-append-version="true"></script>
     <script src="~/js/chats/chats-chat-session.js" asp-append-version="true"></script>
     <script src="~/js/chats/chats-list.js" asp-append-version="true"></script>
+    <script src="~/js/chats/chats-folders.js" asp-append-version="true"></script>
     <script src="~/js/chats/chats-search.js" asp-append-version="true"></script>
     <script src="~/js/chats/chats-participants.js" asp-append-version="true"></script>
     <script src="~/js/chats/chats-ui.js" asp-append-version="true"></script>
