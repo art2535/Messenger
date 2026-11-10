@@ -52,11 +52,23 @@ namespace Messenger.API.Controllers
                 }
 
                 var logins = await _loginService.GetLoginsByUserIdAsync(user!.UserId, cancellationToken);
+                var data = logins
+                    .Where(l => l.Active)
+                    .OrderByDescending(l => l.LoginTime)
+                    .Select(l => new
+                    {
+                        loginId = l.LoginId,
+                        ipAddress = l.IpAddress,
+                        loginTime = l.LoginTime,
+                        logoutTime = l.LogoutTime,
+                        active = l.Active
+                    })
+                    .ToList();
 
-                return Ok(new GetLoginsSuccessResponse
+                return Ok(new
                 {
-                    IsSuccess = true,
-                    Data = logins
+                    isSuccess = true,
+                    data
                 });
             }
             catch (Exception ex)
@@ -170,7 +182,7 @@ namespace Messenger.API.Controllers
         }
 
         /// <summary>
-        /// Завершить конкретную сессию по Login_ID
+        /// Завершить конкретную сессию
         /// </summary>
         [HttpDelete("{loginId:guid}")]
         [EndpointName("RevokeLogin")]
@@ -196,7 +208,7 @@ namespace Messenger.API.Controllers
         }
 
         /// <summary>
-        /// Завершить все сессии, кроме текущей (по loginId, если передан)
+        /// Завершить все сессии кроме указанной
         /// </summary>
         [HttpPost("revoke-others")]
         [EndpointName("RevokeOtherLogins")]
