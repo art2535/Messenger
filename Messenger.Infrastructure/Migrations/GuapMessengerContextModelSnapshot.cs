@@ -425,6 +425,62 @@ namespace Messenger.Infrastructure.Migrations
                     b.ToTable("Chats");
                 });
 
+            modelBuilder.Entity("Messenger.Core.Models.ChatFolder", b =>
+                {
+                    b.Property<Guid>("FolderId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("Folder_ID");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("Created_At");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("Sort_Order");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("User_ID");
+
+                    b.HasKey("FolderId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("ChatFolders", (string)null);
+                });
+
+            modelBuilder.Entity("Messenger.Core.Models.ChatFolderChat", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("Id");
+
+                    b.Property<Guid>("ChatId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("Chat_ID");
+
+                    b.Property<Guid>("FolderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("Folder_ID");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChatId");
+
+                    b.HasIndex("FolderId", "ChatId")
+                        .IsUnique();
+
+                    b.ToTable("ChatFolderChats", (string)null);
+                });
+
             modelBuilder.Entity("Messenger.Core.Models.ChatParticipant", b =>
                 {
                     b.Property<Guid>("ChatId")
@@ -948,6 +1004,36 @@ namespace Messenger.Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("Messenger.Core.Models.ChatFolder", b =>
+                {
+                    b.HasOne("Messenger.Core.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Messenger.Core.Models.ChatFolderChat", b =>
+                {
+                    b.HasOne("Messenger.Core.Models.Chat", "Chat")
+                        .WithMany()
+                        .HasForeignKey("ChatId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Messenger.Core.Models.ChatFolder", "Folder")
+                        .WithMany("Chats")
+                        .HasForeignKey("FolderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Chat");
+
+                    b.Navigation("Folder");
+                });
+
             modelBuilder.Entity("Messenger.Core.Models.ChatParticipant", b =>
                 {
                     b.HasOne("Messenger.Core.Models.Chat", "Chat")
@@ -1084,6 +1170,11 @@ namespace Messenger.Infrastructure.Migrations
                     b.Navigation("ChatParticipants");
 
                     b.Navigation("Messages");
+                });
+
+            modelBuilder.Entity("Messenger.Core.Models.ChatFolder", b =>
+                {
+                    b.Navigation("Chats");
                 });
 
             modelBuilder.Entity("Messenger.Core.Models.Message", b =>

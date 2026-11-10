@@ -45,6 +45,10 @@ public partial class GuapMessengerContext : DbContext
 
     public virtual DbSet<Log> Logs { get; set; }
 
+    public virtual DbSet<ChatFolder> ChatFolders { get; set; }
+
+    public virtual DbSet<ChatFolderChat> ChatFolderChats { get; set; }
+
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
     }
@@ -383,6 +387,25 @@ public partial class GuapMessengerContext : DbContext
                 .HasDatabaseName("IX_logs_level");
             entity.HasIndex(e => e.Application)
                 .HasDatabaseName("IX_logs_application");
+        });
+
+
+        modelBuilder.Entity<ChatFolder>(entity =>
+        {
+            entity.ToTable("ChatFolders");
+            entity.HasKey(e => e.FolderId);
+            entity.Property(e => e.Name).HasMaxLength(64).IsRequired();
+            entity.HasIndex(e => e.UserId);
+            entity.HasOne(e => e.User).WithMany().HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ChatFolderChat>(entity =>
+        {
+            entity.ToTable("ChatFolderChats");
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => new { e.FolderId, e.ChatId }).IsUnique();
+            entity.HasOne(e => e.Folder).WithMany(f => f.Chats).HasForeignKey(e => e.FolderId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.Chat).WithMany().HasForeignKey(e => e.ChatId).OnDelete(DeleteBehavior.Cascade);
         });
 
         OnModelCreatingPartial(modelBuilder);
