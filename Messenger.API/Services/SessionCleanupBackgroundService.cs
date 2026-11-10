@@ -102,7 +102,7 @@ namespace Messenger.API.Services
 
             await statusService.SetOfflineBatchAsync(userIds, ct);
 
-            await loginService.CloseActiveLoginsForUsersAsync(userIds, ct);
+            await loginService.CloseActiveLoginsForIdleUsersAsync(userIds, ct);
 
             var now = UtcDateTime.Now;
             foreach (var userId in userIds)

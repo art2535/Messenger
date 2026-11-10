@@ -4,6 +4,20 @@ let sessionClosed = false;
 let intentionalLogout = false;
 let internalNavigation = false;
 
+function isIdleLogoutEnabled() {
+    if (window.__accountSettings && typeof window.__accountSettings.idleLogout === 'boolean') {
+        return window.__accountSettings.idleLogout;
+    }
+    try {
+        const raw = localStorage.getItem('guap.accountSettings');
+        if (raw) {
+            const s = JSON.parse(raw);
+            if (typeof s.idleLogout === 'boolean') return s.idleLogout;
+        }
+    } catch (_) {}
+    return true;
+}
+
 function getAccessTokenForBeacon() {
     return (typeof token === 'string' && token)
         ? token
@@ -84,6 +98,7 @@ function markInternalNavigation() {
 document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') {
         if (intentionalLogout || internalNavigation) return;
+        if (!isIdleLogoutEnabled()) return;
         closeSessionTimer = setTimeout(() => {
             closeSessionViaApi({ force: true });
         }, SESSION_CLOSE_DELAY_MS);
