@@ -24,9 +24,56 @@ namespace Messenger.Infrastructure.Services
                 .Where(l => ids.Contains(l.UserId) && l.Active)
                 .ExecuteUpdateAsync(s => s
                     .SetProperty(l => l.Active, false)
-                    .SetProperty(l => l.LogoutTime, UtcDateTime.Now)
-                    .SetProperty(l => l.Token, string.Empty),
+                    .SetProperty(l => l.LogoutTime, UtcDateTime.Now),
                     cancellationToken);
+        }
+
+        public async Task CloseActiveLoginsForIdleUsersAsync(IEnumerable<Guid> userIds, CancellationToken cancellationToken = default)
+        {
+            var ids = userIds.ToList();
+            if (ids.Count == 0)
+                return;
+
+            var withIdleOn = await _context.AccountSettings
+                .AsNoTracking()
+                .Where(s => ids.Contains(s.AccountId) && s.IdleLogout)
+                .Select(s => s.AccountId)
+                .ToListAsync(cancellationToken);
+
+            var hasSettings = await _context.AccountSettings
+                .AsNoTracking()
+                .Where(s => ids.Contains(s.AccountId))
+                .Select(s => s.AccountId)
+                .ToListAsync(cancellationToken);
+
+            var withoutSettings = ids.Except(hasSettings).ToList();
+            var toClose = withIdleOn.Concat(withoutSettings).Distinct().ToList();
+            if (toClose.Count == 0)
+                return;
+
+            await _context.Logins
+                .Where(l => toClose.Contains(l.UserId) && l.Active)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(l => l.Active, false)
+                    .SetProperty(l => l.LogoutTime, UtcDateTime.Now),
+                    cancellationToken);
+        }
+
+        public async Task<bool?> IsSessionKeyActiveAsync(string sessionKey, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(sessionKey))
+                return null;
+
+            var login = await _context.Logins
+                .AsNoTracking()
+                .Where(l => l.Token == sessionKey)
+                .OrderByDescending(l => l.LoginTime)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (login == null)
+                return null;
+
+            return login.Active;
         }
 
         public async Task AddLoginAsync(Login login, CancellationToken cancellationToken = default)
@@ -58,7 +105,6 @@ namespace Messenger.Infrastructure.Services
 
             login.Active = false;
             login.LogoutTime = UtcDateTime.Now;
-            login.Token = string.Empty;
             await _context.SaveChangesAsync(cancellationToken);
             return true;
         }
@@ -71,8 +117,7 @@ namespace Messenger.Infrastructure.Services
 
             return await q.ExecuteUpdateAsync(s => s
                 .SetProperty(l => l.Active, false)
-                .SetProperty(l => l.LogoutTime, UtcDateTime.Now)
-                .SetProperty(l => l.Token, string.Empty),
+                .SetProperty(l => l.LogoutTime, UtcDateTime.Now),
                 cancellationToken);
         }
     }

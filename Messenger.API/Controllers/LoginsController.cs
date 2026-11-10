@@ -104,11 +104,15 @@ namespace Messenger.API.Controllers
                     return error;
                 }
 
+                var sessionKey = string.IsNullOrWhiteSpace(request.Token)
+                    ? Guid.NewGuid().ToString("N")
+                    : request.Token.Trim();
+
                 var login = new Login
                 {
                     LoginId = Guid.NewGuid(),
                     UserId = user!.UserId,
-                    Token = $"{request.Token.Substring(0, 20)}...",
+                    Token = sessionKey,
                     IpAddress = request.IpAddress,
                     LoginTime = UtcDateTime.Now,
                     Active = true
@@ -119,7 +123,8 @@ namespace Messenger.API.Controllers
                 return Ok(new CreateLoginSuccessResponse
                 {
                     IsSuccess = true,
-                    Message = "Вход успешно добавлен"
+                    Message = "Вход успешно добавлен",
+                    Data = new { loginId = login.LoginId, sessionKey }
                 });
             }
             catch (Exception ex)
@@ -227,6 +232,19 @@ namespace Messenger.API.Controllers
             {
                 return StatusCode(500, new ErrorResponse { IsSuccess = false, Error = ex.Message });
             }
+        }
+
+        /// <summary>
+        /// Проверка активности сессии по ключу UserTokenStore (для фонового TokenRefresh на Web).
+        /// </summary>
+        [HttpGet("session/{sessionKey}/active")]
+        [AllowAnonymous]
+        [EndpointName("IsLoginSessionActive")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        public async Task<IActionResult> IsSessionActiveAsync(string sessionKey, CancellationToken cancellationToken = default)
+        {
+            var active = await _loginService.IsSessionKeyActiveAsync(sessionKey, cancellationToken);
+            return Ok(new { isSuccess = true, active = active ?? true, known = active.HasValue });
         }
     }
 }
