@@ -21,6 +21,7 @@ namespace Messenger.API.Extensions
             {
                 services.AddScoped<IUserService, UserService>();
                 services.AddScoped<IChatService, ChatService>();
+                services.AddScoped<IChatFolderService, ChatFolderService>();
                 services.AddScoped<INotificationService, NotificationService>();
                 services.AddScoped<IAttachmentService, AttachmentService>();
                 services.AddScoped<IReactionService, ReactionService>();
