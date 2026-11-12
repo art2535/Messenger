@@ -78,6 +78,28 @@
 .dark .chat-folder-submenu button { color: #f3f4f6; }
 .chat-folder-submenu button:hover { background: rgba(59,130,246,.1); }
 .chat-folder-submenu .muted { color: #9ca3af; font-size: 0.75rem; padding: 0.5rem 0.75rem; }
+
+.chat-folder-tab-menu {
+  position: fixed; z-index: 10070; min-width: 220px;
+  background: #fff; border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(0,0,0,.18);
+  border: 1px solid #e5e7eb; padding: 0.35rem;
+}
+.dark .chat-folder-tab-menu { background: #1f2937; border-color: #374151; }
+.chat-folder-tab-menu button {
+  display: flex; align-items: center; gap: 0.65rem; width: 100%;
+  text-align: left; padding: 0.55rem 0.75rem; border: none;
+  background: transparent; border-radius: 8px; font-size: 0.875rem;
+  color: #111827; cursor: pointer;
+}
+.dark .chat-folder-tab-menu button { color: #f3f4f6; }
+.chat-folder-tab-menu button:hover { background: rgba(59,130,246,.1); }
+.chat-folder-tab-menu button.danger { color: #dc2626; }
+.dark .chat-folder-tab-menu button.danger { color: #f87171; }
+.chat-folder-tab-menu button.danger:hover { background: rgba(220,38,38,.08); }
+.chat-folder-tab-menu .cfm-icon { flex-shrink: 0; opacity: 0.85; }
+.chat-folder-tab.unread-filter { box-shadow: inset 0 -2px 0 #3b82f6; }
+
 </style>
 </head>
 <body class="h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
@@ -690,7 +712,6 @@
             initialChatId: '@(Model.ChatId?.ToString() ?? "")'
         };
     </script>
-
     <div id="chat-folder-submenu" class="chat-folder-submenu hidden"></div>
 
     <div id="chat-folders-modal" class="fixed inset-0 z-[10060] hidden items-center justify-center bg-black/40 p-4">

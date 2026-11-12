@@ -7,7 +7,8 @@
         loaded: false,
         allChats: [],
         editingId: null,
-        selectedChatIds: new Set()
+        selectedChatIds: new Set(),
+        unreadOnly: false
     };
 
     function apiBase() {
@@ -69,6 +70,7 @@
             bar.insertBefore(allBtn, manage);
         }
         allBtn.classList.toggle('active', !state.activeFolderId);
+        allBtn.classList.toggle('unread-filter', state.unreadOnly && !state.activeFolderId);
 
         state.folders.forEach(f => {
             const id = f.folderId || f.FolderId;
@@ -76,33 +78,45 @@
             const btn = document.createElement('button');
             btn.type = 'button';
             btn.className = 'chat-folder-tab' + (String(state.activeFolderId) === String(id) ? ' active' : '');
+            if (state.unreadOnly && String(state.activeFolderId) === String(id)) {
+                btn.classList.add('unread-filter');
+            }
             btn.dataset.folderId = id;
             btn.textContent = name;
-            btn.addEventListener('contextmenu', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                openManageModal();
-                const folder = state.folders.find(x => String(x.folderId || x.FolderId) === String(id));
-                if (folder) openEditPanel(folder);
-            });
             bar.insertBefore(btn, manage);
         });
         if (typeof feather !== 'undefined') feather.replace();
+    }
+
+    function chatHasUnread(el) {
+        if (!el) return false;
+        const cid = el.dataset.chatId || el.getAttribute('data-chat-id');
+        if (typeof unreadCounts !== 'undefined' && unreadCounts instanceof Map) {
+            const n = unreadCounts.get(String(cid)) || unreadCounts.get(cid);
+            if (n > 0) return true;
+        }
+        const badge = el.querySelector('.unread-badge');
+        if (badge && !badge.classList.contains('hidden')) {
+            const t = (badge.textContent || '').trim();
+            if (t && t !== '0') return true;
+        }
+        return false;
     }
 
     function applyFolderFilter() {
         const container = document.getElementById('chats-container');
         if (!container) return;
         const items = container.querySelectorAll('.chat-item, .chat-list-item, [data-chat-id]');
-        if (!state.activeFolderId) {
-            items.forEach(el => { el.style.display = ''; });
-            return;
+        let allowedIds = null;
+        if (state.activeFolderId) {
+            const folder = state.folders.find(f => String(f.folderId || f.FolderId) === String(state.activeFolderId));
+            allowedIds = new Set((folder?.chatIds || folder?.ChatIds || []).map(String));
         }
-        const folder = state.folders.find(f => String(f.folderId || f.FolderId) === String(state.activeFolderId));
-        const ids = new Set((folder?.chatIds || folder?.ChatIds || []).map(String));
         items.forEach(el => {
-            const cid = el.dataset.chatId || el.getAttribute('data-chat-id');
-            el.style.display = ids.has(String(cid)) ? '' : 'none';
+            const cid = String(el.dataset.chatId || el.getAttribute('data-chat-id') || '');
+            let show = !allowedIds || allowedIds.has(cid);
+            if (show && state.unreadOnly) show = chatHasUnread(el);
+            el.style.display = show ? '' : 'none';
         });
     }
 
@@ -116,11 +130,191 @@
         state.activeFolderId = tab.dataset.folderId || '';
         document.querySelectorAll('.chat-folder-tab').forEach(t => {
             t.classList.toggle('active', (t.dataset.folderId || '') === state.activeFolderId && t.id !== 'chat-folder-manage-btn');
+            t.classList.toggle('unread-filter', state.unreadOnly && (t.dataset.folderId || '') === state.activeFolderId);
         });
         applyFolderFilter();
     }
 
-    /* ——— модалка управления ——— */
+    function ensureTabMenu() {
+        let menu = document.getElementById('chat-folder-tab-menu');
+        if (menu) return menu;
+        menu = document.createElement('div');
+        menu.id = 'chat-folder-tab-menu';
+        menu.className = 'chat-folder-tab-menu hidden';
+        document.body.appendChild(menu);
+        menu.addEventListener('click', onTabMenuClick);
+        return menu;
+    }
+
+    function hideTabMenu() {
+        const menu = document.getElementById('chat-folder-tab-menu');
+        if (menu) {
+            menu.classList.add('hidden');
+            menu.innerHTML = '';
+            delete menu.dataset.folderId;
+        }
+    }
+
+    function positionMenu(menu, x, y) {
+        menu.classList.remove('hidden');
+        const pad = 8;
+        const w = menu.offsetWidth || 220;
+        const h = menu.offsetHeight || 140;
+        let left = x;
+        let top = y;
+        if (left + w > window.innerWidth - pad) left = window.innerWidth - w - pad;
+        if (top + h > window.innerHeight - pad) top = window.innerHeight - h - pad;
+        if (left < pad) left = pad;
+        if (top < pad) top = pad;
+        menu.style.left = left + 'px';
+        menu.style.top = top + 'px';
+    }
+
+    function iconEdit() {
+        return '<svg class="cfm-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
+    }
+    function iconUnread() {
+        return '<svg class="cfm-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
+    }
+    function iconReadAll() {
+        return '<svg class="cfm-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 7 17l-5-5"/><path d="m22 10-7.5 7.5L13 16"/></svg>';
+    }
+    function iconTrash() {
+        return '<svg class="cfm-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>';
+    }
+
+    function showTabContextMenu(x, y, folderId) {
+        hideTabMenu();
+        hideFolderSubmenu();
+        const menu = ensureTabMenu();
+        menu.dataset.folderId = folderId || '';
+        const isAll = !folderId;
+        const unreadLabel = state.unreadOnly
+            ? 'Показать все чаты'
+            : 'Показать только непрочитанные';
+
+        let html = '';
+        if (isAll) {
+            html +=
+                '<button type="button" data-action="configure-all">' + iconEdit() + '<span>Настроить папки</span></button>' +
+                '<button type="button" data-action="toggle-unread">' + iconUnread() + '<span>' + unreadLabel + '</span></button>' +
+                '<button type="button" data-action="read-all">' + iconReadAll() + '<span>Прочитать все</span></button>';
+        } else {
+            html +=
+                '<button type="button" data-action="configure-one">' + iconEdit() + '<span>Настроить папку</span></button>' +
+                '<button type="button" data-action="toggle-unread">' + iconUnread() + '<span>' + unreadLabel + '</span></button>' +
+                '<button type="button" data-action="read-all">' + iconReadAll() + '<span>Прочитать все</span></button>' +
+                '<button type="button" data-action="delete" class="danger">' + iconTrash() + '<span>Удалить</span></button>';
+        }
+        menu.innerHTML = html;
+        positionMenu(menu, x, y);
+    }
+
+    async function onTabMenuClick(e) {
+        const btn = e.target.closest('button[data-action]');
+        if (!btn) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const action = btn.dataset.action;
+        const folderId = document.getElementById('chat-folder-tab-menu')?.dataset.folderId || '';
+        hideTabMenu();
+
+        if (action === 'configure-all') {
+            openManageModal();
+            return;
+        }
+        if (action === 'configure-one') {
+            const folder = state.folders.find(f => String(f.folderId || f.FolderId) === String(folderId));
+            openManageModal();
+            if (folder) openEditPanel(folder);
+            return;
+        }
+        if (action === 'toggle-unread') {
+            state.unreadOnly = !state.unreadOnly;
+            renderTabs();
+            applyFolderFilter();
+            if (typeof showToast === 'function') {
+                showToast(state.unreadOnly ? 'Только непрочитанные' : 'Показаны все чаты', 'info');
+            }
+            return;
+        }
+        if (action === 'read-all') {
+            await markVisibleChatsRead(folderId || null);
+            return;
+        }
+        if (action === 'delete' && folderId) {
+            const folder = state.folders.find(f => String(f.folderId || f.FolderId) === String(folderId));
+            const name = folder ? (folder.name || folder.Name) : 'папку';
+            const ok = typeof showConfirm === 'function'
+                ? await showConfirm('Удалить папку «' + name + '»? Чаты не удалятся.', {
+                    title: 'Удаление папки',
+                    okText: 'Удалить',
+                    danger: true
+                })
+                : window.confirm('Удалить папку «' + name + '»?');
+            if (!ok) return;
+            const res = await api('/chat-folders/' + encodeURIComponent(folderId), { method: 'DELETE' });
+            if (res.ok) {
+                if (String(state.activeFolderId) === String(folderId)) state.activeFolderId = '';
+                await loadFolders();
+                if (typeof showToast === 'function') showToast('Папка удалена', 'success');
+            } else if (typeof showToast === 'function') {
+                showToast('Не удалось удалить', 'error');
+            }
+        }
+    }
+
+    async function markVisibleChatsRead(folderId) {
+        const container = document.getElementById('chats-container');
+        if (!container) return;
+        let allowed = null;
+        if (folderId) {
+            const folder = state.folders.find(f => String(f.folderId || f.FolderId) === String(folderId));
+            allowed = new Set((folder?.chatIds || folder?.ChatIds || []).map(String));
+        }
+        const items = Array.from(container.querySelectorAll('.chat-item, .chat-list-item, [data-chat-id]'))
+            .filter(el => {
+                const cid = String(el.dataset.chatId || el.getAttribute('data-chat-id') || '');
+                if (allowed && !allowed.has(cid)) return false;
+                if (!folderId && el.style.display === 'none') return false;
+                return chatHasUnread(el);
+            });
+        let ok = 0;
+        for (const el of items) {
+            const cid = el.dataset.chatId || el.getAttribute('data-chat-id');
+            if (!cid) continue;
+            try {
+                const res = await api('/messages/' + encodeURIComponent(cid) + '/read', { method: 'POST', body: '{}' });
+                if (res.ok) {
+                    ok++;
+                    if (typeof unreadCounts !== 'undefined' && unreadCounts instanceof Map) {
+                        unreadCounts.set(String(cid), 0);
+                    }
+                    if (typeof updateUnreadBadge === 'function') updateUnreadBadge(cid, 0);
+                    else {
+                        const badge = el.querySelector('.unread-badge');
+                        if (badge) {
+                            badge.classList.add('hidden');
+                            badge.textContent = '';
+                        }
+                    }
+                }
+            } catch (_) { /* */ }
+        }
+        applyFolderFilter();
+        if (typeof showToast === 'function') {
+            showToast(ok ? ('Прочитано чатов: ' + ok) : 'Нет непрочитанных', ok ? 'success' : 'info');
+        }
+    }
+
+    function onTabsContextMenu(e) {
+        const tab = e.target.closest('.chat-folder-tab');
+        if (!tab || tab.id === 'chat-folder-manage-btn') return;
+        e.preventDefault();
+        e.stopPropagation();
+        const folderId = tab.dataset.folderId || '';
+        showTabContextMenu(e.clientX, e.clientY, folderId);
+    }
 
     function openManageModal() {
         const modal = document.getElementById('chat-folders-modal');
@@ -285,8 +479,6 @@
         }
     }
 
-    /* ——— ПКМ submenu ——— */
-
     function hideFolderSubmenu() {
         const sm = document.getElementById('chat-folder-submenu');
         if (sm) {
@@ -423,6 +615,15 @@
                 !e.target.closest('#chat-ctx-folder-remove-btn')) {
                 hideFolderSubmenu();
             }
+            if (!e.target.closest('#chat-folder-tab-menu') && !e.target.closest('.chat-folder-tab')) {
+                hideTabMenu();
+            }
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                hideTabMenu();
+                hideFolderSubmenu();
+            }
         });
     }
 
@@ -439,18 +640,7 @@
 
     function init() {
         document.getElementById('chat-folder-tabs')?.addEventListener('click', onTabsClick);
-        document.getElementById('chat-folder-tabs')?.addEventListener('contextmenu', (e) => {
-            const tab = e.target.closest('.chat-folder-tab');
-            if (!tab || tab.id === 'chat-folder-manage-btn') return;
-            e.preventDefault();
-            if (!tab.dataset.folderId) {
-                openManageModal();
-                return;
-            }
-            openManageModal();
-            const folder = state.folders.find(x => String(x.folderId || x.FolderId) === String(tab.dataset.folderId));
-            if (folder) openEditPanel(folder);
-        });
+        document.getElementById('chat-folder-tabs')?.addEventListener('contextmenu', onTabsContextMenu);
         wireContextMenu();
         wireModal();
         loadFolders();
