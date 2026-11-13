@@ -105,8 +105,16 @@ function updateExistingMessageText(messageId, newText, markEdited = false) {
             fl.innerHTML = '<span class="forward-label-icon">↗</span> Переслано от <span class="forward-label-name"></span>';
             bubble.insertBefore(fl, bubble.firstChild);
         }
+        fl.classList.add('forward-label-clickable');
         const nameEl = fl.querySelector('.forward-label-name');
-        if (nameEl) nameEl.textContent = parsedUpd.forward.senderName || 'Пользователь';
+        if (nameEl) {
+            nameEl.textContent = parsedUpd.forward.senderName || 'Пользователь';
+            const u = parsedUpd.forward.senderId || '';
+            if (u) nameEl.dataset.userId = String(u);
+        }
+        if (parsedUpd.forward.senderId) el.dataset.forwardSenderId = String(parsedUpd.forward.senderId);
+        if (parsedUpd.forward.messageId) el.dataset.forwardOf = String(parsedUpd.forward.messageId);
+        el.dataset.forwardFrom = parsedUpd.forward.senderName || '';
     }
     if (parsedUpd.reply) {
         let q = bubble.querySelector('.reply-quote');
@@ -266,9 +274,23 @@ function appendMessage(msg) {
     messagesContainer.appendChild(div);
     if (forwardMeta) {
         const nameEl = div.querySelector('.forward-label-name');
-        if (nameEl) nameEl.textContent = forwardMeta.senderName || 'Пользователь';
+        const fl = div.querySelector('.forward-label');
+        if (fl) fl.classList.add('forward-label-clickable');
+        // senderId из payload или из кэша исходного сообщения
+        let fwdUid = forwardMeta.senderId || forwardMeta.SenderId || '';
+        if (!fwdUid && forwardMeta.messageId && window.__messageForwardCache) {
+            try {
+                const c = window.__messageForwardCache.get(String(forwardMeta.messageId));
+                if (c?.senderId) fwdUid = String(c.senderId);
+            } catch (_) {}
+        }
+        if (nameEl) {
+            nameEl.textContent = forwardMeta.senderName || 'Пользователь';
+            if (fwdUid) nameEl.dataset.userId = String(fwdUid);
+        }
         div.dataset.forwardFrom = forwardMeta.senderName || '';
         div.dataset.forwardOf = forwardMeta.messageId || '';
+        if (fwdUid) div.dataset.forwardSenderId = String(fwdUid);
     }
     if (replyMeta) fillReplyQuoteInRow(div, replyMeta);
     feather.replace();
