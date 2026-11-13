@@ -277,6 +277,40 @@ async function removeParticipantFromChat(userId, buttonElement) {
     toggleSaveButton();
 }
 
+
+/** Клик по участнику в «Информация о чате» → профиль пользователя */
+function wireParticipantRowProfileClick(rowEl, participant) {
+    if (!rowEl) return;
+    const userId = String(
+        (participant && (participant.id || participant.userId || participant.UserId || participant.Id)) ||
+        rowEl.dataset.userId ||
+        ''
+    ).trim();
+    if (!userId) return;
+
+    const clickable = rowEl.querySelector('.participant-info-main') || rowEl;
+    clickable.style.cursor = 'pointer';
+    clickable.classList.add('participant-info-clickable');
+
+    const handler = (e) => {
+        // не открывать профиль при клике на кнопку удаления
+        if (e.target.closest('button')) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const fallback = {
+            fullName: (participant && (participant.fullName || participant.name || participant.FullName)) ||
+                rowEl.querySelector('.font-semibold')?.textContent || '',
+            avatar: (participant && (participant.avatar || participant.Avatar || participant.avatarPath)) ||
+                rowEl.querySelector('img')?.src || '',
+            login: (participant && (participant.login || participant.Login)) || ''
+        };
+        if (typeof openUserProfile === 'function') {
+            openUserProfile(userId, fallback);
+        }
+    };
+    clickable.addEventListener('click', handler);
+}
+
 function addParticipantToChat(userId, userName, userAvatar) {
     if (document.querySelector(`#participants-list [data-user-id="${userId}"]`)) {
         showToast('Этот пользователь уже в чате', 'error');
@@ -290,11 +324,11 @@ function addParticipantToChat(userId, userName, userAvatar) {
 
     div.dataset.role = 'участник';
     div.innerHTML = `
-        <div class="flex items-center gap-4">
+        <div class="participant-info-main flex items-center gap-4 min-w-0 flex-1">
             <img src="${userAvatar || 'https://novgorodskij-r49.gosweb.gosuslugi.ru/netcat_files/9/260/user_test.png'}"
-                    class="w-12 h-12 rounded-full object-cover">
-            <div>
-                <p class="font-semibold">${userName}</p>
+                    class="w-12 h-12 rounded-full object-cover flex-shrink-0">
+            <div class="min-w-0">
+                <p class="font-semibold truncate">${userName}</p>
             </div>
         </div>
         ${currentChatInfo?.type === 'group' ? `
@@ -304,6 +338,9 @@ function addParticipantToChat(userId, userName, userAvatar) {
         </button>` : ''}
     `;
     list.appendChild(div);
+    if ((currentChatInfo?.type || '') === 'group') {
+        wireParticipantRowProfileClick(div, { id: userId, fullName: userName, avatar: userAvatar });
+    }
     feather.replace();
 
     if (!addedParticipantIds.includes(userId)) {
@@ -576,21 +613,9 @@ document.getElementById('delete-chat-btn')?.addEventListener('click', function (
 
             document.querySelector(`.chat-item[data-chat-id="${targetChatId}"]`)?.remove();
 
-            currentChatId = null;
-            messagesContainer.innerHTML = `
-                <div class="flex items-center justify-center h-full text-gray-500">
-                    <p>Выберите чат для просмотра сообщений</p>
-                </div>
-            `;
-            document.getElementById('chat-title').textContent = 'Выберите чат';
-            document.getElementById('chat-subtitle').textContent = 'Нажмите, чтобы посмотреть информацию';
-            if (typeof updateChatSubtitleMarquee === 'function') updateChatSubtitleMarquee();
-            if (typeof updateChatSubtitleMarquee === "function") updateChatSubtitleMarquee();
-            document.getElementById('chat-info-avatar').src = 'https://novgorodskij-r49.gosweb.gosuslugi.ru/netcat_files/9/260/user_test.png';
-
-            if (!document.querySelector('.chat-item')) {
-                chatsList.innerHTML = '<div class="p-4 text-gray-500">Чатов нет</div>';
-            }
+            if (typeof showEmptyRightPanel === 'function') showEmptyRightPanel();
+            else if (typeof closeCurrentChat === 'function') closeCurrentChat();
+            if (typeof toggleEmptyState === 'function') toggleEmptyState();
 
             showToast('Чат успешно удалён', 'success');
         } catch (err) {
@@ -655,6 +680,10 @@ document.addEventListener('keydown', function (e) {
 });
 
 function closeCurrentChat() {
+    if (typeof showEmptyRightPanel === 'function') {
+        showEmptyRightPanel();
+        return;
+    }
     if (typeof selectMode !== "undefined" && selectMode) exitSelectMode();
     if (currentChatId && connection?.state === 'Connected') {
         leaveChat(currentChatId).catch(() => { });
@@ -664,19 +693,26 @@ function closeCurrentChat() {
     currentChatInfo = null;
     if (typeof setChatUrl === 'function') setChatUrl(null);
 
-    document.getElementById('chat-header').classList.add('hidden');
-    document.getElementById('messages-wrapper').classList.add('hidden');
-    document.getElementById('messages-container').classList.add('hidden');
-    document.getElementById('chat-input-area').classList.add('hidden');
-    document.getElementById('empty-right-panel').classList.remove('hidden');
+    const chatHeader = document.getElementById('chat-header');
+    const messagesWrapper = document.getElementById('messages-wrapper');
+    const messagesContainer = document.getElementById('messages-container');
+    const chatInput = document.getElementById('chat-input-area');
+    const emptyRight = document.getElementById('empty-right-panel');
+
+    if (chatHeader) { chatHeader.classList.add('hidden'); chatHeader.style.display = 'none'; }
+    if (messagesWrapper) { messagesWrapper.classList.add('hidden'); messagesWrapper.style.display = 'none'; }
+    if (messagesContainer) { messagesContainer.classList.add('hidden'); messagesContainer.style.display = 'none'; messagesContainer.innerHTML = ''; }
+    if (chatInput) { chatInput.classList.add('hidden'); chatInput.style.display = 'none'; }
+    if (emptyRight) { emptyRight.classList.remove('hidden'); emptyRight.style.display = ''; }
 
     document.querySelectorAll('.chat-item').forEach(i => i.classList.remove('active'));
 
-    document.getElementById('message-input').value = '';
-    document.getElementById('attached-files').innerHTML = '';
+    const mi = document.getElementById('message-input');
+    if (mi) mi.value = '';
+    const af = document.getElementById('attached-files');
+    if (af) af.innerHTML = '';
     selectedFiles = [];
 
-    // Скрыть вкладку закреплённых при закрытии чата
     const pinBar = document.getElementById('pinned-message-bar');
     if (pinBar) pinBar.classList.remove('show');
 
@@ -775,16 +811,16 @@ async function openChatInfoForChatId(chatId) {
             div.dataset.role = pRole;
             const showRemove = modalInfo.type === 'group' && !isYou && canRemoveParticipant(userId, pRole, modalInfo);
             div.innerHTML = `
-                <div class="flex items-center gap-4">
-                    <div class="relative">
+                <div class="participant-info-main flex items-center gap-4 min-w-0 flex-1">
+                    <div class="relative flex-shrink-0">
                         <img src="${p.avatar || 'https://novgorodskij-r49.gosweb.gosuslugi.ru/netcat_files/9/260/user_test.png'}"
                                 class="w-12 h-12 rounded-full object-cover">
                         ${modalInfo.type === 'group' ? `
                         <span class="chat-online-dot absolute bottom-0 right-0 w-4 h-4 bg-green-500 rounded-full border-2 border-white ${isOnline ? '' : 'hidden'}"></span>
                         ` : ''}
                     </div>
-                    <div>
-                        <p class="font-semibold">${p.fullName || p.name || 'Пользователь'}</p>
+                    <div class="min-w-0">
+                        <p class="font-semibold truncate">${p.fullName || p.name || 'Пользователь'}</p>
                         ${isYou ? '<p class="text-sm text-blue-600">Вы</p>' : ''}
                         ${!isYou ? roleBadgeHtml(pRole) : ''}
                     </div>
@@ -796,6 +832,7 @@ async function openChatInfoForChatId(chatId) {
                 </button>` : ''}
             `;
             list.appendChild(div);
+            if (modalInfo.type === 'group') wireParticipantRowProfileClick(div, p);
         });
         document.getElementById('participants-count').textContent = `(${modalInfo.participants.length})`;
 
@@ -848,6 +885,29 @@ function openChatInfo() {
     const info = currentChatInfo;
     if (!info) return;
 
+    // Личный чат: карточка профиля пользователя (без «редактировать»)
+    const isPrivate = (info.type || '').toString().toLowerCase() === 'private' || info.isPrivate === true;
+    if (isPrivate && typeof openUserProfile === 'function') {
+        const myId = String(typeof me !== 'undefined' ? me : '').trim().toLowerCase();
+        const parts = info.participants || info.Participants || [];
+        const partner = parts.find(p => {
+            const id = String(p.id || p.userId || p.UserId || p.Id || '').trim().toLowerCase();
+            return id && id !== myId;
+        });
+        const partnerId = partner
+            ? (partner.id || partner.userId || partner.UserId || partner.Id)
+            : (document.querySelector(`.chat-item[data-chat-id="${CSS.escape(String(currentChatId))}"]`)?.dataset?.partnerId);
+        if (partnerId) {
+            const fallback = {
+                fullName: document.getElementById('chat-title')?.textContent || partner?.fullName || partner?.name || '',
+                avatar: document.getElementById('chat-info-avatar')?.src || partner?.avatar || partner?.avatarPath || '',
+                login: partner?.login || partner?.Login || ''
+            };
+            openUserProfile(partnerId, fallback);
+            return;
+        }
+    }
+
     document.getElementById('modal-chat-avatar').src = document.getElementById('chat-info-avatar').src;
     document.getElementById('modal-chat-name').value = document.getElementById('chat-title').textContent;
     document.getElementById('modal-chat-type').textContent = info.type === 'group' ? 'Групповой чат' : 'Личный чат';
@@ -870,16 +930,16 @@ function openChatInfo() {
         const showRemove2 = info.type === 'group' && !isYou && canRemoveParticipant(userId, pRole2, info);
 
         div.innerHTML = `
-            <div class="flex items-center gap-4">
-                <div class="relative">
+            <div class="participant-info-main flex items-center gap-4 min-w-0 flex-1">
+                <div class="relative flex-shrink-0">
                     <img src="${p.avatar || 'https://novgorodskij-r49.gosweb.gosuslugi.ru/netcat_files/9/260/user_test.png'}"
                             class="w-12 h-12 rounded-full object-cover">
                     ${info.type === 'group' ? `
                     <span class="chat-online-dot absolute bottom-0 right-0 w-4 h-4 bg-green-500 rounded-full border-2 border-white ${isOnline ? '' : 'hidden'}"></span>
                     ` : ''}
                 </div>
-                <div>
-                    <p class="font-semibold">${p.fullName || p.name || 'Пользователь'}</p>
+                <div class="min-w-0">
+                    <p class="font-semibold truncate">${p.fullName || p.name || 'Пользователь'}</p>
                     ${isYou ? '<p class="text-sm text-blue-600">Вы</p>' : ''}
                     ${!isYou ? roleBadgeHtml(pRole2) : ''}
                 </div>
@@ -892,6 +952,7 @@ function openChatInfo() {
         `;
 
         list.appendChild(div);
+        if (info.type === 'group') wireParticipantRowProfileClick(div, p);
     });
 
     document.getElementById('participants-count').textContent = `(${info.participants.length})`;
