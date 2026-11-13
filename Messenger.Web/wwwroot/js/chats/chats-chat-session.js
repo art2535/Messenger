@@ -16,19 +16,36 @@ openChat = function (item) {
     return result;
 };
 
+function getUserStatus(userId) {
+    if (!userId || typeof userStatuses === 'undefined') return null;
+    const raw = String(userId).trim();
+    if (!raw) return null;
+    return userStatuses.get(raw)
+        || userStatuses.get(raw.toLowerCase())
+        || userStatuses.get(raw.toUpperCase())
+        || null;
+}
+
 function updateAllOnlineIndicators() {
     document.querySelectorAll('.chat-item').forEach(item => {
         const partnerId = item.dataset.partnerId;
         if (!partnerId) return;
+        // в избранном (чат с собой) точку не показываем как «собеседник»
+        if (item.dataset.isSelfChat === '1' || item.dataset.isFavorites === '1') {
+            const onlineDot = item.querySelector('.chat-online-dot');
+            if (onlineDot) onlineDot.classList.add('hidden');
+            return;
+        }
 
-        const status = userStatuses.get(partnerId);
+        const status = getUserStatus(partnerId);
         const onlineDot = item.querySelector('.chat-online-dot');
-
         if (onlineDot) {
-            onlineDot.classList.toggle('hidden', !(status?.isOnline === true));
+            onlineDot.classList.toggle('hidden', !(status && status.isOnline === true));
         }
     });
 }
+window.updateAllOnlineIndicators = updateAllOnlineIndicators;
+window.getUserStatus = getUserStatus;
 
 function updateTypingInChatList(chatId, userId, isTyping) {
     const chatItem = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
@@ -50,26 +67,41 @@ function updateTypingInChatList(chatId, userId, isTyping) {
     }
 
     if (isTyping) {
-        loadUserName(typingUserId).then(name => {
-            const currentItem = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
-            if (!currentItem) return;
-            const tBlock = currentItem.querySelector('.typing-in-list');
-            const mBlock = currentItem.querySelector('.chat-list-message-meta') ||
-                            currentItem.querySelector('.last-message-preview');
-            if (!tBlock) return;
+        const currentItem = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
+        if (!currentItem) return;
+        const tBlock = currentItem.querySelector('.typing-in-list');
+        const mBlock = currentItem.querySelector('.chat-list-message-meta') ||
+                        currentItem.querySelector('.last-message-preview');
+        if (!tBlock) return;
 
-            console.log(`[TYPING LIST] Показываем в списке: "${name}" печатает...`);
+        // В личных чатах — только «печатает...», без имени
+        const isPrivate = (currentItem.dataset.chatType || '').toLowerCase() === 'private'
+            || !!currentItem.dataset.partnerId;
 
-            let nameEl = tBlock.querySelector('.typing-name');
-            if (!nameEl) {
-                tBlock.innerHTML = `<span class="typing-name"></span> печатает...`;
-                nameEl = tBlock.querySelector('.typing-name');
-            }
-
-            if (nameEl) nameEl.textContent = name || "Собеседник";
-
+        if (isPrivate) {
+            tBlock.innerHTML = 'печатает...';
             tBlock.classList.remove('hidden');
             if (mBlock) mBlock.classList.add('hidden');
+            return;
+        }
+
+        loadUserName(typingUserId).then(name => {
+            const item = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
+            if (!item) return;
+            const block = item.querySelector('.typing-in-list');
+            const meta = item.querySelector('.chat-list-message-meta') ||
+                            item.querySelector('.last-message-preview');
+            if (!block) return;
+
+            let nameEl = block.querySelector('.typing-name');
+            if (!nameEl) {
+                block.innerHTML = `<span class="typing-name"></span> печатает...`;
+                nameEl = block.querySelector('.typing-name');
+            }
+            if (nameEl) nameEl.textContent = name || 'Собеседник';
+
+            block.classList.remove('hidden');
+            if (meta) meta.classList.add('hidden');
         });
     } else {
         typingBlock.classList.add('hidden');
@@ -78,10 +110,8 @@ function updateTypingInChatList(chatId, userId, isTyping) {
 }
 
 function showToast(message, type = 'info', duration = 4000) {
-    if (window.__uiShowToast) {
-        return window.__uiShowToast(message, type, duration);
-    }
-    if (message) console.log('[toast:' + (type || 'info') + ']', message);
+    // тосты отключены по требованию
+    return;
 }
 
 function toggleEmptyState() {
@@ -195,18 +225,40 @@ async function openChat(item) {
     document.querySelectorAll('.chat-item').forEach(i => i.classList.remove('active'));
     item.classList.add('active');
 
-    document.getElementById('empty-right-panel').classList.add('hidden');
-    document.getElementById('chat-header').classList.remove('hidden');
-    document.getElementById('messages-wrapper').classList.remove('hidden');
-    document.getElementById('messages-container').classList.remove('hidden');
-    document.getElementById('chat-input-area').classList.remove('hidden');
+    const emptyRight = document.getElementById('empty-right-panel');
+    if (emptyRight) {
+        emptyRight.classList.add('hidden');
+        emptyRight.style.setProperty('display', 'none', 'important');
+    }
+    const showEl = (id, display) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.classList.remove('hidden');
+        el.style.removeProperty('display');
+        if (display) el.style.display = display;
+    };
+    showEl('chat-header', '');
+    showEl('messages-wrapper', '');
+    // messagesContainer объявляется ниже — здесь только показываем
+    {
+        const mc = document.getElementById('messages-container');
+        if (mc) {
+            mc.classList.remove('hidden');
+            mc.style.removeProperty('display');
+        }
+    }
+    showEl('chat-input-area', '');
 
     if (isMobileLayout()) {
         setMobileChatOpen(true);
     }
 
     const chatNameEl = item.querySelector('h3');
-    document.getElementById('chat-title').textContent = chatNameEl ? chatNameEl.textContent : 'Чат';
+    let openTitle = chatNameEl ? chatNameEl.textContent : 'Чат';
+    if (item.dataset.isSelfChat === '1' || item.dataset.isFavorites === '1') {
+        openTitle = 'Избранное';
+    }
+    document.getElementById('chat-title').textContent = openTitle;
 
     const avatarEl = item.querySelector('img');
     document.getElementById('chat-info-avatar').src = avatarEl ? avatarEl.src : 'https://novgorodskij-r49.gosweb.gosuslugi.ru/netcat_files/9/260/user_test.png';
@@ -237,7 +289,33 @@ async function openChat(item) {
 
                     if (partner) {
                         const partnerId = String(partner.id || partner.userId || "");
+                        if (partnerId) {
+                            const listItem = document.querySelector(`.chat-item[data-chat-id="${CSS.escape(String(chatId))}"]`);
+                            if (listItem) {
+                                listItem.dataset.partnerId = partnerId;
+                                listItem.dataset.chatType = listItem.dataset.chatType || 'private';
+                            }
+                            window.__privatePartnerMap = window.__privatePartnerMap || {};
+                            window.__privatePartnerMap[String(chatId)] = partnerId;
+                        }
                         setTimeout(() => requestPartnerStatus(partnerId), 200);
+                    } else {
+                        // Чат с самим собой → Избранное
+                        const listItem = document.querySelector(`.chat-item[data-chat-id="${CSS.escape(String(chatId))}"]`);
+                        if (listItem) {
+                            listItem.dataset.isSelfChat = '1';
+                            listItem.dataset.isFavorites = '1';
+                            listItem.dataset.partnerId = String(me || '');
+                            const h3 = listItem.querySelector('h3');
+                            if (h3) h3.textContent = 'Избранное';
+                        }
+                        window.__favoritesChatId = String(chatId);
+                        window.__privatePartnerMap = window.__privatePartnerMap || {};
+                        window.__privatePartnerMap[String(chatId)] = String(me || 'self');
+                        const titleEl = document.getElementById('chat-title');
+                        if (titleEl) titleEl.textContent = 'Избранное';
+                        currentChatInfo.isSelfChat = true;
+                        currentChatInfo.isFavorites = true;
                     }
                 }
             }

@@ -132,42 +132,24 @@
   }
 
   function showToast(message, type, duration) {
-    type = type || 'info';
-    duration = duration == null ? 4000 : duration;
-    if (!message) return;
-
-    const container = ensureToastContainer();
-    const toast = document.createElement('div');
-    toast.className = 'ui-toast ' + type;
-    toast.innerHTML =
-      '<div class="ui-toast-msg"></div>' +
-      '<button type="button" class="ui-toast-close" aria-label="Закрыть">×</button>';
-    toast.querySelector('.ui-toast-msg').textContent = String(message);
-
-    const remove = () => {
-      toast.classList.remove('show');
-      toast.classList.add('hide');
-      setTimeout(() => toast.remove(), 250);
-    };
-    toast.querySelector('.ui-toast-close').addEventListener('click', remove);
-    container.appendChild(toast);
-    requestAnimationFrame(() => toast.classList.add('show'));
-    if (duration > 0) setTimeout(remove, duration);
+    // тосты отключены
+    return;
   }
 
-  // Public API
   global.showAlert = showAlert;
   global.showConfirm = showConfirm;
   global.showToast = showToast;
   global.__uiShowToast = showToast;
 
   global.alert = function (msg) {
+    // fire-and-forget; for await use showAlert(...)
     showAlert(msg == null ? '' : String(msg), { type: 'info', title: 'Сообщение' });
   };
 
   global.confirm = function (msg) {
+    // Синхронный confirm недоступен с кастомным UI — всегда false.
+    // Используйте: const ok = await showConfirm(...)
     console.warn('[ui-dialogs] Use await showConfirm(...) instead of confirm()');
-    showConfirm(msg == null ? '' : String(msg), { title: 'Подтвердите действие' });
     return false;
   };
 })(typeof window !== 'undefined' ? window : globalThis);

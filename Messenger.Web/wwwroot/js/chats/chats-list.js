@@ -35,6 +35,7 @@ async function loadChats() {
             const div = document.createElement('div');
             div.className = 'p-4 chat-item flex items-center space-x-3 cursor-pointer hover:bg-gray-100 transition rounded-lg mx-2';
             div.dataset.chatId = chat.chatId || chat.id;
+            div.dataset.chatType = (chat.type || (chat.isPrivate ? 'private' : 'group') || '').toString().toLowerCase();
 
             const isPrivate = chat.type === 'private' || chat.isPrivate;
 
@@ -52,6 +53,37 @@ async function loadChats() {
                     displayAvatar = interlocutor.avatar || interlocutor.avatarPath || displayAvatar;
                     partnerId = interlocutor.id || interlocutor.userId;
                     if (partnerId) div.dataset.partnerId = String(partnerId);
+                } else {
+                    // нет другого участника → чат с собой («Избранное»)
+                    displayName = 'Избранное';
+                    div.dataset.isSelfChat = '1';
+                    div.dataset.isFavorites = '1';
+                    partnerId = me;
+                    div.dataset.partnerId = String(me);
+                }
+            } else if (isPrivate) {
+                // API списка часто без participants; «Приватный чат» = избранное
+                const n = String(displayName || '').trim().toLowerCase();
+                const favId = window.__favoritesChatId && String(window.__favoritesChatId);
+                const chatIdStr = String(chat.chatId || chat.id || '');
+                const mappedSelf = (window.__privatePartnerMap || {})[chatIdStr];
+                if (favId === chatIdStr ||
+                    (mappedSelf && String(mappedSelf).toLowerCase() === String(me).toLowerCase()) ||
+                    n === 'приватный чат' || n === 'избранное' || n === '') {
+                    displayName = 'Избранное';
+                    div.dataset.isSelfChat = '1';
+                    div.dataset.isFavorites = '1';
+                    partnerId = me;
+                    div.dataset.partnerId = String(me);
+                }
+            }
+
+            // восстановить partnerId из кэша (для зелёной точки online)
+            if (isPrivate && !partnerId) {
+                const cid = String(chat.chatId || chat.id || '');
+                const mapped = (window.__privatePartnerMap || {})[cid];
+                if (mapped && String(mapped).toLowerCase() !== String(me).toLowerCase()) {
+                    partnerId = mapped;
                 }
             }
 
@@ -113,7 +145,13 @@ async function loadChats() {
         await hydrateChatListStatuses(json.data);
         renderAllDraftPreviews();
 
-        setTimeout(updateAllOnlineIndicators, 300);
+        setTimeout(() => {
+            if (typeof refreshVisiblePresence === 'function') refreshVisiblePresence();
+            if (typeof updateAllOnlineIndicators === 'function') updateAllOnlineIndicators();
+        }, 300);
+        setTimeout(() => {
+            if (typeof updateAllOnlineIndicators === 'function') updateAllOnlineIndicators();
+        }, 1200);
 
         if (typeof openChatFromUrlIfNeeded === 'function') {
             openChatFromUrlIfNeeded(true).catch(() => {});
@@ -152,8 +190,22 @@ async function loadChats() {
                             displayName = interlocutor.fullName || interlocutor.name || displayName;
                             displayAvatar = interlocutor.avatar || interlocutor.avatarPath || displayAvatar;
                             partnerId = interlocutor.id || interlocutor.userId;
+                        } else {
+                            displayName = 'Избранное';
+                            div.dataset.isSelfChat = '1';
+                            div.dataset.isFavorites = '1';
+                            partnerId = me;
+                        }
+                    } else if (isPrivate) {
+                        const n = String(displayName || '').trim().toLowerCase();
+                        if (n === 'приватный чат' || n === 'избранное' || n === '') {
+                            displayName = 'Избранное';
+                            div.dataset.isSelfChat = '1';
+                            div.dataset.isFavorites = '1';
+                            partnerId = me;
                         }
                     }
+                    if (partnerId) div.dataset.partnerId = String(partnerId);
                     const lastMessage = chat.lastMessage && typeof chat.lastMessage === 'object' ? chat.lastMessage : null;
                     const lastMessageSenderId = lastMessage?.senderId ?? lastMessage?.userId ?? lastMessage?.fromUserId;
                     const lastMessageIsMine = lastMessageSenderId != null && String(lastMessageSenderId) === String(me);
@@ -395,9 +447,20 @@ async function loadMessages(chatId) {
 }
 
 function renderLastMessagePreview(lastMessageValue) {
+    function cleanPreviewText(raw) {
+        let t = String(raw || '');
+        if (typeof stripMessageMetaForPreview === 'function') t = stripMessageMetaForPreview(t);
+        else if (typeof stripForwardForPreview === 'function') t = stripForwardForPreview(t);
+        return (t || '').trim();
+    }
+
     if (typeof lastMessageValue === "string") {
-        const text = lastMessageValue.trim();
+        const text = cleanPreviewText(lastMessageValue);
         if (text === "") {
+            // после strip метаданных текст пустой — возможно только пересылка/вложение
+            if (/FORWARD:/i.test(String(lastMessageValue))) {
+                return '<i data-feather="corner-up-right" class="w-4 h-4"></i> Пересланное сообщение';
+            }
             return '<i data-feather="paperclip" class="w-4 h-4"></i> Вложение';
         }
         return text.length > 38 ? text.substring(0, 35) + '...' : text;
@@ -405,7 +468,16 @@ function renderLastMessagePreview(lastMessageValue) {
 
     if (typeof lastMessageValue === "object" && lastMessageValue !== null) {
         if (lastMessageValue.messageText && lastMessageValue.messageText.trim()) {
-            const text = lastMessageValue.messageText.trim();
+            const text = cleanPreviewText(lastMessageValue.messageText);
+            if (!text) {
+                if (/FORWARD:/i.test(String(lastMessageValue.messageText))) {
+                    return '<i data-feather="corner-up-right" class="w-4 h-4"></i> Пересланное сообщение';
+                }
+                if (lastMessageValue.attachments && lastMessageValue.attachments.length) {
+                    return '<i data-feather="paperclip" class="w-4 h-4"></i> Вложение';
+                }
+                return 'Сообщение';
+            }
             return text.length > 38 ? text.substring(0, 35) + '...' : text;
         }
 

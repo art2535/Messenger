@@ -78,36 +78,54 @@ async function startSignalR() {
     });
 
     connection.on("UserOnlineStatusChanged", (data) => {
-        const uid = String(data.userId || data.UserId || '').trim();
+        if (!data) return;
+        const uidRaw = String(data.userId || data.UserId || '').trim();
+        if (!uidRaw) return;
+        const uid = uidRaw.toLowerCase();
         const isOnline = !!(data.isOnline ?? data.IsOnline ?? data.online ?? data.Online);
         let lastActivity = data.lastActivity ?? data.LastActivity ?? data.lastSeen ?? data.LastSeen ?? null;
-        console.log(`[STATUS] ${uid} → ${isOnline ? 'ONLINE' : 'OFFLINE'}`, data);
+        console.log(`[STATUS] ${uidRaw} → ${isOnline ? 'ONLINE' : 'OFFLINE'}`, data);
 
-        const prev = userStatuses.get(uid);
+        // единый ключ в нижнем регистре + дублируем исходный id
+        const prev = userStatuses.get(uid) || userStatuses.get(uidRaw);
         if (!lastActivity && prev?.lastActivity) {
             lastActivity = prev.lastActivity;
         }
 
-        userStatuses.set(uid, {
-            isOnline,
-            lastActivity
-        });
+        const entry = { isOnline, lastActivity };
+        userStatuses.set(uid, entry);
+        userStatuses.set(uidRaw, entry);
+
+        // зелёные точки в списке чатов
+        if (typeof updateAllOnlineIndicators === 'function') {
+            updateAllOnlineIndicators();
+        } else {
+            document.querySelectorAll('.chat-item[data-partner-id]').forEach(item => {
+                const pid = String(item.dataset.partnerId || '').trim().toLowerCase();
+                if (pid !== uid) return;
+                const onlineDot = item.querySelector('.chat-online-dot');
+                if (onlineDot) onlineDot.classList.toggle('hidden', !isOnline);
+            });
+        }
 
         if (currentChatId) {
             updateCurrentChatSubtitle();
         }
 
-        if (document.getElementById('chat-info-modal').classList.contains('show') && currentChatInfo?.type === 'group') {
-            const userIdStr = data.userId.toString().trim();
-            const isOnlineNow = !!data.isOnline;
-
-            const participantEl = document.querySelector(`#participants-list [data-user-id="${userIdStr}"]`);
-            if (participantEl) {
+        // участники в info-модалке группы
+        const infoModal = document.getElementById('chat-info-modal');
+        if (infoModal && infoModal.classList.contains('show')) {
+            document.querySelectorAll('#participants-list [data-user-id]').forEach(participantEl => {
+                const pid = String(participantEl.dataset.userId || '').trim().toLowerCase();
+                if (pid !== uid) return;
                 const onlineDot = participantEl.querySelector('.chat-online-dot');
-                if (onlineDot) {
-                    onlineDot.classList.toggle('hidden', !isOnlineNow);
-                }
-            }
+                if (onlineDot) onlineDot.classList.toggle('hidden', !isOnline);
+            });
+        }
+
+        // открытая карточка профиля
+        if (typeof updateOpenUserProfileStatus === 'function') {
+            updateOpenUserProfileStatus(uidRaw, isOnline, lastActivity);
         }
     });
 
@@ -794,8 +812,15 @@ function updateCurrentChatSubtitle() {
     const onlineDot = document.getElementById('chat-online-indicator');
 
     if (currentChatInfo.type !== 'private') {
-        if (subtitle) subtitle.textContent = `${currentChatInfo.participants?.length || 0} участников`;
+        const count = currentChatInfo.participants?.length || currentChatInfo.participantsCount || 0;
+        if (subtitle) {
+            // корректное склонение
+            let label = count + ' участников';
+            if (count === 1) label = '1 участник';
+            else if (count >= 2 && count <= 4) label = count + ' участника';
+            subtitle.textContent = label;
             if (typeof updateChatSubtitleMarquee === 'function') updateChatSubtitleMarquee();
+        }
         if (onlineDot) onlineDot.classList.add('hidden');
         return;
     }
@@ -805,8 +830,19 @@ function updateCurrentChatSubtitle() {
         return pid !== String(me).toLowerCase().trim();
     });
 
+    // Личный чат без другого участника = «Избранное»
     if (!partner) {
-        console.log("updateCurrentChatSubtitle: собеседник не найден в currentChatInfo");
+        const titleEl = document.getElementById('chat-title');
+        if (titleEl) titleEl.textContent = 'Избранное';
+        if (subtitle) {
+            const count = currentChatInfo.participants?.length || 1;
+            subtitle.textContent = count === 1 ? '1 участник' : (count + ' участников');
+            subtitle.classList.remove('text-green-600', 'font-medium');
+            if (typeof updateChatSubtitleMarquee === 'function') updateChatSubtitleMarquee();
+        }
+        if (onlineDot) onlineDot.classList.add('hidden');
+        currentChatInfo.isSelfChat = true;
+        currentChatInfo.isFavorites = true;
         return;
     }
 

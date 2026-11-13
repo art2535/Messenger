@@ -1,3 +1,87 @@
+
+/** Показать пустую правую панель — как при первой загрузке страницы чатов */
+function showEmptyRightPanel() {
+    try {
+        if (typeof selectMode !== 'undefined' && selectMode && typeof exitSelectMode === 'function') {
+            exitSelectMode();
+        }
+    } catch (_) {}
+
+    const prevId = currentChatId;
+    currentChatId = null;
+    currentChatInfo = null;
+    modalChatId = null;
+    if (typeof setChatUrl === 'function') {
+        try { setChatUrl(null); } catch (_) {}
+    }
+    // убрать chatId из URL, чтобы ничего не переоткрыло чат
+    try {
+        const path = window.location.pathname.replace(/\/[^/]+$/, '') || '/Inside/Chats';
+        if (/\/Inside\/Chats/i.test(window.location.pathname) || /\/Account\/Chats/i.test(window.location.pathname)) {
+            window.history.replaceState({}, '', path.endsWith('/Chats') || path.endsWith('/chats')
+                ? path
+                : (window.location.pathname.replace(/\/[^/]+\/?$/, '') || '/Inside/Chats'));
+        }
+    } catch (_) {}
+
+    // leave hub (best-effort)
+    if (prevId && typeof connection !== 'undefined' && connection?.state === 'Connected' && typeof leaveChat === 'function') {
+        try { leaveChat(prevId).catch(() => {}); } catch (_) {}
+    }
+
+    const forceHide = (id) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.classList.add('hidden');
+        el.style.setProperty('display', 'none', 'important');
+    };
+    forceHide('chat-header');
+    forceHide('messages-wrapper');
+    forceHide('messages-container');
+    forceHide('chat-input-area');
+    forceHide('message-search-filters');
+    forceHide('global-search-results');
+
+    const pinBar = document.getElementById('pinned-message-bar');
+    if (pinBar) {
+        pinBar.classList.remove('show');
+        pinBar.style.display = 'none';
+    }
+    const selToolbar = document.getElementById('selection-toolbar');
+    if (selToolbar) selToolbar.classList.remove('show');
+
+    // очистить сообщения
+    const mc = document.getElementById('messages-container');
+    if (mc) mc.innerHTML = '';
+
+    const emptyRight = document.getElementById('empty-right-panel');
+    if (emptyRight) {
+        emptyRight.classList.remove('hidden');
+        emptyRight.style.removeProperty('display');
+        emptyRight.style.setProperty('display', 'flex', 'important');
+    }
+
+    // правая колонка должна остаться видимой
+    const rightPanel = document.getElementById('right-panel');
+    if (rightPanel) {
+        rightPanel.classList.remove('hidden');
+        rightPanel.style.removeProperty('display');
+    }
+
+    document.querySelectorAll('.chat-item').forEach(i => i.classList.remove('active'));
+
+    const mi = document.getElementById('message-input');
+    if (mi) mi.value = '';
+    const af = document.getElementById('attached-files');
+    if (af) af.innerHTML = '';
+    if (typeof selectedFiles !== 'undefined') selectedFiles = [];
+
+    if (typeof setMobileChatOpen === 'function') {
+        try { setMobileChatOpen(false); } catch (_) {}
+    }
+    try { document.body.classList.remove('mobile-chat-open'); } catch (_) {}
+}
+
 function hideMessageContextMenu() {
     const menu = document.getElementById('message-context-menu');
     if (menu) menu.classList.remove('show');
@@ -193,23 +277,11 @@ async function deleteChatById(chatId) {
         cacheChatItems?.();
         filterChats?.();
 
-        if (String(currentChatId) === String(chatId)) {
-            currentChatId = null;
-            currentChatInfo = null;
-            messagesContainer.innerHTML = `
-                <div class="flex flex-col items-center justify-center h-full text-gray-500">
-                    <p>Выберите чат для просмотра сообщений</p>
-                </div>`;
-            const title = document.getElementById('chat-title');
-            if (title) title.textContent = 'Выберите чат';
-            const subtitle = document.getElementById('chat-subtitle');
-            if (subtitle) subtitle.textContent = 'Нажмите, чтобы посмотреть информацию';
-            if (typeof updateChatSubtitleMarquee === 'function') updateChatSubtitleMarquee();
-            document.getElementById('chat-input-area')?.classList.add('hidden');
-            document.getElementById('empty-right-panel')?.classList.remove('hidden');
-            document.getElementById('right-panel')?.classList.add('hidden');
+        // всегда сбрасываем правую панель, если удалили открытый чат
+        // (сравнение без учёта регистра GUID)
+        if (!currentChatId || String(currentChatId).toLowerCase() === String(chatId).toLowerCase()) {
+            showEmptyRightPanel();
         }
-        showToast('Чат удалён', 'success');
     } catch (err) {
         console.error(err);
         showToast(err.message || 'Не удалось удалить чат', 'error');

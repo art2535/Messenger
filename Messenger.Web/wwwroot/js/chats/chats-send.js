@@ -765,9 +765,18 @@ function renderChatListStatus(status) {
 
 function renderChatListMessageMeta(messageText, attachments = [], sentAt = null, isMyMessage = false, status = null) {
     let previewHTML = '';
-    if (messageText && String(messageText).trim() !== '') {
-        const text = String(messageText).trim();
-        previewHTML = text.length > 45 ? text.substring(0, 42) + '...' : text;
+    let cleaned = messageText == null ? '' : String(messageText);
+    if (typeof stripMessageMetaForPreview === 'function') {
+        cleaned = stripMessageMetaForPreview(cleaned);
+    } else if (typeof stripForwardForPreview === 'function') {
+        cleaned = stripForwardForPreview(cleaned);
+    }
+    cleaned = (cleaned || '').trim();
+
+    if (cleaned) {
+        previewHTML = cleaned.length > 45 ? cleaned.substring(0, 42) + '...' : cleaned;
+    } else if (messageText && /FORWARD:/i.test(String(messageText))) {
+        previewHTML = `<i data-feather="corner-up-right" class="w-4 h-4"></i> Пересланное сообщение`;
     } else if (attachments && attachments.length > 0) {
         const imageCount = attachments.filter(a => a.fileType?.startsWith('image/')).length;
         previewHTML = imageCount > 0
@@ -776,9 +785,8 @@ function renderChatListMessageMeta(messageText, attachments = [], sentAt = null,
     } else {
         previewHTML = 'Новое сообщение';
     }
-    if (attachments && attachments.length > 0 && messageText && String(messageText).trim() !== '') {
-        const text = String(messageText).trim();
-        const shortText = text.length > 35 ? text.substring(0, 32) + '...' : text;
+    if (attachments && attachments.length > 0 && cleaned) {
+        const shortText = cleaned.length > 35 ? cleaned.substring(0, 32) + '...' : cleaned;
         previewHTML = `<i data-feather="paperclip" class="w-4 h-4"></i> Вложение: ${shortText}`;
     }
     return {
@@ -788,7 +796,8 @@ function renderChatListMessageMeta(messageText, attachments = [], sentAt = null,
 }
 
 function updateChatLastMessagePreview(chatId, messageText, attachments = [], sentAt = null, isMyMessage = false, status = null) {
-    if (typeof stripReplyForPreview === 'function') messageText = stripReplyForPreview(messageText);
+    if (typeof stripMessageMetaForPreview === 'function') messageText = stripMessageMetaForPreview(messageText);
+    else if (typeof stripReplyForPreview === 'function') messageText = stripReplyForPreview(messageText);
     const chatItem = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
     if (!chatItem) return;
     let lastMessageEl = chatItem.querySelector('.last-message-preview');
