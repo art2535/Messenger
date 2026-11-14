@@ -1,0 +1,100 @@
+/* Voice */
+.voice-record-bar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px; background: var(--surface-2, #1e293b); border-radius: 12px; margin: 6px 0;
+}
+.voice-record-bar.hidden { display: none; }
+.voice-rec-dot {
+  width: 10px; height: 10px; border-radius: 50%; background: #ef4444;
+  animation: pulse 1s infinite;
+}
+@keyframes pulse { 50% { opacity: .4; } }
+.voice-player { display: flex; align-items: center; gap: 8px; min-width: 220px; }
+.voice-play-btn {
+  width: 36px; height: 36px; border-radius: 50%; border: none;
+  background: var(--accent, #3b82f6); color: #fff; cursor: pointer;
+}
+.voice-wave-canvas { flex: 1; }
+
+/* Thread panel */
+.thread-panel {
+  position: absolute; right: 0; top: 0; bottom: 0; width: min(360px, 100%);
+  background: var(--surface, #0f172a); border-left: 1px solid var(--border, #334155);
+  display: flex; flex-direction: column; z-index: 20;
+}
+.thread-panel.hidden { display: none; }
+.thread-panel-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 16px; border-bottom: 1px solid var(--border, #334155);
+}
+.thread-panel-root, .thread-panel-replies { padding: 12px; overflow-y: auto; }
+.thread-panel-replies { flex: 1; }
+.thread-msg { padding: 8px 0; border-bottom: 1px solid rgba(148,163,184,.15); }
+.thread-msg-author { font-weight: 600; font-size: 13px; }
+.thread-msg-text { font-size: 14px; margin-top: 2px; }
+.thread-panel-compose { padding: 12px; border-top: 1px solid var(--border, #334155); display: flex; gap: 8px; }
+.thread-panel-compose textarea { flex: 1; resize: none; }
+.thread-badge {
+  display: inline-block; margin-top: 4px; font-size: 12px; color: var(--accent, #3b82f6);
+  background: transparent; border: none; cursor: pointer; padding: 0;
+}
+
+/* Mentions */
+.mention-dropdown {
+  position: fixed; z-index: 100; min-width: 200px; max-height: 240px; overflow-y: auto;
+  background: var(--surface, #1e293b); border: 1px solid var(--border, #475569);
+  border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.35);
+}
+.mention-item { padding: 8px 12px; cursor: pointer; }
+.mention-item:hover { background: rgba(59,130,246,.2); }
+.mention-tag { color: var(--accent, #3b82f6); font-weight: 600; }
+
+/* Pinned carousel */
+.pinned-carousel {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 12px; background: rgba(59,130,246,.12);
+  border-bottom: 1px solid var(--border, #334155);
+}
+.pinned-carousel.hidden { display: none; }
+.pin-slide { flex: 1; cursor: pointer; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pin-nav, .pin-close { border: none; background: transparent; cursor: pointer; font-size: 18px; color: inherit; }
+.pin-counter { font-size: 12px; opacity: .7; }
+.highlight-flash { outline: 2px solid var(--accent, #3b82f6); border-radius: 8px; }
+
+/* Polls */
+.poll-card {
+  background: var(--surface-2, #1e293b); border-radius: 12px; padding: 12px; min-width: 240px;
+}
+.poll-question { font-weight: 600; margin-bottom: 8px; }
+.poll-option {
+  position: relative; display: block; width: 100%; text-align: left;
+  margin: 4px 0; padding: 8px 10px; border-radius: 8px;
+  border: 1px solid var(--border, #475569); background: transparent; color: inherit; cursor: pointer;
+  overflow: hidden;
+}
+.poll-option.voted { border-color: var(--accent, #3b82f6); }
+.poll-option-bar {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  background: rgba(59,130,246,.2); z-index: 0;
+}
+.poll-option-text, .poll-option-meta { position: relative; z-index: 1; }
+.poll-option-meta { float: right; font-size: 12px; opacity: .75; }
+
+/* Admin panel */
+.admin-panel { padding: 16px; }
+.admin-stats-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px;
+}
+.admin-stat-card {
+  background: var(--surface-2, #1e293b); border-radius: 12px; padding: 14px;
+}
+.admin-stat-card .value { font-size: 22px; font-weight: 700; }
+.admin-stat-card .label { font-size: 12px; opacity: .7; }
+.admin-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.admin-table th, .admin-table td { padding: 8px; border-bottom: 1px solid var(--border, #334155); text-align: left; }
+
+/* Presence badges */
+.presence-badge { font-size: 11px; padding: 2px 6px; border-radius: 999px; background: rgba(148,163,184,.2); }
+.presence-badge.busy { background: rgba(239,68,68,.2); color: #fca5a5; }
+.presence-badge.in_class { background: rgba(234,179,8,.2); color: #fde68a; }
+.presence-badge.vacation { background: rgba(56,189,248,.2); color: #bae6fd; }

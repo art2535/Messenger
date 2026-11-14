@@ -620,7 +620,10 @@
     </div>
 
     <div id="message-context-menu">
-        <button type="button" id="ctx-reply-btn"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ctx-icon"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+                <button type="button" id="ctx-report-btn"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="ctx-icon"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+            <span>Пожаловаться</span>
+        </button>
+<button type="button" id="ctx-reply-btn"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ctx-icon"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
             <span>Ответить</span>
         </button>
         <button type="button" id="ctx-forward-btn"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ctx-icon"><path d="M15 17l5-5-5-5"/><path d="M4 19v-2a4 4 0 0 1 4-4h12"/></svg>
@@ -752,6 +755,8 @@
     <script src="~/js/chats/chats-messages.js" asp-append-version="true"></script>
     <script src="~/js/chats/chats-forward.js" asp-append-version="true"></script>
     <script src="~/js/chats/chats-menus.js" asp-append-version="true"></script>
+<script src="~/js/chats/chats-moderation.js" asp-append-version="true"></script>
+
     <script src="~/js/chats/chats-pins.js" asp-append-version="true"></script>
     <script src="~/js/chats/chats-send.js" asp-append-version="true"></script>
     <script src="~/js/chats/chats-signalr.js" asp-append-version="true"></script>
