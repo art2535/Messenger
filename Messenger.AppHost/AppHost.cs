@@ -28,6 +28,7 @@ var postgres = builder.AddPostgres("postgres", password: postgresPassword)
     .WithDataVolume()
     .WithPgAdmin(pgAdmin =>
     {
+        pgAdmin.WithImage("dpage/pgadmin4", "latest");
         pgAdmin.WithUrlForEndpoint("http", u => u.DisplayText = "pgAdmin");
     });
 
@@ -62,6 +63,7 @@ var redisExporter = builder.AddContainer("redis-exporter", "oliver006/redis_expo
 var monitoringPath = Path.Combine(builder.AppHostDirectory, "monitoring");
 
 var prometheus = builder.AddDockerfile("prometheus", monitoringPath)
+    .WithImage("messenger-prometheus", "local")
     .WithVolume("prometheus-data", "/prometheus")
     .WithArgs(
         "--config.file=/etc/prometheus/prometheus.yml",
@@ -75,6 +77,7 @@ var prometheus = builder.AddDockerfile("prometheus", monitoringPath)
 var grafanaPath = Path.Combine(monitoringPath, "grafana");
 
 var grafana = builder.AddDockerfile("grafana", grafanaPath)
+    .WithImage("messenger-grafana", "local")
     .WithVolume("grafana-data", "/var/lib/grafana")
     .WithEnvironment("GF_SECURITY_ADMIN_USER", grafanaAdminUser)
     .WithEnvironment("GF_SECURITY_ADMIN_PASSWORD", grafanaAdminPassword)
