@@ -101,8 +101,48 @@ namespace Messenger.API
 
             using (var migrationScope = app.Services.CreateScope())
             {
+                var logger = migrationScope.ServiceProvider.GetRequiredService<ILogger<Program>>();
                 var db = migrationScope.ServiceProvider.GetRequiredService<GuapMessengerContext>();
-                db.Database.Migrate();
+
+                try
+                {
+                    var appliedMigrations = db.Database.GetAppliedMigrations().ToList();
+                    var currentMigration = appliedMigrations.LastOrDefault();
+
+                    logger.LogInformation("Текущая миграция базы данных: {Migration}", currentMigration ?? "Нет");
+
+                    var pendingMigrations = db.Database.GetPendingMigrations().ToList();
+
+                    if (pendingMigrations.Count == 0)
+                    {
+                        logger.LogInformation("Нет ожидающих миграций для применения.");
+                    }
+                    else
+                    {
+                        logger.LogInformation("Найдено {Count} ожидающих миграций. Применяю...", pendingMigrations.Count);
+
+                        foreach (var migration in pendingMigrations)
+                        {
+                            logger.LogInformation("Применяю миграцию: {Migration}", migration);
+                            db.Database.Migrate(migration);
+                            logger.LogInformation("Миграция успешно применена: {Migration}", migration);
+                        }
+
+                        logger.LogInformation("Все ожидающие миграции успешно применены.");
+                    }
+
+                    var finalMigration = db.Database
+                        .GetAppliedMigrations()
+                        .LastOrDefault();
+
+                    logger.LogInformation("Миграция базы данных завершена. Текущая миграция: {Migration}",
+                        finalMigration ?? "Нет");
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Ошибка при применении миграций базы данных.");
+                    throw;
+                }
             }
 
             if (app.Environment.IsDevelopment())
@@ -154,12 +194,12 @@ namespace Messenger.API
 
             try
             {
-                Log.Information("Messenger.API starting...");
+                Log.Information("Запуск Messenger.API...");
                 app.Run();
             }
             catch (Exception ex)
             {
-                Log.Fatal(ex, "Messenger.API terminated unexpectedly");
+                Log.Fatal(ex, "Messenger.API неожиданно завершил работу");
                 throw;
             }
             finally

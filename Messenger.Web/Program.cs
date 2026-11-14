@@ -171,12 +171,12 @@ namespace Messenger.Web
 
             try
             {
-                Log.Information("Messenger.Web starting...");
+                Log.Information("Запуск Messenger.Web...");
                 app.Run();
             }
             catch (Exception ex)
             {
-                Log.Fatal(ex, "Messenger.Web terminated unexpectedly");
+                Log.Fatal(ex, "Messenger.Web неожиданно завершил работу");
                 throw;
             }
             finally
