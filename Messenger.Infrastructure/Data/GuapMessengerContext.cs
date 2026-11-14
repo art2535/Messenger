@@ -16,38 +16,25 @@ public partial class GuapMessengerContext : DbContext
     }
 
     public virtual DbSet<AccountSetting> AccountSettings { get; set; }
-
     public virtual DbSet<Attachment> Attachments { get; set; }
-
     public virtual DbSet<Chat> Chats { get; set; }
-
     public virtual DbSet<ChatParticipant> ChatParticipants { get; set; }
-
     public virtual DbSet<Login> Logins { get; set; }
-
     public virtual DbSet<Message> Messages { get; set; }
-
     public virtual DbSet<Notification> Notifications { get; set; }
-
     public virtual DbSet<Reaction> Reactions { get; set; }
-
     public virtual DbSet<Role> Roles { get; set; }
-
     public virtual DbSet<User> Users { get; set; }
-
     public virtual DbSet<UserStatus> UserStatuses { get; set; }
-
     public virtual DbSet<Broadcast> Broadcasts { get; set; }
-
     public virtual DbSet<BroadcastRecipient> BroadcastRecipients { get; set; }
-
     public virtual DbSet<PushSubscription> PushSubscriptions { get; set; }
-
     public virtual DbSet<Log> Logs { get; set; }
-
     public virtual DbSet<ChatFolder> ChatFolders { get; set; }
-
     public virtual DbSet<ChatFolderChat> ChatFolderChats { get; set; }
+    public virtual DbSet<MessageReport> MessageReports { get; set; }
+    public virtual DbSet<UserMute> UserMutes { get; set; }
+    public virtual DbSet<ModerationLog> ModerationLogs { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
@@ -240,7 +227,7 @@ public partial class GuapMessengerContext : DbContext
 
             entity.HasOne(d => d.Account)
                 .WithOne(p => p.User)
-                .HasForeignKey<AccountSetting>(a => a.AccountId)   // shared PK
+                .HasForeignKey<AccountSetting>(a => a.AccountId)
                 .HasConstraintName("fk_account")
                 .OnDelete(DeleteBehavior.Cascade);
 
@@ -389,7 +376,6 @@ public partial class GuapMessengerContext : DbContext
                 .HasDatabaseName("IX_logs_application");
         });
 
-
         modelBuilder.Entity<ChatFolder>(entity =>
         {
             entity.ToTable("ChatFolders");
@@ -406,6 +392,46 @@ public partial class GuapMessengerContext : DbContext
             entity.HasIndex(e => new { e.FolderId, e.ChatId }).IsUnique();
             entity.HasOne(e => e.Folder).WithMany(f => f.Chats).HasForeignKey(e => e.FolderId).OnDelete(DeleteBehavior.Cascade);
             entity.HasOne(e => e.Chat).WithMany().HasForeignKey(e => e.ChatId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<MessageReport>(entity =>
+        {
+            entity.ToTable("Message_Reports");
+            entity.HasKey(e => e.ReportId);
+            entity.Property(e => e.ReportId).HasColumnName("Report_ID");
+            entity.Property(e => e.MessageId).HasColumnName("Message_ID");
+            entity.Property(e => e.ChatId).HasColumnName("Chat_ID");
+            entity.Property(e => e.ReporterId).HasColumnName("Reporter_ID");
+            entity.Property(e => e.CreatedAt).HasColumnName("Created_At");
+            entity.Property(e => e.ReviewedAt).HasColumnName("Reviewed_At");
+            entity.Property(e => e.ReviewedBy).HasColumnName("Reviewed_By");
+            entity.Property(e => e.AdminNote).HasColumnName("Admin_Note");
+            entity.HasIndex(e => e.Status);
+        });
+
+        modelBuilder.Entity<UserMute>(entity =>
+        {
+            entity.ToTable("User_Mutes");
+            entity.HasKey(e => e.MuteId);
+            entity.Property(e => e.MuteId).HasColumnName("Mute_ID");
+            entity.Property(e => e.UserId).HasColumnName("User_ID");
+            entity.Property(e => e.ChatId).HasColumnName("Chat_ID");
+            entity.Property(e => e.MutedBy).HasColumnName("Muted_By");
+            entity.Property(e => e.MutedUntil).HasColumnName("Muted_Until");
+            entity.Property(e => e.CreatedAt).HasColumnName("Created_At");
+            entity.Property(e => e.IsActive).HasColumnName("Is_Active");
+        });
+
+        modelBuilder.Entity<ModerationLog>(entity =>
+        {
+            entity.ToTable("Moderation_Logs");
+            entity.HasKey(e => e.LogId);
+            entity.Property(e => e.LogId).HasColumnName("Log_ID");
+            entity.Property(e => e.ActorId).HasColumnName("Actor_ID");
+            entity.Property(e => e.TargetUserId).HasColumnName("Target_User_ID");
+            entity.Property(e => e.ChatId).HasColumnName("Chat_ID");
+            entity.Property(e => e.MessageId).HasColumnName("Message_ID");
+            entity.Property(e => e.CreatedAt).HasColumnName("Created_At");
         });
 
         OnModelCreatingPartial(modelBuilder);

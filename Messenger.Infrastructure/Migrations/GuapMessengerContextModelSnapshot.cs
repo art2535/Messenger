@@ -685,6 +685,111 @@ namespace Messenger.Infrastructure.Migrations
                     b.ToTable("Messages");
                 });
 
+            modelBuilder.Entity("Messenger.Core.Models.MessageReport", b =>
+                {
+                    b.Property<Guid>("ReportId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("Report_ID");
+
+                    b.Property<string>("AdminNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("Admin_Note");
+
+                    b.Property<Guid>("ChatId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("Chat_ID");
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("Comment");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("Created_At");
+
+                    b.Property<Guid>("MessageId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("Message_ID");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("Reason");
+
+                    b.Property<Guid>("ReporterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("Reporter_ID");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("Reviewed_At");
+
+                    b.Property<Guid?>("ReviewedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("Reviewed_By");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("Status");
+
+                    b.HasKey("ReportId");
+
+                    b.HasIndex("MessageId");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("Message_Reports", (string)null);
+                });
+
+            modelBuilder.Entity("Messenger.Core.Models.ModerationLog", b =>
+                {
+                    b.Property<Guid>("LogId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("Log_ID");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("Action");
+
+                    b.Property<Guid?>("ActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("Actor_ID");
+
+                    b.Property<Guid?>("ChatId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("Chat_ID");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("Created_At");
+
+                    b.Property<string>("Details")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("Details");
+
+                    b.Property<Guid?>("MessageId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("Message_ID");
+
+                    b.Property<Guid?>("TargetUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("Target_User_ID");
+
+                    b.HasKey("LogId");
+
+                    b.ToTable("Moderation_Logs", (string)null);
+                });
+
             modelBuilder.Entity("Messenger.Core.Models.Notification", b =>
                 {
                     b.Property<Guid>("NotificationId")
@@ -884,6 +989,47 @@ namespace Messenger.Infrastructure.Migrations
                         .HasName("Users_pkey");
 
                     b.ToTable("Users");
+                });
+
+            modelBuilder.Entity("Messenger.Core.Models.UserMute", b =>
+                {
+                    b.Property<Guid>("MuteId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("Mute_ID");
+
+                    b.Property<Guid?>("ChatId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("Chat_ID");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("Created_At");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("Is_Active");
+
+                    b.Property<Guid>("MutedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("Muted_By");
+
+                    b.Property<DateTime>("MutedUntil")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("Muted_Until");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("Reason");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("User_ID");
+
+                    b.HasKey("MuteId");
+
+                    b.ToTable("User_Mutes", (string)null);
                 });
 
             modelBuilder.Entity("Messenger.Core.Models.UserStatus", b =>
@@ -1086,6 +1232,17 @@ namespace Messenger.Infrastructure.Migrations
                     b.Navigation("Chat");
 
                     b.Navigation("Sender");
+                });
+
+            modelBuilder.Entity("Messenger.Core.Models.MessageReport", b =>
+                {
+                    b.HasOne("Messenger.Core.Models.Message", "Message")
+                        .WithMany()
+                        .HasForeignKey("MessageId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Message");
                 });
 
             modelBuilder.Entity("Messenger.Core.Models.Notification", b =>
