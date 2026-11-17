@@ -35,6 +35,7 @@ public partial class GuapMessengerContext : DbContext
     public virtual DbSet<MessageReport> MessageReports { get; set; }
     public virtual DbSet<UserMute> UserMutes { get; set; }
     public virtual DbSet<ModerationLog> ModerationLogs { get; set; }
+    public virtual DbSet<Core.Models.ScheduledMessage> ScheduledMessages { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
@@ -432,6 +433,55 @@ public partial class GuapMessengerContext : DbContext
             entity.Property(e => e.ChatId).HasColumnName("Chat_ID");
             entity.Property(e => e.MessageId).HasColumnName("Message_ID");
             entity.Property(e => e.CreatedAt).HasColumnName("Created_At");
+        });
+
+        modelBuilder.Entity<Core.Models.ScheduledMessage>(entity =>
+        {
+            entity.ToTable("Scheduled_Messages");
+            entity.HasKey(e => e.ScheduledMessageId).HasName("Scheduled_Messages_pkey");
+
+            entity.Property(e => e.ScheduledMessageId)
+                .HasColumnName("Scheduled_Message_ID")
+                .ValueGeneratedNever();
+
+            entity.Property(e => e.ChatId).HasColumnName("Chat_ID");
+            entity.Property(e => e.SenderId).HasColumnName("Sender_ID");
+            entity.Property(e => e.MessageText).HasColumnName("Message_Text");
+            entity.Property(e => e.HasAttachments).HasColumnName("Has_Attachments");
+            entity.Property(e => e.AttachmentsJson).HasColumnName("Attachments_Json");
+            entity.Property(e => e.ScheduledAt)
+                .HasColumnName("Scheduled_At")
+                .HasColumnType("timestamp with time zone");
+            entity.Property(e => e.CreatedAt)
+                .HasColumnName("Created_At")
+                .HasColumnType("timestamp with time zone");
+            entity.Property(e => e.UpdatedAt)
+                .HasColumnName("Updated_At")
+                .HasColumnType("timestamp with time zone");
+            entity.Property(e => e.Status)
+                .HasColumnName("Status")
+                .HasMaxLength(32);
+            entity.Property(e => e.ResultMessageId).HasColumnName("Result_Message_ID");
+            entity.Property(e => e.ErrorMessage).HasColumnName("Error_Message");
+            entity.Property(e => e.ReplyToMessageId).HasColumnName("Reply_To_Message_ID");
+
+            entity.HasIndex(e => e.ChatId).HasDatabaseName("IX_Scheduled_Messages_Chat_ID");
+            entity.HasIndex(e => new { e.SenderId, e.Status })
+                .HasDatabaseName("IX_Scheduled_Messages_Sender_ID_Status");
+            entity.HasIndex(e => new { e.Status, e.ScheduledAt })
+                .HasDatabaseName("IX_Scheduled_Messages_Status_Scheduled_At");
+
+            entity.HasOne(d => d.Chat)
+                .WithMany()
+                .HasForeignKey(d => d.ChatId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_scheduled_message_chat");
+
+            entity.HasOne(d => d.Sender)
+                .WithMany()
+                .HasForeignKey(d => d.SenderId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_scheduled_message_sender");
         });
 
         OnModelCreatingPartial(modelBuilder);

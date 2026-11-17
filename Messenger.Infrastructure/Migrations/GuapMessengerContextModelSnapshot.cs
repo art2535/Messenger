@@ -954,6 +954,77 @@ namespace Messenger.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Messenger.Core.Models.ScheduledMessage", b =>
+                {
+                    b.Property<Guid>("ScheduledMessageId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("Scheduled_Message_ID");
+
+                    b.Property<string>("AttachmentsJson")
+                        .HasColumnType("text")
+                        .HasColumnName("Attachments_Json");
+
+                    b.Property<Guid>("ChatId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("Chat_ID");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("Created_At");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasColumnType("text")
+                        .HasColumnName("Error_Message");
+
+                    b.Property<bool>("HasAttachments")
+                        .HasColumnType("boolean")
+                        .HasColumnName("Has_Attachments");
+
+                    b.Property<string>("MessageText")
+                        .HasColumnType("text")
+                        .HasColumnName("Message_Text");
+
+                    b.Property<string>("ReplyToMessageId")
+                        .HasColumnType("text")
+                        .HasColumnName("Reply_To_Message_ID");
+
+                    b.Property<Guid?>("ResultMessageId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("Result_Message_ID");
+
+                    b.Property<DateTime>("ScheduledAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("Scheduled_At");
+
+                    b.Property<Guid>("SenderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("Sender_ID");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("Status");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("Updated_At");
+
+                    b.HasKey("ScheduledMessageId")
+                        .HasName("Scheduled_Messages_pkey");
+
+                    b.HasIndex("ChatId")
+                        .HasDatabaseName("IX_Scheduled_Messages_Chat_ID");
+
+                    b.HasIndex("SenderId", "Status")
+                        .HasDatabaseName("IX_Scheduled_Messages_Sender_ID_Status");
+
+                    b.HasIndex("Status", "ScheduledAt")
+                        .HasDatabaseName("IX_Scheduled_Messages_Status_Scheduled_At");
+
+                    b.ToTable("Scheduled_Messages", (string)null);
+                });
+
             modelBuilder.Entity("Messenger.Core.Models.User", b =>
                 {
                     b.Property<Guid>("UserId")
@@ -1288,6 +1359,27 @@ namespace Messenger.Infrastructure.Migrations
                     b.Navigation("Message");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Messenger.Core.Models.ScheduledMessage", b =>
+                {
+                    b.HasOne("Messenger.Core.Models.Chat", "Chat")
+                        .WithMany()
+                        .HasForeignKey("ChatId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_scheduled_message_chat");
+
+                    b.HasOne("Messenger.Core.Models.User", "Sender")
+                        .WithMany()
+                        .HasForeignKey("SenderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_scheduled_message_sender");
+
+                    b.Navigation("Chat");
+
+                    b.Navigation("Sender");
                 });
 
             modelBuilder.Entity("Messenger.Core.Models.UserStatus", b =>
