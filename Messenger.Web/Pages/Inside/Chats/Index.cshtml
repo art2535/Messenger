@@ -44,6 +44,7 @@
     <link rel="stylesheet" href="~/css/chats-user-profile.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/settings-sync.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/ui-dialogs.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/scheduled-messages.css" asp-append-version="true" />
 
 <style>
 .chat-folder-tabs {
@@ -428,21 +429,43 @@
                     </div>
 
                     <div id="normal-input-ui">
-                        <div class="flex items-center space-x-2">
-                            <label for="file-input" class="cursor-pointer text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
+                        <div class="flex items-center gap-1.5 sm:gap-2 min-w-0">
+                            <label for="file-input" class="flex-shrink-0 cursor-pointer text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 w-8 h-8 sm:w-9 sm:h-9 inline-flex items-center justify-center rounded-full">
                                 <i data-feather="paperclip" class="w-5 h-5"></i>
                             </label>
                             <input id="file-input" type="file" class="hidden" multiple>
                             <textarea id="message-input"
                                       rows="1"
                                       placeholder="Напишите сообщение..."
-                                      class="flex-1 px-4 py-2 bg-gray-100 dark:bg-gray-700 dark:text-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white dark:focus:bg-gray-600 dark:placeholder-gray-400 resize-none overflow-y-auto"
+                                      class="flex-1 min-w-0 px-3 sm:px-4 py-2 bg-gray-100 dark:bg-gray-700 dark:text-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white dark:focus:bg-gray-600 dark:placeholder-gray-400 resize-none overflow-y-auto"
                                       style="max-height: 8rem; line-height: 1.4;"
                                       enterkeyhint="send"
                                       autocomplete="off"></textarea>
-                            <button id="send-button" class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
-                                <i data-feather="send" class="w-5 h-5"></i>
+                            <button type="button"
+                                    id="scheduled-messages-badge"
+                                    class="scheduled-badge flex-shrink-0"
+                                    style="display:none"
+                                    title="Запланированные сообщения"
+                                    aria-label="Запланированные сообщения">
+                                <i data-feather="clock" class="w-3.5 h-3.5"></i>
+                                <span class="count">0</span>
                             </button>
+                            <button type="button"
+                                    id="schedule-message-btn"
+                                    class="hidden sm:inline-flex flex-shrink-0 items-center justify-center w-9 h-9 text-gray-500 dark:text-gray-400 hover:text-violet-600 dark:hover:text-violet-400 transition rounded-full"
+                                    title="Отправить позже (или удерживайте кнопку отправки)"
+                                    aria-label="Отправить позже">
+                                <i data-feather="clock" class="w-5 h-5"></i>
+                            </button>
+                            <div class="send-btn-wrap relative flex-shrink-0">
+                                <button id="send-button" type="button"
+                                        class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 w-8 h-8 sm:w-9 sm:h-9 inline-flex items-center justify-center rounded-full"
+                                        title="Отправить (удерживайте для отложенной отправки)"
+                                        aria-label="Отправить">
+                                    <i data-feather="send" class="w-5 h-5"></i>
+                                </button>
+                                <div class="schedule-hint">Удерживайте для отложенной отправки</div>
+                            </div>
                         </div>
                         <div id="attached-files" class="mt-2 flex flex-wrap gap-2"></div>
                     </div>
@@ -759,6 +782,7 @@
 
     <script src="~/js/chats/chats-pins.js" asp-append-version="true"></script>
     <script src="~/js/chats/chats-send.js" asp-append-version="true"></script>
+    <script src="~/js/chats/chats-scheduled.js" asp-append-version="true"></script>
     <script src="~/js/chats/chats-signalr.js" asp-append-version="true"></script>
     <script src="~/js/chats/chats-chat-session.js" asp-append-version="true"></script>
     <script src="~/js/chats/chats-list.js" asp-append-version="true"></script>

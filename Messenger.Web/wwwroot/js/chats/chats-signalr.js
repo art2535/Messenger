@@ -778,6 +778,11 @@ async function startSignalR() {
         await connection.start();
         console.log("SignalR успешно подключён");
 
+        if (window.ScheduledMessages) {
+            window.ScheduledMessages.onSignalR(connection);
+            window.ScheduledMessages.reload();
+        }
+
         updateConnectionStatus('Онлайн', 'green');
 
         setTimeout(async () => {
