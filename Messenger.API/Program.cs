@@ -1,4 +1,5 @@
 using Messenger.API.Extensions;
+using Messenger.API.Services;
 using Messenger.Core.Hubs;
 using Messenger.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -46,6 +47,7 @@ namespace Messenger.API
             builder.Services.AddEncryption(builder.Configuration);
             builder.Services.AddRabbitMQ(builder.Configuration);
             builder.Services.AddHttpClient();
+            builder.Services.AddHostedService<ScheduledMessageDispatcherService>();
             builder.Services.AddEtaApiAuthentication(builder.Configuration, !builder.Environment.IsDevelopment());
             builder.Services.AddMessengerRateLimiting();
             builder.Services.AddSessionCleanup(builder.Configuration);
