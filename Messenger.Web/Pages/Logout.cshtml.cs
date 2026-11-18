@@ -63,7 +63,7 @@ namespace Messenger.Web.Pages
                         try { await api.PatchRawAsync("logins", accessToken: accessToken); } catch { }
                         try
                         {
-                            var statusResponse = await api.PutRawAsync("userstatuses", new UpdateStatusRequest { Online = false }, accessToken);
+                            var statusResponse = await api.PutRawAsync("user-statuses", new UpdateStatusRequest { Online = false }, accessToken);
                             if (statusResponse.IsSuccessStatusCode && Guid.TryParse(userIdStr, out Guid userId))
                             {
                                 var payload = new { userId = userId.ToString(), isOnline = false, lastActivity = DateTime.UtcNow };
@@ -108,7 +108,7 @@ namespace Messenger.Web.Pages
             DeleteCookie(".GuapMessenger.Cookie");
             DeleteCookie(".AspNetCore.Antiforgery");
 
-            return Redirect("/login");
+            return RedirectToPage("/Login/Index");
         }
 
         private async Task<IReadOnlyList<TokenEntry>> StopTokenRefreshAsync(string? accessToken, string? refreshToken)

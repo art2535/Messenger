@@ -13,6 +13,7 @@ using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Security.Claims;
 using Messenger.Web.Services;
+using Microsoft.AspNetCore.Authentication.Cookies;
 
 namespace Messenger.Web.Pages.Login
 {
@@ -44,7 +45,7 @@ namespace Messenger.Web.Pages.Login
                 {
                     try
                     {
-                        await HttpContext.SignOutAsync(Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationDefaults.AuthenticationScheme);
+                        await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
                     }
                     catch { }
                 }
@@ -68,7 +69,7 @@ namespace Messenger.Web.Pages.Login
                         {
                             var loginRequest = new CreateLoginRequest
                             {
-                                Token = sessionKey, // ключ UserTokenStore для отзыва refresh при revoke
+                                Token = sessionKey,
                                 IpAddress = GetLocalIPv4()
                             };
                             await LoginAsync(loginRequest);
@@ -157,7 +158,7 @@ namespace Messenger.Web.Pages.Login
                     Roles = roles
                 };
 
-                var authResponse = await _api.PostRawAsync("authorization/external/callback", request, accessToken);
+                var authResponse = await _api.PostRawAsync("auth/external/callback", request, accessToken);
 
                 if (!authResponse.IsSuccessStatusCode)
                 {
@@ -245,7 +246,7 @@ namespace Messenger.Web.Pages.Login
 
         private async Task SendToSignalRAsync(string? accessToken, UpdateStatusRequest request, string? userIdStr = null)
         {
-            var statusResponse = await _api.PutRawAsync("userstatuses", request, accessToken);
+            var statusResponse = await _api.PutRawAsync("user-statuses", request, accessToken);
 
             if (!statusResponse.IsSuccessStatusCode)
                 return;
@@ -278,8 +279,7 @@ namespace Messenger.Web.Pages.Login
 
         private async Task<string> EnsureSessionKeyAsync()
         {
-            var auth = await HttpContext.AuthenticateAsync(
-                Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationDefaults.AuthenticationScheme);
+            var auth = await HttpContext.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
             var props = auth.Properties ?? new AuthenticationProperties();
             if (!props.Items.TryGetValue(UserTokenStore.StoreKeyItem, out var key) || string.IsNullOrEmpty(key))
             {
@@ -287,8 +287,7 @@ namespace Messenger.Web.Pages.Login
                 props.Items[UserTokenStore.StoreKeyItem] = key;
                 if (auth.Principal != null)
                 {
-                    await HttpContext.SignInAsync(
-                        Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationDefaults.AuthenticationScheme,
+                    await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme,
                         auth.Principal, props);
                 }
             }
