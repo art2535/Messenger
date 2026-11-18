@@ -26,15 +26,12 @@
             }
         })();
     </script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {}
-            }
-        }
-    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/@@tailwindcss/browser@4"></script>
+    <style type="text/tailwindcss">
+        @@custom -variant dark (&:where(.dark, .dark *));
+    </style>
+
     <script src="https://unpkg.com/feather-icons"></script>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
@@ -778,7 +775,7 @@
     <script src="~/js/chats/chats-messages.js" asp-append-version="true"></script>
     <script src="~/js/chats/chats-forward.js" asp-append-version="true"></script>
     <script src="~/js/chats/chats-menus.js" asp-append-version="true"></script>
-<script src="~/js/chats/chats-moderation.js" asp-append-version="true"></script>
+    <script src="~/js/chats/chats-moderation.js" asp-append-version="true"></script>
 
     <script src="~/js/chats/chats-pins.js" asp-append-version="true"></script>
     <script src="~/js/chats/chats-send.js" asp-append-version="true"></script>
