@@ -46,7 +46,9 @@ namespace Messenger.Web.Pages
             var accessToken = await HttpContext.GetTokenAsync("access_token");
             var refreshToken = await HttpContext.GetTokenAsync("refresh_token");
 
-            var closedSessions = await StopTokenRefreshAsync(accessToken, refreshToken);
+            string? sessionKey = null;
+
+            var closedSessions = await StopTokenRefreshAsync(sessionKey, accessToken, refreshToken);
 
             var api = _api;
             var hub = _hubContext;
@@ -60,7 +62,7 @@ namespace Messenger.Web.Pages
                 {
                     if (!string.IsNullOrEmpty(accessToken))
                     {
-                        try { await api.PatchRawAsync("logins", accessToken: accessToken); } catch { }
+                        try { await api.PatchRawAsync("login", accessToken, sessionKey); } catch { }
                         try
                         {
                             var statusResponse = await api.PutRawAsync("user-statuses", new UpdateStatusRequest { Online = false }, accessToken);
@@ -111,33 +113,33 @@ namespace Messenger.Web.Pages
             return RedirectToPage("/Login/Index");
         }
 
-        private async Task<IReadOnlyList<TokenEntry>> StopTokenRefreshAsync(string? accessToken, string? refreshToken)
+        private async Task<IReadOnlyList<TokenEntry>> StopTokenRefreshAsync(string? storeKey, string? accessToken,
+            string? refreshToken)
         {
             try
             {
-                string? storeKey = null;
-                var auth = await HttpContext.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-                if (auth.Succeeded && auth.Properties != null)
-                {
-                    auth.Properties.Items.TryGetValue(UserTokenStore.StoreKeyItem, out storeKey);
-                }
-
                 var closed = _tokenStore.RevokeSession(storeKey, accessToken, refreshToken);
 
                 foreach (var entry in closed)
                 {
                     if (await entry.RefreshLock.WaitAsync(TimeSpan.FromSeconds(10)))
+                    {
                         entry.RefreshLock.Release();
+                    }
+                    else
+                    {
+                        _logger.LogWarning("Не удалось дождаться завершения обновления токена");
+                    }
                 }
 
-                _logger.LogInformation("[Logout] TokenStore: key={Key} closedSessions={Count}",
-                    storeKey ?? "(null)", closed.Count);
+                _logger.LogInformation("[Logout] TokenStore: key={Key}, closedSessions={Count}", storeKey ?? "(null)",
+                    closed.Count);
 
                 return closed;
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "[Logout] Не удалось остановить фоновое обновление токенов");
+                _logger.LogWarning(ex, "[Logout] Не удалось остановить обновление токенов");
                 return Array.Empty<TokenEntry>();
             }
         }

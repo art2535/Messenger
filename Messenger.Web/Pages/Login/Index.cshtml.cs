@@ -1,9 +1,12 @@
+using Azure.Core;
 using Messenger.Core.DTOs.Auth;
 using Messenger.Core.DTOs.Logins;
 using Messenger.Core.DTOs.UserStatuses;
 using Messenger.Core.Hubs;
 using Messenger.Web.Helpers;
+using Messenger.Web.Services;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -12,8 +15,6 @@ using Microsoft.AspNetCore.SignalR;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Security.Claims;
-using Messenger.Web.Services;
-using Microsoft.AspNetCore.Authentication.Cookies;
 
 namespace Messenger.Web.Pages.Login
 {
@@ -72,7 +73,7 @@ namespace Messenger.Web.Pages.Login
                                 Token = sessionKey,
                                 IpAddress = GetLocalIPv4()
                             };
-                            await LoginAsync(loginRequest);
+                            await LoginAsync(loginRequest, tokenCopy);
                             await SendToSignalRAsync(tokenCopy, new UpdateStatusRequest { Online = true }, userIdStr);
                         }
                         catch (Exception bgEx)
@@ -104,7 +105,7 @@ namespace Messenger.Web.Pages.Login
                     {
                         try
                         {
-                            await LoginAsync(new CreateLoginRequest { Token = sessionKey, IpAddress = GetLocalIPv4() });
+                            await LoginAsync(new CreateLoginRequest { Token = sessionKey, IpAddress = GetLocalIPv4() }, tokenCopy);
                             await SendToSignalRAsync(tokenCopy, new UpdateStatusRequest { Online = true }, userIdStr);
                         }
                         catch (Exception bgEx)
@@ -183,7 +184,7 @@ namespace Messenger.Web.Pages.Login
                             Token = sessionKey,
                             IpAddress = GetLocalIPv4()
                         };
-                        await LoginAsync(loginRequest);
+                        await LoginAsync(loginRequest, tokenCopy);
                         await SendToSignalRAsync(tokenCopy, new UpdateStatusRequest { Online = true }, userIdStr);
                     }
                     catch (Exception bgEx)
@@ -239,9 +240,10 @@ namespace Messenger.Web.Pages.Login
                 .ToList();
         }
 
-        public async Task<HttpResponseMessage> LoginAsync(CreateLoginRequest request, CancellationToken token = default)
+        public async Task<HttpResponseMessage> LoginAsync(CreateLoginRequest request, string accessToken,
+            CancellationToken token = default)
         {
-            return await _api.PostRawAsync("logins", request, request.Token, token);
+            return await _api.PostRawAsync("login", request, accessToken, token);
         }
 
         private async Task SendToSignalRAsync(string? accessToken, UpdateStatusRequest request, string? userIdStr = null)

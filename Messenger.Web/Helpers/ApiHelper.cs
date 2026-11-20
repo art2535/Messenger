@@ -129,6 +129,21 @@ namespace Messenger.Web.Helpers
             return await client.PatchAsJsonAsync(GetApiUrl(path), body, JsonOptions, ct);
         }
 
+        public async Task<HttpResponseMessage> PatchRawAsync(string path, string? accessToken, string? sessionKey,
+            CancellationToken ct = default)
+        {
+            var client = CreateClient(accessToken);
+
+            using var request = new HttpRequestMessage(HttpMethod.Patch, GetApiUrl(path));
+
+            if (!string.IsNullOrWhiteSpace(sessionKey))
+            {
+                request.Headers.Add("X-Session-Key", sessionKey);
+            }
+
+            return await client.SendAsync(request, ct);
+        }
+
         public async Task<HttpResponseMessage> DeleteRawAsync(string path, string? accessToken = null,
             CancellationToken ct = default)
         {
