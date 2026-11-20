@@ -1,280 +1,158 @@
 @page "/inside/settings/notifications"
 @model Messenger.Web.Pages.Inside.Settings.Notifications.IndexModel
 @{
-    Layout = null;
-    var fullName = Model.DisplayName;
     ViewData["Title"] = "Уведомления";
+    ViewData["DisplayName"] = Model.DisplayName;
+    ViewData["AccessToken"] = Model.AccessToken;
+    ViewData["ApiBaseUrl"] = Model.ApiBaseUrl;
+    ViewData["HubUrl"] = Model.HubUrl;
 }
 
-<!DOCTYPE html>
-<html lang="ru" class="h-full">
-<head>
-    <meta charset="UTF-8">
-    <meta name="access-token" content="@Model.AccessToken">
-    <meta name="api-base" content="@Model.ApiBaseUrl">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
-    <meta name="theme-color" content="#111827" media="(prefers-color-scheme: dark)">
-    <title>@ViewData["Title"]</title>
+<div class="max-w-4xl mx-auto space-y-5 sm:space-y-6">
+    <h2 class="text-xl sm:text-2xl font-semibold text-gray-800 dark:text-white hidden sm:block">Уведомления</h2>
+
+    <section class="settings-card">
+        <div class="settings-card-header">
+            <div class="settings-icon-wrap bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
+                <i data-feather="bell" class="w-5 h-5"></i>
+            </div>
+            <div class="min-w-0">
+                <h3 class="settings-card-title">Push-уведомления</h3>
+                <p class="settings-card-desc">Системные уведомления на этом устройстве</p>
+            </div>
+        </div>
+
+        <div class="settings-row">
+            <div class="settings-row-text">
+                <span class="settings-row-label">Включить push</span>
+                <span id="push-status-text" class="settings-row-hint">Проверка поддержки…</span>
+            </div>
+            <label class="toggle">
+                <input type="checkbox" id="push-toggle" class="toggle-input" aria-label="Push-уведомления">
+                <span class="toggle-track" id="push-toggle-slider"></span>
+            </label>
+        </div>
+
+        <div id="ios-push-hint" class="settings-hint hidden">
+            На iOS добавьте приложение на домашний экран (PWA), затем разрешите уведомления в настройках Safari.
+        </div>
+        <div id="push-unsupported-hint" class="settings-hint hidden">
+            Браузер не поддерживает Web Push. Используйте Chrome, Edge или установленное PWA.
+        </div>
+    </section>
+
+    <section id="notification-types" class="settings-card hidden">
+        <div class="settings-card-header">
+            <div class="settings-icon-wrap bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400">
+                <i data-feather="list" class="w-5 h-5"></i>
+            </div>
+            <div class="min-w-0">
+                <h3 class="settings-card-title">Типы уведомлений</h3>
+                <p class="settings-card-desc">Что показывать, когда push включён</p>
+            </div>
+        </div>
+
+        <div class="settings-row">
+            <div class="settings-row-text">
+                <span class="settings-row-label">Новые сообщения</span>
+                <span class="settings-row-hint">Личные чаты</span>
+            </div>
+            <label class="toggle">
+                <input type="checkbox" class="toggle-input pref-toggle" data-pref="notif.messages" checked>
+                <span class="toggle-track"></span>
+            </label>
+        </div>
+        <div class="settings-row">
+            <div class="settings-row-text">
+                <span class="settings-row-label">Групповые чаты</span>
+                <span class="settings-row-hint">Сообщения в групповых чатах</span>
+            </div>
+            <label class="toggle">
+                <input type="checkbox" class="toggle-input pref-toggle" data-pref="notif.groupChats" checked>
+                <span class="toggle-track"></span>
+            </label>
+        </div>
+
+        <div class="settings-row">
+            <div class="settings-row-text">
+                <span class="settings-row-label">Упоминания</span>
+                <span class="settings-row-hint">Когда вас отметили в группе</span>
+            </div>
+            <label class="toggle">
+                <input type="checkbox" class="toggle-input pref-toggle" data-pref="notif.mentions" checked>
+                <span class="toggle-track"></span>
+            </label>
+        </div>
+        <div class="settings-row">
+            <div class="settings-row-text">
+                <span class="settings-row-label">Реакции</span>
+                <span class="settings-row-hint">На ваши сообщения</span>
+            </div>
+            <label class="toggle">
+                <input type="checkbox" class="toggle-input pref-toggle" data-pref="notif.reactions" checked>
+                <span class="toggle-track"></span>
+            </label>
+        </div>
+        <div class="settings-row border-0">
+            <div class="settings-row-text">
+                <span class="settings-row-label">Системные</span>
+                <span class="settings-row-hint">Вход с нового устройства, важные события</span>
+            </div>
+            <label class="toggle">
+                <input type="checkbox" class="toggle-input pref-toggle" data-pref="notif.system" checked>
+                <span class="toggle-track"></span>
+            </label>
+        </div>
+    </section>
+
+    <section id="notification-inapp" class="settings-card hidden">
+        <div class="settings-card-header">
+            <div class="settings-icon-wrap bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400">
+                <i data-feather="monitor" class="w-5 h-5"></i>
+            </div>
+            <div class="min-w-0">
+                <h3 class="settings-card-title">В приложении</h3>
+                <p class="settings-card-desc">Поведение при открытой вкладке</p>
+            </div>
+        </div>
+        <div class="settings-row">
+            <div class="settings-row-text">
+                <span class="settings-row-label">Звук</span>
+                <span class="settings-row-hint">Короткий сигнал при новом сообщении</span>
+            </div>
+            <label class="toggle">
+                <input type="checkbox" class="toggle-input pref-toggle" data-pref="notif.sound" checked>
+                <span class="toggle-track"></span>
+            </label>
+        </div>
+        <div class="settings-row">
+            <div class="settings-row-text">
+                <span class="settings-row-label">Не беспокоить в открытом чате</span>
+                <span class="settings-row-hint">Не дублировать OS-уведомление, если чат уже на экране</span>
+            </div>
+            <label class="toggle">
+                <input type="checkbox" class="toggle-input pref-toggle" data-pref="notif.suppressOpenChat" checked>
+                <span class="toggle-track"></span>
+            </label>
+        </div>
+        <div class="settings-row border-0">
+            <div class="settings-row-text">
+                <span class="settings-row-label">Превью текста</span>
+                <span class="settings-row-hint">Показывать текст сообщения в уведомлении</span>
+            </div>
+            <label class="toggle">
+                <input type="checkbox" class="toggle-input pref-toggle" data-pref="notif.preview" checked>
+                <span class="toggle-track"></span>
+            </label>
+        </div>
+    </section>
+
+    <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400 px-1">
+    </p>
+</div>
+
+@section Scripts {
     <script>
-        (function () {
-            const saved = localStorage.getItem('theme');
-            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-            if (saved === 'dark' || (!saved && prefersDark)) {
-                document.documentElement.classList.add('dark');
-            } else {
-                document.documentElement.classList.remove('dark');
-            }
-        })();
-    </script>
-    <partial name="_LayoutPWA" />
-
-    <script src="https://cdn.jsdelivr.net/npm/@@tailwindcss/browser@4"></script>
-    <style type="text/tailwindcss">
-        @@custom -variant dark (&:where(.dark, .dark *));
-    </style>
-
-    <script src="https://unpkg.com/feather-icons"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="~/css/settings.css" asp-append-version="true" />
-    <link rel="stylesheet" href="~/css/settings-sync.css" asp-append-version="true" />
-    <link rel="stylesheet" href="~/css/ui-dialogs.css" asp-append-version="true" />
-</head>
-<body class="flex bg-gray-50 dark:bg-gray-900">
-    <div id="sidebar-overlay" class="sidebar-overlay"></div>
-
-    <aside id="sidebar" class="sidebar">
-        <div class="p-5 text-center border-b border-gray-200 dark:border-gray-700">
-            <div class="guap-gradient w-11 h-11 rounded-full flex items-center justify-center mx-auto mb-2.5">
-                <i data-feather="message-square" class="w-5 h-5 text-white"></i>
-            </div>
-            <h1 class="text-lg font-bold text-gray-800 dark:text-white">GUAP Messenger</h1>
-        </div>
-
-        <nav class="flex-1 p-3 overflow-y-auto">
-            <a asp-page="/Inside/Chats/Index" class="block py-2.5 px-4 text-gray-600 dark:text-gray-300 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition active:scale-[0.98]">
-                Чаты
-            </a>
-            <a href="#" class="block py-2.5 px-4 bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 rounded-xl font-medium">
-                Настройки
-            </a>
-            <div class="pl-4 mt-3 space-y-0.5">
-                <a asp-page="/Inside/Settings/Profile/Index" class="sidebar-link block py-2 px-4 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">Профиль</a>
-                <a asp-page="/Inside/Settings/Security/Index" class="sidebar-link block py-2 px-4 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">Безопасность</a>
-                <a asp-page="/Inside/Settings/Notifications/Index" class="sidebar-link block py-2 px-4 text-sm bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 rounded-lg font-medium">Уведомления</a>
-                <a asp-page="/Inside/Settings/Appearance/Index" class="sidebar-link block py-2 px-4 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">Внешний вид</a>
-                <a asp-page="/Inside/Settings/Folders/Index" class="sidebar-link block py-2 px-4 text-sm text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">Папки чатов</a>
-                <a asp-page="/Inside/Settings/Privacy/Index" class="sidebar-link block py-2 px-4 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">Конфиденциальность</a>
-                <a id="nav-admin-link" asp-page="/Inside/Settings/Admin/Index" class="sidebar-link hidden block py-2 px-4 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">Админ-панель</a>
-            </div>
-        </nav>
-
-        <div class="p-4 border-t border-gray-200 dark:border-gray-700">
-            <p class="text-sm text-gray-600 dark:text-gray-400 truncate text-center">@fullName</p>
-            <form asp-page="/Logout" method="post" data-logout="true" class="w-full">
-                <button type="submit" class="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 transition font-medium text-sm active:scale-[0.98]">
-                    <i data-feather="log-out" class="w-4 h-4"></i>
-                    <span>Выйти</span>
-                </button>
-            </form>
-        </div>
-    </aside>
-
-    <div class="flex-1 flex flex-col min-w-0">
-        <div class="mobile-header">
-            <button id="menu-toggle" type="button" class="w-11 h-11 flex items-center justify-center rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition" aria-label="Открыть меню">
-                <i data-feather="menu" class="w-6 h-6 text-gray-700 dark:text-gray-200"></i>
-            </button>
-            <h1 class="text-lg font-semibold text-gray-800 dark:text-white truncate">Уведомления</h1>
-            <div class="w-11"></div>
-        </div>
-
-        <main class="main-content p-4 sm:p-6">
-            <div class="max-w-4xl mx-auto space-y-5 sm:space-y-6">
-                <h2 class="text-xl sm:text-2xl font-semibold text-gray-800 dark:text-white hidden sm:block">Уведомления</h2>
-
-                <section class="settings-card">
-                    <div class="settings-card-header">
-                        <div class="settings-icon-wrap bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
-                            <i data-feather="bell" class="w-5 h-5"></i>
-                        </div>
-                        <div class="min-w-0">
-                            <h3 class="settings-card-title">Push-уведомления</h3>
-                            <p class="settings-card-desc">Системные уведомления на этом устройстве</p>
-                        </div>
-                    </div>
-
-                    <div class="settings-row">
-                        <div class="settings-row-text">
-                            <span class="settings-row-label">Включить push</span>
-                            <span id="push-status-text" class="settings-row-hint">Проверка поддержки…</span>
-                        </div>
-                        <label class="toggle">
-                            <input type="checkbox" id="push-toggle" class="toggle-input" aria-label="Push-уведомления">
-                            <span class="toggle-track" id="push-toggle-slider"></span>
-                        </label>
-                    </div>
-
-                    <div id="ios-push-hint" class="settings-hint hidden">
-                        На iOS добавьте приложение на домашний экран (PWA), затем разрешите уведомления в настройках Safari.
-                    </div>
-                    <div id="push-unsupported-hint" class="settings-hint hidden">
-                        Браузер не поддерживает Web Push. Используйте Chrome, Edge или установленное PWA.
-                    </div>
-                </section>
-
-                <section id="notification-types" class="settings-card hidden">
-                    <div class="settings-card-header">
-                        <div class="settings-icon-wrap bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400">
-                            <i data-feather="list" class="w-5 h-5"></i>
-                        </div>
-                        <div class="min-w-0">
-                            <h3 class="settings-card-title">Типы уведомлений</h3>
-                            <p class="settings-card-desc">Что показывать, когда push включён</p>
-                        </div>
-                    </div>
-
-                    <div class="settings-row">
-                        <div class="settings-row-text">
-                            <span class="settings-row-label">Новые сообщения</span>
-                            <span class="settings-row-hint">Личные чаты</span>
-                        </div>
-                        <label class="toggle">
-                            <input type="checkbox" class="toggle-input pref-toggle" data-pref="notif.messages" checked>
-                            <span class="toggle-track"></span>
-                        </label>
-                    </div>
-                    <div class="settings-row">
-                        <div class="settings-row-text">
-                            <span class="settings-row-label">Групповые чаты</span>
-                            <span class="settings-row-hint">Сообщения в групповых чатах</span>
-                        </div>
-                        <label class="toggle">
-                            <input type="checkbox" class="toggle-input pref-toggle" data-pref="notif.groupChats" checked>
-                            <span class="toggle-track"></span>
-                        </label>
-                    </div>
-
-                    <div class="settings-row">
-                        <div class="settings-row-text">
-                            <span class="settings-row-label">Упоминания</span>
-                            <span class="settings-row-hint">Когда вас отметили в группе</span>
-                        </div>
-                        <label class="toggle">
-                            <input type="checkbox" class="toggle-input pref-toggle" data-pref="notif.mentions" checked>
-                            <span class="toggle-track"></span>
-                        </label>
-                    </div>
-                    <div class="settings-row">
-                        <div class="settings-row-text">
-                            <span class="settings-row-label">Реакции</span>
-                            <span class="settings-row-hint">На ваши сообщения</span>
-                        </div>
-                        <label class="toggle">
-                            <input type="checkbox" class="toggle-input pref-toggle" data-pref="notif.reactions" checked>
-                            <span class="toggle-track"></span>
-                        </label>
-                    </div>
-                    <div class="settings-row border-0">
-                        <div class="settings-row-text">
-                            <span class="settings-row-label">Системные</span>
-                            <span class="settings-row-hint">Вход с нового устройства, важные события</span>
-                        </div>
-                        <label class="toggle">
-                            <input type="checkbox" class="toggle-input pref-toggle" data-pref="notif.system" checked>
-                            <span class="toggle-track"></span>
-                        </label>
-                    </div>
-                </section>
-
-                <section id="notification-inapp" class="settings-card hidden">
-                    <div class="settings-card-header">
-                        <div class="settings-icon-wrap bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400">
-                            <i data-feather="monitor" class="w-5 h-5"></i>
-                        </div>
-                        <div class="min-w-0">
-                            <h3 class="settings-card-title">В приложении</h3>
-                            <p class="settings-card-desc">Поведение при открытой вкладке</p>
-                        </div>
-                    </div>
-<div class="settings-row">
-                        <div class="settings-row-text">
-                            <span class="settings-row-label">Звук</span>
-                            <span class="settings-row-hint">Короткий сигнал при новом сообщении</span>
-                        </div>
-                        <label class="toggle">
-                            <input type="checkbox" class="toggle-input pref-toggle" data-pref="notif.sound" checked>
-                            <span class="toggle-track"></span>
-                        </label>
-                    </div>
-                    <div class="settings-row">
-                        <div class="settings-row-text">
-                            <span class="settings-row-label">Не беспокоить в открытом чате</span>
-                            <span class="settings-row-hint">Не дублировать OS-уведомление, если чат уже на экране</span>
-                        </div>
-                        <label class="toggle">
-                            <input type="checkbox" class="toggle-input pref-toggle" data-pref="notif.suppressOpenChat" checked>
-                            <span class="toggle-track"></span>
-                        </label>
-                    </div>
-                    <div class="settings-row border-0">
-                        <div class="settings-row-text">
-                            <span class="settings-row-label">Превью текста</span>
-                            <span class="settings-row-hint">Показывать текст сообщения в уведомлении</span>
-                        </div>
-                        <label class="toggle">
-                            <input type="checkbox" class="toggle-input pref-toggle" data-pref="notif.preview" checked>
-                            <span class="toggle-track"></span>
-                        </label>
-                    </div>
-                </section>
-
-                <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400 px-1">
-                </p>
-            </div>
-        </main>
-    </div>
-<script>
-    </script>
-    <script src="~/js/ui-dialogs.js" asp-append-version="true"></script>
-        <script>
-        (function () {
-            const sessionToken = '@(HttpContext.Session.GetString("ACCESS_TOKEN") ?? "")';
-            const modelToken = '@Model.AccessToken';
-            const t = (modelToken || sessionToken || localStorage.getItem('token') || '').trim();
-            if (t) {
-                try { localStorage.setItem('token', t.replace(/^Bearer\s+/i, '')); } catch (_) {}
-            }
-            window.API_BASE_URL = '@Model.ApiBaseUrl';
-            if (typeof getAuthToken !== 'function') {
-                window.getAuthToken = function () {
-                    const raw = (localStorage.getItem('token') || modelToken || sessionToken || '').trim();
-                    if (!raw) return '';
-                    return raw.startsWith('Bearer ') ? raw : ('Bearer ' + raw);
-                };
-            }
-        })();
-    </script>
-    <script src="~/js/settings.js" asp-append-version="true"></script>
-        <script>
-        (function () {
-            const sessionToken = '@(HttpContext.Session.GetString("ACCESS_TOKEN") ?? "")';
-            const modelToken = '@Model.AccessToken';
-            const t = (modelToken || sessionToken || localStorage.getItem('token') || '').trim();
-            if (t) {
-                try { localStorage.setItem('token', t.replace(/^Bearer\s+/i, '')); } catch (_) {}
-            }
-            window.API_BASE_URL = '@Model.ApiBaseUrl';
-            if (typeof getAuthToken !== 'function') {
-                window.getAuthToken = function () {
-                    const raw = (localStorage.getItem('token') || modelToken || sessionToken || '').trim();
-                    if (!raw) return '';
-                    return raw.startsWith('Bearer ') ? raw : ('Bearer ' + raw);
-                };
-            }
-        })();
     </script>
     <script src="~/js/settings-prefs.js" asp-append-version="true"></script>
     <script>
@@ -292,29 +170,8 @@
                 }
             };
             pushEl?.addEventListener('change', syncTypes);
-            // после загрузки prefs/push-status ещё раз
             setTimeout(syncTypes, 300);
             setTimeout(syncTypes, 1000);
         });
     </script>
-
-    <script>
-    (function () {
-        const link = document.getElementById('nav-admin-link');
-        if (!link) return;
-        const API = (typeof window.API_BASE_URL === 'string' && window.API_BASE_URL
-            ? window.API_BASE_URL
-            : '@Model.ApiBaseUrl').replace(/\/$/, '');
-        let t = document.querySelector('meta[name="access-token"]')?.content || '';
-        try { t = t || localStorage.getItem('token') || ''; } catch (_) {}
-        t = String(t).replace(/^Bearer\s+/i, '');
-        const headers = t ? { 'Authorization': 'Bearer ' + t } : {};
-        fetch(API + '/admin/me', { headers, credentials: 'include' })
-            .then(r => r.ok ? r.json() : null)
-            .then(j => { if (j && (j.isAdmin === true || j.IsAdmin === true)) link.classList.remove('hidden'); })
-            .catch(() => {});
-    })();
-    </script>
-
-</body>
-</html>
+}

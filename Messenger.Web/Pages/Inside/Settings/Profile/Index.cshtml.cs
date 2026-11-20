@@ -1,10 +1,7 @@
 ﻿using Messenger.Core.DTOs.Users;
 using Messenger.Web.Helpers;
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.RazorPages;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -13,17 +10,9 @@ namespace Messenger.Web.Pages.Inside.Settings.Profile
 {
     [Authorize]
     [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
-    public class IndexModel : PageModel
+    public class IndexModel : SettingsPageModel
     {
-        private readonly ApiHelper _api;
-
-        public IndexModel(ApiHelper api)
-        {
-            _api = api;
-        }
-
-        public string ApiBaseUrl { get; private set; } = string.Empty;
-        public string HubUrl { get; private set; } = string.Empty;
+        public IndexModel(ApiHelper api) : base(api) { }
 
         [BindProperty]
         public UpdateUserProfileRequest Profile { get; set; } = new();
@@ -39,7 +28,6 @@ namespace Messenger.Web.Pages.Inside.Settings.Profile
         public UserProfileDto? CurrentUser { get; private set; }
 
         public string? ErrorMessage { get; private set; }
-        public string AccessToken { get; set; } = string.Empty;
 
         public async Task<IActionResult> OnGetAsync()
         {
@@ -49,14 +37,14 @@ namespace Messenger.Web.Pages.Inside.Settings.Profile
             if (User.Identity?.IsAuthenticated != true)
                 return Redirect("/login");
 
-            await InitializeAsync();
+            await InitializeSettingsAsync();
             await LoadProfileAsync();
             return Page();
         }
 
         public async Task<IActionResult> OnGetTokenAsync()
         {
-            await InitializeAsync();
+            await InitializeSettingsAsync();
             Response.Headers.CacheControl = "no-store";
             return new JsonResult(new { accessToken = AccessToken });
         }
@@ -65,7 +53,7 @@ namespace Messenger.Web.Pages.Inside.Settings.Profile
         {
             try
             {
-                var profileRes = await _api.GetRawAsync("users/info", AccessToken);
+                var profileRes = await Api.GetRawAsync("users/info", AccessToken);
 
                 if (!profileRes.IsSuccessStatusCode)
                 {
@@ -97,7 +85,7 @@ namespace Messenger.Web.Pages.Inside.Settings.Profile
                     AvatarUrl = CurrentUser.Account?.Avatar;
                     if (!string.IsNullOrWhiteSpace(AvatarUrl) && AvatarUrl.StartsWith("/"))
                     {
-                        var apiOrigin = (_api.GetApiUrl() ?? "").Split(new[] { "/api/" }, StringSplitOptions.None)[0].TrimEnd('/');
+                        var apiOrigin = (Api.GetApiUrl() ?? "").Split(new[] { "/api/" }, StringSplitOptions.None)[0].TrimEnd('/');
                         AvatarUrl = apiOrigin + AvatarUrl;
                     }
                     HasAvatar = !string.IsNullOrWhiteSpace(AvatarUrl);
@@ -116,7 +104,7 @@ namespace Messenger.Web.Pages.Inside.Settings.Profile
 
         public async Task<IActionResult> OnPostSaveAsync()
         {
-            await InitializeAsync();
+            await InitializeSettingsAsync();
 
             if (!ModelState.IsValid)
             {
@@ -130,7 +118,7 @@ namespace Messenger.Web.Pages.Inside.Settings.Profile
 
                 if (DeleteAvatar)
                 {
-                    var deleteRes = await _api.DeleteRawAsync("users/delete-avatar", AccessToken);
+                    var deleteRes = await Api.DeleteRawAsync("users/delete-avatar", AccessToken);
                     if (!deleteRes.IsSuccessStatusCode)
                         ModelState.AddModelError("", "Не удалось удалить аватар");
                 }
@@ -149,7 +137,7 @@ namespace Messenger.Web.Pages.Inside.Settings.Profile
                         new MediaTypeHeaderValue(AvatarFile.ContentType ?? "image/jpeg");
                     content.Add(fileContent, "avatarFile", AvatarFile.FileName);
 
-                    var uploadRes = await _api.PostMultipartRawAsync(
+                    var uploadRes = await Api.PostMultipartRawAsync(
                         "users/upload-avatar", content, AccessToken);
 
                     if (uploadRes.IsSuccessStatusCode)
@@ -177,7 +165,7 @@ namespace Messenger.Web.Pages.Inside.Settings.Profile
                 if (!string.IsNullOrEmpty(newAvatarUrl))
                     updatePath += $"?avatarUrl={Uri.EscapeDataString(newAvatarUrl)}";
 
-                var response = await _api.PutRawAsync(updatePath, payload, AccessToken);
+                var response = await Api.PutRawAsync(updatePath, payload, AccessToken);
 
                 if (response.IsSuccessStatusCode)
                 {
@@ -195,29 +183,5 @@ namespace Messenger.Web.Pages.Inside.Settings.Profile
             await LoadProfileAsync();
             return Page();
         }
-
-        private async Task InitializeAsync()
-        {
-            AccessToken = await HttpContext.GetTokenAsync("access_token") ?? "";
-
-            if (string.IsNullOrEmpty(AccessToken))
-            {
-                var authResult = await HttpContext.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-                if (authResult.Succeeded)
-                    AccessToken = authResult.Properties.GetTokenValue("access_token") ?? "";
-            }
-
-            if (string.IsNullOrEmpty(AccessToken))
-            {
-                AccessToken = HttpContext.Session.GetString("ACCESS_TOKEN") ?? "";
-            }
-            if (!string.IsNullOrEmpty(AccessToken))
-            {
-                HttpContext.Session.SetString("ACCESS_TOKEN", AccessToken);
-            }
-
-            ApiBaseUrl = _api.GetApiUrl();
-            HubUrl = $"{ApiBaseUrl}/hubs/chat";
-        }
-    }
+}
 }
