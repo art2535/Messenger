@@ -15,7 +15,7 @@ namespace Messenger.API.Controllers
     /// </summary>
     [Authorize]
     [ApiController]
-    [Route("api/v{version:apiVersion}/[controller]")]
+    [Route("api/v{version:apiVersion}/login")]
     [ApiVersion("1.0")]
     [Produces("application/json")]
     [Tags("Logins")]

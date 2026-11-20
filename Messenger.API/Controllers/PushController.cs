@@ -14,7 +14,7 @@ namespace Messenger.API.Controllers
     /// </summary>
     [Authorize]
     [ApiController]
-    [Route("api/v{version:apiVersion}/[controller]")]
+    [Route("api/v{version:apiVersion}/push")]
     [ApiVersion("1.0")]
     [Tags("Push")]
     public class PushController : ControllerBase

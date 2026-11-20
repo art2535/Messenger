@@ -11,7 +11,7 @@ namespace Messenger.API.Controllers
     /// Контроллер для авторизации пользователей через ЕТА ГУАП
     /// </summary>
     [ApiController]
-    [Route("api/v{version:apiVersion}/[controller]")]
+    [Route("api/v{version:apiVersion}/auth")]
     [ApiVersion("1.0")]
     [Produces("application/json")]
     [Consumes("application/json")]

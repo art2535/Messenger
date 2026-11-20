@@ -17,7 +17,7 @@ namespace Messenger.API.Controllers
     /// </summary>
     [Authorize]
     [ApiController]
-    [Route("api/v{version:apiVersion}/[controller]")]
+    [Route("api/v{version:apiVersion}/users")]
     [ApiVersion("1.0")]
     [Tags("Users")]
     public class UsersController : ControllerBase
