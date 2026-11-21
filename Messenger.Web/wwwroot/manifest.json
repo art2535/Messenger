@@ -5,7 +5,7 @@
   "description": "Корпоративный мессенджер для студентов, преподавателей и сотрудников ГУАП",
   "lang": "ru",
   "dir": "ltr",
-  "start_url": "/Account/Chats",
+  "start_url": "/inside/chats",
   "scope": "/",
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui", "browser"],
@@ -45,14 +45,14 @@
       "name": "Чаты",
       "short_name": "Чаты",
       "description": "Открыть список чатов",
-      "url": "/Account/Chats",
+      "url": "/inside/chats",
       "icons": [{ "src": "/images/web-app-manifest-192x192.png", "sizes": "192x192" }]
     },
     {
       "name": "Настройки",
       "short_name": "Настройки",
       "description": "Настройки профиля и уведомлений",
-      "url": "/Account/Settings",
+      "url": "/inside/settings",
       "icons": [{ "src": "/images/web-app-manifest-192x192.png", "sizes": "192x192" }]
     }
   ]
