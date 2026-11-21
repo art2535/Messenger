@@ -12,5 +12,7 @@ namespace Messenger.Core.Interfaces
         Task<bool> RevokeLoginAsync(Guid userId, Guid loginId, CancellationToken cancellationToken = default);
         Task<int> RevokeOtherLoginsAsync(Guid userId, Guid? keepLoginId, CancellationToken cancellationToken = default);
         Task<bool?> IsSessionKeyActiveAsync(string sessionKey, CancellationToken cancellationToken = default);
+        Task<bool> RevokeLoginAndUpdateStatusAsync(Guid userId, Guid loginId, CancellationToken cancellationToken = default);
+        Task<bool> ExpireSessionAsync(string sessionKey, CancellationToken cancellationToken = default);
     }
 }

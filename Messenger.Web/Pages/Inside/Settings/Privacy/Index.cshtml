@@ -67,14 +67,19 @@
 
     <section class="settings-card">
         <div class="settings-card-header">
-            <div class="settings-icon-wrap bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
-                <i data-feather="info" class="w-5 h-5"></i>
+            <div class="settings-icon-wrap bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400">
+                <i data-feather="monitor" class="w-5 h-5"></i>
             </div>
             <div class="min-w-0">
-                <h3 class="settings-card-title">Данные</h3>
-                <p class="settings-card-desc">Корпоративный мессенджер ГУАП</p>
+                <h3 class="settings-card-title">Активные сессии</h3>
+                <p class="settings-card-desc">Устройства, на которых выполнен вход в ваш аккаунт</p>
             </div>
         </div>
+        
+        <div id="active-sessions-list" class="space-y-2">
+            <p class="text-sm text-gray-500 dark:text-gray-400 py-2">Загрузка…</p>
+        </div>
+
         <p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
             Сообщения и метаданные обрабатываются в инфраструктуре университета.
             Подробности — в политике обработки персональных данных ГУАП.
@@ -93,6 +98,11 @@
         document.addEventListener('DOMContentLoaded', () => {
             if (typeof feather !== 'undefined') feather.replace();
             if (typeof initPrefToggles === 'function') initPrefToggles();
+
+            const sessionsListEl = document.getElementById('active-sessions-list');
+            if (sessionsListEl && typeof window.loadSessionsList === 'function') {
+                window.loadSessionsList(sessionsListEl);
+            }
         });
     </script>
 }

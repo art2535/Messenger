@@ -7,6 +7,8 @@ using Messenger.Core.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace Messenger.API.Controllers
 {
@@ -82,6 +84,19 @@ namespace Messenger.API.Controllers
         }
 
         /// <summary>
+        /// Принудительное завершение сессии по ключу (вызывается фоновым сервисом Web при истечении/отзыве)
+        /// </summary>
+        [HttpPost("session/{sessionKey}/expire")]
+        [AllowAnonymous]
+        [EndpointName("ExpireLoginSession")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        public async Task<IActionResult> ExpireSessionAsync(string sessionKey, CancellationToken cancellationToken = default)
+        {
+            var expired = await _loginService.ExpireSessionAsync(sessionKey, cancellationToken);
+            return Ok(new { isSuccess = true, expired });
+        }
+
+        /// <summary>
         /// Регистрация нового входа в систему
         /// </summary>
         [HttpPost]
@@ -104,15 +119,17 @@ namespace Messenger.API.Controllers
                     return error;
                 }
 
-                var sessionKey = string.IsNullOrWhiteSpace(request.Token)
-                    ? Guid.NewGuid().ToString("N")
+                var rawToken = string.IsNullOrWhiteSpace(request.Token) 
+                    ? Guid.NewGuid().ToString("N") 
                     : request.Token.Trim();
+
+                var tokenHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(rawToken)));
 
                 var login = new Login
                 {
                     LoginId = Guid.NewGuid(),
                     UserId = user!.UserId,
-                    Token = sessionKey,
+                    Token = tokenHash,
                     IpAddress = request.IpAddress,
                     LoginTime = UtcDateTime.Now,
                     Active = true
@@ -124,7 +141,7 @@ namespace Messenger.API.Controllers
                 {
                     IsSuccess = true,
                     Message = "Вход успешно добавлен",
-                    Data = new { loginId = login.LoginId, sessionKey }
+                    Data = new { loginId = login.LoginId, tokenHash }
                 });
             }
             catch (Exception ex)
@@ -200,9 +217,9 @@ namespace Messenger.API.Controllers
                 var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
                 if (error != null) return error;
 
-                var ok = await _loginService.RevokeLoginAsync(user!.UserId, loginId, cancellationToken);
+                var ok = await _loginService.RevokeLoginAndUpdateStatusAsync(user!.UserId, loginId, cancellationToken);
                 if (!ok)
-                    return NotFound(new ErrorResponse { IsSuccess = false, Error = "Сессия не найдена" });
+                    return NotFound(new ErrorResponse { IsSuccess = false, Error = "Сессия не найдена или уже завершена" });
 
                 return Ok(new { isSuccess = true, message = "Сессия завершена" });
             }

@@ -62,7 +62,7 @@ async function closeSessionViaApi(options = {}) {
         const headers = {
             'Authorization': accessToken.startsWith('Bearer ') ? accessToken : `Bearer ${accessToken}`
         };
-        await fetch(`${window.API_BASE_URL}/logins`, {
+        await fetch(`${window.API_BASE_URL}/login`, {
             method: 'PATCH',
             headers,
             keepalive: true

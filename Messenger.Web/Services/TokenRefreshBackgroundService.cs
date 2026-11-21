@@ -11,11 +11,8 @@ namespace Messenger.Web.Services
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger<TokenRefreshBackgroundService> _logger;
 
-        public TokenRefreshBackgroundService(
-            UserTokenStore store,
-            TokenRefresher refresher,
-            IOptions<TokenRefreshOptions> options,
-            IServiceScopeFactory scopeFactory,
+        public TokenRefreshBackgroundService(UserTokenStore store, TokenRefresher refresher,
+            IOptions<TokenRefreshOptions> options, IServiceScopeFactory scopeFactory,
             ILogger<TokenRefreshBackgroundService> logger)
         {
             _store = store;
@@ -57,55 +54,76 @@ namespace Messenger.Web.Services
             _store.PurgeExpiredTombstones();
             var entries = _store.Snapshot();
 
-            if (_logger.IsEnabled(LogLevel.Debug))
-            {
-                var nearest = entries
-                    .Where(e => !e.IsRevoked)
-                    .Select(e => (e.Tokens.ExpiresAtUtc - DateTime.UtcNow).TotalSeconds)
-                    .DefaultIfEmpty(double.NaN)
-                    .Min();
-
-                _logger.LogDebug("[TokenRefresh] Тик: активных сессий {Count}, ближайшее истечение токена через {Seconds:F0} с",
-                    entries.Length, nearest);
-            }
-
             foreach (var entry in entries)
             {
+                bool needsDbExpiration = false;
+
                 if (entry.IsRevoked)
                 {
                     _store.Remove(entry.Key);
                     _logger.LogInformation("[TokenRefresh] Сессия {Key} удалена: отозвана (logout)", entry.Key);
-                    continue;
+                    needsDbExpiration = true;
                 }
-
-                if (DateTime.UtcNow - entry.LastSeenUtc > idleLimit)
+                else if (DateTime.UtcNow - entry.LastSeenUtc > idleLimit)
                 {
                     _store.Remove(entry.Key);
                     _logger.LogInformation("[TokenRefresh] Сессия {Key} удалена из хранилища: нет запросов более {Minutes} мин",
                         entry.Key, _options.IdleTimeoutMinutes);
-                    continue;
+                    needsDbExpiration = true;
                 }
-
-                var sessionActive = await IsLoginSessionActiveAsync(entry.Key, cancellationToken);
-                if (sessionActive == false)
+                else
                 {
-                    entry.IsRevoked = true;
-                    _store.RevokeSession(entry.Key, entry.Tokens.AccessToken, entry.Tokens.RefreshToken);
-                    _logger.LogInformation(
-                        "[TokenRefresh] Сессия {Key} удалена: login отозван в БД (завершение сессии / idle)",
-                        entry.Key);
-                    continue;
+                    var sessionActive = await IsLoginSessionActiveAsync(entry.Key, cancellationToken);
+                    if (sessionActive == false)
+                    {
+                        entry.IsRevoked = true;
+                        _store.RevokeSession(entry.Key, entry.Tokens.AccessToken, entry.Tokens.RefreshToken);
+                        _logger.LogInformation(
+                            "[TokenRefresh] Сессия {Key} удалена: login отозван в БД (завершение сессии / idle)",
+                            entry.Key);
+                        needsDbExpiration = true;
+                    }
+                    else
+                    {
+                        await _refresher.RefreshIfNeededAsync(entry, cancellationToken);
+
+                        if (entry.IsRevoked)
+                        {
+                            _store.RevokeSession(entry.Key, entry.Tokens.AccessToken, entry.Tokens.RefreshToken);
+                            _logger.LogInformation(
+                                "[TokenRefresh] Сессия {Key} снята с фонового обновления после отзыва",
+                                entry.Key);
+                            needsDbExpiration = true;
+                        }
+                    }
                 }
 
-                await _refresher.RefreshIfNeededAsync(entry, cancellationToken);
-
-                if (entry.IsRevoked)
+                if (needsDbExpiration)
                 {
-                    _store.RevokeSession(entry.Key, entry.Tokens.AccessToken, entry.Tokens.RefreshToken);
-                    _logger.LogInformation(
-                        "[TokenRefresh] Сессия {Key} снята с фонового обновления после отзыва",
-                        entry.Key);
+                    await ExpireSessionInDbAsync(entry.Key, cancellationToken);
                 }
+            }
+        }
+
+        private async Task ExpireSessionInDbAsync(string sessionKey, CancellationToken ct)
+        {
+            try
+            {
+                await using var scope = _scopeFactory.CreateAsyncScope();
+                var api = scope.ServiceProvider.GetRequiredService<ApiHelper>();
+
+                var path = $"login/session/{Uri.EscapeDataString(sessionKey)}/expire";
+                using var res = await api.PostRawAsync<object>(path, new { }, accessToken: null, ct);
+
+                if (!res.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning("[TokenRefresh] API вернул {Status} при попытке завершить сессию {Key}",
+                        res.StatusCode, sessionKey);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "[TokenRefresh] Не удалось уведомить API об истечении сессии {Key}", sessionKey);
             }
         }
 
@@ -116,7 +134,7 @@ namespace Messenger.Web.Services
                 await using var scope = _scopeFactory.CreateAsyncScope();
                 var api = scope.ServiceProvider.GetRequiredService<ApiHelper>();
 
-                var path = "logins/session/" + Uri.EscapeDataString(sessionKey) + "/active";
+                var path = "login/session/" + Uri.EscapeDataString(sessionKey) + "/active";
                 using var res = await api.GetRawAsync(path, accessToken: null, ct);
                 if (!res.IsSuccessStatusCode)
                     return null;

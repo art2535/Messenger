@@ -331,7 +331,7 @@
         listEl.classList.add('sessions-scroll');
         listEl.innerHTML = '<p class="text-sm text-gray-500 dark:text-gray-400 py-2">Загрузка…</p>';
         try {
-            var res = await apiFetch('/logins');
+            var res = await apiFetch('/login');
             if (!res.ok) throw new Error('fail');
             var json = await res.json();
             var items = json.data || json.Data || [];
@@ -377,9 +377,9 @@
                     btn.disabled = true;
                     btn.textContent = '…';
                     try {
-                        var r = await apiFetch('/logins/' + encodeURIComponent(id), { method: 'DELETE' });
+                        var r = await apiFetch('/login/' + encodeURIComponent(id), { method: 'DELETE' });
                         if (!r || !r.ok) {
-                            r = await apiFetch('/logins/' + encodeURIComponent(id), { method: 'DELETE' });
+                            r = await apiFetch('/login/' + encodeURIComponent(id), { method: 'DELETE' });
                         }
                         if (r && r.ok) {
                             await loadSessionsList(listEl);

@@ -1,8 +1,3 @@
-/**
- * Синхронизация настроек аккаунта с API + применение на всех страницах.
- * API: GET/PUT /api/v1/account-settings
- * Сессии: GET /api/v1/logins, DELETE /api/v1/logins/{id}
- */
 (function (global) {
     const CACHE_KEY = 'guap.accountSettings';
 
@@ -228,7 +223,7 @@
         if (!listEl) return;
         listEl.innerHTML = '<p class="text-sm text-gray-500 dark:text-gray-400">Загрузка…</p>';
         try {
-            const res = await apiFetch('/api/v1/logins');
+            const res = await apiFetch('/api/v1/login');
             if (!res.ok) throw new Error('fail');
             const json = await res.json();
             const items = json.data || json.Data || [];
@@ -262,7 +257,7 @@
                 btn.addEventListener('click', async () => {
                     const id = btn.getAttribute('data-id');
                     if (!id || !confirm('Завершить эту сессию?')) return;
-                    const r = await apiFetch('/api/v1/logins/' + id, { method: 'DELETE' });
+                    const r = await apiFetch('/api/v1/login/' + id, { method: 'DELETE' });
                     if (r.ok) loadSessions(listEl);
                 });
             });
