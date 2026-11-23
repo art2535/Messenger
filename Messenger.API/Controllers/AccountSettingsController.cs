@@ -1,57 +1,75 @@
 using Asp.Versioning;
-using Messenger.API.Responses;
-using Messenger.API.Services;
+using Messenger.API.Extensions;
 using Messenger.Core.DTOs.AccountSettings;
 using Messenger.Core.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.ComponentModel;
 
 namespace Messenger.API.Controllers
 {
     /// <summary>
-    /// Настройки аккаунта: уведомления, внешний вид, конфиденциальность
+    /// Настройки аккаунта: уведомления, внешний вид, конфиденциальность.
     /// </summary>
-    [Authorize]
     [ApiController]
     [Route("api/v{version:apiVersion}/account-settings")]
     [ApiVersion("1.0")]
+    [Authorize]
     [Produces("application/json")]
+    [Consumes("application/json")]
     [Tags("AccountSettings")]
     public class AccountSettingsController : ControllerBase
     {
         private readonly IAccountSettingsService _accountSettingsService;
         private readonly IUserService _userService;
+        private readonly ILogger<AccountSettingsController> _logger;
 
         public AccountSettingsController(
             IAccountSettingsService accountSettingsService,
-            IUserService userService)
+            IUserService userService,
+            ILogger<AccountSettingsController> logger)
         {
             _accountSettingsService = accountSettingsService;
             _userService = userService;
+            _logger = logger;
         }
 
         /// <summary>
-        /// Получить настройки текущего пользователя
+        /// Получить настройки текущего пользователя.
         /// </summary>
         [HttpGet]
         [EndpointName("GetAccountSettings")]
+        [EndpointSummary("Получить настройки текущего пользователя")]
+        [EndpointDescription("Возвращает текущие настройки аккаунта авторизованного пользователя: уведомления, внешний вид и конфиденциальность.")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> GetAsync(CancellationToken cancellationToken = default)
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> GetAccountSettingsAsync(CancellationToken ct)
         {
             try
             {
-                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
-                if (error != null)
-                    return error;
+                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var settings = await _accountSettingsService.GetByUserIdAsync(userId, ct);
 
-                var data = await _accountSettingsService.GetByUserIdAsync(user!.UserId, cancellationToken);
-                return Ok(new { isSuccess = true, data });
+                return Ok(new
+                {
+                    IsSuccess = true,
+                    Data = settings
+                });
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Ошибка авторизации при получении настроек аккаунта");
+                return Unauthorized(new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new ErrorResponse
+                _logger.LogError(ex, "Ошибка при получении настроек аккаунта");
+                return StatusCode(StatusCodes.Status500InternalServerError, new
                 {
                     IsSuccess = false,
                     Error = ex.Message
@@ -60,28 +78,60 @@ namespace Messenger.API.Controllers
         }
 
         /// <summary>
-        /// Обновить настройки текущего пользователя
+        /// Обновить настройки текущего пользователя.
         /// </summary>
         [HttpPut]
         [EndpointName("UpdateAccountSettings")]
+        [EndpointSummary("Обновить настройки текущего пользователя")]
+        [EndpointDescription("Обновляет настройки аккаунта авторизованного пользователя. Можно передать только те поля, которые нужно изменить.")]
         [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> UpdateAsync([FromBody] UpdateAccountSettingsRequest request,
-            CancellationToken cancellationToken = default)
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> PutUpdateAccountSettingsAsync(
+            [FromBody, Description("Новые значения настроек аккаунта")] UpdateAccountSettingsRequest request,
+            CancellationToken ct)
         {
             try
             {
-                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
-                if (error != null)
-                    return error;
+                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var settings = await _accountSettingsService.UpdateAsync(userId, request, ct);
 
-                var data = await _accountSettingsService.UpdateAsync(user!.UserId, request, cancellationToken);
-                return Ok(new { isSuccess = true, data });
+                return Ok(new
+                {
+                    IsSuccess = true,
+                    Data = settings
+                });
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Ошибка авторизации при обновлении настроек аккаунта");
+                return Unauthorized(new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new ErrorResponse
+                _logger.LogError(ex, "Ошибка при обновлении настроек аккаунта");
+                return StatusCode(StatusCodes.Status500InternalServerError, new
                 {
                     IsSuccess = false,
                     Error = ex.Message

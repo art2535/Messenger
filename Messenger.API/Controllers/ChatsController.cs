@@ -1,6 +1,5 @@
 ﻿using Asp.Versioning;
-using Messenger.API.Responses;
-using Messenger.API.Services;
+using Messenger.API.Extensions;
 using Messenger.Core.DTOs.Chats;
 using Messenger.Core.Hubs;
 using Messenger.Core.Interfaces;
@@ -12,7 +11,7 @@ using System.ComponentModel;
 namespace Messenger.API.Controllers
 {
     /// <summary>
-    /// Контроллер для управления чатами
+    /// Контроллер для управления чатами.
     /// </summary>
     [Authorize]
     [ApiController]
@@ -26,45 +25,56 @@ namespace Messenger.API.Controllers
         private readonly IChatService _chatService;
         private readonly IHubContext<ChatHub> _hubContext;
         private readonly IUserService _userService;
+        private readonly ILogger<ChatsController> _logger;
 
-        public ChatsController(IChatService chatService, IHubContext<ChatHub> hubContext, IUserService userService)
+        public ChatsController(
+            IChatService chatService,
+            IHubContext<ChatHub> hubContext,
+            IUserService userService,
+            ILogger<ChatsController> logger)
         {
             _chatService = chatService;
             _hubContext = hubContext;
             _userService = userService;
+            _logger = logger;
         }
 
         /// <summary>
-        /// Получить список чатов текущего пользователя
+        /// Получить список чатов текущего пользователя.
         /// </summary>
         [HttpGet]
         [EndpointName("GetUserChats")]
         [EndpointSummary("Получить список чатов текущего пользователя")]
         [EndpointDescription("Возвращает все чаты, в которых состоит авторизованный пользователь, с информацией о последнем сообщении.")]
-        [ProducesResponseType(typeof(GetUserChatsSuccessResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> GetChatsByIdAsync(CancellationToken cancellationToken = default)
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> GetUserChatsAsync(CancellationToken ct = default)
         {
             try
             {
-                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
-                if (error != null)
-                {
-                    return error;
-                }
+                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var chats = await _chatService.GetUserChatsWithLastMessageAsync(userId, ct);
 
-                var chats = await _chatService.GetUserChatsWithLastMessageAsync(user!.UserId, cancellationToken);
-
-                return Ok(new GetUserChatsSuccessResponse
+                return Ok(new
                 {
                     IsSuccess = true,
                     Data = chats
                 });
             }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Ошибка авторизации при получении списка чатов");
+                return Unauthorized(new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
             catch (Exception ex)
             {
-                return StatusCode(500, new ErrorResponse
+                _logger.LogError(ex, "Ошибка при выполнении GET /chats");
+                return StatusCode(StatusCodes.Status500InternalServerError, new
                 {
                     IsSuccess = false,
                     Error = ex.Message
@@ -73,42 +83,44 @@ namespace Messenger.API.Controllers
         }
 
         /// <summary>
-        /// Получить информацию о конкретном чате
+        /// Получить информацию о конкретном чате.
         /// </summary>
-        [HttpGet("{chatId}")]
+        [HttpGet("{chatId:guid}")]
         [EndpointName("GetChatById")]
         [EndpointSummary("Получить информацию о конкретном чате")]
         [EndpointDescription("Возвращает детали чата: название, тип, участников и аватар (для приватных чатов — аватар собеседника).")]
-        [ProducesResponseType(typeof(GetChatByIdSuccessResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> GetChatByIdAsync(
-            [Description("Уникальный идентификатор чата (GUID)")] Guid chatId, 
+            [FromRoute, Description("Уникальный идентификатор чата (GUID)")] Guid chatId,
             CancellationToken ct = default)
         {
             try
             {
-                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
-                if (error != null)
-                {
-                    return error;
-                }
+                var userId = await User.GetCurrentUserIdAsync(_userService);
 
                 var chat = await _chatService.GetChatByIdAsync(chatId, ct);
                 if (chat == null)
                 {
-                    return NotFound(new ErrorResponse
-                    { 
-                        IsSuccess = false, 
-                        Error = "Чат не найден" 
+                    return NotFound(new
+                    {
+                        IsSuccess = false,
+                        Error = "Чат не найден"
                     });
                 }
 
                 var participants = await _chatService.GetChatParticipantsAsync(chatId, ct);
-                if (!participants.Any(p => p.UserId == user!.UserId))
-                    return Forbid();
+                if (!participants.Any(p => p.UserId == userId))
+                {
+                    return StatusCode(StatusCodes.Status403Forbidden, new
+                    {
+                        IsSuccess = false,
+                        Error = "Доступ к чату запрещён"
+                    });
+                }
 
                 var participantDtos = participants.Select(p =>
                 {
@@ -120,66 +132,76 @@ namespace Messenger.API.Controllers
 
                     return new
                     {
-                        id = p.UserId,
-                        userId = p.UserId,
-                        name = $"{p.User?.FirstName} {p.User?.LastName}".Trim(),
-                        fullName = $"{p.User?.FirstName} {p.User?.LastName}".Trim(),
-                        avatar = p.User?.Account?.Avatar,
-                        role
+                        Id = p.UserId,
+                        UserId = p.UserId,
+                        Name = $"{p.User?.FirstName} {p.User?.LastName}".Trim(),
+                        FullName = $"{p.User?.FirstName} {p.User?.LastName}".Trim(),
+                        Avatar = p.User?.Account?.Avatar,
+                        Role = role
                     };
                 }).ToList();
 
                 string displayName = chat.Type == "group"
                     ? chat.Name
-                    : await GetPrivateChatDisplayNameAsync(chatId, user!.UserId, ct);
+                    : await GetPrivateChatDisplayNameAsync(chatId, userId, ct);
 
                 var result = new
                 {
-                    chatId = chat.ChatId,
-                    name = displayName,
-                    type = chat.Type,
-                    userId = chat.UserId,
-                    creatorId = chat.UserId,
-                    avatar = chat.Type == "group" ? (string?)null : 
-                        await GetOtherUserAvatarAsync(participantDtos.FirstOrDefault(p => p.id != user!.UserId)?.id 
-                        ?? user!.UserId, ct),
-                    participants = participantDtos
+                    ChatId = chat.ChatId,
+                    Name = displayName,
+                    Type = chat.Type,
+                    UserId = chat.UserId,
+                    CreatorId = chat.UserId,
+                    Avatar = chat.Type == "group"
+                        ? (string?)null
+                        : await GetOtherUserAvatarAsync(participantDtos.FirstOrDefault(p => p.UserId != userId)?.UserId ?? userId, ct),
+                    Participants = participantDtos
                 };
 
-                return Ok(new GetChatByIdSuccessResponse 
-                { 
-                    IsSuccess = true, 
-                    Data = result 
+                return Ok(new
+                {
+                    IsSuccess = true,
+                    Data = result
+                });
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Ошибка авторизации при получении чата {ChatId}", chatId);
+                return Unauthorized(new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
                 });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new ErrorResponse 
-                { 
-                    IsSuccess = false, 
-                    Error = ex.Message 
+                _logger.LogError(ex, "Ошибка при выполнении GET /chats/{ChatId}", chatId);
+                return StatusCode(StatusCodes.Status500InternalServerError, new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
                 });
             }
         }
 
         /// <summary>
-        /// Создать новый чат
+        /// Создать новый чат.
         /// </summary>
         [HttpPost("create-chat")]
         [EndpointName("CreateChat")]
         [EndpointSummary("Создать новый чат")]
         [EndpointDescription("Создаёт приватный или групповой чат. Для приватного — ровно один участник, для группового — название обязательно.")]
-        [ProducesResponseType(typeof(CreateChatSuccessResponse), StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> CreateNewChatAsync(
-            [FromBody, Description("Данные для создания чата")] CreateChatRequest request, 
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> PostCreateChatAsync(
+            [FromBody, Description("Данные для создания чата")] CreateChatRequest request,
             CancellationToken ct = default)
         {
             if (!new[] { "private", "group" }.Contains(request.Type))
             {
-                return BadRequest(new ErrorResponse
+                return BadRequest(new
                 {
                     IsSuccess = false,
                     Error = "Тип чата должен быть 'private' или 'group'"
@@ -188,7 +210,7 @@ namespace Messenger.API.Controllers
 
             if (request.Type == "group" && string.IsNullOrWhiteSpace(request.Name))
             {
-                return BadRequest(new ErrorResponse
+                return BadRequest(new
                 {
                     IsSuccess = false,
                     Error = "Для группового чата укажите название"
@@ -197,7 +219,7 @@ namespace Messenger.API.Controllers
 
             if (request.UserIds == null || request.UserIds.Count == 0)
             {
-                return BadRequest(new ErrorResponse
+                return BadRequest(new
                 {
                     IsSuccess = false,
                     Error = "Выберите хотя бы одного участника"
@@ -206,7 +228,7 @@ namespace Messenger.API.Controllers
 
             if (request.Type == "private" && request.UserIds.Count != 1)
             {
-                return BadRequest(new ErrorResponse
+                return BadRequest(new
                 {
                     IsSuccess = false,
                     Error = "В приватном чате должен быть ровно один участник"
@@ -215,11 +237,7 @@ namespace Messenger.API.Controllers
 
             try
             {
-                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
-                if (error != null)
-                {
-                    return error;
-                }
+                var currentUserId = await User.GetCurrentUserIdAsync(_userService);
 
                 string chatNameForDb = request.Type == "group"
                     ? request.Name.Trim()
@@ -228,62 +246,89 @@ namespace Messenger.API.Controllers
                 var chat = await _chatService.CreateChatAsync(
                     name: chatNameForDb,
                     type: request.Type,
-                    creatorId: user!.UserId,
+                    creatorId: currentUserId,
                     ct);
 
-                foreach (var userId in request.UserIds.Distinct())
+                foreach (var participantId in request.UserIds.Distinct())
                 {
-                    if (userId == user!.UserId) 
+                    if (participantId == currentUserId)
                         continue;
 
-                    await _chatService.AddParticipantToChatAsync(chat.ChatId, userId, "участник", ct);
+                    await _chatService.AddParticipantToChatAsync(chat.ChatId, participantId, "участник", ct);
                 }
 
                 string displayName = request.Type == "group"
                     ? request.Name.Trim()
-                    : await GetPrivateChatDisplayNameAsync(chat.ChatId, user!.UserId, ct);
+                    : await GetPrivateChatDisplayNameAsync(chat.ChatId, currentUserId, ct);
 
-                foreach (var userId in request.UserIds.Distinct())
+                foreach (var participantId in request.UserIds.Distinct())
                 {
-                    var dbParticipant = await _userService.GetUserByIdAsync(userId, ct);
-                    if (dbParticipant == null || string.IsNullOrEmpty(dbParticipant.ExternalId)) continue;
+                    var dbParticipant = await _userService.GetUserByIdAsync(participantId, ct);
+                    if (dbParticipant == null || string.IsNullOrEmpty(dbParticipant.ExternalId))
+                        continue;
 
                     string individualizedName = request.Type == "group"
                         ? request.Name.Trim()
-                        : await GetPrivateChatDisplayNameAsync(chat.ChatId, userId, ct);
+                        : await GetPrivateChatDisplayNameAsync(chat.ChatId, participantId, ct);
 
                     string? individualizedAvatar = null;
                     if (request.Type == "private")
                     {
-                        var otherId = (userId == user!.UserId) ? request.UserIds[0] : user!.UserId;
+                        var otherId = participantId == currentUserId ? request.UserIds[0] : currentUserId;
                         individualizedAvatar = await GetOtherUserAvatarAsync(otherId, ct);
                     }
 
                     var chatForSingleUser = new
                     {
-                        chatId = chat.ChatId,
-                        name = individualizedName,
-                        avatar = individualizedAvatar,
-                        type = chat.Type
+                        ChatId = chat.ChatId,
+                        Name = individualizedName,
+                        Avatar = individualizedAvatar,
+                        Type = chat.Type
                     };
 
                     await _hubContext.Clients.User(dbParticipant.ExternalId.ToLowerInvariant())
                         .SendAsync("NewChat", chatForSingleUser, ct);
                 }
 
-                return Ok(new CreateChatSuccessResponse 
-                { 
-                    IsSuccess = true, 
-                    Data = new 
-                    { 
-                        chat.ChatId, 
-                        Name = displayName 
-                    } 
+                return Ok(new
+                {
+                    IsSuccess = true,
+                    Data = new
+                    {
+                        ChatId = chat.ChatId,
+                        Name = displayName
+                    }
+                });
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Ошибка авторизации при создании чата");
+                return Unauthorized(new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
                 });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new
+                _logger.LogError(ex, "Ошибка при выполнении POST /chats/create-chat");
+                return StatusCode(StatusCodes.Status500InternalServerError, new
                 {
                     IsSuccess = false,
                     Error = ex.Message
@@ -292,34 +337,34 @@ namespace Messenger.API.Controllers
         }
 
         /// <summary>
-        /// Добавить участника в чат
+        /// Добавить участника в чат.
         /// </summary>
-        [HttpPost("{chatId}/{userId}/participant")]
+        [HttpPost("{chatId:guid}/{userId:guid}/participant")]
         [EndpointName("AddParticipantToChat")]
         [EndpointSummary("Добавить участника в чат")]
         [EndpointDescription("Добавляет пользователя в существующий чат и уведомляет всех участников через SignalR.")]
-        [ProducesResponseType(typeof(AddParticipantSuccessResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> AddParticipantToChatAsync(
-            [Description("Идентификатор чата")] Guid chatId,
-            [Description("Идентификатор добавляемого пользователя")] Guid userId,
-            [Description("Роль в чате (по умолчанию «участник»)")] string role = "участник",
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> PostAddParticipantToChatAsync(
+            [FromRoute, Description("Идентификатор чата")] Guid chatId,
+            [FromRoute, Description("Идентификатор добавляемого пользователя")] Guid userId,
+            [FromQuery, Description("Роль в чате (по умолчанию «участник»)")] string role = "участник",
             CancellationToken ct = default)
         {
             try
             {
-                var (currentUser, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
-                if (error != null)
-                {
-                    return error;
-                }
+                await User.GetCurrentUserIdAsync(_userService);
 
                 var chat = await _chatService.GetChatByIdAsync(chatId, ct);
                 if (chat == null)
                 {
-                    return NotFound();
+                    return NotFound(new
+                    {
+                        IsSuccess = false,
+                        Error = "Чат не найден"
+                    });
                 }
 
                 await _chatService.AddParticipantToChatAsync(chatId, userId, role, ct);
@@ -327,7 +372,7 @@ namespace Messenger.API.Controllers
                 var addedUser = await _userService.GetUserByIdAsync(userId, ct);
                 if (addedUser == null)
                 {
-                    return NotFound(new ErrorResponse 
+                    return NotFound(new
                     {
                         IsSuccess = false,
                         Error = "Пользователь не найден"
@@ -336,14 +381,18 @@ namespace Messenger.API.Controllers
 
                 var userInfo = new
                 {
-                    id = addedUser.UserId,
-                    name = $"{addedUser.FirstName} {addedUser.LastName}".Trim(),
-                    fullName = $"{addedUser.FirstName} {addedUser.LastName}".Trim(),
-                    avatar = addedUser.Account?.Avatar
+                    Id = addedUser.UserId,
+                    Name = $"{addedUser.FirstName} {addedUser.LastName}".Trim(),
+                    FullName = $"{addedUser.FirstName} {addedUser.LastName}".Trim(),
+                    Avatar = addedUser.Account?.Avatar
                 };
 
-                await _hubContext.Clients.Group(chatId.ToString()).
-                    SendAsync("ParticipantAdded", new { chatId, user = userInfo }, ct);
+                await _hubContext.Clients.Group(chatId.ToString())
+                    .SendAsync("ParticipantAdded", new
+                    {
+                        ChatId = chatId,
+                        User = userInfo
+                    }, ct);
 
                 var updatedChat = await _chatService.GetChatByIdAsync(chatId, ct);
                 var updatedCount = updatedChat?.ChatParticipants?.Count ?? 0;
@@ -351,32 +400,58 @@ namespace Messenger.API.Controllers
                 await _hubContext.Clients.Group(chatId.ToString())
                     .SendAsync("ParticipantCountChanged", new
                     {
-                        chatId = chatId,
-                        count = updatedCount
-                    });
+                        ChatId = chatId,
+                        Count = updatedCount
+                    }, ct);
 
                 var chatForNewUser = new
                 {
-                    chatId = chat.ChatId,
-                    name = chat.Type == "group" ? chat.Name : await GetPrivateChatDisplayNameAsync(chatId, userId, ct),
-                    type = chat.Type
+                    ChatId = chat.ChatId,
+                    Name = chat.Type == "group" ? chat.Name : await GetPrivateChatDisplayNameAsync(chatId, userId, ct),
+                    Type = chat.Type
                 };
 
-                if (addedUser?.ExternalId != null)
+                if (!string.IsNullOrEmpty(addedUser.ExternalId))
                 {
                     await _hubContext.Clients.User(addedUser.ExternalId.ToLowerInvariant())
                         .SendAsync("NewChat", chatForNewUser, ct);
                 }
 
-                return Ok(new AddParticipantSuccessResponse
+                return Ok(new
                 {
                     IsSuccess = true,
                     Message = $"Пользователь {userId} успешно добавлен в чат"
                 });
             }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Ошибка авторизации при добавлении участника {UserId} в чат {ChatId}", userId, chatId);
+                return Unauthorized(new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
             catch (Exception ex)
             {
-                return StatusCode(500, new ErrorResponse
+                _logger.LogError(ex, "Ошибка при выполнении POST /chats/{ChatId}/{UserId}/participant", chatId, userId);
+                return StatusCode(StatusCodes.Status500InternalServerError, new
                 {
                     IsSuccess = false,
                     Error = ex.Message
@@ -385,25 +460,25 @@ namespace Messenger.API.Controllers
         }
 
         /// <summary>
-        /// Обновить название чата
+        /// Обновить название чата.
         /// </summary>
-        [HttpPut("{chatId}")]
+        [HttpPut("{chatId:guid}")]
         [EndpointName("UpdateChat")]
         [EndpointSummary("Обновить название чата")]
         [EndpointDescription("Изменяет название группового чата.")]
-        [ProducesResponseType(typeof(UpdateChatSuccessResponse), StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> UpdateChatAsync(
-            [Description("Идентификатор чата")] Guid chatId,
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> PutUpdateChatAsync(
+            [FromRoute, Description("Идентификатор чата")] Guid chatId,
             [FromBody, Description("Новые данные чата")] UpdateChatRequest request,
-            CancellationToken ct)
+            CancellationToken ct = default)
         {
             if (string.IsNullOrWhiteSpace(request.Name))
             {
-                return BadRequest(new ErrorResponse
+                return BadRequest(new
                 {
                     IsSuccess = false,
                     Error = "Название не может быть пустым"
@@ -412,10 +487,12 @@ namespace Messenger.API.Controllers
 
             try
             {
+                await User.GetCurrentUserIdAsync(_userService);
+
                 var chat = await _chatService.GetChatByIdAsync(chatId, ct);
-                if (chat == null) 
+                if (chat == null)
                 {
-                    return NotFound(new ErrorResponse
+                    return NotFound(new
                     {
                         IsSuccess = false,
                         Error = "Чат не найден"
@@ -428,66 +505,29 @@ namespace Messenger.API.Controllers
 
                 await _hubContext.Clients.Group(chatId.ToString()).SendAsync("ChatUpdated", new
                 {
-                    chatId,
-                    name = request.Name
+                    ChatId = chatId,
+                    Name = request.Name
                 }, ct);
 
-                return Ok(new UpdateChatSuccessResponse
-                { 
-                    IsSuccess = true, 
-                    Message = "Чат обновлён" 
-                });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new ErrorResponse 
-                { 
-                    IsSuccess = false,
-                    Error = ex.Message 
-                });
-            }
-        }
-
-        /// <summary>
-        /// Удалить чат
-        /// </summary>
-        [HttpDelete("{chatId}")]
-        [EndpointName("DeleteChat")]
-        [EndpointSummary("Удалить чат")]
-        [EndpointDescription("Полностью удаляет чат и все связанные данные.")]
-        [ProducesResponseType(typeof(DeleteChatSuccessResponse), StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> DeleteChatAsync(
-            [Description("Идентификатор удаляемого чата")] Guid chatId,
-            CancellationToken cancellationToken = default)
-        {
-            try
-            {
-                var chat = await _chatService.GetChatByIdAsync(chatId, cancellationToken);
-                if (chat == null)
-                {
-                    return NotFound(new ErrorResponse
-                    {
-                        IsSuccess = false,
-                        Error = "Чат не найден"
-                    });
-                }
-
-                await _chatService.DeleteChatAsync(chat, cancellationToken);
-
-                await _hubContext.Clients.Group(chatId.ToString()).SendAsync("ChatDeleted", chatId, cancellationToken);
-
-                return Ok(new DeleteChatSuccessResponse
+                return Ok(new
                 {
                     IsSuccess = true,
-                    Message = "Чат успешно удален"
+                    Message = "Чат обновлён"
+                });
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Ошибка авторизации при обновлении чата {ChatId}", chatId);
+                return Unauthorized(new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
                 });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new ErrorResponse
+                _logger.LogError(ex, "Ошибка при выполнении PUT /chats/{ChatId}", chatId);
+                return StatusCode(StatusCodes.Status500InternalServerError, new
                 {
                     IsSuccess = false,
                     Error = ex.Message
@@ -496,39 +536,101 @@ namespace Messenger.API.Controllers
         }
 
         /// <summary>
-        /// Удалить участника из чата
+        /// Удалить чат.
         /// </summary>
-        [HttpDelete("{chatId}/{userId}")]
-        [EndpointName("RemoveParticipantFromChat")]
-        [EndpointSummary("Удалить участника из чата")]
-        [EndpointDescription("Исключает пользователя из чата и отправляет соответствующие SignalR-уведомления.")]
-        [ProducesResponseType(typeof(RemoveParticipantSuccessResponse), StatusCodes.Status200OK)]
+        [HttpDelete("{chatId:guid}")]
+        [EndpointName("DeleteChat")]
+        [EndpointSummary("Удалить чат")]
+        [EndpointDescription("Полностью удаляет чат и все связанные данные.")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> DeleteParticipantsFromChatAsync(
-            [Description("Идентификатор чата")] Guid chatId,
-            [Description("Идентификатор удаляемого участника")] Guid userId,
-            CancellationToken cancellationToken = default)
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> DeleteChatAsync(
+            [FromRoute, Description("Идентификатор удаляемого чата")] Guid chatId,
+            CancellationToken ct = default)
         {
             try
             {
-                var (currentUser, authError) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
-                if (authError != null)
-                    return authError;
+                await User.GetCurrentUserIdAsync(_userService);
 
-                var userToDelete = await _userService.GetUserByIdAsync(userId, cancellationToken);
-
-                if (userToDelete == null)
+                var chat = await _chatService.GetChatByIdAsync(chatId, ct);
+                if (chat == null)
                 {
-                    return NotFound(new ErrorResponse { IsSuccess = false, Error = "Пользователь не найден" });
+                    return NotFound(new
+                    {
+                        IsSuccess = false,
+                        Error = "Чат не найден"
+                    });
                 }
 
-                var participants = (await _chatService.GetChatParticipantsAsync(chatId, cancellationToken)).ToList();
-                var actor = participants.FirstOrDefault(p => p.UserId == currentUser!.UserId);
+                await _chatService.DeleteChatAsync(chat, ct);
+
+                await _hubContext.Clients.Group(chatId.ToString()).SendAsync("ChatDeleted", chatId, ct);
+
+                return Ok(new
+                {
+                    IsSuccess = true,
+                    Message = "Чат успешно удален"
+                });
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Ошибка авторизации при удалении чата {ChatId}", chatId);
+                return Unauthorized(new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка при выполнении DELETE /chats/{ChatId}", chatId);
+                return StatusCode(StatusCodes.Status500InternalServerError, new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
+        }
+
+        /// <summary>
+        /// Удалить участника из чата.
+        /// </summary>
+        [HttpDelete("{chatId:guid}/{userId:guid}")]
+        [EndpointName("RemoveParticipantFromChat")]
+        [EndpointSummary("Удалить участника из чата")]
+        [EndpointDescription("Исключает пользователя из чата и отправляет соответствующие SignalR-уведомления.")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> DeleteParticipantFromChatAsync(
+            [FromRoute, Description("Идентификатор чата")] Guid chatId,
+            [FromRoute, Description("Идентификатор удаляемого участника")] Guid userId,
+            CancellationToken ct = default)
+        {
+            try
+            {
+                var currentUserId = await User.GetCurrentUserIdAsync(_userService);
+
+                var userToDelete = await _userService.GetUserByIdAsync(userId, ct);
+                if (userToDelete == null)
+                {
+                    return NotFound(new
+                    {
+                        IsSuccess = false,
+                        Error = "Пользователь не найден"
+                    });
+                }
+
+                var participants = (await _chatService.GetChatParticipantsAsync(chatId, ct)).ToList();
+                var actor = participants.FirstOrDefault(p => p.UserId == currentUserId);
                 if (actor == null)
                 {
-                    return StatusCode(StatusCodes.Status403Forbidden, new ErrorResponse
+                    return StatusCode(StatusCodes.Status403Forbidden, new
                     {
                         IsSuccess = false,
                         Error = "Вы не являетесь участником этого чата"
@@ -538,7 +640,11 @@ namespace Messenger.API.Controllers
                 var target = participants.FirstOrDefault(p => p.UserId == userId);
                 if (target == null)
                 {
-                    return NotFound(new ErrorResponse { IsSuccess = false, Error = "Участник не найден в чате" });
+                    return NotFound(new
+                    {
+                        IsSuccess = false,
+                        Error = "Участник не найден в чате"
+                    });
                 }
 
                 static string NormRole(string? role) =>
@@ -550,73 +656,72 @@ namespace Messenger.API.Controllers
                     return r is "владелец" or "owner" or "admin" or "админ" or "administrator" or "модератор" or "moderator";
                 }
 
-                var actorRole = NormRole(actor.Role);
-                var targetRole = NormRole(target.Role);
-
-                if (userId == currentUser!.UserId)
+                if (userId == currentUserId)
                 {
-                    return BadRequest(new ErrorResponse
+                    return BadRequest(new
                     {
                         IsSuccess = false,
                         Error = "Нельзя удалить самого себя из чата этим методом"
                     });
                 }
 
-                if (IsAdminOrOwnerRole(actor.Role))
+                if (IsAdminOrOwnerRole(target.Role))
                 {
-                    if (IsAdminOrOwnerRole(target.Role))
+                    return StatusCode(StatusCodes.Status403Forbidden, new
                     {
-                        return StatusCode(StatusCodes.Status403Forbidden, new ErrorResponse
-                        {
-                            IsSuccess = false,
-                            Error = "Администратор не может удалить владельца или другого администратора"
-                        });
-                    }
-                }
-                else
-                {
-                    if (IsAdminOrOwnerRole(target.Role))
-                    {
-                        return StatusCode(StatusCodes.Status403Forbidden, new ErrorResponse
-                        {
-                            IsSuccess = false,
-                            Error = "Нельзя удалить владельца или администратора чата"
-                        });
-                    }
+                        IsSuccess = false,
+                        Error = IsAdminOrOwnerRole(actor.Role)
+                            ? "Администратор не может удалить владельца или другого администратора"
+                            : "Нельзя удалить владельца или администратора чата"
+                    });
                 }
 
-                await _chatService.DeleteParticipantFromChatAsync(chatId, userId, cancellationToken);
+                await _chatService.DeleteParticipantFromChatAsync(chatId, userId, ct);
 
                 await _hubContext.Clients.Group(chatId.ToString().ToLowerInvariant())
-                    .SendAsync("ParticipantRemoved", new { chatId, userId }, cancellationToken);
+                    .SendAsync("ParticipantRemoved", new
+                    {
+                        ChatId = chatId,
+                        UserId = userId
+                    }, ct);
 
-                var updatedChat = await _chatService.GetChatByIdAsync(chatId, cancellationToken);
+                var updatedChat = await _chatService.GetChatByIdAsync(chatId, ct);
                 var updatedCount = updatedChat?.ChatParticipants?.Count ?? 0;
 
                 await _hubContext.Clients.Group(chatId.ToString())
                     .SendAsync("ParticipantCountChanged", new
                     {
-                        chatId = chatId,
-                        count = updatedCount
-                    });
+                        ChatId = chatId,
+                        Count = updatedCount
+                    }, ct);
 
                 if (!string.IsNullOrEmpty(userToDelete.ExternalId))
                 {
                     var signalRId = userToDelete.ExternalId.ToLowerInvariant();
 
                     await _hubContext.Clients.User(signalRId)
-                        .SendAsync("YouWereRemovedFromChat", chatId, cancellationToken);
+                        .SendAsync("YouWereRemovedFromChat", chatId, ct);
                 }
 
-                return Ok(new RemoveParticipantSuccessResponse
+                return Ok(new
                 {
                     IsSuccess = true,
                     Message = $"Пользователь {userId} успешно удален из чата"
                 });
             }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Ошибка авторизации при удалении участника {UserId} из чата {ChatId}", userId, chatId);
+                return Unauthorized(new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
             catch (Exception ex)
             {
-                return StatusCode(500, new ErrorResponse
+                _logger.LogError(ex, "Ошибка при выполнении DELETE /chats/{ChatId}/{UserId}", chatId, userId);
+                return StatusCode(StatusCodes.Status500InternalServerError, new
                 {
                     IsSuccess = false,
                     Error = ex.Message

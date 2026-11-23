@@ -1,88 +1,255 @@
+using Asp.Versioning;
+using Messenger.API.Extensions;
 using Messenger.Core.DTOs.Moderation;
 using Messenger.Core.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using System.Security.Claims;
+using System.ComponentModel;
 
 namespace Messenger.API.Controllers
 {
+    /// <summary>
+    /// Контроллер для модерации: жалобы, муты и снятие мутов.
+    /// </summary>
     [ApiController]
     [Route("api/v{version:apiVersion}/moderation")]
+    [ApiVersion("1.0")]
     [Authorize]
+    [Produces("application/json")]
+    [Consumes("application/json")]
+    [Tags("Moderation")]
     public class ModerationController : ControllerBase
     {
-        private readonly IModerationService _moderation;
-        private readonly IAdminService _admin;
-        private readonly IUserService _users;
+        private readonly IModerationService _moderationService;
+        private readonly IAdminService _adminService;
+        private readonly IUserService _userService;
+        private readonly ILogger<ModerationController> _logger;
 
-        public ModerationController(IModerationService moderation, IAdminService admin, IUserService users)
+        public ModerationController(
+            IModerationService moderationService,
+            IAdminService adminService,
+            IUserService userService,
+            ILogger<ModerationController> logger)
         {
-            _moderation = moderation;
-            _admin = admin;
-            _users = users;
+            _moderationService = moderationService;
+            _adminService = adminService;
+            _userService = userService;
+            _logger = logger;
         }
 
-        private async Task<Guid?> CurrentUserId(CancellationToken ct)
+        private async Task<Guid> EnsureAdminAsync(CancellationToken ct)
         {
-            var externalId = User.FindFirstValue("sub")
-                          ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (!string.IsNullOrEmpty(externalId))
-            {
-                var byExt = await _users.GetUserByExternalIdAsync(externalId);
-                if (byExt != null) return byExt.UserId;
-            }
-            // Fallback: NameIdentifier = UserId (Guid) — JwtService
-            if (!string.IsNullOrEmpty(externalId) && Guid.TryParse(externalId, out var userId))
-            {
-                var byId = await _users.GetUserByIdAsync(userId, ct);
-                if (byId != null) return byId.UserId;
-            }
-            return null;
+            var userId = await User.GetCurrentUserIdAsync(_userService);
+            var isAdmin = await _adminService.IsSystemAdminAsync(userId, ct);
+            if (!isAdmin)
+                throw new ForbiddenAccessException("Нужна роль «Администратор»");
+
+            return userId;
         }
 
+        /// <summary>
+        /// Отправить жалобу на сообщение.
+        /// </summary>
         [HttpPost("report")]
-        public async Task<IActionResult> Report([FromBody] ReportMessageRequest request, CancellationToken ct)
+        [EndpointName("ReportMessage")]
+        [EndpointSummary("Пожаловаться на сообщение")]
+        [EndpointDescription("Создаёт жалобу на указанное сообщение от имени текущего пользователя.")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> PostReportAsync(
+            [FromBody, Description("Данные жалобы на сообщение")] ReportMessageRequest request,
+            CancellationToken ct = default)
         {
-            var uid = await CurrentUserId(ct);
-            if (uid == null) return Unauthorized();
             try
             {
-                var r = await _moderation.ReportMessageAsync(uid.Value, request, ct);
-                return Ok(new { data = r });
+                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var report = await _moderationService.ReportMessageAsync(userId, request, ct);
+
+                return Ok(new
+                {
+                    IsSuccess = true,
+                    Data = report
+                });
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Ошибка авторизации при отправке жалобы");
+                return Unauthorized(new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
             }
             catch (Exception ex)
             {
-                return BadRequest(new { error = ex.Message });
+                _logger.LogError(ex, "Ошибка при выполнении POST /moderation/report");
+                return StatusCode(StatusCodes.Status500InternalServerError, new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
             }
         }
 
+        /// <summary>
+        /// Выдать мут пользователю.
+        /// </summary>
         [HttpPost("mute")]
-        public async Task<IActionResult> Mute([FromBody] MuteUserRequest request, CancellationToken ct)
+        [EndpointName("MuteUser")]
+        [EndpointSummary("Выдать мут пользователю")]
+        [EndpointDescription("Ограничивает отправку сообщений пользователем. Требует роль администратора.")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> PostMuteAsync(
+            [FromBody, Description("Параметры мута пользователя")] MuteUserRequest request,
+            CancellationToken ct = default)
         {
-            var uid = await CurrentUserId(ct);
-            if (uid == null) return Unauthorized();
-            if (!await _admin.IsSystemAdminAsync(uid.Value, ct))
-                return Forbid();
             try
             {
-                var m = await _moderation.MuteUserAsync(uid.Value, request, ct);
-                return Ok(new { data = m });
+                var adminUserId = await EnsureAdminAsync(ct);
+                var mute = await _moderationService.MuteUserAsync(adminUserId, request, ct);
+
+                return Ok(new
+                {
+                    IsSuccess = true,
+                    Data = mute
+                });
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Ошибка авторизации при выдаче мута");
+                return Unauthorized(new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
+            catch (ForbiddenAccessException ex)
+            {
+                return StatusCode(StatusCodes.Status403Forbidden, new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
             }
             catch (Exception ex)
             {
-                return BadRequest(new { error = ex.Message });
+                _logger.LogError(ex, "Ошибка при выполнении POST /moderation/mute");
+                return StatusCode(StatusCodes.Status500InternalServerError, new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
             }
         }
 
+        /// <summary>
+        /// Снять мут с пользователя.
+        /// </summary>
         [HttpPost("unmute/{muteId:guid}")]
-        public async Task<IActionResult> Unmute(Guid muteId, CancellationToken ct)
+        [EndpointName("UnmuteUser")]
+        [EndpointSummary("Снять мут")]
+        [EndpointDescription("Снимает активный мут по его идентификатору. Требует роль администратора.")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> PostUnmuteAsync(
+            [FromRoute, Description("Идентификатор мута (GUID)")] Guid muteId,
+            CancellationToken ct = default)
         {
-            var uid = await CurrentUserId(ct);
-            if (uid == null) return Unauthorized();
-            if (!await _admin.IsSystemAdminAsync(uid.Value, ct))
-                return Forbid();
-            await _moderation.UnmuteAsync(uid.Value, muteId, ct);
-            return Ok(new { success = true });
+            try
+            {
+                var adminUserId = await EnsureAdminAsync(ct);
+                await _moderationService.UnmuteAsync(adminUserId, muteId, ct);
+
+                return Ok(new
+                {
+                    IsSuccess = true
+                });
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Ошибка авторизации при снятии мута {MuteId}", muteId);
+                return Unauthorized(new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
+            catch (ForbiddenAccessException ex)
+            {
+                return StatusCode(StatusCodes.Status403Forbidden, new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка при выполнении POST /moderation/unmute/{MuteId}", muteId);
+                return StatusCode(StatusCodes.Status500InternalServerError, new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
         }
+
+        private sealed class ForbiddenAccessException(string message) : Exception(message);
     }
 }

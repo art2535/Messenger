@@ -1,6 +1,6 @@
-﻿using Asp.Versioning;
-using Messenger.API.Responses;
-using Messenger.API.Services;
+﻿using System.ComponentModel;
+using Asp.Versioning;
+using Messenger.API.Extensions;
 using Messenger.Core.DTOs.Users;
 using Messenger.Core.Hubs;
 using Messenger.Core.Interfaces;
@@ -8,64 +8,80 @@ using Messenger.Core.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
-using System.ComponentModel;
 
 namespace Messenger.API.Controllers
 {
     /// <summary>
-    /// Контроллер для управления пользователями
+    /// Контроллер для управления пользователями.
     /// </summary>
     [Authorize]
     [ApiController]
     [Route("api/v{version:apiVersion}/users")]
     [ApiVersion("1.0")]
+    [Produces("application/json")]
+    [Consumes("application/json")]
     [Tags("Users")]
     public class UsersController : ControllerBase
     {
         private readonly IUserService _userService;
         private readonly IChatService _chatService;
         private readonly IHubContext<ChatHub> _hubContext;
+        private readonly ILogger<UsersController> _logger;
 
-        public UsersController(IUserService userService, IChatService chatService, IHubContext<ChatHub> hubContext)
+        public UsersController(
+            IUserService userService,
+            IChatService chatService,
+            IHubContext<ChatHub> hubContext,
+            ILogger<UsersController> logger)
         {
             _userService = userService;
             _chatService = chatService;
             _hubContext = hubContext;
+            _logger = logger;
         }
 
-        private async Task SendProfileToPeersAsync(Guid userId, string method, object payload, CancellationToken token)
+        private async Task SendProfileToPeersAsync(Guid userId, string method, object payload, CancellationToken ct)
         {
-            var peerIds = await _chatService.GetPeerUserIdsAsync(userId, token);
+            var peerIds = await _chatService.GetPeerUserIdsAsync(userId, ct);
             var groups = peerIds.Select(id => $"User_{id}").ToList();
+
             if (groups.Count == 0)
             {
-                await _hubContext.Clients.Group($"User_{userId}").SendAsync(method, payload, token);
+                await _hubContext.Clients.Group($"User_{userId}").SendAsync(method, payload, ct);
                 return;
             }
-            await _hubContext.Clients.Groups(groups).SendAsync(method, payload, token);
+
+            await _hubContext.Clients.Groups(groups).SendAsync(method, payload, ct);
         }
 
         /// <summary>
-        /// Получить пользователя по внешнему идентификатору (OIDC / Keycloak)
+        /// Получить пользователя по внешнему идентификатору (OIDC / Keycloak).
         /// </summary>
         [HttpGet("{externalId}")]
         [EndpointName("GetUserByExternalId")]
         [EndpointSummary("Получить пользователя по externalId")]
         [EndpointDescription("Возвращает пользователя по внешнему идентификатору из SSO (Keycloak).")]
-        [ProducesResponseType(typeof(User), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> GetUserByExternalIdAsync(
-            [Description("Внешний идентификатор пользователя из SSO")] string externalId)
+            [Description("Внешний идентификатор пользователя из SSO")] string externalId,
+            CancellationToken ct = default)
         {
             try
             {
                 var user = await _userService.GetUserByExternalIdAsync(externalId);
-                return Ok(user);
+
+                return Ok(new
+                {
+                    IsSuccess = true,
+                    Data = user
+                });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new ErrorResponse
+                _logger.LogError(ex, "Ошибка при получении пользователя по externalId {ExternalId}", externalId);
+                return StatusCode(StatusCodes.Status500InternalServerError, new
                 {
                     IsSuccess = false,
                     Error = ex.Message
@@ -74,41 +90,40 @@ namespace Messenger.API.Controllers
         }
 
         /// <summary>
-        /// Поиск пользователей
+        /// Поиск пользователей.
         /// </summary>
         [HttpGet("search")]
         [EndpointName("SearchUsers")]
         [EndpointSummary("Поиск пользователей")]
-        [EndpointDescription("Возвращает список пользователей, соответствующих поисковому запросу (минимум 2 символа). " +
-            "Используется для автодополнения при добавлении в чат или поиске контактов.")]
-        [ProducesResponseType(typeof(SearchUsersSuccessResponse), StatusCodes.Status200OK)]
+        [EndpointDescription("Возвращает список пользователей, соответствующих поисковому запросу (минимум 2 символа). Используется для автодополнения при добавлении в чат или поиске контактов.")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> SearchAsync(
-            [FromQuery, Description("Поисковый запрос (минимум 2 символа)")] string query, 
-            CancellationToken token = default)
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> GetSearchAsync(
+            [FromQuery, Description("Поисковый запрос (минимум 2 символа)")] string query,
+            CancellationToken ct = default)
         {
             try
             {
                 if (string.IsNullOrWhiteSpace(query) || query.Length < 2)
                 {
-                    return Ok(new SearchUsersSuccessResponse
+                    return Ok(new
                     {
                         IsSuccess = true,
                         Data = Array.Empty<object>()
                     });
                 }
 
-                var result = await _userService.SearchUsersAsync(query.Trim(), token);
+                var result = await _userService.SearchUsersAsync(query.Trim(), ct);
 
                 var data = result.Select(u => new
                 {
-                    id = u.Id,
-                    name = u.Name,
-                    avatar = u.Avatar ?? "https://static.photos/people/200x200/default"
+                    Id = u.Id,
+                    Name = u.Name,
+                    Avatar = u.Avatar ?? "https://static.photos/people/200x200/default"
                 });
 
-                return Ok(new SearchUsersSuccessResponse
+                return Ok(new
                 {
                     IsSuccess = true,
                     Data = data
@@ -116,7 +131,8 @@ namespace Messenger.API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new ErrorResponse
+                _logger.LogError(ex, "Ошибка при поиске пользователей по запросу {Query}", query);
+                return StatusCode(StatusCodes.Status500InternalServerError, new
                 {
                     IsSuccess = false,
                     Error = ex.Message
@@ -125,22 +141,22 @@ namespace Messenger.API.Controllers
         }
 
         /// <summary>
-        /// Получить список всех пользователей
+        /// Получить список всех пользователей.
         /// </summary>
         [HttpGet]
         [EndpointName("GetAllUsers")]
         [EndpointSummary("Получить список всех пользователей")]
         [EndpointDescription("Возвращает полный список зарегистрированных пользователей системы.")]
-        [ProducesResponseType(typeof(GetAllUsersSuccessResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> GetAllUsersAsync(CancellationToken token = default)
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> GetAllUsersAsync(CancellationToken ct = default)
         {
             try
             {
-                var users = await _userService.GetAllUsersAsync(token);
+                var users = await _userService.GetAllUsersAsync(ct);
 
-                return Ok(new GetAllUsersSuccessResponse
+                return Ok(new
                 {
                     IsSuccess = true,
                     Data = users
@@ -148,31 +164,32 @@ namespace Messenger.API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new ErrorResponse
+                _logger.LogError(ex, "Ошибка при получении списка всех пользователей");
+                return StatusCode(StatusCodes.Status500InternalServerError, new
                 {
                     IsSuccess = false,
-                    Error = ex.Message,
+                    Error = ex.Message
                 });
             }
         }
 
         /// <summary>
-        /// Получить список всех ролей
+        /// Получить список всех ролей.
         /// </summary>
         [HttpGet("roles")]
         [EndpointName("GetAllRoles")]
         [EndpointSummary("Получить список всех ролей")]
         [EndpointDescription("Возвращает список всех доступных ролей в системе.")]
-        [ProducesResponseType(typeof(GetRolesSuccessResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> GetAllRolesAsync(CancellationToken token = default)
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> GetAllRolesAsync(CancellationToken ct = default)
         {
             try
             {
-                var roles = await _userService.GetRolesAsync(token);
+                var roles = await _userService.GetRolesAsync(ct);
 
-                return Ok(new GetRolesSuccessResponse
+                return Ok(new
                 {
                     IsSuccess = true,
                     Data = roles
@@ -180,33 +197,36 @@ namespace Messenger.API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new ErrorResponse
+                _logger.LogError(ex, "Ошибка при получении списка всех ролей");
+                return StatusCode(StatusCodes.Status500InternalServerError, new
                 {
                     IsSuccess = false,
-                    Error = ex.Message,
+                    Error = ex.Message
                 });
             }
         }
 
         /// <summary>
-        /// Получить отображаемое имя пользователя по ID
+        /// Получить отображаемое имя пользователя по ID.
         /// </summary>
         [HttpGet("{userId}/name")]
         [EndpointName("GetUserDisplayName")]
         [EndpointSummary("Получить отображаемое имя пользователя")]
         [EndpointDescription("Возвращает полное имя (Имя Фамилия) пользователя по его GUID.")]
-        [ProducesResponseType(typeof(GetUserNameSuccessResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> GetUserDisplayName([Description("Идентификатор пользователя (GUID)")] Guid userId)
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> GetDisplayNameAsync(
+            [Description("Идентификатор пользователя (GUID)")] Guid userId,
+            CancellationToken ct = default)
         {
             try
             {
-                var currentUser = await _userService.GetUserByIdAsync(userId);
+                var currentUser = await _userService.GetUserByIdAsync(userId, ct);
                 if (currentUser == null)
                 {
-                    return NotFound(new ErrorResponse
+                    return NotFound(new
                     {
                         IsSuccess = false,
                         Error = "Пользователь не найден"
@@ -215,15 +235,16 @@ namespace Messenger.API.Controllers
 
                 var name = $"{currentUser.FirstName} {currentUser.LastName}".Trim() ?? "Удалённый пользователь";
 
-                return Ok(new GetUserNameSuccessResponse 
-                { 
-                    IsSuccess = true, 
-                    Data = name 
+                return Ok(new
+                {
+                    IsSuccess = true,
+                    Data = name
                 });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new ErrorResponse
+                _logger.LogError(ex, "Ошибка при получении отображаемого имени пользователя {UserId}", userId);
+                return StatusCode(StatusCodes.Status500InternalServerError, new
                 {
                     IsSuccess = false,
                     Error = ex.Message
@@ -232,30 +253,26 @@ namespace Messenger.API.Controllers
         }
 
         /// <summary>
-        /// Получить информацию о текущем пользователе
+        /// Получить информацию о текущем пользователе.
         /// </summary>
         [HttpGet("info")]
         [EndpointName("GetCurrentUserInfo")]
         [EndpointSummary("Получить информацию о текущем пользователе")]
         [EndpointDescription("Возвращает личные данные авторизованного пользователя: имя, логин, телефон, аватар и тему.")]
-        [ProducesResponseType(typeof(GetCurrentUserSuccessResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> GetUserByIdAsync(CancellationToken token = default)
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> GetInfoAsync(CancellationToken ct = default)
         {
             try
             {
-                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
-                if (error != null)
-                {
-                    return error;
-                }
+                var user = await User.GetCurrentUserAsync(_userService);
 
-                var currentUser = await _userService.GetUserByIdAsync(user!.UserId, token);
+                var currentUser = await _userService.GetUserByIdAsync(user.UserId, ct);
                 if (currentUser == null)
                 {
-                    return NotFound(new ErrorResponse
+                    return NotFound(new
                     {
                         IsSuccess = false,
                         Error = "Пользователь не найден"
@@ -274,15 +291,25 @@ namespace Messenger.API.Controllers
                     } : null
                 };
 
-                return Ok(new GetCurrentUserSuccessResponse
+                return Ok(new
                 {
                     IsSuccess = true,
                     Data = response
                 });
             }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Ошибка авторизации при получении информации о текущем пользователе");
+                return Unauthorized(new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
             catch (Exception ex)
             {
-                return StatusCode(500, new ErrorResponse
+                _logger.LogError(ex, "Ошибка при получении информации о текущем пользователе");
+                return StatusCode(StatusCodes.Status500InternalServerError, new
                 {
                     IsSuccess = false,
                     Error = ex.Message
@@ -291,51 +318,56 @@ namespace Messenger.API.Controllers
         }
 
         /// <summary>
-        /// Обновить профиль текущего пользователя
+        /// Обновить профиль текущего пользователя.
         /// </summary>
         [HttpPut("update-profile")]
         [EndpointName("UpdateUserProfile")]
         [EndpointSummary("Обновить профиль текущего пользователя")]
-        [EndpointDescription("Обновляет личные данные пользователя (имя, телефон и т.д.) и тему интерфейса. " +
-            "Аватар можно передать отдельно через upload-avatar.")]
-        [ProducesResponseType(typeof(UpdateProfileSuccessResponse), StatusCodes.Status200OK)]
+        [EndpointDescription("Обновляет личные данные пользователя (имя, телефон и т.д.) и тему интерфейса. Аватар можно передать отдельно через upload-avatar.")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> UpdateUserProfileByIdAsync(
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> PutUpdateProfileAsync(
             [FromBody, Description("Новые данные профиля")] UpdateUserProfileRequest request,
             [FromQuery, Description("Опциональный URL аватара")] string? avatarUrl = null,
-            CancellationToken token = default)
+            CancellationToken ct = default)
         {
             try
             {
-                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
-                if (error != null)
-                {
-                    return error;
-                }
+                var user = await User.GetCurrentUserAsync(_userService);
 
-                await _userService.UpdateProfileAsync(user!.UserId, request, avatarUrl, token);
+                await _userService.UpdateProfileAsync(user.UserId, request, avatarUrl, ct);
 
-                var updatedUser = await _userService.GetUserByIdAsync(user!.UserId, token);
+                var updatedUser = await _userService.GetUserByIdAsync(user.UserId, ct);
                 var newDisplayName = $"{updatedUser.FirstName} {updatedUser.LastName}".Trim();
                 var currentAvatar = updatedUser.Account?.Avatar;
 
-                await SendProfileToPeersAsync(user!.UserId, "ProfileUpdated", new
+                await SendProfileToPeersAsync(user.UserId, "ProfileUpdated", new
                 {
-                    userId = user!.UserId.ToString(),
-                    avatarUrl = currentAvatar,
-                    displayName = newDisplayName
-                }, token);
+                    UserId = user.UserId.ToString(),
+                    AvatarUrl = currentAvatar,
+                    DisplayName = newDisplayName
+                }, ct);
 
-                return Ok(new UpdateProfileSuccessResponse
+                return Ok(new
                 {
                     IsSuccess = true,
                     Message = "Пользователь успешно обновлен"
                 });
             }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Ошибка авторизации при обновлении профиля");
+                return Unauthorized(new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
             catch (Exception ex)
             {
-                return StatusCode(500, new ErrorResponse
+                _logger.LogError(ex, "Ошибка при обновлении профиля пользователя");
+                return StatusCode(StatusCodes.Status500InternalServerError, new
                 {
                     IsSuccess = false,
                     Error = ex.Message
@@ -344,111 +376,125 @@ namespace Messenger.API.Controllers
         }
 
         /// <summary>
-        /// Загрузить аватар пользователя
+        /// Загрузить аватар пользователя.
         /// </summary>
         [HttpPost("upload-avatar")]
+        [Consumes("multipart/form-data")]
         [EndpointName("UploadAvatar")]
         [EndpointSummary("Загрузить аватар пользователя")]
         [EndpointDescription("Загружает изображение аватара для текущего пользователя (макс. 2 МБ). Возвращает URL загруженного аватара.")]
-        [ProducesResponseType(typeof(UploadAvatarSuccessResponse), StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> UploadAvatar(
-            [FromForm, Description("Файл аватара (изображение)")] IFormFile avatarFile, 
-            CancellationToken token = default)
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> PostUploadAvatarAsync(
+            [FromForm, Description("Файл аватара (изображение)")] IFormFile avatarFile,
+            CancellationToken ct = default)
         {
-            if (avatarFile == null || avatarFile.Length == 0)
-            {
-                return BadRequest(new ErrorResponse
-                {
-                    IsSuccess = false,
-                    Error = "Файл не выбран"
-                });
-            }
-
-            if (avatarFile.Length > 2 * 1024 * 1024)
-            {
-                return BadRequest(new ErrorResponse
-                {
-                    IsSuccess = false,
-                    Error = "Файл не должен превышать 2 МБ"
-                });
-            }
-
             try
             {
-                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
-                if (error != null)
+                if (avatarFile == null || avatarFile.Length == 0)
                 {
-                    return error;
+                    return BadRequest(new
+                    {
+                        IsSuccess = false,
+                        Error = "Файл не выбран"
+                    });
                 }
 
-                var avatarUrl = await _userService.UploadAvatarAsync(user!.UserId, avatarFile, token);
-
-                await SendProfileToPeersAsync(user!.UserId, "AvatarUpdated", new
+                if (avatarFile.Length > 2 * 1024 * 1024)
                 {
-                    userId = user!.UserId.ToString(),
-                    avatarUrl = avatarUrl
-                }, token);
+                    return BadRequest(new
+                    {
+                        IsSuccess = false,
+                        Error = "Файл не должен превышать 2 МБ"
+                    });
+                }
 
-                return Ok(new UploadAvatarSuccessResponse
+                var user = await User.GetCurrentUserAsync(_userService);
+
+                var avatarUrl = await _userService.UploadAvatarAsync(user.UserId, avatarFile, ct);
+
+                await SendProfileToPeersAsync(user.UserId, "AvatarUpdated", new
+                {
+                    UserId = user.UserId.ToString(),
+                    AvatarUrl = avatarUrl
+                }, ct);
+
+                return Ok(new
                 {
                     IsSuccess = true,
                     Message = "Аватар успешно загружен",
-                    Data = new { avatarUrl }
+                    Data = new { AvatarUrl = avatarUrl }
+                });
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Ошибка авторизации при загрузке аватара");
+                return Unauthorized(new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
                 });
             }
             catch (ArgumentException ex)
             {
-                return BadRequest(new ErrorResponse 
-                { 
-                    IsSuccess = false, 
-                    Error = ex.Message 
+                return BadRequest(new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
                 });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new ErrorResponse 
-                { 
-                    IsSuccess = false, 
-                    Error = ex.Message 
+                _logger.LogError(ex, "Ошибка при загрузке аватара");
+                return StatusCode(StatusCodes.Status500InternalServerError, new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
                 });
             }
         }
 
         /// <summary>
-        /// Назначить роль текущему пользователю
+        /// Назначить роль текущему пользователю.
         /// </summary>
         [HttpPost("assign-role/{roleId}")]
         [EndpointName("AssignRole")]
         [EndpointSummary("Назначить роль текущему пользователю")]
         [EndpointDescription("Назначает указанную роль авторизованному пользователю (для администраторов).")]
-        [ProducesResponseType(typeof(AssignRoleSuccessResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> AssignRoleAsync(
-            [Description("Идентификатор роли")] Guid roleId, CancellationToken token = default)
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> PostAssignRoleAsync(
+            [Description("Идентификатор роли")] Guid roleId,
+            CancellationToken ct = default)
         {
             try
             {
-                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
-                if (error != null)
-                {
-                    return error;
-                }
+                var user = await User.GetCurrentUserAsync(_userService);
 
-                await _userService.AssignRoleAsync(user!.UserId, roleId, token);
+                await _userService.AssignRoleAsync(user.UserId, roleId, ct);
 
-                return Ok(new AssignRoleSuccessResponse
+                return Ok(new
                 {
                     IsSuccess = true,
-                    Message = "Роль успешно определена"
+                    Message = "Роль успешно назначена"
+                });
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Ошибка авторизации при назначении роли");
+                return Unauthorized(new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
                 });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new ErrorResponse
+                _logger.LogError(ex, "Ошибка при назначении роли {RoleId} пользователю", roleId);
+                return StatusCode(StatusCodes.Status500InternalServerError, new
                 {
                     IsSuccess = false,
                     Error = ex.Message
@@ -457,45 +503,51 @@ namespace Messenger.API.Controllers
         }
 
         /// <summary>
-        /// Удалить аватар
+        /// Удалить аватар.
         /// </summary>
         [HttpDelete("delete-avatar")]
         [EndpointName("DeleteAvatar")]
         [EndpointSummary("Удалить аватар")]
         [EndpointDescription("Удаляет текущий аватар пользователя и устанавливает стандартный. Уведомление рассылается через SignalR.")]
-        [ProducesResponseType(typeof(DeleteAvatarSuccessResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> DeleteAvatar(CancellationToken token = default)
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> DeleteAvatarAsync(CancellationToken ct = default)
         {
             try
             {
-                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
-                if (error != null)
+                var user = await User.GetCurrentUserAsync(_userService);
+
+                await _userService.DeleteAvatarAsync(user.UserId, ct);
+
+                await SendProfileToPeersAsync(user.UserId, "AvatarUpdated", new
                 {
-                    return error;
-                }
+                    UserId = user.UserId.ToString(),
+                    AvatarUrl = (string?)null
+                }, ct);
 
-                await _userService.DeleteAvatarAsync(user!.UserId, token);
-
-                await SendProfileToPeersAsync(user!.UserId, "AvatarUpdated", new
-                {
-                    userId = user!.UserId.ToString(),
-                    avatarUrl = (string?)null
-                }, token);
-
-                return Ok(new DeleteAvatarSuccessResponse
+                return Ok(new
                 {
                     IsSuccess = true,
                     Message = "Аватар успешно удалён"
                 });
             }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Ошибка авторизации при удалении аватара");
+                return Unauthorized(new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
             catch (Exception ex)
             {
-                return StatusCode(500, new ErrorResponse 
-                { 
-                    IsSuccess = false, 
-                    Error = ex.Message 
+                _logger.LogError(ex, "Ошибка при удалении аватара");
+                return StatusCode(StatusCodes.Status500InternalServerError, new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
                 });
             }
         }

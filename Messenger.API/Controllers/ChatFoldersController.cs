@@ -1,115 +1,434 @@
 using Asp.Versioning;
-using Messenger.API.Responses;
-using Messenger.API.Services;
+using Messenger.API.Extensions;
 using Messenger.Core.DTOs.ChatFolders;
 using Messenger.Core.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.ComponentModel;
 
 namespace Messenger.API.Controllers
 {
+    /// <summary>
+    /// Контроллер для управления папками чатов.
+    /// </summary>
     [Authorize]
     [ApiController]
     [Route("api/v{version:apiVersion}/chat-folders")]
     [ApiVersion("1.0")]
     [Produces("application/json")]
+    [Consumes("application/json")]
     [Tags("ChatFolders")]
     public class ChatFoldersController : ControllerBase
     {
-        private readonly IChatFolderService _folders;
-        private readonly IUserService _users;
+        private readonly IChatFolderService _chatFolderService;
+        private readonly IUserService _userService;
+        private readonly ILogger<ChatFoldersController> _logger;
 
-        public ChatFoldersController(IChatFolderService folders, IUserService users)
+        public ChatFoldersController(
+            IChatFolderService chatFolderService,
+            IUserService userService,
+            ILogger<ChatFoldersController> logger)
         {
-            _folders = folders;
-            _users = users;
+            _chatFolderService = chatFolderService;
+            _userService = userService;
+            _logger = logger;
         }
 
+        /// <summary>
+        /// Получить все папки чатов текущего пользователя.
+        /// </summary>
         [HttpGet]
-        public async Task<IActionResult> GetAll(CancellationToken ct = default)
+        [EndpointName("GetChatFolders")]
+        [EndpointSummary("Получить все папки чатов")]
+        [EndpointDescription("Возвращает список всех папок чатов авторизованного пользователя.")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> GetAllAsync(CancellationToken ct = default)
         {
-            var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _users);
-            if (error != null) return error;
-            var list = await _folders.GetFoldersAsync(user!.UserId, ct);
-            return Ok(new { isSuccess = true, data = list });
+            try
+            {
+                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var list = await _chatFolderService.GetFoldersAsync(userId, ct);
+
+                return Ok(new
+                {
+                    IsSuccess = true,
+                    Data = list
+                });
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Ошибка авторизации при получении папок чатов");
+                return Unauthorized(new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка при выполнении GET /chat-folders");
+                return StatusCode(StatusCodes.Status500InternalServerError, new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
         }
 
+        /// <summary>
+        /// Получить папку чатов по ID.
+        /// </summary>
         [HttpGet("{folderId:guid}")]
-        public async Task<IActionResult> GetOne(Guid folderId, CancellationToken ct = default)
+        [EndpointName("GetChatFolderById")]
+        [EndpointSummary("Получить папку чатов")]
+        [EndpointDescription("Возвращает информацию о папке чатов по её идентификатору.")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> GetByIdAsync(
+            [FromRoute, Description("Уникальный идентификатор папки (GUID)")] Guid folderId,
+            CancellationToken ct = default)
         {
-            var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _users);
-            if (error != null) return error;
-            var folder = await _folders.GetFolderAsync(user!.UserId, folderId, ct);
-            if (folder == null)
-                return NotFound(new ErrorResponse { IsSuccess = false, Error = "Папка не найдена" });
-            return Ok(new { isSuccess = true, data = folder });
-        }
-
-        [HttpPost]
-        public async Task<IActionResult> Create([FromBody] CreateChatFolderRequest request, CancellationToken ct = default)
-        {
-            var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _users);
-            if (error != null) return error;
             try
             {
-                var folder = await _folders.CreateFolderAsync(user!.UserId, request, ct);
-                return Ok(new { isSuccess = true, data = folder });
-            }
-            catch (ArgumentException ex)
-            {
-                return BadRequest(new ErrorResponse { IsSuccess = false, Error = ex.Message });
-            }
-        }
+                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var folder = await _chatFolderService.GetFolderAsync(userId, folderId, ct);
 
-        [HttpPut("{folderId:guid}")]
-        public async Task<IActionResult> Update(Guid folderId, [FromBody] UpdateChatFolderRequest request, CancellationToken ct = default)
-        {
-            var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _users);
-            if (error != null) return error;
-            try
-            {
-                var folder = await _folders.UpdateFolderAsync(user!.UserId, folderId, request, ct);
                 if (folder == null)
-                    return NotFound(new ErrorResponse { IsSuccess = false, Error = "Папка не найдена" });
-                return Ok(new { isSuccess = true, data = folder });
+                {
+                    return NotFound(new
+                    {
+                        IsSuccess = false,
+                        Error = "Папка не найдена"
+                    });
+                }
+
+                return Ok(new
+                {
+                    IsSuccess = true,
+                    Data = folder
+                });
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Ошибка авторизации при получении папки {FolderId}", folderId);
+                return Unauthorized(new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка при выполнении GET /chat-folders/{FolderId}", folderId);
+                return StatusCode(StatusCodes.Status500InternalServerError, new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
+        }
+
+        /// <summary>
+        /// Создать папку чатов.
+        /// </summary>
+        [HttpPost]
+        [EndpointName("CreateChatFolder")]
+        [EndpointSummary("Создать папку чатов")]
+        [EndpointDescription("Создаёт новую папку чатов для текущего пользователя.")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> PostCreateAsync(
+            [FromBody, Description("Данные для создания папки чатов")] CreateChatFolderRequest request,
+            CancellationToken ct = default)
+        {
+            try
+            {
+                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var folder = await _chatFolderService.CreateFolderAsync(userId, request, ct);
+
+                return Ok(new
+                {
+                    IsSuccess = true,
+                    Data = folder
+                });
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Ошибка авторизации при создании папки чатов");
+                return Unauthorized(new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
             }
             catch (ArgumentException ex)
             {
-                return BadRequest(new ErrorResponse { IsSuccess = false, Error = ex.Message });
+                return BadRequest(new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка при выполнении POST /chat-folders");
+                return StatusCode(StatusCodes.Status500InternalServerError, new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
             }
         }
 
+        /// <summary>
+        /// Обновить папку чатов.
+        /// </summary>
+        [HttpPut("{folderId:guid}")]
+        [EndpointName("UpdateChatFolder")]
+        [EndpointSummary("Обновить папку чатов")]
+        [EndpointDescription("Обновляет параметры существующей папки чатов.")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> PutUpdateAsync(
+            [FromRoute, Description("Уникальный идентификатор папки (GUID)")] Guid folderId,
+            [FromBody, Description("Новые данные папки чатов")] UpdateChatFolderRequest request,
+            CancellationToken ct = default)
+        {
+            try
+            {
+                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var folder = await _chatFolderService.UpdateFolderAsync(userId, folderId, request, ct);
+
+                if (folder == null)
+                {
+                    return NotFound(new
+                    {
+                        IsSuccess = false,
+                        Error = "Папка не найдена"
+                    });
+                }
+
+                return Ok(new
+                {
+                    IsSuccess = true,
+                    Data = folder
+                });
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Ошибка авторизации при обновлении папки {FolderId}", folderId);
+                return Unauthorized(new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка при выполнении PUT /chat-folders/{FolderId}", folderId);
+                return StatusCode(StatusCodes.Status500InternalServerError, new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
+        }
+
+        /// <summary>
+        /// Удалить папку чатов.
+        /// </summary>
         [HttpDelete("{folderId:guid}")]
-        public async Task<IActionResult> Delete(Guid folderId, CancellationToken ct = default)
+        [EndpointName("DeleteChatFolder")]
+        [EndpointSummary("Удалить папку чатов")]
+        [EndpointDescription("Удаляет папку чатов по её идентификатору.")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> DeleteAsync(
+            [FromRoute, Description("Уникальный идентификатор папки (GUID)")] Guid folderId,
+            CancellationToken ct = default)
         {
-            var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _users);
-            if (error != null) return error;
-            var ok = await _folders.DeleteFolderAsync(user!.UserId, folderId, ct);
-            if (!ok)
-                return NotFound(new ErrorResponse { IsSuccess = false, Error = "Папка не найдена" });
-            return Ok(new { isSuccess = true });
+            try
+            {
+                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var ok = await _chatFolderService.DeleteFolderAsync(userId, folderId, ct);
+
+                if (!ok)
+                {
+                    return NotFound(new
+                    {
+                        IsSuccess = false,
+                        Error = "Папка не найдена"
+                    });
+                }
+
+                return Ok(new
+                {
+                    IsSuccess = true
+                });
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Ошибка авторизации при удалении папки {FolderId}", folderId);
+                return Unauthorized(new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка при выполнении DELETE /chat-folders/{FolderId}", folderId);
+                return StatusCode(StatusCodes.Status500InternalServerError, new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
         }
 
+        /// <summary>
+        /// Добавить чат в папку.
+        /// </summary>
         [HttpPost("{folderId:guid}/chats")]
-        public async Task<IActionResult> AddChat(Guid folderId, [FromBody] FolderChatRequest request, CancellationToken ct = default)
+        [EndpointName("AddChatToFolder")]
+        [EndpointSummary("Добавить чат в папку")]
+        [EndpointDescription("Добавляет указанный чат в выбранную папку чатов.")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> PostAddChatAsync(
+            [FromRoute, Description("Уникальный идентификатор папки (GUID)")] Guid folderId,
+            [FromBody, Description("Данные чата для добавления в папку")] FolderChatRequest request,
+            CancellationToken ct = default)
         {
-            var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _users);
-            if (error != null) return error;
-            var ok = await _folders.AddChatAsync(user!.UserId, folderId, request.ChatId, ct);
-            if (!ok)
-                return NotFound(new ErrorResponse { IsSuccess = false, Error = "Папка или чат не найдены" });
-            return Ok(new { isSuccess = true });
+            try
+            {
+                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var ok = await _chatFolderService.AddChatAsync(userId, folderId, request.ChatId, ct);
+
+                if (!ok)
+                {
+                    return NotFound(new
+                    {
+                        IsSuccess = false,
+                        Error = "Папка или чат не найдены"
+                    });
+                }
+
+                return Ok(new
+                {
+                    IsSuccess = true
+                });
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Ошибка авторизации при добавлении чата в папку {FolderId}", folderId);
+                return Unauthorized(new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка при выполнении POST /chat-folders/{FolderId}/chats", folderId);
+                return StatusCode(StatusCodes.Status500InternalServerError, new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
         }
 
+        /// <summary>
+        /// Удалить чат из папки.
+        /// </summary>
         [HttpDelete("{folderId:guid}/chats/{chatId:guid}")]
-        public async Task<IActionResult> RemoveChat(Guid folderId, Guid chatId, CancellationToken ct = default)
+        [EndpointName("RemoveChatFromFolder")]
+        [EndpointSummary("Удалить чат из папки")]
+        [EndpointDescription("Удаляет указанный чат из папки чатов.")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> DeleteRemoveChatAsync(
+            [FromRoute, Description("Уникальный идентификатор папки (GUID)")] Guid folderId,
+            [FromRoute, Description("Уникальный идентификатор чата (GUID)")] Guid chatId,
+            CancellationToken ct = default)
         {
-            var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _users);
-            if (error != null) return error;
-            var ok = await _folders.RemoveChatAsync(user!.UserId, folderId, chatId, ct);
-            if (!ok)
-                return NotFound(new ErrorResponse { IsSuccess = false, Error = "Папка не найдена" });
-            return Ok(new { isSuccess = true });
+            try
+            {
+                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var ok = await _chatFolderService.RemoveChatAsync(userId, folderId, chatId, ct);
+
+                if (!ok)
+                {
+                    return NotFound(new
+                    {
+                        IsSuccess = false,
+                        Error = "Папка не найдена"
+                    });
+                }
+
+                return Ok(new
+                {
+                    IsSuccess = true
+                });
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Ошибка авторизации при удалении чата {ChatId} из папки {FolderId}", chatId, folderId);
+                return Unauthorized(new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка при выполнении DELETE /chat-folders/{FolderId}/chats/{ChatId}", folderId, chatId);
+                return StatusCode(StatusCodes.Status500InternalServerError, new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
         }
     }
 }

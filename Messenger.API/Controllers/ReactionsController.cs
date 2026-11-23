@@ -1,6 +1,6 @@
+using System.ComponentModel;
 using Asp.Versioning;
-using Messenger.API.Responses;
-using Messenger.API.Services;
+using Messenger.API.Extensions;
 using Messenger.Core.DTOs.Reactions;
 using Messenger.Core.Hubs;
 using Messenger.Core.Interfaces;
@@ -8,12 +8,11 @@ using Messenger.Core.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
-using System.ComponentModel;
 
 namespace Messenger.API.Controllers
 {
     /// <summary>
-    /// Контроллер для управления реакциями на сообщения
+    /// Контроллер для управления реакциями на сообщения.
     /// </summary>
     [Authorize]
     [ApiController]
@@ -27,45 +26,53 @@ namespace Messenger.API.Controllers
         private readonly IReactionService _reactionService;
         private readonly IUserService _userService;
         private readonly IHubContext<ChatHub> _hubContext;
+        private readonly ILogger<ReactionsController> _logger;
 
-        public ReactionsController(IReactionService reactionService, IUserService userService,
-            IHubContext<ChatHub> hubContext)
+        public ReactionsController(
+            IReactionService reactionService,
+            IUserService userService,
+            IHubContext<ChatHub> hubContext,
+            ILogger<ReactionsController> logger)
         {
             _reactionService = reactionService;
             _userService = userService;
             _hubContext = hubContext;
+            _logger = logger;
         }
 
         /// <summary>
-        /// Получить все реакции на сообщение
+        /// Получает объект текущего авторизованного пользователя или выбрасывает исключение.
+        /// </summary>
+        /// <summary>
+        /// Получить все реакции на сообщение.
         /// </summary>
         [HttpGet("{messageId:guid}")]
         [EndpointName("GetReactionsByMessage")]
         [EndpointSummary("Получить все реакции на сообщение")]
         [EndpointDescription("Возвращает список всех реакций (эмодзи) на указанное сообщение, включая информацию о пользователе и тип реакции.")]
-        [ProducesResponseType(typeof(GetReactionsSuccessResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> GetReactionsByMessageAsync(
             [Description("Идентификатор сообщения (GUID)")] Guid messageId,
-            CancellationToken cancellationToken = default)
+            CancellationToken ct = default)
         {
             try
             {
-                var reactions = await _reactionService.GetReactionsByMessageIdAsync(messageId, cancellationToken);
+                var reactions = await _reactionService.GetReactionsByMessageIdAsync(messageId, ct);
 
                 var data = reactions.Select(r => new
                 {
-                    reactionId = r.ReactionId,
-                    messageId = r.MessageId,
-                    userId = r.UserId,
-                    reactionType = r.ReactionType,
-                    userName = r.User != null
+                    ReactionId = r.ReactionId,
+                    MessageId = r.MessageId,
+                    UserId = r.UserId,
+                    ReactionType = r.ReactionType,
+                    UserName = r.User != null
                         ? $"{r.User.FirstName} {r.User.LastName}".Trim()
                         : null
                 });
 
-                return Ok(new GetReactionsSuccessResponse
+                return Ok(new
                 {
                     IsSuccess = true,
                     Data = data
@@ -73,7 +80,8 @@ namespace Messenger.API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new ErrorResponse
+                _logger.LogError(ex, "Ошибка при получении реакций для сообщения {MessageId}", messageId);
+                return StatusCode(StatusCodes.Status500InternalServerError, new
                 {
                     IsSuccess = false,
                     Error = ex.Message
@@ -82,31 +90,29 @@ namespace Messenger.API.Controllers
         }
 
         /// <summary>
-        /// Добавить (или обновить) реакцию на сообщение
+        /// Добавить (или обновить) реакцию на сообщение.
         /// </summary>
         [HttpPost("{messageId:guid}")]
         [EndpointName("AddReaction")]
         [EndpointSummary("Добавить реакцию на сообщение")]
         [EndpointDescription("Добавляет реакцию (эмодзи) от имени текущего авторизованного пользователя к указанному сообщению. Если реакция уже есть — обновляет её тип.")]
-        [ProducesResponseType(typeof(AddReactionSuccessResponse), StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> AddReactionAsync(
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> PostAddReactionAsync(
             [Description("Идентификатор сообщения (GUID)")] Guid messageId,
             [FromBody, Description("Данные реакции")] CreateReactionRequest request,
-            CancellationToken cancellationToken = default)
+            CancellationToken ct = default)
         {
             try
             {
-                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
-                if (error != null)
-                    return error;
+                var user = await User.GetCurrentUserAsync(_userService);
 
                 if (request == null || string.IsNullOrWhiteSpace(request.ReactionType))
                 {
-                    return BadRequest(new ErrorResponse
+                    return BadRequest(new
                     {
                         IsSuccess = false,
                         Error = "Укажите тип реакции (ReactionType)"
@@ -117,36 +123,45 @@ namespace Messenger.API.Controllers
                 {
                     ReactionId = Guid.NewGuid(),
                     MessageId = messageId,
-                    UserId = user!.UserId,
+                    UserId = user.UserId,
                     ReactionType = request.ReactionType.Trim()
                 };
 
-                await _reactionService.AddReactionAsync(reaction, cancellationToken);
+                await _reactionService.AddReactionAsync(reaction, ct);
 
-                var chatId = await _reactionService.GetChatIdByMessageIdAsync(messageId, cancellationToken);
+                var chatId = await _reactionService.GetChatIdByMessageIdAsync(messageId, ct);
                 if (chatId.HasValue)
                 {
                     await _hubContext.Clients.Group(chatId.Value.ToString())
                         .SendAsync("ReactionUpdated", new
                         {
-                            messageId,
-                            chatId = chatId.Value,
-                            userId = user.UserId,
-                            userName = $"{user.FirstName} {user.LastName}".Trim(),
-                            reactionType = reaction.ReactionType,
-                            action = "add"
-                        }, cancellationToken);
+                            MessageId = messageId,
+                            ChatId = chatId.Value,
+                            UserId = user.UserId,
+                            UserName = $"{user.FirstName} {user.LastName}".Trim(),
+                            ReactionType = reaction.ReactionType,
+                            Action = "add"
+                        }, ct);
                 }
 
-                return Ok(new AddReactionSuccessResponse
+                return Ok(new
                 {
                     IsSuccess = true,
                     Message = "Реакция добавлена"
                 });
             }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Ошибка авторизации при добавлении реакции");
+                return Unauthorized(new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
             catch (ArgumentException ex)
             {
-                return BadRequest(new ErrorResponse
+                return BadRequest(new
                 {
                     IsSuccess = false,
                     Error = ex.Message
@@ -154,7 +169,7 @@ namespace Messenger.API.Controllers
             }
             catch (KeyNotFoundException)
             {
-                return NotFound(new ErrorResponse
+                return NotFound(new
                 {
                     IsSuccess = false,
                     Error = "Сообщение не найдено"
@@ -162,7 +177,8 @@ namespace Messenger.API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new ErrorResponse
+                _logger.LogError(ex, "Ошибка при добавлении реакции к сообщению {MessageId}", messageId);
+                return StatusCode(StatusCodes.Status500InternalServerError, new
                 {
                     IsSuccess = false,
                     Error = ex.Message
@@ -171,61 +187,77 @@ namespace Messenger.API.Controllers
         }
 
         /// <summary>
-        /// Удалить свою реакцию с сообщения
+        /// Удалить свою реакцию с сообщения.
         /// </summary>
         [HttpDelete("{messageId:guid}")]
         [EndpointName("DeleteReaction")]
         [EndpointSummary("Удалить свою реакцию с сообщения")]
         [EndpointDescription("Удаляет реакцию текущего авторизованного пользователя с указанного сообщения.")]
-        [ProducesResponseType(typeof(DeleteReactionSuccessResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> DeleteReactionAsync(
             [Description("Идентификатор сообщения (GUID)")] Guid messageId,
-            CancellationToken cancellationToken = default)
+            CancellationToken ct = default)
         {
             try
             {
-                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
-                if (error != null)
-                    return error;
+                var user = await User.GetCurrentUserAsync(_userService);
 
-                if (!await _reactionService.MessageExistsAsync(messageId, cancellationToken))
+                if (!await _reactionService.MessageExistsAsync(messageId, ct))
                 {
-                    return NotFound(new ErrorResponse
+                    return NotFound(new
                     {
                         IsSuccess = false,
                         Error = "Сообщение не найдено"
                     });
                 }
 
-                await _reactionService.DeleteReactionAsync(messageId, user!.UserId, cancellationToken);
+                await _reactionService.DeleteReactionAsync(messageId, user.UserId, ct);
 
-                var chatId = await _reactionService.GetChatIdByMessageIdAsync(messageId, cancellationToken);
+                var chatId = await _reactionService.GetChatIdByMessageIdAsync(messageId, ct);
                 if (chatId.HasValue)
                 {
                     await _hubContext.Clients.Group(chatId.Value.ToString())
                         .SendAsync("ReactionUpdated", new
                         {
-                            messageId,
-                            chatId = chatId.Value,
-                            userId = user.UserId,
-                            userName = $"{user.FirstName} {user.LastName}".Trim(),
-                            reactionType = (string?)null,
-                            action = "remove"
-                        }, cancellationToken);
+                            MessageId = messageId,
+                            ChatId = chatId.Value,
+                            UserId = user.UserId,
+                            UserName = $"{user.FirstName} {user.LastName}".Trim(),
+                            ReactionType = (string?)null,
+                            Action = "remove"
+                        }, ct);
                 }
 
-                return Ok(new DeleteReactionSuccessResponse
+                return Ok(new
                 {
                     IsSuccess = true,
                     Message = "Реакция успешно удалена"
                 });
             }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Ошибка авторизации при удалении реакции");
+                return Unauthorized(new
+                {
+                    IsSuccess = false,
+                    Error = ex.Message
+                });
+            }
+            catch (KeyNotFoundException)
+            {
+                return NotFound(new
+                {
+                    IsSuccess = false,
+                    Error = "Сообщение или реакция не найдены"
+                });
+            }
             catch (Exception ex)
             {
-                return StatusCode(500, new ErrorResponse
+                _logger.LogError(ex, "Ошибка при удалении реакции с сообщения {MessageId}", messageId);
+                return StatusCode(StatusCodes.Status500InternalServerError, new
                 {
                     IsSuccess = false,
                     Error = ex.Message
