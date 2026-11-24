@@ -1,5 +1,6 @@
 /**
- * Показывает ссылку #nav-admin-link, если GET /admin/me вернул isAdmin=true.
+ * Показывает ссылку #nav-admin-link, если GET /admin/me вернул isAdmin=true
+ * в ApiResponse.data (camelCase).
  */
 (function () {
     const link = document.getElementById('nav-admin-link');
@@ -13,7 +14,7 @@
     try { t = t || localStorage.getItem('token') || ''; } catch (_) {}
     t = String(t).replace(/^Bearer\s+/i, '');
 
-    const headers = t ? { 'Authorization': 'Bearer ' + t } : {};
+    const headers = t ? { 'Authorization': 'Bearer ' + t, 'Accept': 'application/json' } : { 'Accept': 'application/json' };
 
     fetch(API + '/admin/me', { headers, credentials: 'include' })
         .then(function (r) {
@@ -21,7 +22,10 @@
             return r.json();
         })
         .then(function (json) {
-            if (json && (json.isAdmin === true || json.IsAdmin === true)) {
+            if (!json) return;
+            const data = json.data !== undefined ? json.data : json;
+            const isAdmin = data && (data.isAdmin === true || data.IsAdmin === true);
+            if (isAdmin) {
                 link.classList.remove('hidden');
             }
         })

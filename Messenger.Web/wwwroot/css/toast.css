@@ -1,0 +1,120 @@
+.messenger-toast-root {
+    position: fixed;
+    z-index: 99999;
+    top: 16px;
+    right: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-width: min(420px, calc(100vw - 32px));
+    pointer-events: none;
+}
+
+.messenger-toast {
+    pointer-events: auto;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.18);
+    background: #fff;
+    color: #0f172a;
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    opacity: 0;
+    transform: translateY(-8px);
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.messenger-toast--visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.messenger-toast--hide {
+    opacity: 0;
+    transform: translateY(-8px);
+}
+
+.messenger-toast__text {
+    flex: 1;
+    word-break: break-word;
+}
+
+.messenger-toast__close {
+    flex-shrink: 0;
+    border: none;
+    background: transparent;
+    color: inherit;
+    opacity: 0.55;
+    cursor: pointer;
+    font-size: 18px;
+    line-height: 1;
+    padding: 0 2px;
+}
+
+.messenger-toast__close:hover {
+    opacity: 1;
+}
+
+.messenger-toast--error {
+    background: #fef2f2;
+    border-color: #fecaca;
+    color: #991b1b;
+}
+
+.messenger-toast--warning {
+    background: #fffbeb;
+    border-color: #fde68a;
+    color: #92400e;
+}
+
+.messenger-toast--success {
+    background: #ecfdf5;
+    border-color: #a7f3d0;
+    color: #065f46;
+}
+
+.messenger-toast--info {
+    background: #eff6ff;
+    border-color: #bfdbfe;
+    color: #1e40af;
+}
+
+.dark .messenger-toast,
+html.dark .messenger-toast {
+    background: #1e293b;
+    color: #e2e8f0;
+    border-color: rgba(148, 163, 184, 0.25);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+.dark .messenger-toast--error,
+html.dark .messenger-toast--error {
+    background: rgba(127, 29, 29, 0.45);
+    border-color: rgba(248, 113, 113, 0.35);
+    color: #fecaca;
+}
+
+.dark .messenger-toast--warning,
+html.dark .messenger-toast--warning {
+    background: rgba(120, 53, 15, 0.4);
+    border-color: rgba(251, 191, 36, 0.35);
+    color: #fde68a;
+}
+
+.dark .messenger-toast--success,
+html.dark .messenger-toast--success {
+    background: rgba(6, 78, 59, 0.4);
+    border-color: rgba(52, 211, 153, 0.35);
+    color: #a7f3d0;
+}
+
+.dark .messenger-toast--info,
+html.dark .messenger-toast--info {
+    background: rgba(30, 58, 138, 0.4);
+    border-color: rgba(96, 165, 250, 0.35);
+    color: #bfdbfe;
+}

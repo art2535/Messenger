@@ -21,6 +21,26 @@
         return res;
     }
 
+    function parseApiResponse(res, json) {
+        const ok = res.ok && (json == null || json.isSuccess !== false);
+        const data = json && (json.data !== undefined ? json.data : json);
+        const error = (json && (json.error || json.message)) || (!ok ? ('HTTP ' + res.status) : null);
+        const errorCode = json && json.errorCode;
+        return { ok, data, error, errorCode, message: json && json.message, meta: json && json.meta, json };
+    }
+
+    function notifyApiError(parsed) {
+        const t = window.MessengerToast;
+        const msg = (parsed && parsed.error) || 'Ошибка запроса';
+        if (parsed && parsed.errorCode === 'RATE_LIMIT_EXCEEDED') {
+            if (t) t.warning(msg); else console.warn(msg);
+        } else if (t) {
+            t.error(msg);
+        } else {
+            console.error(msg);
+        }
+    }
+
     function readCache() {
         try {
             const raw = localStorage.getItem(CACHE_KEY);
@@ -107,14 +127,19 @@
         const cached = readCache();
         if (cached) applyToDocument(cached);
         try {
-            const res = await apiFetch('/api/v1/account-settings');
-            if (!res.ok) return cached || defaults();
-            const json = await res.json();
-            const data = normalize(json.data || json.Data || json);
+            const res = await apiFetch('/account-settings');
+            const json = await res.json().catch(() => ({}));
+            const parsed = parseApiResponse(res, json);
+            if (!parsed.ok) {
+                if (res.status !== 401) notifyApiError(parsed);
+                return cached || defaults();
+            }
+            const data = normalize(parsed.data);
             writeCache(data);
             applyToDocument(data);
             return data;
-        } catch {
+        } catch (e) {
+            if (window.MessengerToast) window.MessengerToast.warning('Нет сети: показаны сохранённые настройки');
             return cached || defaults();
         }
     }
@@ -142,18 +167,23 @@
                 readReceipts: current.readReceipts,
                 idleLogout: current.idleLogout
             };
-            const res = await apiFetch('/api/v1/account-settings', {
+            const res = await apiFetch('/account-settings', {
                 method: 'PUT',
                 body: JSON.stringify(body)
             });
-            if (res.ok) {
-                const json = await res.json();
-                const data = normalize(json.data || json.Data || body);
+            const json = await res.json().catch(() => ({}));
+            const parsed = parseApiResponse(res, json);
+            if (parsed.ok) {
+                const data = normalize(parsed.data ?? body);
                 writeCache(data);
                 applyToDocument(data);
+                if (window.MessengerToast) window.MessengerToast.success(parsed.message || 'Настройки сохранены');
                 return data;
             }
-        } catch { /* offline — локальный кэш уже обновлён */ }
+            notifyApiError(parsed);
+        } catch {
+            if (window.MessengerToast) window.MessengerToast.warning('Офлайн: изменения сохранены локально');
+        }
         return current;
     }
 
@@ -223,10 +253,10 @@
         if (!listEl) return;
         listEl.innerHTML = '<p class="text-sm text-gray-500 dark:text-gray-400">Загрузка…</p>';
         try {
-            const res = await apiFetch('/api/v1/login');
+            const res = await apiFetch('/login');
             if (!res.ok) throw new Error('fail');
             const json = await res.json();
-            const items = json.data || json.Data || [];
+            const items = json.data ?? [];
             if (!items.length) {
                 listEl.innerHTML = '<p class="text-sm text-gray-500">Нет записей о сессиях</p>';
                 return;
@@ -257,7 +287,7 @@
                 btn.addEventListener('click', async () => {
                     const id = btn.getAttribute('data-id');
                     if (!id || !confirm('Завершить эту сессию?')) return;
-                    const r = await apiFetch('/api/v1/login/' + id, { method: 'DELETE' });
+                    const r = await apiFetch('/login/' + id, { method: 'DELETE' });
                     if (r.ok) loadSessions(listEl);
                 });
             });

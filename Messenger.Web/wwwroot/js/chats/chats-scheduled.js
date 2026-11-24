@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  const API = () => (typeof API_BASE !== 'undefined' ? API_BASE : '/api/v1');
+  const API = () => (typeof API_BASE !== 'undefined' && API_BASE ? API_BASE : (window.API_BASE_URL || '/api/v1.0'));
 
   let scheduledCache = [];
   let sheetEl = null;
