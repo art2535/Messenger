@@ -5,6 +5,7 @@ using Messenger.Core.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel;
+using Messenger.Core.Responses;
 
 namespace Messenger.API.Controllers
 {
@@ -57,53 +58,29 @@ namespace Messenger.API.Controllers
 
                 await _notificationService.CreateNotificationAsync(request.UserId, request.Text, ct);
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Message = "Уведомление успешно создано"
-                });
+                return Ok(ApiResponse.Success(message: "Уведомление успешно создано"));
             }
             catch (UnauthorizedAccessException ex)
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при создании уведомления");
-                return Unauthorized(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
             }
             catch (ArgumentException ex)
             {
-                return BadRequest(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
             }
             catch (KeyNotFoundException)
             {
-                return NotFound(new
-                {
-                    IsSuccess = false,
-                    Error = $"Пользователь с ID {request.UserId} не найден"
-                });
+                return NotFound(ApiResponse.Failure($"Пользователь с ID {request.UserId} не найден", "NOT_FOUND"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при выполнении POST /notifications");
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -124,29 +101,17 @@ namespace Messenger.API.Controllers
                 var userId = await User.GetCurrentUserIdAsync(_userService);
                 var notifications = await _notificationService.GetNotificationsAsync(userId, ct);
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Data = notifications
-                });
+                return Ok(ApiResponse.Success(notifications));
             }
             catch (UnauthorizedAccessException ex)
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при получении уведомлений");
-                return Unauthorized(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при выполнении GET /notifications");
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
     }

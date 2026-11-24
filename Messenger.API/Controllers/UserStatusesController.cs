@@ -6,6 +6,7 @@ using Messenger.Core.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel;
+using Messenger.Core.Responses;
 
 namespace Messenger.API.Controllers
 {
@@ -56,36 +57,20 @@ namespace Messenger.API.Controllers
 
                 if (status == null)
                 {
-                    return NotFound(new
-                    {
-                        IsSuccess = false,
-                        Error = "Статус пользователя не найден"
-                    });
+                    return NotFound(ApiResponse.Failure("Статус пользователя не найден", "NOT_FOUND"));
                 }
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Data = status
-                });
+                return Ok(ApiResponse.Success(status));
             }
             catch (UnauthorizedAccessException ex)
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при получении статуса пользователя");
-                return Unauthorized(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при получении статуса пользователя");
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -117,29 +102,17 @@ namespace Messenger.API.Controllers
 
                 await _userStatusService.UpdateUserStatusAsync(userStatus, ct);
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Message = "Статус пользователя обновлен"
-                });
+                return Ok(ApiResponse.Success(message: "Статус пользователя обновлен"));
             }
             catch (UnauthorizedAccessException ex)
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при обновлении статуса пользователя");
-                return Unauthorized(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при обновлении статуса пользователя");
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
     }

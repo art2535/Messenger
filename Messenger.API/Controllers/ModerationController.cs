@@ -5,6 +5,7 @@ using Messenger.Core.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel;
+using Messenger.Core.Responses;
 
 namespace Messenger.API.Controllers
 {
@@ -67,45 +68,25 @@ namespace Messenger.API.Controllers
                 var userId = await User.GetCurrentUserIdAsync(_userService);
                 var report = await _moderationService.ReportMessageAsync(userId, request, ct);
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Data = report
-                });
+                return Ok(ApiResponse.Success(report));
             }
             catch (UnauthorizedAccessException ex)
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при отправке жалобы");
-                return Unauthorized(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
             }
             catch (ArgumentException ex)
             {
-                return BadRequest(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при выполнении POST /moderation/report");
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -130,53 +111,29 @@ namespace Messenger.API.Controllers
                 var adminUserId = await EnsureAdminAsync(ct);
                 var mute = await _moderationService.MuteUserAsync(adminUserId, request, ct);
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Data = mute
-                });
+                return Ok(ApiResponse.Success(mute));
             }
             catch (UnauthorizedAccessException ex)
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при выдаче мута");
-                return Unauthorized(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (ForbiddenAccessException ex)
             {
-                return StatusCode(StatusCodes.Status403Forbidden, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status403Forbidden, ApiResponse.Failure(ex.Message, "FORBIDDEN"));
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
             }
             catch (ArgumentException ex)
             {
-                return BadRequest(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при выполнении POST /moderation/mute");
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -201,52 +158,29 @@ namespace Messenger.API.Controllers
                 var adminUserId = await EnsureAdminAsync(ct);
                 await _moderationService.UnmuteAsync(adminUserId, muteId, ct);
 
-                return Ok(new
-                {
-                    IsSuccess = true
-                });
+                return Ok(ApiResponse.Success());
             }
             catch (UnauthorizedAccessException ex)
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при снятии мута {MuteId}", muteId);
-                return Unauthorized(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (ForbiddenAccessException ex)
             {
-                return StatusCode(StatusCodes.Status403Forbidden, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status403Forbidden, ApiResponse.Failure(ex.Message, "FORBIDDEN"));
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
             }
             catch (ArgumentException ex)
             {
-                return BadRequest(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при выполнении POST /moderation/unmute/{MuteId}", muteId);
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 

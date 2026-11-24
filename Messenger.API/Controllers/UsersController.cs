@@ -8,6 +8,7 @@ using Messenger.Core.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
+using Messenger.Core.Responses;
 
 namespace Messenger.API.Controllers
 {
@@ -72,20 +73,12 @@ namespace Messenger.API.Controllers
             {
                 var user = await _userService.GetUserByExternalIdAsync(externalId);
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Data = user
-                });
+                return Ok(ApiResponse.Success(user));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при получении пользователя по externalId {ExternalId}", externalId);
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -107,11 +100,8 @@ namespace Messenger.API.Controllers
             {
                 if (string.IsNullOrWhiteSpace(query) || query.Length < 2)
                 {
-                    return Ok(new
-                    {
-                        IsSuccess = true,
-                        Data = Array.Empty<object>()
-                    });
+                    return Ok(ApiResponse.Success(Array.Empty<object>()
+                    ));
                 }
 
                 var result = await _userService.SearchUsersAsync(query.Trim(), ct);
@@ -123,20 +113,12 @@ namespace Messenger.API.Controllers
                     Avatar = u.Avatar ?? "https://static.photos/people/200x200/default"
                 });
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Data = data
-                });
+                return Ok(ApiResponse.Success(data));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при поиске пользователей по запросу {Query}", query);
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -156,20 +138,12 @@ namespace Messenger.API.Controllers
             {
                 var users = await _userService.GetAllUsersAsync(ct);
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Data = users
-                });
+                return Ok(ApiResponse.Success(users));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при получении списка всех пользователей");
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -189,20 +163,12 @@ namespace Messenger.API.Controllers
             {
                 var roles = await _userService.GetRolesAsync(ct);
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Data = roles
-                });
+                return Ok(ApiResponse.Success(roles));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при получении списка всех ролей");
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -226,29 +192,17 @@ namespace Messenger.API.Controllers
                 var currentUser = await _userService.GetUserByIdAsync(userId, ct);
                 if (currentUser == null)
                 {
-                    return NotFound(new
-                    {
-                        IsSuccess = false,
-                        Error = "Пользователь не найден"
-                    });
+                    return NotFound(ApiResponse.Failure("Пользователь не найден", "NOT_FOUND"));
                 }
 
                 var name = $"{currentUser.FirstName} {currentUser.LastName}".Trim() ?? "Удалённый пользователь";
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Data = name
-                });
+                return Ok(ApiResponse.Success(data: name));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при получении отображаемого имени пользователя {UserId}", userId);
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -272,11 +226,7 @@ namespace Messenger.API.Controllers
                 var currentUser = await _userService.GetUserByIdAsync(user.UserId, ct);
                 if (currentUser == null)
                 {
-                    return NotFound(new
-                    {
-                        IsSuccess = false,
-                        Error = "Пользователь не найден"
-                    });
+                    return NotFound(ApiResponse.Failure("Пользователь не найден", "NOT_FOUND"));
                 }
 
                 var response = new
@@ -291,29 +241,17 @@ namespace Messenger.API.Controllers
                     } : null
                 };
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Data = response
-                });
+                return Ok(ApiResponse.Success(response));
             }
             catch (UnauthorizedAccessException ex)
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при получении информации о текущем пользователе");
-                return Unauthorized(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при получении информации о текущем пользователе");
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -349,29 +287,17 @@ namespace Messenger.API.Controllers
                     DisplayName = newDisplayName
                 }, ct);
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Message = "Пользователь успешно обновлен"
-                });
+                return Ok(ApiResponse.Success(message: "Пользователь успешно обновлен"));
             }
             catch (UnauthorizedAccessException ex)
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при обновлении профиля");
-                return Unauthorized(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при обновлении профиля пользователя");
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -395,20 +321,12 @@ namespace Messenger.API.Controllers
             {
                 if (avatarFile == null || avatarFile.Length == 0)
                 {
-                    return BadRequest(new
-                    {
-                        IsSuccess = false,
-                        Error = "Файл не выбран"
-                    });
+                    return BadRequest(ApiResponse.Failure("Файл не выбран", "INVALID_REQUEST"));
                 }
 
                 if (avatarFile.Length > 2 * 1024 * 1024)
                 {
-                    return BadRequest(new
-                    {
-                        IsSuccess = false,
-                        Error = "Файл не должен превышать 2 МБ"
-                    });
+                    return BadRequest(ApiResponse.Failure("Файл не должен превышать 2 МБ", "INVALID_REQUEST"));
                 }
 
                 var user = await User.GetCurrentUserAsync(_userService);
@@ -421,38 +339,21 @@ namespace Messenger.API.Controllers
                     AvatarUrl = avatarUrl
                 }, ct);
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Message = "Аватар успешно загружен",
-                    Data = new { AvatarUrl = avatarUrl }
-                });
+                return Ok(ApiResponse.Success(new { avatarUrl }, "Аватар успешно загружен"));
             }
             catch (UnauthorizedAccessException ex)
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при загрузке аватара");
-                return Unauthorized(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (ArgumentException ex)
             {
-                return BadRequest(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при загрузке аватара");
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -476,29 +377,17 @@ namespace Messenger.API.Controllers
 
                 await _userService.AssignRoleAsync(user.UserId, roleId, ct);
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Message = "Роль успешно назначена"
-                });
+                return Ok(ApiResponse.Success(message: "Роль успешно назначена"));
             }
             catch (UnauthorizedAccessException ex)
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при назначении роли");
-                return Unauthorized(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при назначении роли {RoleId} пользователю", roleId);
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -526,29 +415,17 @@ namespace Messenger.API.Controllers
                     AvatarUrl = (string?)null
                 }, ct);
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Message = "Аватар успешно удалён"
-                });
+                return Ok(ApiResponse.Success(message: "Аватар успешно удалён"));
             }
             catch (UnauthorizedAccessException ex)
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при удалении аватара");
-                return Unauthorized(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при удалении аватара");
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
     }

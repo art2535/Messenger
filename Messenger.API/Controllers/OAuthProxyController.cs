@@ -1,6 +1,7 @@
 ﻿using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Messenger.Core.Responses;
 
 namespace Messenger.API.Controllers
 {
@@ -62,16 +63,9 @@ namespace Messenger.API.Controllers
 
                 if (string.IsNullOrWhiteSpace(responseBody))
                 {
-                    return StatusCode((int)response.StatusCode, new
-                    {
-                        IsSuccess = false,
-                        Error = "Keycloak возвратил пустое тело"
-                    });
+                    return StatusCode((int)response.StatusCode, ApiResponse.Failure("Keycloak возвратил пустое тело", "INTERNAL_ERROR"));
                 }
 
-                // Примечание: для успешного проксирования возвращается оригинальный ответ Keycloak 
-                // через ContentResult, чтобы не сломать OAuth-поток на клиенте (Scalar UI ожидает 
-                // сырой JSON с токеном, а не обёрнутый анонимный объект).
                 return new ContentResult
                 {
                     StatusCode = (int)response.StatusCode,
@@ -82,20 +76,12 @@ namespace Messenger.API.Controllers
             catch (HttpRequestException ex)
             {
                 _logger.LogError(ex, "Ошибка сети при проксировании запроса к Keycloak SSO ГУАП");
-                return StatusCode(StatusCodes.Status502BadGateway, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status502BadGateway, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при выполнении POST /oauth/token");
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
     }

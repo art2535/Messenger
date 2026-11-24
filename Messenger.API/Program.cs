@@ -8,6 +8,8 @@ using OpenTelemetry.Resources;
 using Serilog;
 using Serilog.Ui.Web.Extensions;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Messenger.API
 {
@@ -37,7 +39,19 @@ namespace Messenger.API
             });
 
             builder.EnsureSharedDevelopmentEncryptionKey();
-            builder.Services.AddControllers();
+            builder.Services.AddControllers()
+                .AddJsonOptions(options =>
+                {
+                    options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+                    options.JsonSerializerOptions.DictionaryKeyPolicy = JsonNamingPolicy.CamelCase;
+                    options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
+                });
+            builder.Services.ConfigureHttpJsonOptions(options =>
+            {
+                options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+                options.SerializerOptions.DictionaryKeyPolicy = JsonNamingPolicy.CamelCase;
+                options.SerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
+            });
             builder.Services.AddValidation();
             builder.Services.AddSignalRService(builder.Configuration);
             builder.Services.AddRedisCache(builder.Configuration);

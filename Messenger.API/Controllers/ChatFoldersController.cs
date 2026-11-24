@@ -5,6 +5,7 @@ using Messenger.Core.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel;
+using Messenger.Core.Responses;
 
 namespace Messenger.API.Controllers
 {
@@ -51,29 +52,17 @@ namespace Messenger.API.Controllers
                 var userId = await User.GetCurrentUserIdAsync(_userService);
                 var list = await _chatFolderService.GetFoldersAsync(userId, ct);
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Data = list
-                });
+                return Ok(ApiResponse.Success(list));
             }
             catch (UnauthorizedAccessException ex)
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при получении папок чатов");
-                return Unauthorized(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при выполнении GET /chat-folders");
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -99,36 +88,20 @@ namespace Messenger.API.Controllers
 
                 if (folder == null)
                 {
-                    return NotFound(new
-                    {
-                        IsSuccess = false,
-                        Error = "Папка не найдена"
-                    });
+                    return NotFound(ApiResponse.Failure("Папка не найдена", "NOT_FOUND"));
                 }
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Data = folder
-                });
+                return Ok(ApiResponse.Success(folder));
             }
             catch (UnauthorizedAccessException ex)
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при получении папки {FolderId}", folderId);
-                return Unauthorized(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при выполнении GET /chat-folders/{FolderId}", folderId);
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -152,45 +125,25 @@ namespace Messenger.API.Controllers
                 var userId = await User.GetCurrentUserIdAsync(_userService);
                 var folder = await _chatFolderService.CreateFolderAsync(userId, request, ct);
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Data = folder
-                });
+                return Ok(ApiResponse.Success(folder));
             }
             catch (UnauthorizedAccessException ex)
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при создании папки чатов");
-                return Unauthorized(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
             }
             catch (ArgumentException ex)
             {
-                return BadRequest(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при выполнении POST /chat-folders");
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -218,52 +171,28 @@ namespace Messenger.API.Controllers
 
                 if (folder == null)
                 {
-                    return NotFound(new
-                    {
-                        IsSuccess = false,
-                        Error = "Папка не найдена"
-                    });
+                    return NotFound(ApiResponse.Failure("Папка не найдена", "NOT_FOUND"));
                 }
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Data = folder
-                });
+                return Ok(ApiResponse.Success(folder));
             }
             catch (UnauthorizedAccessException ex)
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при обновлении папки {FolderId}", folderId);
-                return Unauthorized(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
             }
             catch (ArgumentException ex)
             {
-                return BadRequest(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при выполнении PUT /chat-folders/{FolderId}", folderId);
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -289,35 +218,20 @@ namespace Messenger.API.Controllers
 
                 if (!ok)
                 {
-                    return NotFound(new
-                    {
-                        IsSuccess = false,
-                        Error = "Папка не найдена"
-                    });
+                    return NotFound(ApiResponse.Failure("Папка не найдена", "NOT_FOUND"));
                 }
 
-                return Ok(new
-                {
-                    IsSuccess = true
-                });
+                return Ok(ApiResponse.Success());
             }
             catch (UnauthorizedAccessException ex)
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при удалении папки {FolderId}", folderId);
-                return Unauthorized(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при выполнении DELETE /chat-folders/{FolderId}", folderId);
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -344,35 +258,20 @@ namespace Messenger.API.Controllers
 
                 if (!ok)
                 {
-                    return NotFound(new
-                    {
-                        IsSuccess = false,
-                        Error = "Папка или чат не найдены"
-                    });
+                    return NotFound(ApiResponse.Failure("Папка или чат не найдены", "NOT_FOUND"));
                 }
 
-                return Ok(new
-                {
-                    IsSuccess = true
-                });
+                return Ok(ApiResponse.Success());
             }
             catch (UnauthorizedAccessException ex)
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при добавлении чата в папку {FolderId}", folderId);
-                return Unauthorized(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при выполнении POST /chat-folders/{FolderId}/chats", folderId);
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -399,35 +298,20 @@ namespace Messenger.API.Controllers
 
                 if (!ok)
                 {
-                    return NotFound(new
-                    {
-                        IsSuccess = false,
-                        Error = "Папка не найдена"
-                    });
+                    return NotFound(ApiResponse.Failure("Папка не найдена", "NOT_FOUND"));
                 }
 
-                return Ok(new
-                {
-                    IsSuccess = true
-                });
+                return Ok(ApiResponse.Success());
             }
             catch (UnauthorizedAccessException ex)
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при удалении чата {ChatId} из папки {FolderId}", chatId, folderId);
-                return Unauthorized(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при выполнении DELETE /chat-folders/{FolderId}/chats/{ChatId}", folderId, chatId);
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
     }

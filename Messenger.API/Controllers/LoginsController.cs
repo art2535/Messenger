@@ -3,6 +3,7 @@ using Messenger.API.Extensions;
 using Messenger.Core.DTOs.Logins;
 using Messenger.Core.Interfaces;
 using Messenger.Core.Models;
+using Messenger.Core.Responses;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel;
@@ -68,29 +69,17 @@ namespace Messenger.API.Controllers
                     })
                     .ToList();
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Data = data
-                });
+                return Ok(ApiResponse.Success(data));
             }
             catch (UnauthorizedAccessException ex)
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при получении истории входов");
-                return Unauthorized(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при выполнении GET /login");
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -112,20 +101,12 @@ namespace Messenger.API.Controllers
             {
                 var expired = await _loginService.ExpireSessionAsync(sessionKey, ct);
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Expired = expired
-                });
+                return Ok(ApiResponse.Success(new { expired }, expired ? "Сессия завершена" : "Сессия не найдена"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при выполнении POST /login/session/{SessionKey}/expire", sessionKey);
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -166,50 +147,25 @@ namespace Messenger.API.Controllers
 
                 await _loginService.AddLoginAsync(login, ct);
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Message = "Вход успешно добавлен",
-                    Data = new
-                    {
-                        LoginId = login.LoginId,
-                        TokenHash = tokenHash
-                    }
-                });
+                return Ok(ApiResponse.Success(new { loginId = login.LoginId, tokenHash }, "Вход успешно добавлен"));
             }
             catch (UnauthorizedAccessException ex)
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при регистрации входа");
-                return Unauthorized(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
             }
             catch (ArgumentException ex)
             {
-                return BadRequest(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при выполнении POST /login");
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -242,29 +198,17 @@ namespace Messenger.API.Controllers
                     await _loginService.UpdateLoginAsync(userLogout, ct);
                 }
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Message = "Выход успешно обновлен"
-                });
+                return Ok(ApiResponse.Success(message: "Выход успешно обновлен"));
             }
             catch (UnauthorizedAccessException ex)
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при выходе из системы");
-                return Unauthorized(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при выполнении PATCH /login");
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -290,36 +234,20 @@ namespace Messenger.API.Controllers
                 var ok = await _loginService.RevokeLoginAndUpdateStatusAsync(userId, loginId, ct);
                 if (!ok)
                 {
-                    return NotFound(new
-                    {
-                        IsSuccess = false,
-                        Error = "Сессия не найдена или уже завершена"
-                    });
+                    return NotFound(ApiResponse.Failure("Сессия не найдена или уже завершена", "NOT_FOUND"));
                 }
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Message = "Сессия завершена"
-                });
+                return Ok(ApiResponse.Success(message: "Сессия завершена"));
             }
             catch (UnauthorizedAccessException ex)
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при завершении сессии {LoginId}", loginId);
-                return Unauthorized(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при выполнении DELETE /login/{LoginId}", loginId);
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -343,29 +271,17 @@ namespace Messenger.API.Controllers
 
                 var revokedCount = await _loginService.RevokeOtherLoginsAsync(userId, keepLoginId, ct);
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Revoked = revokedCount
-                });
+                return Ok(ApiResponse.Success(new { revoked = revokedCount }, "Другие сессии завершены"));
             }
             catch (UnauthorizedAccessException ex)
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при завершении других сессий");
-                return Unauthorized(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при выполнении POST /login/revoke-others");
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -387,21 +303,12 @@ namespace Messenger.API.Controllers
             {
                 var active = await _loginService.IsSessionKeyActiveAsync(sessionKey, ct);
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Active = active ?? true,
-                    Known = active.HasValue
-                });
+                return Ok(ApiResponse.Success(new { active = active ?? true, known = active.HasValue }));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при выполнении GET /login/session/{SessionKey}/active", sessionKey);
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
     }

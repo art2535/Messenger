@@ -8,6 +8,7 @@ using Messenger.Core.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
+using Messenger.Core.Responses;
 
 namespace Messenger.API.Controllers
 {
@@ -72,20 +73,12 @@ namespace Messenger.API.Controllers
                         : null
                 });
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Data = data
-                });
+                return Ok(ApiResponse.Success(data));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при получении реакций для сообщения {MessageId}", messageId);
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -112,11 +105,7 @@ namespace Messenger.API.Controllers
 
                 if (request == null || string.IsNullOrWhiteSpace(request.ReactionType))
                 {
-                    return BadRequest(new
-                    {
-                        IsSuccess = false,
-                        Error = "Укажите тип реакции (ReactionType)"
-                    });
+                    return BadRequest(ApiResponse.Failure("Укажите тип реакции (ReactionType)", "INVALID_REQUEST"));
                 }
 
                 var reaction = new Reaction
@@ -144,45 +133,25 @@ namespace Messenger.API.Controllers
                         }, ct);
                 }
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Message = "Реакция добавлена"
-                });
+                return Ok(ApiResponse.Success(message: "Реакция добавлена"));
             }
             catch (UnauthorizedAccessException ex)
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при добавлении реакции");
-                return Unauthorized(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (ArgumentException ex)
             {
-                return BadRequest(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
             }
             catch (KeyNotFoundException)
             {
-                return NotFound(new
-                {
-                    IsSuccess = false,
-                    Error = "Сообщение не найдено"
-                });
+                return NotFound(ApiResponse.Failure("Сообщение не найдено", "NOT_FOUND"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при добавлении реакции к сообщению {MessageId}", messageId);
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -207,11 +176,7 @@ namespace Messenger.API.Controllers
 
                 if (!await _reactionService.MessageExistsAsync(messageId, ct))
                 {
-                    return NotFound(new
-                    {
-                        IsSuccess = false,
-                        Error = "Сообщение не найдено"
-                    });
+                    return NotFound(ApiResponse.Failure("Сообщение не найдено", "NOT_FOUND"));
                 }
 
                 await _reactionService.DeleteReactionAsync(messageId, user.UserId, ct);
@@ -231,37 +196,21 @@ namespace Messenger.API.Controllers
                         }, ct);
                 }
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Message = "Реакция успешно удалена"
-                });
+                return Ok(ApiResponse.Success(message: "Реакция успешно удалена"));
             }
             catch (UnauthorizedAccessException ex)
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при удалении реакции");
-                return Unauthorized(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (KeyNotFoundException)
             {
-                return NotFound(new
-                {
-                    IsSuccess = false,
-                    Error = "Сообщение или реакция не найдены"
-                });
+                return NotFound(ApiResponse.Failure("Сообщение или реакция не найдены", "NOT_FOUND"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при удалении реакции с сообщения {MessageId}", messageId);
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
     }

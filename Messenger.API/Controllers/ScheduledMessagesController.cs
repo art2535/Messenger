@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using System.ComponentModel;
+using Messenger.Core.Responses;
 
 namespace Messenger.API.Controllers
 {
@@ -77,36 +78,24 @@ namespace Messenger.API.Controllers
 
                 if (!scheduledAt.HasValue)
                 {
-                    return BadRequest(new
-                    {
-                        IsSuccess = false,
-                        Error = "Не указано время отправки (scheduledAt)"
-                    });
+                    return BadRequest(ApiResponse.Failure("Не указано время отправки (scheduledAt)", "INVALID_REQUEST"));
                 }
 
                 var scheduledUtc = scheduledAt.Value.UtcDateTime;
                 if (scheduledUtc <= DateTime.UtcNow.AddSeconds(30))
                 {
-                    return BadRequest(new
-                    {
-                        IsSuccess = false,
-                        Error = "Время отправки должно быть хотя бы на 30 секунд в будущем"
-                    });
+                    return BadRequest(ApiResponse.Failure("Время отправки должно быть хотя бы на 30 секунд в будущем", "INVALID_REQUEST"));
                 }
 
                 var chat = await _chatService.GetChatByIdAsync(chatId, ct);
                 if (chat == null)
                 {
-                    return NotFound(new
-                    {
-                        IsSuccess = false,
-                        Error = "Чат не найден"
-                    });
+                    return NotFound(ApiResponse.Failure("Чат не найден", "NOT_FOUND"));
                 }
 
                 if (!chat.ChatParticipants.Any(p => p.UserId == user.UserId))
                 {
-                    return Forbid();
+                    return StatusCode(StatusCodes.Status403Forbidden, ApiResponse.Failure("Доступ запрещён", "FORBIDDEN"));
                 }
 
                 const long MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -116,11 +105,7 @@ namespace Messenger.API.Controllers
                     {
                         if (file.Length > MAX_FILE_SIZE)
                         {
-                            return BadRequest(new
-                            {
-                                IsSuccess = false,
-                                Error = $"Файл '{file.FileName}' превышает 10 МБ"
-                            });
+                            return BadRequest(ApiResponse.Failure($"Файл '{file.FileName}' превышает 10 МБ", "INVALID_REQUEST"));
                         }
                     }
                 }
@@ -153,31 +138,19 @@ namespace Messenger.API.Controllers
 
                 if (string.IsNullOrWhiteSpace(messageText) && attachmentsInfo.Count == 0)
                 {
-                    return BadRequest(new
-                    {
-                        IsSuccess = false,
-                        Error = "Пустое сообщение"
-                    });
+                    return BadRequest(ApiResponse.Failure("Пустое сообщение", "INVALID_REQUEST"));
                 }
 
                 var encrypted = string.IsNullOrWhiteSpace(messageText)
                     ? null
                     : _encryption.Encrypt(messageText.Trim());
 
-                var entity = await _scheduledService.CreateAsync(
-                    chatId,
-                    user.UserId,
-                    encrypted,
-                    attachmentsInfo.Count > 0,
-                    attachmentsInfo,
-                    scheduledUtc,
-                    replyToMessageId,
-                    ct);
+                var entity = await _scheduledService.CreateAsync(chatId, user.UserId, encrypted,
+                    attachmentsInfo.Count > 0, attachmentsInfo, scheduledUtc, replyToMessageId, ct);
 
                 var senderName = $"{user.FirstName} {user.LastName}".Trim();
                 var dto = _scheduledService.ToDto(entity, messageText?.Trim(), senderName, chat.Name);
 
-                // SignalR: обновить список запланированных у отправителя
                 try
                 {
                     await _hubContext.Clients.Group($"User_{user.UserId}")
@@ -188,37 +161,21 @@ namespace Messenger.API.Controllers
                     _logger.LogWarning(ex, "SignalR ScheduledMessageCreated failed");
                 }
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Data = dto
-                });
+                return Ok(ApiResponse.Success(dto));
             }
             catch (UnauthorizedAccessException ex)
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при планировании сообщения");
-                return Unauthorized(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (ArgumentException ex)
             {
-                return BadRequest(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Schedule message failed for chat {ChatId}", chatId);
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -247,29 +204,17 @@ namespace Messenger.API.Controllers
                     return _scheduledService.ToDto(e, plain, null, e.Chat?.Name);
                 }).ToList();
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Data = dtos
-                });
+                return Ok(ApiResponse.Success(dtos));
             }
             catch (UnauthorizedAccessException ex)
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при получении списка запланированных сообщений");
-                return Unauthorized(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при получении списка запланированных сообщений пользователя");
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -300,29 +245,17 @@ namespace Messenger.API.Controllers
                     return _scheduledService.ToDto(e, plain);
                 }).ToList();
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Data = dtos
-                });
+                return Ok(ApiResponse.Success(dtos));
             }
             catch (UnauthorizedAccessException ex)
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при получении запланированных сообщений чата {ChatId}", chatId);
-                return Unauthorized(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при получении запланированных сообщений чата {ChatId}", chatId);
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -364,11 +297,7 @@ namespace Messenger.API.Controllers
 
                 if (entity == null)
                 {
-                    return NotFound(new
-                    {
-                        IsSuccess = false,
-                        Error = "Запланированное сообщение не найдено"
-                    });
+                    return NotFound(ApiResponse.Failure("Запланированное сообщение не найдено", "NOT_FOUND"));
                 }
 
                 var plain = request.MessageText?.Trim()
@@ -389,45 +318,25 @@ namespace Messenger.API.Controllers
                     _logger.LogWarning(ex, "SignalR ScheduledMessageUpdated failed");
                 }
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Data = dto
-                });
+                return Ok(ApiResponse.Success(dto));
             }
             catch (UnauthorizedAccessException ex)
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при обновлении запланированного сообщения {Id}", scheduledMessageId);
-                return Unauthorized(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (ArgumentException ex)
             {
-                return BadRequest(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Update scheduled {Id} failed", scheduledMessageId);
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -454,11 +363,7 @@ namespace Messenger.API.Controllers
                 var ok = await _scheduledService.CancelAsync(scheduledMessageId, user.UserId, ct);
                 if (!ok)
                 {
-                    return NotFound(new
-                    {
-                        IsSuccess = false,
-                        Error = "Сообщение не найдено или уже отправлено/отменено"
-                    });
+                    return NotFound(ApiResponse.Failure("Сообщение не найдено или уже отправлено/отменено", "NOT_FOUND"));
                 }
 
                 try
@@ -471,29 +376,17 @@ namespace Messenger.API.Controllers
                     _logger.LogWarning(ex, "SignalR ScheduledMessageCancelled failed");
                 }
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Message = "Запланированное сообщение успешно отменено"
-                });
+                return Ok(ApiResponse.Success(message: "Запланированное сообщение успешно отменено"));
             }
             catch (UnauthorizedAccessException ex)
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при отмене запланированного сообщения {Id}", scheduledMessageId);
-                return Unauthorized(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Cancel scheduled {Id} failed", scheduledMessageId);
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
     }

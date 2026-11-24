@@ -15,6 +15,7 @@ namespace Messenger.API.Extensions
             {
                 return user.FindFirst("sub")?.Value
                     ?? user.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                    ?? user.FindFirst("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier")?.Value
                     ?? throw new UnauthorizedAccessException("Не удалось определить пользователя");
             }
 

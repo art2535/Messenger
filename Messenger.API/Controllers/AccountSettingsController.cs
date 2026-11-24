@@ -2,6 +2,7 @@ using Asp.Versioning;
 using Messenger.API.Extensions;
 using Messenger.Core.DTOs.AccountSettings;
 using Messenger.Core.Interfaces;
+using Messenger.Core.Responses;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel;
@@ -41,9 +42,9 @@ namespace Messenger.API.Controllers
         [EndpointName("GetAccountSettings")]
         [EndpointSummary("Получить настройки текущего пользователя")]
         [EndpointDescription("Возвращает текущие настройки аккаунта авторизованного пользователя: уведомления, внешний вид и конфиденциальность.")]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        [ProducesResponseType(typeof(ApiResponse<AccountSettingsDto>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> GetAccountSettingsAsync(CancellationToken ct)
         {
             try
@@ -51,29 +52,18 @@ namespace Messenger.API.Controllers
                 var userId = await User.GetCurrentUserIdAsync(_userService);
                 var settings = await _accountSettingsService.GetByUserIdAsync(userId, ct);
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Data = settings
-                });
+                return Ok(ApiResponse.Success(settings, "Настройки аккаунта получены"));
             }
             catch (UnauthorizedAccessException ex)
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при получении настроек аккаунта");
-                return Unauthorized(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при получении настроек аккаунта");
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError,
+                    ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -84,10 +74,10 @@ namespace Messenger.API.Controllers
         [EndpointName("UpdateAccountSettings")]
         [EndpointSummary("Обновить настройки текущего пользователя")]
         [EndpointDescription("Обновляет настройки аккаунта авторизованного пользователя. Можно передать только те поля, которые нужно изменить.")]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        [ProducesResponseType(typeof(ApiResponse<AccountSettingsDto>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> PutUpdateAccountSettingsAsync(
             [FromBody, Description("Новые значения настроек аккаунта")] UpdateAccountSettingsRequest request,
             CancellationToken ct)
@@ -97,45 +87,26 @@ namespace Messenger.API.Controllers
                 var userId = await User.GetCurrentUserIdAsync(_userService);
                 var settings = await _accountSettingsService.UpdateAsync(userId, request, ct);
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Data = settings
-                });
+                return Ok(ApiResponse.Success(settings, "Настройки аккаунта обновлены"));
             }
             catch (UnauthorizedAccessException ex)
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при обновлении настроек аккаунта");
-                return Unauthorized(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
             }
             catch (ArgumentException ex)
             {
-                return BadRequest(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при обновлении настроек аккаунта");
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError,
+                    ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
     }

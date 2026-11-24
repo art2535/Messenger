@@ -5,6 +5,7 @@ using Messenger.Core.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel;
+using Messenger.Core.Responses;
 
 namespace Messenger.API.Controllers
 {
@@ -50,28 +51,16 @@ namespace Messenger.API.Controllers
             {
                 var attachments = await _attachmentService.GetAttachmentsByMessageIdAsync(messageId, ct);
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Data = attachments
-                });
+                return Ok(ApiResponse.Success(attachments));
             }
             catch (InvalidOperationException ex)
             {
-                return NotFound(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return NotFound(ApiResponse.Failure(ex.Message, "NOT_FOUND"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при получении вложений для сообщения {MessageId}", messageId);
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -108,36 +97,20 @@ namespace Messenger.API.Controllers
 
                 await _attachmentService.AddAttachmentAsync(attachment, ct);
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Message = "Вложение успешно добавлено"
-                });
+                return Ok(ApiResponse.Success(message: "Вложение успешно добавлено"));
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
             }
             catch (ArgumentException ex)
             {
-                return BadRequest(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при добавлении вложения к сообщению {MessageId}", messageId);
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
     }

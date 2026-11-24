@@ -1,6 +1,6 @@
 ﻿using Asp.Versioning;
-using Messenger.API.Responses;
 using Messenger.Core.Interfaces;
+using Messenger.Core.Responses;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel;
 
@@ -56,37 +56,20 @@ namespace Messenger.API.Controllers
                 var fullName = string.Join(" ", new[] { user.FirstName, user.LastName }
                     .Where(s => !string.IsNullOrEmpty(s)));
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    UserId = user!.UserId,
-                    FullName = fullName
-                });
+                return Ok(ApiResponse.Success(new { userId = user!.UserId, fullName }, "Авторизация успешна"));
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
             }
             catch (ArgumentException ex)
             {
-                return BadRequest(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при выполнении POST /auth/external/callback");
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
     }

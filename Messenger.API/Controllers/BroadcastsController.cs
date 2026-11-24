@@ -5,6 +5,7 @@ using Messenger.Core.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel;
+using Messenger.Core.Responses;
 
 namespace Messenger.API.Controllers
 {
@@ -53,55 +54,32 @@ namespace Messenger.API.Controllers
             {
                 if (request == null)
                 {
-                    return BadRequest(new
-                    {
-                        IsSuccess = false,
-                        Error = "Тело запроса отсутствует"
-                    });
+                    return BadRequest(ApiResponse.Failure("Тело запроса отсутствует", "INVALID_REQUEST"));
                 }
 
                 var senderId = await User.GetCurrentUserIdAsync(_userService);
                 var created = await _broadcastService.CreateBroadcastAsync(request, senderId);
 
-                return Created($"/api/broadcasts/{created.BroadcastId}", new
-                {
-                    IsSuccess = true,
-                    Data = created
-                });
+                return Ok(ApiResponse.Success(created));
             }
             catch (UnauthorizedAccessException ex)
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при создании рассылки");
-                return Unauthorized(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
             }
             catch (ArgumentException ex)
             {
-                return BadRequest(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при выполнении POST /broadcasts/create");
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = "Внутренняя ошибка при создании рассылки"
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, 
+                    ApiResponse.Failure("Внутренняя ошибка при создании рассылки", "INTERNAL_ERROR"));
             }
         }
 
@@ -130,36 +108,20 @@ namespace Messenger.API.Controllers
 
                 if (summary == null)
                 {
-                    return NotFound(new
-                    {
-                        IsSuccess = false,
-                        Error = "Рассылка не найдена"
-                    });
+                    return NotFound(ApiResponse.Failure("Рассылка не найдена", "NOT_FOUND"));
                 }
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Data = summary
-                });
+                return Ok(ApiResponse.Success(summary));
             }
             catch (UnauthorizedAccessException ex)
             {
                 _logger.LogWarning(ex, "Ошибка доступа при получении статуса рассылки {BroadcastId}", id);
-                return StatusCode(StatusCodes.Status403Forbidden, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status403Forbidden, ApiResponse.Failure(ex.Message, "FORBIDDEN"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при выполнении GET /broadcasts/{BroadcastId}", id);
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = "Ошибка при получении статуса рассылки"
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure("Ошибка при получении статуса рассылки", "INTERNAL_ERROR"));
             }
         }
 
@@ -183,37 +145,22 @@ namespace Messenger.API.Controllers
                 var userId = await User.GetCurrentUserIdAsync(_userService);
                 var result = await _broadcastService.MarkAsReadAsync(id, userId);
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Data = result
-                });
+                return Ok(ApiResponse.Success(result
+                ));
             }
             catch (UnauthorizedAccessException ex)
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при отметке прочтения рассылки {BroadcastId}", id);
-                return Unauthorized(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (KeyNotFoundException ex)
             {
-                return NotFound(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return NotFound(ApiResponse.Failure(ex.Message, "NOT_FOUND"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при выполнении POST /broadcasts/{BroadcastId}/read", id);
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = "Ошибка при отметке прочтения"
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure("Ошибка при отметке прочтения", "INTERNAL_ERROR"));
             }
         }
 
@@ -236,29 +183,17 @@ namespace Messenger.API.Controllers
                 var userId = await User.GetCurrentUserIdAsync(_userService);
                 var broadcasts = await _broadcastService.GetMyBroadcastsAsync(userId, unreadOnly);
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Data = broadcasts
-                });
+                return Ok(ApiResponse.Success(broadcasts));
             }
             catch (UnauthorizedAccessException ex)
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при получении списка рассылок");
-                return Unauthorized(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при выполнении GET /broadcasts/my");
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = "Ошибка при получении ваших рассылок"
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure("Ошибка при получении ваших рассылок", "INTERNAL_ERROR"));
             }
         }
     }

@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel;
 using WebPush;
+using Messenger.Core.Responses;
 
 namespace Messenger.API.Controllers
 {
@@ -65,11 +66,7 @@ namespace Messenger.API.Controllers
             {
                 if (subscriptionDto == null || string.IsNullOrEmpty(subscriptionDto.Endpoint))
                 {
-                    return BadRequest(new
-                    {
-                        IsSuccess = false,
-                        Error = "Некорректные данные подписки"
-                    });
+                    return BadRequest(ApiResponse.Failure("Некорректные данные подписки", "INVALID_REQUEST"));
                 }
 
                 var userId = await User.GetCurrentUserIdAsync(_userService);
@@ -77,11 +74,7 @@ namespace Messenger.API.Controllers
                 if (string.IsNullOrEmpty(subscriptionDto.P256dh) || string.IsNullOrEmpty(subscriptionDto.Auth))
                 {
                     _logger.LogWarning("Подписка от пользователя {UserId} пришла без p256dh/auth ключей", userId);
-                    return BadRequest(new
-                    {
-                        IsSuccess = false,
-                        Error = "Отсутствуют ключи шифрования p256dh или auth"
-                    });
+                    return BadRequest(ApiResponse.Failure("Отсутствуют ключи шифрования p256dh или auth", "INVALID_REQUEST"));
                 }
 
                 var subscription = new Core.Models.PushSubscription
@@ -101,29 +94,17 @@ namespace Messenger.API.Controllers
                 _logger.LogInformation("Push-подписка успешно сохранена для пользователя {UserId}. P256dh length: {Len}",
                     userId, subscription.P256dh.Length);
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Message = "Подписка успешно сохранена"
-                });
+                return Ok(ApiResponse.Success(message: "Подписка успешно сохранена"));
             }
             catch (UnauthorizedAccessException ex)
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при подписке на push-уведомления");
-                return Unauthorized(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при сохранении push-подписки");
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -146,29 +127,17 @@ namespace Messenger.API.Controllers
             {
                 if (string.IsNullOrEmpty(endpoint))
                 {
-                    return BadRequest(new
-                    {
-                        IsSuccess = false,
-                        Error = "Endpoint не может быть пустым"
-                    });
+                    return BadRequest(ApiResponse.Failure("Endpoint не может быть пустым", "INVALID_REQUEST"));
                 }
 
                 await _subscriptionService.RemoveByEndpointAsync(endpoint, ct);
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Message = "Подписка удалена"
-                });
+                return Ok(ApiResponse.Success(message: "Подписка удалена"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при удалении push-подписки");
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -190,20 +159,12 @@ namespace Messenger.API.Controllers
             {
                 await _notificationService.MarkAsReadAsync(notificationId, ct);
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Message = "Уведомление помечено как прочитанное"
-                });
+                return Ok(ApiResponse.Success(message: "Уведомление помечено как прочитанное"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при пометке уведомления {NotificationId} как прочитанного", notificationId);
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -232,29 +193,17 @@ namespace Messenger.API.Controllers
                     NotifyMentions = settings.NotifyMentions
                 };
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Data = result
-                });
+                return Ok(ApiResponse.Success(result));
             }
             catch (UnauthorizedAccessException ex)
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при получении настроек push-уведомлений");
-                return Unauthorized(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при получении настроек push-уведомлений");
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -279,29 +228,17 @@ namespace Messenger.API.Controllers
 
                 _logger.LogInformation("Настройки push-уведомлений обновлены для пользователя {UserId}", userId);
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Message = "Настройки push-уведомлений успешно сохранены"
-                });
+                return Ok(ApiResponse.Success(message: "Настройки push-уведомлений успешно сохранены"));
             }
             catch (UnauthorizedAccessException ex)
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при сохранении настроек push-уведомлений");
-                return Unauthorized(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при сохранении настроек push-уведомлений");
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -324,11 +261,7 @@ namespace Messenger.API.Controllers
             {
                 if (request == null || request.ChatId == Guid.Empty)
                 {
-                    return BadRequest(new
-                    {
-                        IsSuccess = false,
-                        Error = "Некорректные данные запроса"
-                    });
+                    return BadRequest(ApiResponse.Failure("Некорректные данные запроса", "INVALID_REQUEST"));
                 }
 
                 var senderId = await User.GetCurrentUserIdAsync(_userService);
@@ -342,37 +275,21 @@ namespace Messenger.API.Controllers
                     request.IsMention,
                     ct);
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    Message = "Push-уведомления обработаны"
-                });
+                return Ok(ApiResponse.Success(message: "Push-уведомления обработаны"));
             }
             catch (UnauthorizedAccessException ex)
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при отправке push-уведомлений");
-                return Unauthorized(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (ArgumentException ex)
             {
-                return BadRequest(new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при обработке push-уведомлений для чата {ChatId}", request?.ChatId);
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -387,11 +304,7 @@ namespace Messenger.API.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         public IActionResult GetVapidPublicKeyAsync()
         {
-            return Ok(new
-            {
-                IsSuccess = true,
-                Data = _vapidDetails.PublicKey
-            });
+            return Ok(ApiResponse.Success(data: _vapidDetails.PublicKey));
         }
     }
 }
