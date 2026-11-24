@@ -53,8 +53,11 @@ namespace Messenger.Web.Pages
             var api = _api;
             var hub = _hubContext;
             var logger = _logger;
-            var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+            var userIdStr = HttpContext.Session.GetString("USER_ID")
+                         ?? User.FindFirst("user_id")?.Value
+                         ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value
                          ?? User.FindFirst("sub")?.Value;
+
             var tokenRefresher = _tokenRefresher;
             _ = Task.Run(async () =>
             {

@@ -1,5 +1,6 @@
-﻿using Messenger.Core.Models;
+﻿using Messenger.Core.DTOs.Users;
 using Messenger.Web.Helpers;
+using Messenger.Core.Responses;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -76,13 +77,36 @@ namespace Messenger.Web.Pages.Inside.Chats
             {
                 var accessToken = await HttpContext.GetTokenAsync("access_token");
 
-                var externalId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (!string.IsNullOrEmpty(accessToken))
+                {
+                    try
+                    {
+                        var response = await _api.GetAsync<ApiResponse<UserProfileDto>>("users/info", accessToken);
+                        if (response?.IsSuccess == true && response.Data != null
+                            && !string.IsNullOrWhiteSpace(response.Data.UserId)
+                            && response.Data.UserId != Guid.Empty.ToString())
+                        {
+                            UserId = response.Data.UserId;
+                            if (string.IsNullOrWhiteSpace(UserName))
+                            {
+                                var full = $"{response.Data.FirstName} {response.Data.LastName}".Trim();
+                                if (!string.IsNullOrWhiteSpace(full))
+                                    UserName = full;
+                            }
+                        }
+                    }
+                    catch
+                    {
+                        // не блокируем страницу
+                    }
+                }
 
-                var user = await _api.GetAsync<User>($"users/{Uri.EscapeDataString(externalId ?? "")}", accessToken);
+                if (string.IsNullOrWhiteSpace(UserId))
+                    UserId = string.Empty;
 
-                UserId = user?.UserId.ToString() ?? externalId;
-
-                UserName = User.FindFirstValue("name") ?? User.FindFirstValue("preferred_username");
+                UserName = User.FindFirstValue("name")
+                        ?? User.FindFirstValue("preferred_username")
+                        ?? User.Identity?.Name;
 
                 UserRole = GetDisplayRole(User);
 

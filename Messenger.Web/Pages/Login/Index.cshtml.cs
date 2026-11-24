@@ -127,7 +127,8 @@ namespace Messenger.Web.Pages.Login
 
         public async Task<IActionResult> OnGetCallbackAsync()
         {
-            var externalId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var externalId = User.FindFirstValue("sub")
+                          ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
             if (string.IsNullOrEmpty(externalId))
             {
