@@ -37,7 +37,7 @@ namespace Messenger.Infrastructure.Services
             var totalUsers = await _context.Users.AsNoTracking().CountAsync(ct);
 
             var onlineUsers = await _context.UserStatuses.AsNoTracking()
-                .CountAsync(s => s.Online || (s.LastActivity != null && s.LastActivity >= onlineThreshold), ct);
+                .CountAsync(s => s.Online && (s.LastActivity == null || s.LastActivity >= onlineThreshold), ct);
 
             var msg24 = await _context.Messages.AsNoTracking().CountAsync(m => m.SendTime >= d1, ct);
             var msg7 = await _context.Messages.AsNoTracking().CountAsync(m => m.SendTime >= d7, ct);
