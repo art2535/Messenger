@@ -40,17 +40,6 @@
 
         <div id="sessions-list" class="mb-2"></div>
 
-        <div class="settings-row border-0">
-            <div class="settings-row-text">
-                <span class="settings-row-label">Автовыход при бездействии</span>
-                <span class="settings-row-hint">Сессия закрывается после долгого простоя</span>
-            </div>
-            <label class="toggle">
-                <input type="checkbox" class="toggle-input pref-toggle" data-pref="security.idleLogout" checked>
-                <span class="toggle-track"></span>
-            </label>
-        </div>
-
         <form asp-page="/Logout" method="post" data-logout="true" class="mt-2">
             <button type="submit"
                     class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm font-medium hover:bg-red-100 dark:hover:bg-red-900/40 transition active:scale-[0.98]">
@@ -108,7 +97,7 @@
 </div>
 
 @section Scripts {
-    <script src="~/js/settings-prefs.js" asp-append-version="true"></script>
+    <script src="~/js/settings/settings-prefs.js" asp-append-version="true"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             if (typeof feather !== 'undefined') feather.replace();

@@ -126,15 +126,48 @@ async function apiFetch(endpoint, options = {}, retried = false) {
         return apiFetch(endpoint, options, true);
     }
 
+    let json = null;
+    try { json = await response.json(); } catch (_) { json = null; }
+
     if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || ('Ошибка: ' + response.statusText));
+        const err = (json && (json.error || json.message)) || ('Ошибка: ' + response.statusText);
+        const e = new Error(err);
+        e.status = response.status;
+        e.errorCode = json && json.errorCode;
+        e.payload = json;
+        throw e;
     }
-    return response.json();
+
+    // ApiResponse<T>: отдаём data, если контракт распознан
+    if (json && typeof json === 'object' && ('isSuccess' in json || 'data' in json)) {
+        if (json.isSuccess === false) {
+            const e = new Error(json.error || json.message || 'Ошибка API');
+            e.errorCode = json.errorCode;
+            e.payload = json;
+            throw e;
+        }
+        if ('data' in json) return json.data;
+    }
+    return json;
 }
 
-function showToast() {
-    /* тосты отключены */
+function showToast(message, type = 'info') {
+    if (!message) return;
+    const t = window.MessengerToast;
+    if (t && typeof t.show === 'function') {
+        const map = { error: 'error', success: 'success', warning: 'warning', info: 'info' };
+        const kind = map[type] || 'info';
+        if (typeof t[kind] === 'function') t[kind](message);
+        else t.show(message, kind);
+        return;
+    }
+    const root = document.getElementById('toast-container') || document.body;
+    const el = document.createElement('div');
+    el.className = 'messenger-toast messenger-toast--' + (type || 'info') + ' messenger-toast--visible';
+    el.textContent = String(message);
+    el.style.cssText = 'position:fixed;top:16px;right:16px;z-index:99999;padding:12px 14px;border-radius:12px;background:#1e293b;color:#fff;max-width:360px;';
+    root.appendChild(el);
+    setTimeout(() => el.remove(), 4000);
 }
 
 
@@ -458,9 +491,11 @@ async function subscribeToPush() {
         }
 
         const registration = await ensureServiceWorker();
-        const keyRes = await fetch(`${getApiUrl()}/push/vapid-public-key`);
+        const keyRes = await fetch(`${getApiUrl()}/push/vapid-public-key`, {
+            headers: { 'Accept': 'application/json, text/plain, */*' }
+        });
         if (!keyRes.ok) throw new Error('Не удалось получить VAPID-ключ');
-        const vapidPublicKey = (await keyRes.text()).trim();
+        const vapidPublicKey = await extractVapidPublicKey(keyRes);
         if (!vapidPublicKey) throw new Error('Пустой VAPID-ключ');
 
         let subscription = await registration.pushManager.getSubscription();
@@ -568,10 +603,49 @@ async function unsubscribeFromPush() {
     }
 }
 
+async function extractVapidPublicKey(response) {
+    const ct = (response.headers.get('content-type') || '').toLowerCase();
+    if (ct.includes('application/json')) {
+        const json = await response.json();
+        const key = (json && (json.data ?? json.Data ?? json.publicKey ?? json.key)) || '';
+        return String(key).trim().replace(/^"|"$/g, '');
+    }
+    const text = (await response.text()).trim();
+    // Иногда приходит JSON без content-type
+    if (text.startsWith('{')) {
+        try {
+            const json = JSON.parse(text);
+            const key = json.data ?? json.Data ?? json.publicKey ?? json.key ?? '';
+            return String(key).trim().replace(/^"|"$/g, '');
+        } catch (_) { /* plain */ }
+    }
+    return text.replace(/^"|"$/g, '');
+}
+
 function urlBase64ToUint8Array(base64String) {
-    const padding = '='.repeat((4 - base64String.length % 4) % 4);
-    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-    const rawData = window.atob(base64);
+    let s = String(base64String || '').trim().replace(/^"|"$/g, '');
+    // если случайно пришёл весь JSON
+    if (s.startsWith('{')) {
+        try {
+            const json = JSON.parse(s);
+            s = String(json.data ?? json.Data ?? json.publicKey ?? json.key ?? '').trim();
+        } catch (e) {
+            throw new Error('Некорректный VAPID-ключ');
+        }
+    }
+    // убрать пробелы/переносы
+    s = s.replace(/\s+/g, '');
+    if (!s || /[^A-Za-z0-9\-_+=\/]/.test(s)) {
+        throw new Error('VAPID-ключ имеет неверный формат');
+    }
+    const padding = '='.repeat((4 - s.length % 4) % 4);
+    const base64 = (s + padding).replace(/-/g, '+').replace(/_/g, '/');
+    let rawData;
+    try {
+        rawData = window.atob(base64);
+    } catch (e) {
+        throw new Error('Не удалось декодировать VAPID-ключ');
+    }
     const outputArray = new Uint8Array(rawData.length);
     for (let i = 0; i < rawData.length; ++i) {
         outputArray[i] = rawData.charCodeAt(i);
@@ -590,7 +664,7 @@ async function loadPushSettings() {
         if (!settings || settings.pushEnabled === undefined) {
             try {
                 const full = await apiFetch('/account-settings');
-                settings = full?.data || full?.Data || full || {};
+                settings = full || {};
             } catch (_) {
                 settings = settings || {};
             }

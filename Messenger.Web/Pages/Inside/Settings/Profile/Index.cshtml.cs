@@ -1,5 +1,6 @@
 ﻿using Messenger.Core.DTOs.Users;
 using Messenger.Web.Helpers;
+using Messenger.Core.Responses;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Net.Http.Headers;

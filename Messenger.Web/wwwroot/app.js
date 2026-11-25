@@ -87,10 +87,8 @@ async function initializePushNotifications(registration) {
                 headers: { 'Authorization': token }
             });
             if (settingsRes.ok) {
-                const settingsJson = await settingsRes.json();
-                // API: { isSuccess, data } или плоский объект
-                const settings = settingsJson?.data ?? settingsJson?.Data ?? settingsJson;
-                if (settings && (settings.pushEnabled === false || settings.PushEnabled === false)) {
+                const settings = await settingsRes.json();
+                if (settings && ((settings.data && settings.data.pushEnabled === false) || settings.pushEnabled === false)) {
                     serverPushEnabled = false;
                     console.log('Push: на сервере отключены — авто-подписка пропущена');
                     return;
@@ -104,18 +102,26 @@ async function initializePushNotifications(registration) {
 
         if (!subscription) {
             const keyResponse = await fetch(`${API_BASE_URL}/push/vapid-public-key`, {
-                method: 'GET'
+                method: 'GET',
+                headers: { 'Accept': 'application/json, text/plain, */*' }
             });
             if (!keyResponse.ok) throw new Error('Не удалось получить VAPID ключ');
-
-            // API возвращает { isSuccess, data: "<base64url key>" }, не сырой текст
-            const keyJson = await keyResponse.json();
-            let publicKey = (keyJson?.data ?? keyJson?.Data ?? keyJson?.publicKey ?? keyJson?.PublicKey ?? '');
-            if (typeof publicKey !== 'string') publicKey = '';
-            publicKey = publicKey.trim();
-            // на случай если бэкенд когда-то отдаст просто строку
-            if (!publicKey && typeof keyJson === 'string') publicKey = keyJson.trim();
-            if (!publicKey) throw new Error('VAPID public key пустой или в неожиданном формате');
+            let publicKey = '';
+            const ct = (keyResponse.headers.get('content-type') || '').toLowerCase();
+            if (ct.includes('json')) {
+                const j = await keyResponse.json();
+                publicKey = String(j.data ?? j.Data ?? j.publicKey ?? '').trim();
+            } else {
+                const text = (await keyResponse.text()).trim();
+                if (text.startsWith('{')) {
+                    try {
+                        const j = JSON.parse(text);
+                        publicKey = String(j.data ?? j.Data ?? j.publicKey ?? '').trim();
+                    } catch { publicKey = text; }
+                } else publicKey = text;
+            }
+            publicKey = publicKey.replace(/^"|"$/g, '');
+            if (!publicKey) throw new Error('Пустой VAPID ключ');
 
             subscription = await registration.pushManager.subscribe({
                 userVisibleOnly: true,
@@ -156,33 +162,19 @@ async function initializePushNotifications(registration) {
 }
 
 function urlBase64ToUint8Array(base64String) {
-    if (!base64String || typeof base64String !== 'string') {
-        throw new Error('VAPID key: ожидалась base64url-строка');
-    }
-    // убрать кавычки/пробелы/переносы, если пришло из JSON-строки
-    let s = base64String.trim().replace(/^"+|"+$/g, '').replace(/\s+/g, '');
-    // если случайно пришёл весь JSON — вытащить data
+    let s = String(base64String || '').trim().replace(/^"|"$/g, '').replace(/\s+/g, '');
     if (s.startsWith('{')) {
         try {
             const j = JSON.parse(s);
-            s = String(j.data ?? j.Data ?? j.publicKey ?? j.PublicKey ?? '').trim();
-        } catch { /* ignore */ }
+            s = String(j.data ?? j.Data ?? j.publicKey ?? '').trim();
+        } catch (e) {
+            throw new Error('Некорректный VAPID-ключ');
+        }
     }
-    if (!s) throw new Error('VAPID key пустой');
-
     const padding = '='.repeat((4 - s.length % 4) % 4);
-    const base64 = (s + padding)
-        .replace(/-/g, '+')
-        .replace(/_/g, '/');
-
-    let rawData;
-    try {
-        rawData = window.atob(base64);
-    } catch (e) {
-        throw new Error('VAPID key не является корректным base64url: ' + (e && e.message ? e.message : e));
-    }
+    const base64 = (s + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
     const outputArray = new Uint8Array(rawData.length);
-
     for (let i = 0; i < rawData.length; ++i) {
         outputArray[i] = rawData.charCodeAt(i);
     }

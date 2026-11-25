@@ -55,6 +55,7 @@
 
     <link rel="stylesheet" href="~/css/settings.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/settings-sync.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/toast.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/ui-dialogs.css" asp-append-version="true" />
     @await RenderSectionAsync("Styles", required: false)
 </head>
@@ -161,11 +162,12 @@
         window.API_BASE_URL = '@apiBase';
         window.HUB_URL = '@hubUrl';
     </script>
-    <script src="~/js/ui-dialogs.js" asp-append-version="true"></script>
+    <script src="~/js/utils/toast.js" asp-append-version="true"></script>
+    <script src="~/js/utils/ui-dialogs.js" asp-append-version="true"></script>
     <script src="~/app.js"></script>
-    <script src="~/js/session-cleanup.js"></script>
-    <script src="~/js/settings.js" asp-append-version="true"></script>
-    <script src="~/js/settings-admin-nav.js" asp-append-version="true"></script>
+    <script src="~/js/utils/session-cleanup.js"></script>
+    <script src="~/js/settings/settings.js" asp-append-version="true"></script>
+    <script src="~/js/settings/settings-admin-nav.js" asp-append-version="true"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function () {
             if (typeof feather !== 'undefined') feather.replace();
