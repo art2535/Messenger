@@ -151,32 +151,61 @@ public class ScheduledMessageService : IScheduledMessageService, IScheduledMessa
         DateTime? scheduledAtUtc,
         CancellationToken ct = default)
     {
-        var entity = await _context.ScheduledMessages
-            .FirstOrDefaultAsync(x => x.ScheduledMessageId == scheduledMessageId, ct);
+        var senderId = await _context.ScheduledMessages
+            .Where(x => x.ScheduledMessageId == scheduledMessageId)
+            .Select(x => (Guid?)x.SenderId)
+            .FirstOrDefaultAsync(ct);
 
-        if (entity == null)
+        if (!senderId.HasValue)
             return null;
 
-        if (entity.SenderId != userId)
+        if (senderId.Value != userId)
             throw new UnauthorizedAccessException("Можно редактировать только свои запланированные сообщения");
 
-        if (entity.Status != ScheduledMessageStatus.Pending)
-            throw new InvalidOperationException("Можно редактировать только ожидающие отправки сообщения");
-
-        if (encryptedText != null)
-            entity.MessageText = encryptedText;
-
+        DateTime? scheduledAt = null;
         if (scheduledAtUtc.HasValue)
         {
-            var at = DateTime.SpecifyKind(scheduledAtUtc.Value, DateTimeKind.Utc);
-            if (at <= DateTime.UtcNow.AddSeconds(30))
+            scheduledAt = DateTime.SpecifyKind(scheduledAtUtc.Value, DateTimeKind.Utc);
+            if (scheduledAt.Value <= DateTime.UtcNow.AddSeconds(30))
                 throw new ArgumentException("Время отправки должно быть хотя бы на 30 секунд в будущем");
-            entity.ScheduledAt = at;
         }
 
-        entity.UpdatedAt = DateTime.UtcNow;
-        await _context.SaveChangesAsync(ct);
-        return entity;
+        var nowUtc = DateTime.UtcNow;
+        var affectedRows = await _context.ScheduledMessages
+            .Where(x =>
+                x.ScheduledMessageId == scheduledMessageId
+                && x.SenderId == userId
+                && x.Status == ScheduledMessageStatus.Pending)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(x => x.MessageText,
+                        x => encryptedText == null ? x.MessageText : encryptedText)
+                    .SetProperty(x => x.ScheduledAt,
+                        x => scheduledAt ?? x.ScheduledAt)
+                    .SetProperty(x => x.UpdatedAt, nowUtc),
+                ct);
+
+        if (affectedRows != 1)
+        {
+            var currentStatus = await _context.ScheduledMessages
+                .Where(x => x.ScheduledMessageId == scheduledMessageId)
+                .Select(x => new { x.SenderId, x.Status })
+                .FirstOrDefaultAsync(ct);
+
+            if (currentStatus == null)
+                return null;
+
+            if (currentStatus.SenderId != userId)
+                throw new UnauthorizedAccessException(
+                    "Можно редактировать только свои запланированные сообщения");
+
+            throw new InvalidOperationException(
+                "Можно редактировать только ожидающие отправки сообщения");
+        }
+
+        return await _context.ScheduledMessages
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.ScheduledMessageId == scheduledMessageId, ct);
     }
 
     public async Task<bool> CancelAsync(Guid scheduledMessageId, Guid userId, CancellationToken ct = default)

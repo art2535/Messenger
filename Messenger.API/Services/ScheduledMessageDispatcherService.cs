@@ -114,7 +114,17 @@ public class ScheduledMessageDispatcherService : BackgroundService
                     if (user != null)
                         senderName = $"{user.FirstName} {user.LastName}".Trim();
                 }
-                catch { /* ignore */ }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(
+                        ex,
+                        "Failed to resolve sender for scheduled {Id}",
+                        item.ScheduledMessageId);
+                }
 
                 var sentAt = DateTime.UtcNow;
 
