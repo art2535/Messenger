@@ -1,6 +1,7 @@
 using Xunit;
 using System.Reflection;
 using Messenger.Core.Interfaces;
+using Messenger.Infrastructure.Services.Administration;
 using Messenger.Infrastructure.Services.Messages;
 
 namespace Messenger.Tests.Architecture;
@@ -85,5 +86,23 @@ public sealed class LayerDependencyTests
             Assert.True(facadeType.IsSealed);
             Assert.Equal("Messenger.Infrastructure.Services.Messages", facadeType.Namespace);
         });
+    }
+
+    [Fact]
+    public void AdminWorkflowService_UsesExplicitModerationDependency()
+    {
+        var constructor = typeof(AdminWorkflowService).GetConstructors().Single();
+        var parameterTypes = constructor.GetParameters()
+            .Select(parameter => parameter.ParameterType)
+            .ToArray();
+
+        Assert.Contains(typeof(IModerationService), parameterTypes);
+        Assert.DoesNotContain(typeof(IServiceProvider), parameterTypes);
+    }
+
+    [Fact]
+    public void MessageEventPublisher_IsSealed()
+    {
+        Assert.True(typeof(MessageEventPublisher).IsSealed);
     }
 }

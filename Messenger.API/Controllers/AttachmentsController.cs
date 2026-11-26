@@ -1,11 +1,11 @@
-﻿using Asp.Versioning;
+using Asp.Versioning;
 using Messenger.Core.DTOs.Attachments;
-using Messenger.Core.Interfaces;
 using Messenger.Core.Models;
+using Messenger.Core.Responses;
+using Messenger.Infrastructure.Interfaces.Attachments;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel;
-using Messenger.Core.Responses;
 
 namespace Messenger.API.Controllers
 {
@@ -21,14 +21,14 @@ namespace Messenger.API.Controllers
     [Tags("Attachments")]
     public class AttachmentsController : ControllerBase
     {
-        private readonly IAttachmentService _attachmentService;
+        private readonly IAttachmentWorkflowService _attachmentWorkflowService;
         private readonly ILogger<AttachmentsController> _logger;
 
         public AttachmentsController(
-            IAttachmentService attachmentService,
+            IAttachmentWorkflowService attachmentWorkflowService,
             ILogger<AttachmentsController> logger)
         {
-            _attachmentService = attachmentService;
+            _attachmentWorkflowService = attachmentWorkflowService;
             _logger = logger;
         }
 
@@ -49,7 +49,8 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var attachments = await _attachmentService.GetAttachmentsByMessageIdAsync(messageId, ct);
+                var attachments = await _attachmentWorkflowService
+                    .GetAttachmentsByMessageIdAsync(messageId, ct);
 
                 return Ok(ApiResponse.Success(attachments));
             }
@@ -59,8 +60,14 @@ namespace Messenger.API.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Ошибка при получении вложений для сообщения {MessageId}", messageId);
-                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
+                _logger.LogError(
+                    ex,
+                    "Ошибка при получении вложений для сообщения {MessageId}",
+                    messageId);
+
+                return StatusCode(
+                    StatusCodes.Status500InternalServerError,
+                    ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -95,7 +102,7 @@ namespace Messenger.API.Controllers
                     Url = request.Url
                 };
 
-                await _attachmentService.AddAttachmentAsync(attachment, ct);
+                await _attachmentWorkflowService.AddAttachmentAsync(attachment, ct);
 
                 return Ok(ApiResponse.Success(message: "Вложение успешно добавлено"));
             }
@@ -109,8 +116,14 @@ namespace Messenger.API.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Ошибка при добавлении вложения к сообщению {MessageId}", messageId);
-                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
+                _logger.LogError(
+                    ex,
+                    "Ошибка при добавлении вложения к сообщению {MessageId}",
+                    messageId);
+
+                return StatusCode(
+                    StatusCodes.Status500InternalServerError,
+                    ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
     }

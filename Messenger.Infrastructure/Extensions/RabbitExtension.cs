@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using MassTransit;
 using Messenger.Infrastructure.Data;
 using Messenger.Infrastructure.Messaging.Consumers;

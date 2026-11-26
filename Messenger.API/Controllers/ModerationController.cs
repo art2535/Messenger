@@ -2,6 +2,7 @@ using Asp.Versioning;
 using Messenger.API.Extensions;
 using Messenger.Core.DTOs.Moderation;
 using Messenger.Core.Interfaces;
+using Messenger.Infrastructure.Interfaces.Administration;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel;
@@ -21,19 +22,19 @@ namespace Messenger.API.Controllers
     [Tags("Moderation")]
     public class ModerationController : ControllerBase
     {
-        private readonly IModerationService _moderationService;
-        private readonly IAdminService _adminService;
+        private readonly IModerationWorkflowService _moderationWorkflowService;
+        private readonly IAdminWorkflowService _adminWorkflowService;
         private readonly IUserService _userService;
         private readonly ILogger<ModerationController> _logger;
 
         public ModerationController(
-            IModerationService moderationService,
-            IAdminService adminService,
+            IModerationWorkflowService moderationWorkflowService,
+            IAdminWorkflowService adminWorkflowService,
             IUserService userService,
             ILogger<ModerationController> logger)
         {
-            _moderationService = moderationService;
-            _adminService = adminService;
+            _moderationWorkflowService = moderationWorkflowService;
+            _adminWorkflowService = adminWorkflowService;
             _userService = userService;
             _logger = logger;
         }
@@ -41,9 +42,7 @@ namespace Messenger.API.Controllers
         private async Task<Guid> EnsureAdminAsync(CancellationToken ct)
         {
             var userId = await User.GetCurrentUserIdAsync(_userService);
-            var isAdmin = await _adminService.IsSystemAdminAsync(userId, ct);
-            if (!isAdmin)
-                throw new ForbiddenAccessException("Нужна роль «Администратор»");
+            await _adminWorkflowService.EnsureAdminAsync(userId, ct);
 
             return userId;
         }
@@ -66,7 +65,7 @@ namespace Messenger.API.Controllers
             try
             {
                 var userId = await User.GetCurrentUserIdAsync(_userService);
-                var report = await _moderationService.ReportMessageAsync(userId, request, ct);
+                var report = await _moderationWorkflowService.ReportMessageAsync(userId, request, ct);
 
                 return Ok(ApiResponse.Success(report));
             }
@@ -109,7 +108,7 @@ namespace Messenger.API.Controllers
             try
             {
                 var adminUserId = await EnsureAdminAsync(ct);
-                var mute = await _moderationService.MuteUserAsync(adminUserId, request, ct);
+                var mute = await _moderationWorkflowService.MuteUserAsync(adminUserId, request, ct);
 
                 return Ok(ApiResponse.Success(mute));
             }
@@ -118,7 +117,7 @@ namespace Messenger.API.Controllers
                 _logger.LogWarning(ex, "Ошибка авторизации при выдаче мута");
                 return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
-            catch (ForbiddenAccessException ex)
+            catch (AdminForbiddenAccessException ex)
             {
                 return StatusCode(StatusCodes.Status403Forbidden, ApiResponse.Failure(ex.Message, "FORBIDDEN"));
             }
@@ -156,7 +155,7 @@ namespace Messenger.API.Controllers
             try
             {
                 var adminUserId = await EnsureAdminAsync(ct);
-                await _moderationService.UnmuteAsync(adminUserId, muteId, ct);
+                await _moderationWorkflowService.UnmuteAsync(adminUserId, muteId, ct);
 
                 return Ok(ApiResponse.Success());
             }
@@ -165,7 +164,7 @@ namespace Messenger.API.Controllers
                 _logger.LogWarning(ex, "Ошибка авторизации при снятии мута {MuteId}", muteId);
                 return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
-            catch (ForbiddenAccessException ex)
+            catch (AdminForbiddenAccessException ex)
             {
                 return StatusCode(StatusCodes.Status403Forbidden, ApiResponse.Failure(ex.Message, "FORBIDDEN"));
             }
@@ -184,6 +183,5 @@ namespace Messenger.API.Controllers
             }
         }
 
-        private sealed class ForbiddenAccessException(string message) : Exception(message);
-    }
+     }
 }

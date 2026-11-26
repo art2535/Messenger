@@ -1,11 +1,9 @@
 ﻿using Asp.Versioning;
 using Messenger.API.Extensions;
 using Messenger.Core.DTOs.Chats;
-using Messenger.Core.Hubs;
 using Messenger.Core.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.SignalR;
 using System.ComponentModel;
 using Messenger.Core.Responses;
 using Messenger.Infrastructure.Interfaces.Chats;
@@ -24,22 +22,19 @@ namespace Messenger.API.Controllers
     [Tags("Chats")]
     public class ChatsController : ControllerBase
     {
-        private readonly IChatService _chatService;
         private readonly IChatQueryWorkflowService _chatQueryWorkflowService;
-        private readonly IHubContext<ChatHub> _hubContext;
+        private readonly IChatManagementWorkflowService _chatManagementWorkflowService;
         private readonly IUserService _userService;
         private readonly ILogger<ChatsController> _logger;
 
         public ChatsController(
-            IChatService chatService,
             IChatQueryWorkflowService chatQueryWorkflowService,
-            IHubContext<ChatHub> hubContext,
+            IChatManagementWorkflowService chatManagementWorkflowService,
             IUserService userService,
             ILogger<ChatsController> logger)
         {
-            _chatService = chatService;
             _chatQueryWorkflowService = chatQueryWorkflowService;
-            _hubContext = hubContext;
+            _chatManagementWorkflowService = chatManagementWorkflowService;
             _userService = userService;
             _logger = logger;
         }
@@ -161,62 +156,15 @@ namespace Messenger.API.Controllers
             try
             {
                 var currentUserId = await User.GetCurrentUserIdAsync(_userService);
-
-                string chatNameForDb = request.Type == "group"
-                    ? request.Name.Trim()
-                    : "Приватный чат";
-
-                var chat = await _chatService.CreateChatAsync(
-                    name: chatNameForDb,
-                    type: request.Type,
-                    creatorId: currentUserId,
+                var result = await _chatManagementWorkflowService.CreateChatAsync(
+                    request,
+                    currentUserId,
                     ct);
-
-                foreach (var participantId in request.UserIds.Distinct())
-                {
-                    if (participantId == currentUserId)
-                        continue;
-
-                    await _chatService.AddParticipantToChatAsync(chat.ChatId, participantId, "участник", ct);
-                }
-
-                string displayName = request.Type == "group"
-                    ? request.Name.Trim()
-                    : await GetPrivateChatDisplayNameAsync(chat.ChatId, currentUserId, ct);
-
-                foreach (var participantId in request.UserIds.Distinct())
-                {
-                    var dbParticipant = await _userService.GetUserByIdAsync(participantId, ct);
-                    if (dbParticipant == null || string.IsNullOrEmpty(dbParticipant.ExternalId))
-                        continue;
-
-                    string individualizedName = request.Type == "group"
-                        ? request.Name.Trim()
-                        : await GetPrivateChatDisplayNameAsync(chat.ChatId, participantId, ct);
-
-                    string? individualizedAvatar = null;
-                    if (request.Type == "private")
-                    {
-                        var otherId = participantId == currentUserId ? request.UserIds[0] : currentUserId;
-                        individualizedAvatar = await GetOtherUserAvatarAsync(otherId, ct);
-                    }
-
-                    var chatForSingleUser = new
-                    {
-                        ChatId = chat.ChatId,
-                        Name = individualizedName,
-                        Avatar = individualizedAvatar,
-                        Type = chat.Type
-                    };
-
-                    await _hubContext.Clients.User(dbParticipant.ExternalId.ToLowerInvariant())
-                        .SendAsync("NewChat", chatForSingleUser, ct);
-                }
 
                 return Ok(ApiResponse.Success(new
                 {
-                    chat.ChatId,
-                    Name = displayName
+                    result.ChatId,
+                    result.Name
                 }));
             }
             catch (UnauthorizedAccessException ex)
@@ -259,60 +207,15 @@ namespace Messenger.API.Controllers
             try
             {
                 await User.GetCurrentUserIdAsync(_userService);
+                var result = await _chatManagementWorkflowService.AddParticipantAsync(
+                    chatId, userId, role, ct);
 
-                var chat = await _chatService.GetChatByIdAsync(chatId, ct);
-                if (chat == null)
+                if (result.Status == ChatManagementStatus.NotFound)
                 {
-                    return NotFound(ApiResponse.Failure("Чат не найден", "NOT_FOUND"));
+                    return NotFound(ApiResponse.Failure(result.Message!, "NOT_FOUND"));
                 }
 
-                await _chatService.AddParticipantToChatAsync(chatId, userId, role, ct);
-
-                var addedUser = await _userService.GetUserByIdAsync(userId, ct);
-                if (addedUser == null)
-                {
-                    return NotFound(ApiResponse.Failure("Пользователь не найден", "NOT_FOUND"));
-                }
-
-                var userInfo = new
-                {
-                    Id = addedUser.UserId,
-                    Name = $"{addedUser.FirstName} {addedUser.LastName}".Trim(),
-                    FullName = $"{addedUser.FirstName} {addedUser.LastName}".Trim(),
-                    Avatar = addedUser.Account?.Avatar
-                };
-
-                await _hubContext.Clients.Group(chatId.ToString())
-                    .SendAsync("ParticipantAdded", new
-                    {
-                        ChatId = chatId,
-                        User = userInfo
-                    }, ct);
-
-                var updatedChat = await _chatService.GetChatByIdAsync(chatId, ct);
-                var updatedCount = updatedChat?.ChatParticipants?.Count ?? 0;
-
-                await _hubContext.Clients.Group(chatId.ToString())
-                    .SendAsync("ParticipantCountChanged", new
-                    {
-                        ChatId = chatId,
-                        Count = updatedCount
-                    }, ct);
-
-                var chatForNewUser = new
-                {
-                    ChatId = chat.ChatId,
-                    Name = chat.Type == "group" ? chat.Name : await GetPrivateChatDisplayNameAsync(chatId, userId, ct),
-                    Type = chat.Type
-                };
-
-                if (!string.IsNullOrEmpty(addedUser.ExternalId))
-                {
-                    await _hubContext.Clients.User(addedUser.ExternalId.ToLowerInvariant())
-                        .SendAsync("NewChat", chatForNewUser, ct);
-                }
-
-                return Ok(ApiResponse.Success(message: $"Пользователь {userId} успешно добавлен в чат"));
+                return Ok(ApiResponse.Success(message: result.Message));
             }
             catch (UnauthorizedAccessException ex)
             {
@@ -359,24 +262,13 @@ namespace Messenger.API.Controllers
             try
             {
                 await User.GetCurrentUserIdAsync(_userService);
-
-                var chat = await _chatService.GetChatByIdAsync(chatId, ct);
-                if (chat == null)
+                var result = await _chatManagementWorkflowService.UpdateChatAsync(chatId, request.Name, ct);
+                if (result.Status == ChatManagementStatus.NotFound)
                 {
-                    return NotFound(ApiResponse.Failure("Чат не найден", "NOT_FOUND"));
+                    return NotFound(ApiResponse.Failure(result.Message!, "NOT_FOUND"));
                 }
 
-                chat.Name = request.Name;
-
-                await _chatService.UpdateChatAsync(chat, ct);
-
-                await _hubContext.Clients.Group(chatId.ToString()).SendAsync("ChatUpdated", new
-                {
-                    ChatId = chatId,
-                    Name = request.Name
-                }, ct);
-
-                return Ok(ApiResponse.Success(message: "Чат обновлён"));
+                return Ok(ApiResponse.Success(message: result.Message));
             }
             catch (UnauthorizedAccessException ex)
             {
@@ -408,18 +300,13 @@ namespace Messenger.API.Controllers
             try
             {
                 await User.GetCurrentUserIdAsync(_userService);
-
-                var chat = await _chatService.GetChatByIdAsync(chatId, ct);
-                if (chat == null)
+                var result = await _chatManagementWorkflowService.DeleteChatAsync(chatId, ct);
+                if (result.Status == ChatManagementStatus.NotFound)
                 {
-                    return NotFound(ApiResponse.Failure("Чат не найден", "NOT_FOUND"));
+                    return NotFound(ApiResponse.Failure(result.Message!, "NOT_FOUND"));
                 }
 
-                await _chatService.DeleteChatAsync(chat, ct);
-
-                await _hubContext.Clients.Group(chatId.ToString()).SendAsync("ChatDeleted", chatId, ct);
-
-                return Ok(ApiResponse.Success(message: "Чат успешно удален"));
+                return Ok(ApiResponse.Success(message: result.Message));
             }
             catch (UnauthorizedAccessException ex)
             {
@@ -454,79 +341,36 @@ namespace Messenger.API.Controllers
             try
             {
                 var currentUserId = await User.GetCurrentUserIdAsync(_userService);
+                var result = await _chatManagementWorkflowService.RemoveParticipantAsync(
+                    chatId, userId, currentUserId, ct);
 
-                var userToDelete = await _userService.GetUserByIdAsync(userId, ct);
-                if (userToDelete == null)
+                if (result.Status == ChatManagementStatus.NotFound)
                 {
-                    return NotFound(ApiResponse.Failure("Пользователь не найден", "NOT_FOUND"));
+                    return NotFound(ApiResponse.Failure(result.Message!, "NOT_FOUND"));
                 }
 
-                var participants = (await _chatService.GetChatParticipantsAsync(chatId, ct)).ToList();
-                var actor = participants.FirstOrDefault(p => p.UserId == currentUserId);
-                if (actor == null)
+                if (result.Status == ChatManagementStatus.Forbidden)
                 {
-                    return StatusCode(StatusCodes.Status403Forbidden, ApiResponse.Failure("Вы не являетесь участником этого чата", "FORBIDDEN"));
-                }
-
-                var target = participants.FirstOrDefault(p => p.UserId == userId);
-                if (target == null)
-                {
-                    return NotFound(ApiResponse.Failure("Участник не найден в чате", "NOT_FOUND"));
-                }
-
-                static string NormRole(string? role) =>
-                    string.IsNullOrWhiteSpace(role) ? "участник" : role.Trim().ToLowerInvariant();
-
-                static bool IsAdminOrOwnerRole(string? role)
-                {
-                    var r = NormRole(role);
-                    return r is "владелец" or "owner" or "admin" or "админ" or "administrator" or "модератор" or "moderator";
-                }
-
-                if (userId == currentUserId)
-                {
-                    return BadRequest(ApiResponse.Failure("Нельзя удалить самого себя из чата этим методом", "INVALID_REQUEST"));
-                }
-
-                if (IsAdminOrOwnerRole(target.Role))
-                {
-                    return StatusCode(StatusCodes.Status403Forbidden, new
+                    if (result.UseLegacyErrorResponse)
                     {
-                        IsSuccess = false,
-                        Error = IsAdminOrOwnerRole(actor.Role)
-                            ? "Администратор не может удалить владельца или другого администратора"
-                            : "Нельзя удалить владельца или администратора чата"
-                    });
+                        return StatusCode(StatusCodes.Status403Forbidden, new
+                        {
+                            IsSuccess = false,
+                            Error = result.Message
+                        });
+                    }
+
+                    return StatusCode(
+                        StatusCodes.Status403Forbidden,
+                        ApiResponse.Failure(result.Message!, "FORBIDDEN"));
                 }
 
-                await _chatService.DeleteParticipantFromChatAsync(chatId, userId, ct);
-
-                await _hubContext.Clients.Group(chatId.ToString().ToLowerInvariant())
-                    .SendAsync("ParticipantRemoved", new
-                    {
-                        ChatId = chatId,
-                        UserId = userId
-                    }, ct);
-
-                var updatedChat = await _chatService.GetChatByIdAsync(chatId, ct);
-                var updatedCount = updatedChat?.ChatParticipants?.Count ?? 0;
-
-                await _hubContext.Clients.Group(chatId.ToString())
-                    .SendAsync("ParticipantCountChanged", new
-                    {
-                        ChatId = chatId,
-                        Count = updatedCount
-                    }, ct);
-
-                if (!string.IsNullOrEmpty(userToDelete.ExternalId))
+                if (result.Status == ChatManagementStatus.BadRequest)
                 {
-                    var signalRId = userToDelete.ExternalId.ToLowerInvariant();
-
-                    await _hubContext.Clients.User(signalRId)
-                        .SendAsync("YouWereRemovedFromChat", chatId, ct);
+                    return BadRequest(ApiResponse.Failure(result.Message!, "INVALID_REQUEST"));
                 }
 
-                return Ok(ApiResponse.Success(message: $"Пользователь {userId} успешно удален из чата"));
+                return Ok(ApiResponse.Success(message: result.Message));
             }
             catch (UnauthorizedAccessException ex)
             {
@@ -540,23 +384,5 @@ namespace Messenger.API.Controllers
             }
         }
 
-        private async Task<string> GetPrivateChatDisplayNameAsync(Guid chatId, Guid currentUserId, CancellationToken ct)
-        {
-            var participants = await _chatService.GetChatParticipantsAsync(chatId, ct);
-
-            var otherParticipant = participants
-                .FirstOrDefault(p => p.UserId != currentUserId);
-
-            if (otherParticipant?.User == null)
-                return "Удалённый пользователь";
-
-            return $"{otherParticipant.User.FirstName} {otherParticipant.User.LastName}".Trim();
-        }
-
-        private async Task<string?> GetOtherUserAvatarAsync(Guid userId, CancellationToken ct)
-        {
-            var user = await _userService.GetUserByIdAsync(userId, ct);
-            return user?.Account?.Avatar;
-        }
     }
 }

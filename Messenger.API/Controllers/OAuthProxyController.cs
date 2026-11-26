@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Messenger.Core.Responses;
+using Messenger.Infrastructure.Interfaces.Authentication;
 
 namespace Messenger.API.Controllers
 {
@@ -17,17 +18,14 @@ namespace Messenger.API.Controllers
     [Tags("OAuth")]
     public class OAuthProxyController : ControllerBase
     {
-        private readonly IConfiguration _configuration;
-        private readonly IHttpClientFactory _httpClientFactory;
+        private readonly IOAuthProxyWorkflowService _oauthProxyWorkflowService;
         private readonly ILogger<OAuthProxyController> _logger;
 
         public OAuthProxyController(
-            IConfiguration configuration,
-            IHttpClientFactory httpClientFactory,
+            IOAuthProxyWorkflowService oauthProxyWorkflowService,
             ILogger<OAuthProxyController> logger)
         {
-            _configuration = configuration;
-            _httpClientFactory = httpClientFactory;
+            _oauthProxyWorkflowService = oauthProxyWorkflowService;
             _logger = logger;
         }
 
@@ -47,29 +45,20 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var authority = $"{_configuration["AzureAd:Instance"]?.TrimEnd('/')}/{_configuration["AzureAd:TenantId"]}";
-                var tokenUrl = $"{authority}/protocol/openid-connect/token";
-
                 var form = await Request.ReadFormAsync(ct);
-                var pairs = form
-                    .SelectMany(kv => kv.Value.Select(v => new KeyValuePair<string, string>(kv.Key, v ?? string.Empty)))
-                    .ToList();
+                var result = await _oauthProxyWorkflowService.RequestTokenAsync(form, ct);
 
-                using var content = new FormUrlEncodedContent(pairs);
-                var client = _httpClientFactory.CreateClient();
-
-                using var response = await client.PostAsync(tokenUrl, content, ct);
-                var responseBody = await response.Content.ReadAsStringAsync(ct);
-
-                if (string.IsNullOrWhiteSpace(responseBody))
+                if (string.IsNullOrWhiteSpace(result.ResponseBody))
                 {
-                    return StatusCode((int)response.StatusCode, ApiResponse.Failure("Keycloak возвратил пустое тело", "INTERNAL_ERROR"));
+                    return StatusCode(
+                        result.StatusCode,
+                        ApiResponse.Failure("Keycloak возвратил пустое тело", "INTERNAL_ERROR"));
                 }
 
                 return new ContentResult
                 {
-                    StatusCode = (int)response.StatusCode,
-                    Content = responseBody,
+                    StatusCode = result.StatusCode,
+                    Content = result.ResponseBody,
                     ContentType = "application/json; charset=utf-8"
                 };
             }

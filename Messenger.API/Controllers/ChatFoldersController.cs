@@ -2,6 +2,7 @@ using Asp.Versioning;
 using Messenger.API.Extensions;
 using Messenger.Core.DTOs.ChatFolders;
 using Messenger.Core.Interfaces;
+using Messenger.Infrastructure.Interfaces.Chats;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel;
@@ -21,16 +22,16 @@ namespace Messenger.API.Controllers
     [Tags("ChatFolders")]
     public class ChatFoldersController : ControllerBase
     {
-        private readonly IChatFolderService _chatFolderService;
+        private readonly IChatFolderWorkflowService _chatFolderWorkflowService;
         private readonly IUserService _userService;
         private readonly ILogger<ChatFoldersController> _logger;
 
         public ChatFoldersController(
-            IChatFolderService chatFolderService,
+            IChatFolderWorkflowService chatFolderWorkflowService,
             IUserService userService,
             ILogger<ChatFoldersController> logger)
         {
-            _chatFolderService = chatFolderService;
+            _chatFolderWorkflowService = chatFolderWorkflowService;
             _userService = userService;
             _logger = logger;
         }
@@ -50,7 +51,7 @@ namespace Messenger.API.Controllers
             try
             {
                 var userId = await User.GetCurrentUserIdAsync(_userService);
-                var list = await _chatFolderService.GetFoldersAsync(userId, ct);
+                var list = await _chatFolderWorkflowService.GetFoldersAsync(userId, ct);
 
                 return Ok(ApiResponse.Success(list));
             }
@@ -84,7 +85,7 @@ namespace Messenger.API.Controllers
             try
             {
                 var userId = await User.GetCurrentUserIdAsync(_userService);
-                var folder = await _chatFolderService.GetFolderAsync(userId, folderId, ct);
+                var folder = await _chatFolderWorkflowService.GetFolderAsync(userId, folderId, ct);
 
                 if (folder == null)
                 {
@@ -123,7 +124,7 @@ namespace Messenger.API.Controllers
             try
             {
                 var userId = await User.GetCurrentUserIdAsync(_userService);
-                var folder = await _chatFolderService.CreateFolderAsync(userId, request, ct);
+                var folder = await _chatFolderWorkflowService.CreateFolderAsync(userId, request, ct);
 
                 return Ok(ApiResponse.Success(folder));
             }
@@ -167,7 +168,7 @@ namespace Messenger.API.Controllers
             try
             {
                 var userId = await User.GetCurrentUserIdAsync(_userService);
-                var folder = await _chatFolderService.UpdateFolderAsync(userId, folderId, request, ct);
+                var folder = await _chatFolderWorkflowService.UpdateFolderAsync(userId, folderId, request, ct);
 
                 if (folder == null)
                 {
@@ -214,7 +215,7 @@ namespace Messenger.API.Controllers
             try
             {
                 var userId = await User.GetCurrentUserIdAsync(_userService);
-                var ok = await _chatFolderService.DeleteFolderAsync(userId, folderId, ct);
+                var ok = await _chatFolderWorkflowService.DeleteFolderAsync(userId, folderId, ct);
 
                 if (!ok)
                 {
@@ -254,7 +255,7 @@ namespace Messenger.API.Controllers
             try
             {
                 var userId = await User.GetCurrentUserIdAsync(_userService);
-                var ok = await _chatFolderService.AddChatAsync(userId, folderId, request.ChatId, ct);
+                var ok = await _chatFolderWorkflowService.AddChatAsync(userId, folderId, request.ChatId, ct);
 
                 if (!ok)
                 {
@@ -294,7 +295,7 @@ namespace Messenger.API.Controllers
             try
             {
                 var userId = await User.GetCurrentUserIdAsync(_userService);
-                var ok = await _chatFolderService.RemoveChatAsync(userId, folderId, chatId, ct);
+                var ok = await _chatFolderWorkflowService.RemoveChatAsync(userId, folderId, chatId, ct);
 
                 if (!ok)
                 {

@@ -1,13 +1,10 @@
 using Asp.Versioning;
 using Messenger.API.Extensions;
 using Messenger.Core.DTOs.Messages;
-using Messenger.Core.Hubs;
 using Messenger.Core.Interfaces;
-using Messenger.Core.Messages;
-using Messenger.Core.Models;
+using Messenger.Infrastructure.Interfaces.Messages;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.SignalR;
 using System.ComponentModel;
 using Messenger.Core.Responses;
 
@@ -24,29 +21,17 @@ namespace Messenger.API.Controllers
     [Tags("ScheduledMessages")]
     public class ScheduledMessagesController : ControllerBase
     {
-        private readonly IScheduledMessageService _scheduledService;
-        private readonly IChatService _chatService;
+        private readonly IScheduledMessageWorkflowService _scheduledWorkflowService;
         private readonly IUserService _userService;
-        private readonly IEncryptionService _encryption;
-        private readonly IConfiguration _configuration;
-        private readonly IHubContext<ChatHub> _hubContext;
         private readonly ILogger<ScheduledMessagesController> _logger;
 
         public ScheduledMessagesController(
-            IScheduledMessageService scheduledService,
-            IChatService chatService,
+            IScheduledMessageWorkflowService scheduledWorkflowService,
             IUserService userService,
-            IEncryptionService encryption,
-            IConfiguration configuration,
-            IHubContext<ChatHub> hubContext,
             ILogger<ScheduledMessagesController> logger)
         {
-            _scheduledService = scheduledService;
-            _chatService = chatService;
+            _scheduledWorkflowService = scheduledWorkflowService;
             _userService = userService;
-            _encryption = encryption;
-            _configuration = configuration;
-            _hubContext = hubContext;
             _logger = logger;
         }
 
@@ -76,90 +61,14 @@ namespace Messenger.API.Controllers
             {
                 var user = await User.GetCurrentUserAsync(_userService);
 
-                if (!scheduledAt.HasValue)
-                {
-                    return BadRequest(ApiResponse.Failure("Не указано время отправки (scheduledAt)", "INVALID_REQUEST"));
-                }
-
-                var scheduledUtc = scheduledAt.Value.UtcDateTime;
-                if (scheduledUtc <= DateTime.UtcNow.AddSeconds(30))
-                {
-                    return BadRequest(ApiResponse.Failure("Время отправки должно быть хотя бы на 30 секунд в будущем", "INVALID_REQUEST"));
-                }
-
-                var chat = await _chatService.GetChatByIdAsync(chatId, ct);
-                if (chat == null)
-                {
-                    return NotFound(ApiResponse.Failure("Чат не найден", "NOT_FOUND"));
-                }
-
-                if (!chat.ChatParticipants.Any(p => p.UserId == user.UserId))
-                {
-                    return StatusCode(StatusCodes.Status403Forbidden, ApiResponse.Failure("Доступ запрещён", "FORBIDDEN"));
-                }
-
-                const long MAX_FILE_SIZE = 10 * 1024 * 1024;
-                if (files != null)
-                {
-                    foreach (var file in files)
-                    {
-                        if (file.Length > MAX_FILE_SIZE)
-                        {
-                            return BadRequest(ApiResponse.Failure($"Файл '{file.FileName}' превышает 10 МБ", "INVALID_REQUEST"));
-                        }
-                    }
-                }
-
-                var attachmentsInfo = new List<AttachmentInfo>();
-                if (files != null && files.Length > 0)
-                {
-                    var uploadPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads");
-                    Directory.CreateDirectory(uploadPath);
-
-                    foreach (var file in files.Where(f => f.Length > 0))
-                    {
-                        var fileName = Guid.NewGuid() + Path.GetExtension(file.FileName);
-                        var filePath = Path.Combine(uploadPath, fileName);
-                        var fileUrl = $"{_configuration["URL:API:HTTPS"]}/uploads/{fileName}";
-
-                        await using var stream = new FileStream(filePath, FileMode.Create);
-                        await file.CopyToAsync(stream, ct);
-
-                        attachmentsInfo.Add(new AttachmentInfo
-                        {
-                            AttachmentId = Guid.NewGuid(),
-                            FileName = file.FileName,
-                            FileType = file.ContentType ?? "application/octet-stream",
-                            SizeInBytes = file.Length,
-                            Url = fileUrl
-                        });
-                    }
-                }
-
-                if (string.IsNullOrWhiteSpace(messageText) && attachmentsInfo.Count == 0)
-                {
-                    return BadRequest(ApiResponse.Failure("Пустое сообщение", "INVALID_REQUEST"));
-                }
-
-                var encrypted = string.IsNullOrWhiteSpace(messageText)
-                    ? null
-                    : _encryption.Encrypt(messageText.Trim());
-
-                var entity = await _scheduledService.CreateAsync(chatId, user.UserId, encrypted,
-                    attachmentsInfo.Count > 0, attachmentsInfo, scheduledUtc, replyToMessageId, ct);
-
-                var senderName = $"{user.FirstName} {user.LastName}".Trim();
-                var dto = _scheduledService.ToDto(entity, messageText?.Trim(), senderName, chat.Name);
-
-                try
-                {
-                    await _hubContext.Clients.Group($"User_{user.UserId}")
-                        .SendAsync("ScheduledMessageCreated", dto, ct);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "SignalR ScheduledMessageCreated failed");
-                }
+                var dto = await _scheduledWorkflowService.ScheduleAsync(
+                    user,
+                    chatId,
+                    messageText,
+                    scheduledAt,
+                    replyToMessageId,
+                    files,
+                    ct);
 
                 return Ok(ApiResponse.Success(dto));
             }
@@ -171,6 +80,16 @@ namespace Messenger.API.Controllers
             catch (ArgumentException ex)
             {
                 return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
+            }
+            catch (ScheduledMessageChatNotFoundException ex)
+            {
+                return NotFound(ApiResponse.Failure(ex.Message, "NOT_FOUND"));
+            }
+            catch (ScheduledMessageForbiddenException ex)
+            {
+                return StatusCode(
+                    StatusCodes.Status403Forbidden,
+                    ApiResponse.Failure(ex.Message, "FORBIDDEN"));
             }
             catch (Exception ex)
             {
@@ -195,14 +114,7 @@ namespace Messenger.API.Controllers
             {
                 var user = await User.GetCurrentUserAsync(_userService);
 
-                var list = await _scheduledService.GetPendingByUserAsync(user.UserId, ct);
-                var dtos = list.Select(e =>
-                {
-                    string? plain = null;
-                    if (!string.IsNullOrEmpty(e.MessageText))
-                        plain = _encryption.TryDecryptSafe(e.MessageText);
-                    return _scheduledService.ToDto(e, plain, null, e.Chat?.Name);
-                }).ToList();
+                var dtos = await _scheduledWorkflowService.GetPendingByUserAsync(user, ct);
 
                 return Ok(ApiResponse.Success(dtos));
             }
@@ -236,14 +148,7 @@ namespace Messenger.API.Controllers
             {
                 var user = await User.GetCurrentUserAsync(_userService);
 
-                var list = await _scheduledService.GetPendingByChatAsync(chatId, user.UserId, ct);
-                var dtos = list.Select(e =>
-                {
-                    string? plain = null;
-                    if (!string.IsNullOrEmpty(e.MessageText))
-                        plain = _encryption.TryDecryptSafe(e.MessageText);
-                    return _scheduledService.ToDto(e, plain);
-                }).ToList();
+                var dtos = await _scheduledWorkflowService.GetPendingByChatAsync(user, chatId, ct);
 
                 return Ok(ApiResponse.Success(dtos));
             }
@@ -282,40 +187,17 @@ namespace Messenger.API.Controllers
             {
                 var user = await User.GetCurrentUserAsync(_userService);
 
-                string? encrypted = null;
-                if (request.MessageText != null)
+                var dto = await _scheduledWorkflowService.UpdateAsync(
+                    user,
+                    scheduledMessageId,
+                    request,
+                    ct);
+
+                if (dto == null)
                 {
-                    encrypted = string.IsNullOrWhiteSpace(request.MessageText)
-                        ? string.Empty
-                        : _encryption.Encrypt(request.MessageText.Trim());
-                }
-
-                DateTime? at = request.ScheduledAt?.UtcDateTime;
-
-                var entity = await _scheduledService.UpdateAsync(
-                    scheduledMessageId, user.UserId, encrypted, at, ct);
-
-                if (entity == null)
-                {
-                    return NotFound(ApiResponse.Failure("Запланированное сообщение не найдено", "NOT_FOUND"));
-                }
-
-                var plain = request.MessageText?.Trim()
-                            ?? (string.IsNullOrEmpty(entity.MessageText)
-                                ? null
-                                : _encryption.TryDecryptSafe(entity.MessageText));
-
-                var dto = _scheduledService.ToDto(entity, plain,
-                    $"{user.FirstName} {user.LastName}".Trim());
-
-                try
-                {
-                    await _hubContext.Clients.Group($"User_{user.UserId}")
-                        .SendAsync("ScheduledMessageUpdated", dto, ct);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "SignalR ScheduledMessageUpdated failed");
+                    return NotFound(ApiResponse.Failure(
+                        "Запланированное сообщение не найдено",
+                        "NOT_FOUND"));
                 }
 
                 return Ok(ApiResponse.Success(dto));
@@ -360,23 +242,13 @@ namespace Messenger.API.Controllers
             {
                 var user = await User.GetCurrentUserAsync(_userService);
 
-                var ok = await _scheduledService.CancelAsync(scheduledMessageId, user.UserId, ct);
+                var ok = await _scheduledWorkflowService.CancelAsync(user, scheduledMessageId, ct);
                 if (!ok)
                 {
                     return NotFound(ApiResponse.Failure("Сообщение не найдено или уже отправлено/отменено", "NOT_FOUND"));
                 }
 
-                try
-                {
-                    await _hubContext.Clients.Group($"User_{user.UserId}")
-                        .SendAsync("ScheduledMessageCancelled", new { ScheduledMessageId = scheduledMessageId }, ct);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "SignalR ScheduledMessageCancelled failed");
-                }
-
-                return Ok(ApiResponse.Success(message: "Запланированное сообщение успешно отменено"));
+                 return Ok(ApiResponse.Success(message: "Запланированное сообщение успешно отменено"));
             }
             catch (UnauthorizedAccessException ex)
             {

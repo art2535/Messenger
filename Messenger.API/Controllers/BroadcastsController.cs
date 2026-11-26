@@ -2,6 +2,7 @@
 using Messenger.API.Extensions;
 using Messenger.Core.DTOs.Broadcasts;
 using Messenger.Core.Interfaces;
+using Messenger.Infrastructure.Interfaces.Broadcast;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel;
@@ -21,16 +22,16 @@ namespace Messenger.API.Controllers
     [Tags("Broadcasts")]
     public class BroadcastsController : ControllerBase
     {
-        private readonly IBroadcastService _broadcastService;
+        private readonly IBroadcastWorkflowService _broadcastWorkflowService;
         private readonly IUserService _userService;
         private readonly ILogger<BroadcastsController> _logger;
 
         public BroadcastsController(
-            IBroadcastService broadcastService,
+            IBroadcastWorkflowService broadcastWorkflowService,
             IUserService userService,
             ILogger<BroadcastsController> logger)
         {
-            _broadcastService = broadcastService;
+            _broadcastWorkflowService = broadcastWorkflowService;
             _userService = userService;
             _logger = logger;
         }
@@ -58,7 +59,7 @@ namespace Messenger.API.Controllers
                 }
 
                 var senderId = await User.GetCurrentUserIdAsync(_userService);
-                var created = await _broadcastService.CreateBroadcastAsync(request, senderId);
+                var created = await _broadcastWorkflowService.CreateBroadcastAsync(request, senderId);
 
                 return Ok(ApiResponse.Success(created));
             }
@@ -104,7 +105,7 @@ namespace Messenger.API.Controllers
                 var userId = await User.GetCurrentUserIdAsync(_userService);
                 var isAdmin = User.IsInRole("Admin");
 
-                var summary = await _broadcastService.GetBroadcastSummaryAsync(id, userId, isAdmin);
+                var summary = await _broadcastWorkflowService.GetBroadcastSummaryAsync(id, userId, isAdmin);
 
                 if (summary == null)
                 {
@@ -143,7 +144,7 @@ namespace Messenger.API.Controllers
             try
             {
                 var userId = await User.GetCurrentUserIdAsync(_userService);
-                var result = await _broadcastService.MarkAsReadAsync(id, userId);
+                var result = await _broadcastWorkflowService.MarkAsReadAsync(id, userId);
 
                 return Ok(ApiResponse.Success(result
                 ));
@@ -181,7 +182,7 @@ namespace Messenger.API.Controllers
             try
             {
                 var userId = await User.GetCurrentUserIdAsync(_userService);
-                var broadcasts = await _broadcastService.GetMyBroadcastsAsync(userId, unreadOnly);
+                var broadcasts = await _broadcastWorkflowService.GetMyBroadcastsAsync(userId, unreadOnly);
 
                 return Ok(ApiResponse.Success(broadcasts));
             }

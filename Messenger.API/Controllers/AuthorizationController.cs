@@ -1,5 +1,6 @@
 ﻿using Asp.Versioning;
 using Messenger.Core.Interfaces;
+using Messenger.Infrastructure.Interfaces.Authentication;
 using Messenger.Core.Responses;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel;
@@ -17,14 +18,14 @@ namespace Messenger.API.Controllers
     [Tags("Authorization")]
     public class AuthorizationController : ControllerBase
     {
-        private readonly IUserService _userService;
+        private readonly IAuthorizationWorkflowService _authorizationWorkflowService;
         private readonly ILogger<AuthorizationController> _logger;
 
         public AuthorizationController(
-            IUserService userService,
+            IAuthorizationWorkflowService authorizationWorkflowService,
             ILogger<AuthorizationController> logger)
         {
-            _userService = userService;
+            _authorizationWorkflowService = authorizationWorkflowService;
             _logger = logger;
         }
 
@@ -44,9 +45,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var user = await _userService.GetUserByExternalIdAsync(request.ExternalId);
-
-                user ??= await _userService.RegisterExternalUserAsync(
+                var user = await _authorizationWorkflowService.GetOrRegisterExternalUserAsync(
                     request.ExternalId,
                     request.Email,
                     request.FirstName,

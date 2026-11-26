@@ -2,12 +2,10 @@ using System.ComponentModel;
 using Asp.Versioning;
 using Messenger.API.Extensions;
 using Messenger.Core.DTOs.Reactions;
-using Messenger.Core.Hubs;
 using Messenger.Core.Interfaces;
-using Messenger.Core.Models;
+using Messenger.Infrastructure.Interfaces.Messages;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.SignalR;
 using Messenger.Core.Responses;
 
 namespace Messenger.API.Controllers
@@ -24,26 +22,20 @@ namespace Messenger.API.Controllers
     [Tags("Reactions")]
     public class ReactionsController : ControllerBase
     {
-        private readonly IReactionService _reactionService;
+        private readonly IReactionWorkflowService _reactionWorkflowService;
         private readonly IUserService _userService;
-        private readonly IHubContext<ChatHub> _hubContext;
         private readonly ILogger<ReactionsController> _logger;
 
         public ReactionsController(
-            IReactionService reactionService,
+            IReactionWorkflowService reactionWorkflowService,
             IUserService userService,
-            IHubContext<ChatHub> hubContext,
             ILogger<ReactionsController> logger)
         {
-            _reactionService = reactionService;
+            _reactionWorkflowService = reactionWorkflowService;
             _userService = userService;
-            _hubContext = hubContext;
             _logger = logger;
         }
 
-        /// <summary>
-        /// Получает объект текущего авторизованного пользователя или выбрасывает исключение.
-        /// </summary>
         /// <summary>
         /// Получить все реакции на сообщение.
         /// </summary>
@@ -60,7 +52,8 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var reactions = await _reactionService.GetReactionsByMessageIdAsync(messageId, ct);
+                var reactions = await _reactionWorkflowService
+                    .GetReactionsByMessageIdAsync(messageId, ct);
 
                 var data = reactions.Select(r => new
                 {
@@ -77,8 +70,14 @@ namespace Messenger.API.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Ошибка при получении реакций для сообщения {MessageId}", messageId);
-                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
+                _logger.LogError(
+                    ex,
+                    "Ошибка при получении реакций для сообщения {MessageId}",
+                    messageId);
+
+                return StatusCode(
+                    StatusCodes.Status500InternalServerError,
+                    ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -105,33 +104,16 @@ namespace Messenger.API.Controllers
 
                 if (request == null || string.IsNullOrWhiteSpace(request.ReactionType))
                 {
-                    return BadRequest(ApiResponse.Failure("Укажите тип реакции (ReactionType)", "INVALID_REQUEST"));
+                    return BadRequest(ApiResponse.Failure(
+                        "Укажите тип реакции (ReactionType)",
+                        "INVALID_REQUEST"));
                 }
 
-                var reaction = new Reaction
-                {
-                    ReactionId = Guid.NewGuid(),
-                    MessageId = messageId,
-                    UserId = user.UserId,
-                    ReactionType = request.ReactionType.Trim()
-                };
-
-                await _reactionService.AddReactionAsync(reaction, ct);
-
-                var chatId = await _reactionService.GetChatIdByMessageIdAsync(messageId, ct);
-                if (chatId.HasValue)
-                {
-                    await _hubContext.Clients.Group(chatId.Value.ToString())
-                        .SendAsync("ReactionUpdated", new
-                        {
-                            MessageId = messageId,
-                            ChatId = chatId.Value,
-                            UserId = user.UserId,
-                            UserName = $"{user.FirstName} {user.LastName}".Trim(),
-                            ReactionType = reaction.ReactionType,
-                            Action = "add"
-                        }, ct);
-                }
+                await _reactionWorkflowService.AddReactionAsync(
+                    messageId,
+                    user,
+                    request.ReactionType,
+                    ct);
 
                 return Ok(ApiResponse.Success(message: "Реакция добавлена"));
             }
@@ -150,8 +132,14 @@ namespace Messenger.API.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Ошибка при добавлении реакции к сообщению {MessageId}", messageId);
-                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
+                _logger.LogError(
+                    ex,
+                    "Ошибка при добавлении реакции к сообщению {MessageId}",
+                    messageId);
+
+                return StatusCode(
+                    StatusCodes.Status500InternalServerError,
+                    ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -174,27 +162,7 @@ namespace Messenger.API.Controllers
             {
                 var user = await User.GetCurrentUserAsync(_userService);
 
-                if (!await _reactionService.MessageExistsAsync(messageId, ct))
-                {
-                    return NotFound(ApiResponse.Failure("Сообщение не найдено", "NOT_FOUND"));
-                }
-
-                await _reactionService.DeleteReactionAsync(messageId, user.UserId, ct);
-
-                var chatId = await _reactionService.GetChatIdByMessageIdAsync(messageId, ct);
-                if (chatId.HasValue)
-                {
-                    await _hubContext.Clients.Group(chatId.Value.ToString())
-                        .SendAsync("ReactionUpdated", new
-                        {
-                            MessageId = messageId,
-                            ChatId = chatId.Value,
-                            UserId = user.UserId,
-                            UserName = $"{user.FirstName} {user.LastName}".Trim(),
-                            ReactionType = (string?)null,
-                            Action = "remove"
-                        }, ct);
-                }
+                await _reactionWorkflowService.DeleteReactionAsync(messageId, user, ct);
 
                 return Ok(ApiResponse.Success(message: "Реакция успешно удалена"));
             }
@@ -203,14 +171,26 @@ namespace Messenger.API.Controllers
                 _logger.LogWarning(ex, "Ошибка авторизации при удалении реакции");
                 return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
+            catch (KeyNotFoundException ex) when (ex.Message == "Сообщение не найдено")
+            {
+                return NotFound(ApiResponse.Failure("Сообщение не найдено", "NOT_FOUND"));
+            }
             catch (KeyNotFoundException)
             {
-                return NotFound(ApiResponse.Failure("Сообщение или реакция не найдены", "NOT_FOUND"));
+                return NotFound(ApiResponse.Failure(
+                    "Сообщение или реакция не найдены",
+                    "NOT_FOUND"));
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Ошибка при удалении реакции с сообщения {MessageId}", messageId);
-                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
+                _logger.LogError(
+                    ex,
+                    "Ошибка при удалении реакции с сообщения {MessageId}",
+                    messageId);
+
+                return StatusCode(
+                    StatusCodes.Status500InternalServerError,
+                    ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
     }

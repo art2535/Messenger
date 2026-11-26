@@ -2,6 +2,7 @@ using Asp.Versioning;
 using Messenger.API.Extensions;
 using Messenger.Core.DTOs.AccountSettings;
 using Messenger.Core.Interfaces;
+using Messenger.Infrastructure.Interfaces.Users;
 using Messenger.Core.Responses;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -21,16 +22,16 @@ namespace Messenger.API.Controllers
     [Tags("AccountSettings")]
     public class AccountSettingsController : ControllerBase
     {
-        private readonly IAccountSettingsService _accountSettingsService;
+        private readonly IAccountSettingsWorkflowService _accountSettingsWorkflowService;
         private readonly IUserService _userService;
         private readonly ILogger<AccountSettingsController> _logger;
 
         public AccountSettingsController(
-            IAccountSettingsService accountSettingsService,
+            IAccountSettingsWorkflowService accountSettingsWorkflowService,
             IUserService userService,
             ILogger<AccountSettingsController> logger)
         {
-            _accountSettingsService = accountSettingsService;
+            _accountSettingsWorkflowService = accountSettingsWorkflowService;
             _userService = userService;
             _logger = logger;
         }
@@ -50,7 +51,7 @@ namespace Messenger.API.Controllers
             try
             {
                 var userId = await User.GetCurrentUserIdAsync(_userService);
-                var settings = await _accountSettingsService.GetByUserIdAsync(userId, ct);
+                var settings = await _accountSettingsWorkflowService.GetByUserIdAsync(userId, ct);
 
                 return Ok(ApiResponse.Success(settings, "Настройки аккаунта получены"));
             }
@@ -85,7 +86,7 @@ namespace Messenger.API.Controllers
             try
             {
                 var userId = await User.GetCurrentUserIdAsync(_userService);
-                var settings = await _accountSettingsService.UpdateAsync(userId, request, ct);
+                var settings = await _accountSettingsWorkflowService.UpdateAsync(userId, request, ct);
 
                 return Ok(ApiResponse.Success(settings, "Настройки аккаунта обновлены"));
             }

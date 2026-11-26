@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using MassTransit;
 using Messenger.Core.DTOs.Messages;
 using Messenger.Core.Hubs;

@@ -1,6 +1,7 @@
 using Asp.Versioning;
 using Messenger.API.Extensions;
 using Messenger.Core.Interfaces;
+using Messenger.Infrastructure.Interfaces.Administration;
 using Messenger.Core.Responses;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -20,38 +21,24 @@ namespace Messenger.API.Controllers
     [Tags("Admin")]
     public class AdminController : ControllerBase
     {
-        private readonly IAdminService _adminService;
+        private readonly IAdminWorkflowService _adminWorkflowService;
         private readonly IUserService _userService;
-        private readonly IServiceProvider _serviceProvider;
         private readonly ILogger<AdminController> _logger;
 
         public AdminController(
-            IAdminService adminService,
+            IAdminWorkflowService adminWorkflowService,
             IUserService userService,
-            IServiceProvider serviceProvider,
             ILogger<AdminController> logger)
         {
-            _adminService = adminService;
+            _adminWorkflowService = adminWorkflowService;
             _userService = userService;
-            _serviceProvider = serviceProvider;
             _logger = logger;
-        }
-
-        private IModerationService? Moderation => _serviceProvider.GetService<IModerationService>();
-
-        private async Task<(Guid userId, bool isAdmin)> ResolveAdminAsync(CancellationToken ct)
-        {
-            var userId = await User.GetCurrentUserIdAsync(_userService);
-            var isAdmin = await _adminService.IsSystemAdminAsync(userId, ct);
-            return (userId, isAdmin);
         }
 
         private async Task<Guid> EnsureAdminAsync(CancellationToken ct)
         {
-            var (userId, isAdmin) = await ResolveAdminAsync(ct);
-            if (!isAdmin)
-                throw new ForbiddenAccessException("Нужна роль «Администратор»");
-
+            var userId = await User.GetCurrentUserIdAsync(_userService);
+            await _adminWorkflowService.EnsureAdminAsync(userId, ct);
             return userId;
         }
 
@@ -73,15 +60,9 @@ namespace Messenger.API.Controllers
             try
             {
                 var userId = await User.GetCurrentUserIdAsync(_userService);
-                var isAdmin = await _adminService.IsSystemAdminAsync(userId, ct);
-                var user = await _userService.GetUserByIdAsync(userId, ct);
+                var adminInfo = await _adminWorkflowService.GetAdminInfoAsync(userId, ct);
 
-                return Ok(ApiResponse.Success(new
-                {
-                    isAdmin,
-                    userId,
-                    login = user?.Login
-                }, "Права администратора проверены"));
+                return Ok(ApiResponse.Success(adminInfo, "Права администратора проверены"));
             }
             catch (UnauthorizedAccessException ex)
             {
@@ -112,7 +93,7 @@ namespace Messenger.API.Controllers
             try
             {
                 await EnsureAdminAsync(ct);
-                var stats = await _adminService.GetActivityStatsAsync(ct);
+                var stats = await _adminWorkflowService.GetActivityStatsAsync(ct);
                 return Ok(ApiResponse.Success(stats, "Статистика получена"));
             }
             catch (UnauthorizedAccessException ex)
@@ -120,7 +101,7 @@ namespace Messenger.API.Controllers
                 _logger.LogWarning(ex, "Ошибка авторизации при получении статистики");
                 return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
-            catch (ForbiddenAccessException ex)
+            catch (AdminForbiddenAccessException ex)
             {
                 return ForbiddenResult(ex.Message);
             }
@@ -150,20 +131,23 @@ namespace Messenger.API.Controllers
             {
                 await EnsureAdminAsync(ct);
 
-                var mod = Moderation;
-                if (mod == null)
-                    return Ok(ApiResponse.Success(Array.Empty<object>(), "IModerationService не зарегистрирован",
+                var list = await _adminWorkflowService.GetPendingReportsAsync(take, ct);
+                if (list == null)
+                {
+                    return Ok(ApiResponse.Success(
+                        Array.Empty<object>(),
+                        "IModerationService не зарегистрирован",
                         meta: new { note = "IModerationService не зарегистрирован" }));
+                }
 
-                var list = await mod.GetPendingReportsAsync(take, ct);
-                return Ok(ApiResponse.Success(list, meta: new { count = list?.Count() ?? 0 }));
+                return Ok(ApiResponse.Success(list, meta: new { count = list.Count }));
             }
             catch (UnauthorizedAccessException ex)
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при получении списка жалоб");
                 return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
-            catch (ForbiddenAccessException ex)
+            catch (AdminForbiddenAccessException ex)
             {
                 return ForbiddenResult(ex.Message);
             }
@@ -196,11 +180,12 @@ namespace Messenger.API.Controllers
             {
                 var adminUserId = await EnsureAdminAsync(ct);
 
-                var mod = Moderation;
-                if (mod == null)
-                    return BadRequest(ApiResponse.Failure("Модерация не подключена", "INVALID_REQUEST"));
-
-                await mod.ReviewReportAsync(reportId, adminUserId, body?.Status ?? "reviewed", body?.Note, ct);
+                await _adminWorkflowService.ReviewReportAsync(
+                    reportId,
+                    adminUserId,
+                    body?.Status ?? "reviewed",
+                    body?.Note,
+                    ct);
                 return Ok(ApiResponse.Success(message: "Жалоба рассмотрена"));
             }
             catch (UnauthorizedAccessException ex)
@@ -208,7 +193,7 @@ namespace Messenger.API.Controllers
                 _logger.LogWarning(ex, "Ошибка авторизации при рассмотрении жалобы {ReportId}", reportId);
                 return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
-            catch (ForbiddenAccessException ex)
+            catch (AdminForbiddenAccessException ex)
             {
                 return ForbiddenResult(ex.Message);
             }
@@ -244,20 +229,23 @@ namespace Messenger.API.Controllers
             {
                 await EnsureAdminAsync(ct);
 
-                var mod = Moderation;
-                if (mod == null)
-                    return Ok(ApiResponse.Success(Array.Empty<object>(), "IModerationService не зарегистрирован",
+                var list = await _adminWorkflowService.GetActiveMutesAsync(ct);
+                if (list == null)
+                {
+                    return Ok(ApiResponse.Success(
+                        Array.Empty<object>(),
+                        "IModerationService не зарегистрирован",
                         meta: new { note = "IModerationService не зарегистрирован" }));
+                }
 
-                var list = await mod.GetActiveMutesAsync(ct);
-                return Ok(ApiResponse.Success(list, meta: new { count = list?.Count() ?? 0 }));
+                return Ok(ApiResponse.Success(list, meta: new { count = list.Count }));
             }
             catch (UnauthorizedAccessException ex)
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при получении активных мутов");
                 return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
-            catch (ForbiddenAccessException ex)
+            catch (AdminForbiddenAccessException ex)
             {
                 return ForbiddenResult(ex.Message);
             }
@@ -287,20 +275,23 @@ namespace Messenger.API.Controllers
             {
                 await EnsureAdminAsync(ct);
 
-                var mod = Moderation;
-                if (mod == null)
-                    return Ok(ApiResponse.Success(Array.Empty<object>(), "IModerationService не зарегистрирован",
+                var list = await _adminWorkflowService.GetLogsAsync(take, ct);
+                if (list == null)
+                {
+                    return Ok(ApiResponse.Success(
+                        Array.Empty<object>(),
+                        "IModerationService не зарегистрирован",
                         meta: new { note = "IModerationService не зарегистрирован" }));
+                }
 
-                var list = await mod.GetLogsAsync(take, ct);
-                return Ok(ApiResponse.Success(list, meta: new { count = list?.Count() ?? 0 }));
+                return Ok(ApiResponse.Success(list, meta: new { count = list.Count }));
             }
             catch (UnauthorizedAccessException ex)
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при получении логов модерации");
                 return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
-            catch (ForbiddenAccessException ex)
+            catch (AdminForbiddenAccessException ex)
             {
                 return ForbiddenResult(ex.Message);
             }
@@ -332,11 +323,7 @@ namespace Messenger.API.Controllers
             {
                 var adminUserId = await EnsureAdminAsync(ct);
 
-                var mod = Moderation;
-                if (mod == null)
-                    return BadRequest(ApiResponse.Failure("Модерация не подключена", "INVALID_REQUEST"));
-
-                await mod.DeleteReportAsync(reportId, adminUserId, ct);
+                await _adminWorkflowService.DeleteReportAsync(reportId, adminUserId, ct);
                 return Ok(ApiResponse.Success(message: "Жалоба удалена"));
             }
             catch (UnauthorizedAccessException ex)
@@ -344,7 +331,7 @@ namespace Messenger.API.Controllers
                 _logger.LogWarning(ex, "Ошибка авторизации при удалении жалобы {ReportId}", reportId);
                 return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
-            catch (ForbiddenAccessException ex)
+            catch (AdminForbiddenAccessException ex)
             {
                 return ForbiddenResult(ex.Message);
             }
@@ -384,11 +371,7 @@ namespace Messenger.API.Controllers
             {
                 await EnsureAdminAsync(ct);
 
-                var mod = Moderation;
-                if (mod == null)
-                    return BadRequest(ApiResponse.Failure("Модерация не подключена", "INVALID_REQUEST"));
-
-                await mod.DeleteLogAsync(logId, ct);
+                await _adminWorkflowService.DeleteLogAsync(logId, ct);
                 return Ok(ApiResponse.Success(message: "Запись лога удалена"));
             }
             catch (UnauthorizedAccessException ex)
@@ -396,7 +379,7 @@ namespace Messenger.API.Controllers
                 _logger.LogWarning(ex, "Ошибка авторизации при удалении лога {LogId}", logId);
                 return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
-            catch (ForbiddenAccessException ex)
+            catch (AdminForbiddenAccessException ex)
             {
                 return ForbiddenResult(ex.Message);
             }
@@ -422,6 +405,5 @@ namespace Messenger.API.Controllers
             public string? Note { get; set; }
         }
 
-        private sealed class ForbiddenAccessException(string message) : Exception(message);
-    }
+     }
 }

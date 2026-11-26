@@ -31,8 +31,6 @@ namespace Messenger.API.Controllers
         private readonly IConfiguration _configuration;
         private readonly IMessageRealtimeNotifier _messageRealtimeNotifier;
         private readonly IUserService _userService;
-        private readonly IAttachmentService _attachmentService;
-        private readonly IAccountSettingsService _accountSettingsService;
         private readonly ILogger<MessagesController> _logger;
         private readonly SendMessageRateLimiterService _sendLimiter;
         private readonly IMessageSendingService _messageSendingService;
@@ -47,8 +45,6 @@ namespace Messenger.API.Controllers
             IConfiguration configuration,
             IMessageRealtimeNotifier messageRealtimeNotifier,
             IUserService userService,
-            IAttachmentService attachmentService,
-            IAccountSettingsService accountSettingsService,
             ILogger<MessagesController> logger,
             SendMessageRateLimiterService sendLimiter,
             IMessageSendingService messageSendingService,
@@ -62,8 +58,6 @@ namespace Messenger.API.Controllers
             _configuration = configuration;
             _messageRealtimeNotifier = messageRealtimeNotifier;
             _userService = userService;
-            _attachmentService = attachmentService;
-            _accountSettingsService = accountSettingsService;
             _logger = logger;
             _sendLimiter = sendLimiter;
             _messageSendingService = messageSendingService;

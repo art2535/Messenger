@@ -4,7 +4,7 @@ using Messenger.Infrastructure.Data;
 
 namespace Messenger.Infrastructure.Services.Messages
 {
-    public class MessageEventPublisher : IMessageEventPublisher
+    public sealed class MessageEventPublisher : IMessageEventPublisher
     {
         private readonly GuapMessengerContext _context;
         private readonly IPublishEndpoint _publishEndpoint;

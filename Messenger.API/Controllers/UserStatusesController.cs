@@ -3,6 +3,7 @@ using Messenger.API.Extensions;
 using Messenger.Core.DTOs.UserStatuses;
 using Messenger.Core.Interfaces;
 using Messenger.Core.Models;
+using Messenger.Infrastructure.Interfaces.Users;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel;
@@ -22,16 +23,16 @@ namespace Messenger.API.Controllers
     [Tags("UserStatuses")]
     public class UserStatusesController : ControllerBase
     {
-        private readonly IUserStatusService _userStatusService;
+        private readonly IUserStatusWorkflowService _userStatusWorkflowService;
         private readonly IUserService _userService;
         private readonly ILogger<UserStatusesController> _logger;
 
         public UserStatusesController(
-            IUserStatusService userStatusService,
+            IUserStatusWorkflowService userStatusWorkflowService,
             IUserService userService,
             ILogger<UserStatusesController> logger)
         {
-            _userStatusService = userStatusService;
+            _userStatusWorkflowService = userStatusWorkflowService;
             _userService = userService;
             _logger = logger;
         }
@@ -53,7 +54,7 @@ namespace Messenger.API.Controllers
             {
                 var userId = await User.GetCurrentUserIdAsync(_userService);
 
-                var status = await _userStatusService.GetUserStatusByUserIdAsync(userId, ct);
+                var status = await _userStatusWorkflowService.GetUserStatusAsync(userId, ct);
 
                 if (status == null)
                 {
@@ -93,14 +94,7 @@ namespace Messenger.API.Controllers
             {
                 var userId = await User.GetCurrentUserIdAsync(_userService);
 
-                var userStatus = new UserStatus
-                {
-                    UserId = userId,
-                    Online = request.Online,
-                    LastActivity = DateTime.UtcNow
-                };
-
-                await _userStatusService.UpdateUserStatusAsync(userStatus, ct);
+                await _userStatusWorkflowService.UpdateUserStatusAsync(userId, request.Online, ct);
 
                 return Ok(ApiResponse.Success(message: "Статус пользователя обновлен"));
             }

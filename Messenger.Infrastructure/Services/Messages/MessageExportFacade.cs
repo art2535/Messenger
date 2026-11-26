@@ -1,4 +1,4 @@
-using Messenger.Core.DTOs;
+using Messenger.Core.DTOs.Messages;
 
 namespace Messenger.Infrastructure.Services.Messages
 {

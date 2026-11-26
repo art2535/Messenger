@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Messenger.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;

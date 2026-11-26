@@ -3,13 +3,12 @@ using Messenger.API.Extensions;
 using Messenger.Core.DTOs.Logins;
 using Messenger.Core.Interfaces;
 using Messenger.Core.Models;
+using Messenger.Infrastructure.Interfaces.Authentication;
 using Messenger.Core.Responses;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel;
-using System.Security.Cryptography;
-using System.Text;
-
+ 
 namespace Messenger.API.Controllers
 {
     /// <summary>
@@ -24,16 +23,16 @@ namespace Messenger.API.Controllers
     [Tags("Logins")]
     public class LoginsController : ControllerBase
     {
-        private readonly ILoginService _loginService;
+        private readonly ILoginWorkflowService _loginWorkflowService;
         private readonly IUserService _userService;
         private readonly ILogger<LoginsController> _logger;
 
         public LoginsController(
-            ILoginService loginService,
+            ILoginWorkflowService loginWorkflowService,
             IUserService userService,
             ILogger<LoginsController> logger)
         {
-            _loginService = loginService;
+            _loginWorkflowService = loginWorkflowService;
             _userService = userService;
             _logger = logger;
         }
@@ -55,19 +54,7 @@ namespace Messenger.API.Controllers
             {
                 var userId = await User.GetCurrentUserIdAsync(_userService);
 
-                var logins = await _loginService.GetLoginsByUserIdAsync(userId, ct);
-                var data = logins
-                    .Where(l => l.Active)
-                    .OrderByDescending(l => l.LoginTime)
-                    .Select(l => new
-                    {
-                        LoginId = l.LoginId,
-                        IpAddress = l.IpAddress,
-                        LoginTime = l.LoginTime,
-                        LogoutTime = l.LogoutTime,
-                        Active = l.Active
-                    })
-                    .ToList();
+                var data = await _loginWorkflowService.GetActiveLoginsAsync(userId, ct);
 
                 return Ok(ApiResponse.Success(data));
             }
@@ -99,7 +86,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var expired = await _loginService.ExpireSessionAsync(sessionKey, ct);
+                var expired = await _loginWorkflowService.ExpireSessionAsync(sessionKey, ct);
 
                 return Ok(ApiResponse.Success(new { expired }, expired ? "Сессия завершена" : "Сессия не найдена"));
             }
@@ -129,25 +116,11 @@ namespace Messenger.API.Controllers
             {
                 var userId = await User.GetCurrentUserIdAsync(_userService);
 
-                var rawToken = string.IsNullOrWhiteSpace(request.Token)
-                    ? Guid.NewGuid().ToString("N")
-                    : request.Token.Trim();
+                var login = await _loginWorkflowService.CreateLoginAsync(userId, request, ct);
 
-                var tokenHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(rawToken)));
-
-                var login = new Login
-                {
-                    LoginId = Guid.NewGuid(),
-                    UserId = userId,
-                    Token = tokenHash,
-                    IpAddress = request.IpAddress,
-                    LoginTime = UtcDateTime.Now,
-                    Active = true
-                };
-
-                await _loginService.AddLoginAsync(login, ct);
-
-                return Ok(ApiResponse.Success(new { loginId = login.LoginId, tokenHash }, "Вход успешно добавлен"));
+                return Ok(ApiResponse.Success(
+                    new { loginId = login.LoginId, tokenHash = login.TokenHash },
+                    "Вход успешно добавлен"));
             }
             catch (UnauthorizedAccessException ex)
             {
@@ -186,17 +159,7 @@ namespace Messenger.API.Controllers
             {
                 var userId = await User.GetCurrentUserIdAsync(_userService);
 
-                var logins = await _loginService.GetLoginsByUserIdAsync(userId, ct);
-
-                var userLogout = logins.FirstOrDefault(l => l.UserId == userId && l.Active == true);
-                if (userLogout != null)
-                {
-                    userLogout.Token = string.Empty;
-                    userLogout.Active = false;
-                    userLogout.LogoutTime = UtcDateTime.Now;
-
-                    await _loginService.UpdateLoginAsync(userLogout, ct);
-                }
+                await _loginWorkflowService.LogoutAsync(userId, ct);
 
                 return Ok(ApiResponse.Success(message: "Выход успешно обновлен"));
             }
@@ -231,7 +194,7 @@ namespace Messenger.API.Controllers
             {
                 var userId = await User.GetCurrentUserIdAsync(_userService);
 
-                var ok = await _loginService.RevokeLoginAndUpdateStatusAsync(userId, loginId, ct);
+                var ok = await _loginWorkflowService.RevokeLoginAsync(userId, loginId, ct);
                 if (!ok)
                 {
                     return NotFound(ApiResponse.Failure("Сессия не найдена или уже завершена", "NOT_FOUND"));
@@ -269,7 +232,7 @@ namespace Messenger.API.Controllers
             {
                 var userId = await User.GetCurrentUserIdAsync(_userService);
 
-                var revokedCount = await _loginService.RevokeOtherLoginsAsync(userId, keepLoginId, ct);
+                var revokedCount = await _loginWorkflowService.RevokeOtherLoginsAsync(userId, keepLoginId, ct);
 
                 return Ok(ApiResponse.Success(new { revoked = revokedCount }, "Другие сессии завершены"));
             }
@@ -301,7 +264,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var active = await _loginService.IsSessionKeyActiveAsync(sessionKey, ct);
+                var active = await _loginWorkflowService.IsSessionActiveAsync(sessionKey, ct);
 
                 return Ok(ApiResponse.Success(new { active = active ?? true, known = active.HasValue }));
             }

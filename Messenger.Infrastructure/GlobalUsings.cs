@@ -1,5 +1,11 @@
+global using Messenger.Infrastructure.Interfaces.Attachments;
+global using Messenger.Infrastructure.Interfaces.Administration;
+global using Messenger.Infrastructure.Interfaces.Authentication;
+global using Messenger.Infrastructure.Interfaces.Broadcast;
 global using Messenger.Infrastructure.Interfaces.Chats;
 global using Messenger.Infrastructure.Interfaces.Messages;
+global using Messenger.Infrastructure.Interfaces.Notifications;
+global using Messenger.Infrastructure.Interfaces.Users;
 global using Messenger.Infrastructure.Services.Administration;
 global using Messenger.Infrastructure.Services.Attachments;
 global using Messenger.Infrastructure.Services.Authentication;

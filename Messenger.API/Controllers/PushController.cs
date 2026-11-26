@@ -5,7 +5,7 @@ using Messenger.Core.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel;
-using WebPush;
+using Messenger.Infrastructure.Interfaces.Notifications;
 using Messenger.Core.Responses;
 
 namespace Messenger.API.Controllers
@@ -22,29 +22,18 @@ namespace Messenger.API.Controllers
     [Tags("Push")]
     public class PushController : ControllerBase
     {
-        private readonly IPushSubscriptionService _subscriptionService;
-        private readonly VapidDetails _vapidDetails;
+        private readonly IPushWorkflowService _pushWorkflowService;
         private readonly ILogger<PushController> _logger;
         private readonly IUserService _userService;
-        private readonly INotificationService _notificationService;
 
         public PushController(
-            IPushSubscriptionService subscriptionService,
-            IConfiguration configuration,
+            IPushWorkflowService pushWorkflowService,
             ILogger<PushController> logger,
-            IUserService userService,
-            INotificationService notificationService)
+            IUserService userService)
         {
-            _subscriptionService = subscriptionService;
+            _pushWorkflowService = pushWorkflowService;
             _logger = logger;
             _userService = userService;
-            _notificationService = notificationService;
-
-            var vapidSection = configuration.GetSection("Vapid");
-            _vapidDetails = new VapidDetails(
-                vapidSection["Subject"],
-                vapidSection["PublicKey"]!,
-                vapidSection["PrivateKey"]!);
         }
 
         /// <summary>
@@ -77,22 +66,10 @@ namespace Messenger.API.Controllers
                     return BadRequest(ApiResponse.Failure("Отсутствуют ключи шифрования p256dh или auth", "INVALID_REQUEST"));
                 }
 
-                var subscription = new Core.Models.PushSubscription
-                {
-                    UserId = userId,
-                    Endpoint = subscriptionDto.Endpoint,
-                    P256dh = subscriptionDto.P256dh,
-                    Auth = subscriptionDto.Auth,
-                    CreatedAt = DateTime.UtcNow,
-                    LastUsedAt = DateTime.UtcNow
-                };
-
-                await _subscriptionService.RemoveByEndpointAsync(subscriptionDto.Endpoint, ct);
-                await _subscriptionService.AddSubscriptionAsync(subscription, ct);
-                await _subscriptionService.EnsurePushEnabledAsync(userId, ct);
+                await _pushWorkflowService.SubscribeAsync(userId, subscriptionDto, ct);
 
                 _logger.LogInformation("Push-подписка успешно сохранена для пользователя {UserId}. P256dh length: {Len}",
-                    userId, subscription.P256dh.Length);
+                    userId, subscriptionDto.P256dh.Length);
 
                 return Ok(ApiResponse.Success(message: "Подписка успешно сохранена"));
             }
@@ -130,7 +107,7 @@ namespace Messenger.API.Controllers
                     return BadRequest(ApiResponse.Failure("Endpoint не может быть пустым", "INVALID_REQUEST"));
                 }
 
-                await _subscriptionService.RemoveByEndpointAsync(endpoint, ct);
+                await _pushWorkflowService.UnsubscribeAsync(endpoint, ct);
 
                 return Ok(ApiResponse.Success(message: "Подписка удалена"));
             }
@@ -157,7 +134,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                await _notificationService.MarkAsReadAsync(notificationId, ct);
+                await _pushWorkflowService.MarkNotificationAsReadAsync(notificationId, ct);
 
                 return Ok(ApiResponse.Success(message: "Уведомление помечено как прочитанное"));
             }
@@ -183,15 +160,7 @@ namespace Messenger.API.Controllers
             try
             {
                 var userId = await User.GetCurrentUserIdAsync(_userService);
-                var settings = await _subscriptionService.GetPushSettingsAsync(userId, ct);
-
-                var result = new PushSubscriptionUpdateRequest
-                {
-                    PushEnabled = settings.PushEnabled,
-                    NotifyMessages = settings.NotifyMessages,
-                    NotifyGroupChats = settings.NotifyGroupChats,
-                    NotifyMentions = settings.NotifyMentions
-                };
+                var result = await _pushWorkflowService.GetSettingsAsync(userId, ct);
 
                 return Ok(ApiResponse.Success(result));
             }
@@ -224,7 +193,7 @@ namespace Messenger.API.Controllers
             try
             {
                 var userId = await User.GetCurrentUserIdAsync(_userService);
-                await _subscriptionService.SavePushSettingsAsync(userId, request, ct);
+                await _pushWorkflowService.SaveSettingsAsync(userId, request, ct);
 
                 _logger.LogInformation("Настройки push-уведомлений обновлены для пользователя {UserId}", userId);
 
@@ -266,14 +235,7 @@ namespace Messenger.API.Controllers
 
                 var senderId = await User.GetCurrentUserIdAsync(_userService);
 
-                await _subscriptionService.SendPushToOfflineUsersAsync(
-                    request.ChatId,
-                    senderId,
-                    request.SenderName ?? "Пользователь",
-                    request.MessageText,
-                    request.HasAttachments,
-                    request.IsMention,
-                    ct);
+                await _pushWorkflowService.SendPushAsync(senderId, request, ct);
 
                 return Ok(ApiResponse.Success(message: "Push-уведомления обработаны"));
             }
@@ -304,7 +266,7 @@ namespace Messenger.API.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         public IActionResult GetVapidPublicKeyAsync()
         {
-            return Ok(ApiResponse.Success(data: _vapidDetails.PublicKey));
+            return Ok(ApiResponse.Success(data: _pushWorkflowService.GetVapidPublicKey()));
         }
     }
 }

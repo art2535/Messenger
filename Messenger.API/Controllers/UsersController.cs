@@ -2,13 +2,11 @@
 using Asp.Versioning;
 using Messenger.API.Extensions;
 using Messenger.Core.DTOs.Users;
-using Messenger.Core.Hubs;
-using Messenger.Core.Interfaces;
-using Messenger.Core.Models;
-using Microsoft.AspNetCore.Authorization;
+ using Messenger.Core.Interfaces;
+using Messenger.Infrastructure.Interfaces.Users;
+ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.SignalR;
-using Messenger.Core.Responses;
+ using Messenger.Core.Responses;
 
 namespace Messenger.API.Controllers
 {
@@ -25,37 +23,20 @@ namespace Messenger.API.Controllers
     public class UsersController : ControllerBase
     {
         private readonly IUserService _userService;
-        private readonly IChatService _chatService;
-        private readonly IHubContext<ChatHub> _hubContext;
+        private readonly IUserWorkflowService _userWorkflowService;
         private readonly ILogger<UsersController> _logger;
 
         public UsersController(
             IUserService userService,
-            IChatService chatService,
-            IHubContext<ChatHub> hubContext,
+            IUserWorkflowService userWorkflowService,
             ILogger<UsersController> logger)
         {
             _userService = userService;
-            _chatService = chatService;
-            _hubContext = hubContext;
+            _userWorkflowService = userWorkflowService;
             _logger = logger;
         }
 
-        private async Task SendProfileToPeersAsync(Guid userId, string method, object payload, CancellationToken ct)
-        {
-            var peerIds = await _chatService.GetPeerUserIdsAsync(userId, ct);
-            var groups = peerIds.Select(id => $"User_{id}").ToList();
-
-            if (groups.Count == 0)
-            {
-                await _hubContext.Clients.Group($"User_{userId}").SendAsync(method, payload, ct);
-                return;
-            }
-
-            await _hubContext.Clients.Groups(groups).SendAsync(method, payload, ct);
-        }
-
-        /// <summary>
+         /// <summary>
         /// Получить пользователя по внешнему идентификатору (OIDC / Keycloak).
         /// </summary>
         [HttpGet("{externalId}")]
@@ -71,7 +52,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var user = await _userService.GetUserByExternalIdAsync(externalId);
+                var user = await _userWorkflowService.GetByExternalIdAsync(externalId);
 
                 return Ok(ApiResponse.Success(user));
             }
@@ -104,14 +85,7 @@ namespace Messenger.API.Controllers
                     ));
                 }
 
-                var result = await _userService.SearchUsersAsync(query.Trim(), ct);
-
-                var data = result.Select(u => new
-                {
-                    Id = u.Id,
-                    Name = u.Name,
-                    Avatar = u.Avatar ?? "https://static.photos/people/200x200/default"
-                });
+                var data = await _userWorkflowService.SearchAsync(query, ct);
 
                 return Ok(ApiResponse.Success(data));
             }
@@ -136,7 +110,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var users = await _userService.GetAllUsersAsync(ct);
+                var users = await _userWorkflowService.GetAllAsync(ct);
 
                 return Ok(ApiResponse.Success(users));
             }
@@ -161,7 +135,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var roles = await _userService.GetRolesAsync(ct);
+                var roles = await _userWorkflowService.GetRolesAsync(ct);
 
                 return Ok(ApiResponse.Success(roles));
             }
@@ -189,13 +163,11 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var currentUser = await _userService.GetUserByIdAsync(userId, ct);
-                if (currentUser == null)
+                var name = await _userWorkflowService.GetDisplayNameAsync(userId, ct);
+                if (name == null)
                 {
                     return NotFound(ApiResponse.Failure("Пользователь не найден", "NOT_FOUND"));
                 }
-
-                var name = $"{currentUser.FirstName} {currentUser.LastName}".Trim() ?? "Удалённый пользователь";
 
                 return Ok(ApiResponse.Success(data: name));
             }
@@ -223,23 +195,11 @@ namespace Messenger.API.Controllers
             {
                 var user = await User.GetCurrentUserAsync(_userService);
 
-                var currentUser = await _userService.GetUserByIdAsync(user.UserId, ct);
-                if (currentUser == null)
+                var response = await _userWorkflowService.GetCurrentUserInfoAsync(user.UserId, ct);
+                if (response == null)
                 {
                     return NotFound(ApiResponse.Failure("Пользователь не найден", "NOT_FOUND"));
                 }
-
-                var response = new
-                {
-                    UserId = currentUser.UserId,
-                    LastName = currentUser.LastName ?? "",
-                    FirstName = currentUser.FirstName ?? "",
-                    Login = currentUser.Login ?? "",
-                    Account = currentUser.Account != null ? new
-                    {
-                        Avatar = currentUser.Account.Avatar,
-                    } : null
-                };
 
                 return Ok(ApiResponse.Success(response));
             }
@@ -274,18 +234,7 @@ namespace Messenger.API.Controllers
             {
                 var user = await User.GetCurrentUserAsync(_userService);
 
-                await _userService.UpdateProfileAsync(user.UserId, request, avatarUrl, ct);
-
-                var updatedUser = await _userService.GetUserByIdAsync(user.UserId, ct);
-                var newDisplayName = $"{updatedUser.FirstName} {updatedUser.LastName}".Trim();
-                var currentAvatar = updatedUser.Account?.Avatar;
-
-                await SendProfileToPeersAsync(user.UserId, "ProfileUpdated", new
-                {
-                    UserId = user.UserId.ToString(),
-                    AvatarUrl = currentAvatar,
-                    DisplayName = newDisplayName
-                }, ct);
+                await _userWorkflowService.UpdateProfileAsync(user, request, avatarUrl, ct);
 
                 return Ok(ApiResponse.Success(message: "Пользователь успешно обновлен"));
             }
@@ -331,13 +280,7 @@ namespace Messenger.API.Controllers
 
                 var user = await User.GetCurrentUserAsync(_userService);
 
-                var avatarUrl = await _userService.UploadAvatarAsync(user.UserId, avatarFile, ct);
-
-                await SendProfileToPeersAsync(user.UserId, "AvatarUpdated", new
-                {
-                    UserId = user.UserId.ToString(),
-                    AvatarUrl = avatarUrl
-                }, ct);
+                var avatarUrl = await _userWorkflowService.UploadAvatarAsync(user, avatarFile, ct);
 
                 return Ok(ApiResponse.Success(new { avatarUrl }, "Аватар успешно загружен"));
             }
@@ -375,7 +318,7 @@ namespace Messenger.API.Controllers
             {
                 var user = await User.GetCurrentUserAsync(_userService);
 
-                await _userService.AssignRoleAsync(user.UserId, roleId, ct);
+                await _userWorkflowService.AssignRoleAsync(user.UserId, roleId, ct);
 
                 return Ok(ApiResponse.Success(message: "Роль успешно назначена"));
             }
@@ -407,13 +350,7 @@ namespace Messenger.API.Controllers
             {
                 var user = await User.GetCurrentUserAsync(_userService);
 
-                await _userService.DeleteAvatarAsync(user.UserId, ct);
-
-                await SendProfileToPeersAsync(user.UserId, "AvatarUpdated", new
-                {
-                    UserId = user.UserId.ToString(),
-                    AvatarUrl = (string?)null
-                }, ct);
+                await _userWorkflowService.DeleteAvatarAsync(user, ct);
 
                 return Ok(ApiResponse.Success(message: "Аватар успешно удалён"));
             }

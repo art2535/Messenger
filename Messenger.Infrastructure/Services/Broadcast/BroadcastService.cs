@@ -3,6 +3,7 @@ using Messenger.Core.Interfaces;
 using Messenger.Core.Models;
 using Messenger.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using BroadcastModel = Messenger.Core.Models.Broadcast;
 
 namespace Messenger.Infrastructure.Services.Broadcast
 {
@@ -25,7 +26,7 @@ namespace Messenger.Infrastructure.Services.Broadcast
             if (existingIds.Count != request.RecipientIds.Count)
                 throw new ArgumentException("Один или несколько получателей не существуют");
 
-            var broadcast = new Broadcast
+            var broadcast = new BroadcastModel
             {
                 Title = request.Title,
                 MessageText = request.MessageText,
