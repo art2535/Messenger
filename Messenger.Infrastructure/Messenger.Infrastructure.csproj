@@ -26,6 +26,7 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\Messenger.Core\Messenger.Core.csproj" />
+		<FrameworkReference Include="Microsoft.AspNetCore.App" />
 	</ItemGroup>
 
 </Project>
