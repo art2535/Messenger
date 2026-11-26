@@ -5,6 +5,7 @@ using Messenger.Core.Messages;
 using Messenger.Core.Models;
 using Microsoft.AspNetCore.SignalR;
 using Messenger.Core.Hubs;
+using Npgsql;
 
 namespace Messenger.API.Services;
 
@@ -171,6 +172,16 @@ public class ScheduledMessageDispatcherService : BackgroundService
                 // Оставляем Processing: после истечения lease запись безопасно восстановится.
                 throw;
             }
+            catch (Exception ex) when (IsTransientDatabaseFailure(ex))
+            {
+                // Не переводим запись в Failed: транзакция Outbox могла не зафиксироваться.
+                // После истечения lease диспетчер повторит попытку с тем же MessageId.
+                _logger.LogError(
+                    ex,
+                    "Transient database failure while dispatching scheduled {Id}; retry later",
+                    item.ScheduledMessageId);
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to dispatch scheduled {Id}", item.ScheduledMessageId);
@@ -188,4 +199,15 @@ public class ScheduledMessageDispatcherService : BackgroundService
             }
         }
     }
+    private static bool IsTransientDatabaseFailure(Exception exception)
+    {
+        for (var current = exception; current != null; current = current.InnerException)
+        {
+            if (current is NpgsqlException { IsTransient: true } || current is TimeoutException)
+                return true;
+        }
+
+        return false;
+    }
+
 }
