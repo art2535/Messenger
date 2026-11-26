@@ -1,6 +1,8 @@
 using Messenger.Core.Interfaces;
 using Messenger.Core.Services;
 using Messenger.Infrastructure.Services;
+using Messenger.Infrastructure.Interfaces.Chats;
+using Messenger.Infrastructure.Services.Chats;
 using Messenger.Infrastructure.Persistence;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Configuration;
@@ -80,6 +82,7 @@ namespace Messenger.Infrastructure.Extensions
             {
                 services.AddScoped<IUserService, UserService>();
                 services.AddScoped<IChatService, ChatService>();
+                services.AddScoped<IChatQueryWorkflowService, ChatQueryWorkflowService>();
                 services.AddScoped<IChatFolderService, ChatFolderService>();
                 services.AddScoped<INotificationService, NotificationService>();
                 services.AddScoped<IAttachmentService, AttachmentService>();
