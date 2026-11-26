@@ -59,12 +59,13 @@ public sealed class LayerDependencyTests
             .ToArray();
 
         Assert.Equal(
-            [
+            new[]
+            {
                 typeof(MessageQueryFacade),
                 typeof(MessageCommandFacade),
                 typeof(MessageReadFacade),
                 typeof(MessageExportFacade)
-            ],
+            },
             parameterTypes);
     }
 
