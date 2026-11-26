@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
-namespace Messenger.Infrastructure.Services.MessageSendingService.cs
+namespace Messenger.Infrastructure.Services.Messages
 {
     public sealed class MessageSendingService : IMessageSendingService
     {

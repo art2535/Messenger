@@ -1,4 +1,4 @@
-namespace Messenger.Infrastructure.Services.MessageReadFacade.cs
+namespace Messenger.Infrastructure.Services.Messages
 {
     public sealed class MessageReadFacade
     {

@@ -1,7 +1,7 @@
 using Messenger.Core.Hubs;
 using Microsoft.AspNetCore.SignalR;
 
-namespace Messenger.Infrastructure.Services.MessageRealtimeNotifier.cs
+namespace Messenger.Infrastructure.Services.Messages
 {
     public sealed class MessageRealtimeNotifier : IMessageRealtimeNotifier
     {

@@ -3,7 +3,7 @@ using Messenger.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
-namespace Messenger.Infrastructure.Services.MessageReadService.cs
+namespace Messenger.Infrastructure.Services.Messages
 {
     public class MessageReadService : IMessageReadService
     {

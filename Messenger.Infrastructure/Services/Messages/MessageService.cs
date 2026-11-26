@@ -5,7 +5,7 @@ using Messenger.Core.Messages;
 using Messenger.Core.Models;
 using Microsoft.AspNetCore.Http;
 
-namespace Messenger.Infrastructure.Services.MessageService.cs
+namespace Messenger.Infrastructure.Services.Messages
 {
     public sealed class MessageService : IMessageService
     {

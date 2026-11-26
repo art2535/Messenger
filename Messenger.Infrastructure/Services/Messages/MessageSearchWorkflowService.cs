@@ -1,6 +1,6 @@
 using Messenger.Core.DTOs.Messages;
 
-namespace Messenger.Infrastructure.Services.MessageSearchWorkflowService.cs
+namespace Messenger.Infrastructure.Services.Messages
 {
     public sealed class MessageSearchWorkflowService : IMessageSearchWorkflowService
     {
