@@ -55,7 +55,6 @@ namespace Messenger.API
             builder.Services.AddSignalRService(builder.Configuration);
             builder.Services.AddScalarApi(builder.Configuration);
             builder.Services.AddMessengerInfrastructure(builder.Configuration);
-            builder.Services.AddLogRetention(builder.Configuration);
             builder.Services.AddHttpClient();
             builder.Services.AddHostedService<ScheduledMessageDispatcherService>();
             builder.Services.AddEtaApiAuthentication(builder.Configuration, !builder.Environment.IsDevelopment());

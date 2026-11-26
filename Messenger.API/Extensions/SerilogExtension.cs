@@ -109,13 +109,4 @@ writeToProviders: true);   // обязательно true
         }
     }
 
-    extension(IServiceCollection services)
-    {
-        public IServiceCollection AddLogRetention(IConfiguration configuration)
-        {
-            services.Configure<LogRetentionOptions>(configuration.GetSection(LogRetentionOptions.SectionName));
-            services.AddHostedService<LogRetentionService>();
-            return services;
-        }
-    }
 }
