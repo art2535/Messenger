@@ -1,9 +1,7 @@
 using Messenger.Core.DTOs.Messages;
-using Messenger.Core.Hubs;
 using Messenger.Core.Interfaces;
 using Messenger.Core.Messages;
 using Messenger.Core.Models;
-using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -17,7 +15,7 @@ namespace Messenger.Infrastructure.Services
         private readonly IAttachmentService _attachmentService;
         private readonly IEncryptionService _encryptionService;
         private readonly IConfiguration _configuration;
-        private readonly IHubContext<ChatHub> _hubContext;
+        private readonly IMessageRealtimeNotifier _messageRealtimeNotifier;
         private readonly ILogger<MessageForwardingService> _logger;
 
         public MessageForwardingService(
@@ -27,7 +25,7 @@ namespace Messenger.Infrastructure.Services
             IAttachmentService attachmentService,
             IEncryptionService encryptionService,
             IConfiguration configuration,
-            IHubContext<ChatHub> hubContext,
+            IMessageRealtimeNotifier messageRealtimeNotifier,
             ILogger<MessageForwardingService> logger)
         {
             _userService = userService;
@@ -36,7 +34,7 @@ namespace Messenger.Infrastructure.Services
             _attachmentService = attachmentService;
             _encryptionService = encryptionService;
             _configuration = configuration;
-            _hubContext = hubContext;
+            _messageRealtimeNotifier = messageRealtimeNotifier;
             _logger = logger;
         }
 
@@ -300,27 +298,12 @@ namespace Messenger.Infrastructure.Services
 
             try
             {
-                var chatId = target.ChatId.ToString();
-                await _hubContext.Clients.Group(chatId)
-                    .SendAsync("ReceiveMessage", forwardDto, cancellationToken);
-
-                await _hubContext.Clients.Group(chatId)
-                    .SendAsync(
-                        "MessageSendingStatus",
-                        new
-                        {
-                            MessageId = newMessageId,
-                            ChatId = target.ChatId,
-                            Status = "Sent",
-                            Timestamp = DateTimeOffset.UtcNow
-                        },
-                        cancellationToken);
-
-                foreach (var participant in target.ChatParticipants)
-                {
-                    await _hubContext.Clients.Group($"User_{participant.UserId}")
-                        .SendAsync("ReceiveMessage", forwardDto, cancellationToken);
-                }
+                await _messageRealtimeNotifier.SendMessagePublishedAsync(
+                    target.ChatId,
+                    forwardDto,
+                    newMessageId,
+                    target.ChatParticipants.Select(participant => participant.UserId),
+                    cancellationToken);
             }
             catch (Exception exception)
             {
