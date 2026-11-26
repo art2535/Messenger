@@ -144,9 +144,11 @@ namespace Messenger.Infrastructure.Extensions
                 services.AddScoped<IPushSubscriptionService, PushSubscriptionService>();
                 services.AddSingleton<TypingRateLimiterService>();
                 services.AddSingleton<SendMessageRateLimiterService>();
-                services.AddScoped<IScheduledMessageService, ScheduledMessageService>();
+                services.AddScoped<ScheduledMessageService>();
+                services.AddScoped<IScheduledMessageService>(sp =>
+                    sp.GetRequiredService<ScheduledMessageService>());
                 services.AddScoped<IScheduledMessageClaimService>(sp =>
-                    sp.GetRequiredService<IScheduledMessageService>());
+                    sp.GetRequiredService<ScheduledMessageService>());
 
                 return services;
             }
