@@ -11,57 +11,71 @@ namespace Messenger.Infrastructure.Persistence
         DatabaseMigrationStatus migrationStatus,
         ILogger<DatabaseMigrationHostedService> logger) : BackgroundService
     {
+        private static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(15);
+
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            migrationStatus.MarkRunning();
-            logger.LogInformation("Начинаю фоновую инициализацию базы данных и применение миграций.");
-
-            try
+            while (!stoppingToken.IsCancellationRequested)
             {
-                await using var scope = scopeFactory.CreateAsyncScope();
-                var db = scope.ServiceProvider.GetRequiredService<GuapMessengerContext>();
+                migrationStatus.MarkRunning();
+                logger.LogInformation("Начинаю фоновую инициализацию базы данных и применение миграций.");
 
-                var appliedMigrations = (await db.Database.GetAppliedMigrationsAsync(stoppingToken)).ToList();
-                var currentMigration = appliedMigrations.LastOrDefault();
-                logger.LogInformation("Текущая миграция базы данных: {Migration}", currentMigration ?? "Нет");
-
-                var pendingMigrations = (await db.Database.GetPendingMigrationsAsync(stoppingToken)).ToList();
-
-                if (pendingMigrations.Count == 0)
+                try
                 {
-                    logger.LogInformation("Нет ожидающих миграций для применения.");
+                    await ApplyMigrationsAsync(stoppingToken);
+                    migrationStatus.MarkCompleted();
+                    return;
                 }
-                else
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {
-                    logger.LogInformation("Найдено {Count} ожидающих миграций. Применяю...", pendingMigrations.Count);
+                    logger.LogWarning("Фоновая инициализация базы данных отменена при остановке приложения.");
+                    throw;
+                }
+                catch (Exception exception)
+                {
+                    migrationStatus.MarkFailed(exception);
+                    logger.LogError(exception,
+                        "Не удалось выполнить миграции базы данных. Повторная попытка через {DelaySeconds} секунд.",
+                        RetryDelay.TotalSeconds);
 
-                    foreach (var migration in pendingMigrations)
-                    {
-                        stoppingToken.ThrowIfCancellationRequested();
-                        logger.LogInformation("Применяю миграцию: {Migration}", migration);
-                        await db.Database.MigrateAsync(migration, stoppingToken);
-                        logger.LogInformation("Миграция успешно применена: {Migration}", migration);
-                    }
+                    await Task.Delay(RetryDelay, stoppingToken);
+                }
+            }
+        }
 
-                    logger.LogInformation("Все ожидающие миграции успешно применены.");
+        private async Task ApplyMigrationsAsync(CancellationToken cancellationToken)
+        {
+            await using var scope = scopeFactory.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<GuapMessengerContext>();
+
+            var appliedMigrations = (await db.Database.GetAppliedMigrationsAsync(cancellationToken)).ToList();
+            var currentMigration = appliedMigrations.LastOrDefault();
+            logger.LogInformation("Текущая миграция базы данных: {Migration}", currentMigration ?? "Нет");
+
+            var pendingMigrations = (await db.Database.GetPendingMigrationsAsync(cancellationToken)).ToList();
+
+            if (pendingMigrations.Count == 0)
+            {
+                logger.LogInformation("Нет ожидающих миграций для применения.");
+            }
+            else
+            {
+                logger.LogInformation("Найдено {Count} ожидающих миграций. Применяю...", pendingMigrations.Count);
+
+                foreach (var migration in pendingMigrations)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    logger.LogInformation("Применяю миграцию: {Migration}", migration);
+                    await db.Database.MigrateAsync(migration, cancellationToken);
+                    logger.LogInformation("Миграция успешно применена: {Migration}", migration);
                 }
 
-                var finalMigration = (await db.Database.GetAppliedMigrationsAsync(stoppingToken)).LastOrDefault();
-                logger.LogInformation("Миграция базы данных завершена. Текущая миграция: {Migration}",
-                    finalMigration ?? "Нет");
+                logger.LogInformation("Все ожидающие миграции успешно применены.");
+            }
 
-                migrationStatus.MarkCompleted();
-            }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-            {
-                logger.LogWarning("Фоновая инициализация базы данных отменена при остановке приложения.");
-                throw;
-            }
-            catch (Exception exception)
-            {
-                migrationStatus.MarkFailed(exception);
-                logger.LogCritical(exception, "Не удалось выполнить фоновую инициализацию базы данных.");
-            }
+            var finalMigration = (await db.Database.GetAppliedMigrationsAsync(cancellationToken)).LastOrDefault();
+            logger.LogInformation("Миграция базы данных завершена. Текущая миграция: {Migration}",
+                finalMigration ?? "Нет");
         }
     }
 }
