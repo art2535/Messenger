@@ -14,6 +14,7 @@ using System.ComponentModel;
 using System.Security.Claims;
 using Messenger.Core.Services;
 using Messenger.Core.Responses;
+using Messenger.Infrastructure.Services;
 
 namespace Messenger.API.Controllers
 {
@@ -38,6 +39,7 @@ namespace Messenger.API.Controllers
         private readonly IAccountSettingsService _accountSettingsService;
         private readonly ILogger<MessagesController> _logger;
         private readonly SendMessageRateLimiterService _sendLimiter;
+        private readonly IMessageSendingService _messageSendingService;
 
         public MessagesController(
             IMessageService messageService,
@@ -49,7 +51,8 @@ namespace Messenger.API.Controllers
             IAttachmentService attachmentService,
             IAccountSettingsService accountSettingsService,
             ILogger<MessagesController> logger,
-            SendMessageRateLimiterService sendLimiter)
+            SendMessageRateLimiterService sendLimiter,
+            IMessageSendingService messageSendingService)
         {
             _messageService = messageService;
             _configuration = configuration;
@@ -61,6 +64,7 @@ namespace Messenger.API.Controllers
             _accountSettingsService = accountSettingsService;
             _logger = logger;
             _sendLimiter = sendLimiter;
+            _messageSendingService = messageSendingService;
         }
 
         /// <summary>
@@ -146,15 +150,11 @@ namespace Messenger.API.Controllers
                 if (!await _sendLimiter.TryAcquireAsync(rateKey))
                 {
                     _logger.LogWarning("SendMessage rate limit exceeded for {Key}", rateKey);
-                    return StatusCode(StatusCodes.Status429TooManyRequests, ApiResponse.Failure("Слишком много запросов. Подождите немного и попробуйте снова.", "RATE_LIMIT_EXCEEDED"));
-                }
-
-                var userId = await User.GetCurrentUserIdAsync(_userService);
-                var user = await _userService.GetUserByIdAsync(userId, ct);
-                if (user == null)
-                {
-                    return Unauthorized(ApiResponse.Failure("Пользователь не найден"
-                    , "UNAUTHORIZED"));
+                    return StatusCode(
+                        StatusCodes.Status429TooManyRequests,
+                        ApiResponse.Failure(
+                            "Слишком много запросов. Подождите немного и попробуйте снова.",
+                            "RATE_LIMIT_EXCEEDED"));
                 }
 
                 const long maxFileSize = 10 * 1024 * 1024;
@@ -172,123 +172,37 @@ namespace Messenger.API.Controllers
                     }
                 }
 
-                var chat = await _chatService.GetChatByIdAsync(chatId, ct);
-                if (chat == null)
+                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var message = await _messageSendingService.SendAsync(
+                    chatId,
+                    userId,
+                    messageText,
+                    files,
+                    ct);
+
+                return Ok(ApiResponse.Success(message));
+            }
+            catch (MessageSendingException ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "Не удалось отправить сообщение в чат {ChatId}: {Reason}",
+                    chatId,
+                    ex.Failure);
+
+                return ex.Failure switch
                 {
-                    return NotFound(ApiResponse.Failure("Чат не найден", "NOT_FOUND"));
-                }
-
-                if (!chat.ChatParticipants.Any(p => p.UserId == user.UserId))
-                {
-                    return StatusCode(StatusCodes.Status403Forbidden, ApiResponse.Failure("Вы не являетесь участником этого чата", "FORBIDDEN"));
-                }
-
-                var attachmentsInfo = new List<AttachmentInfo>();
-                var attachmentDtos = new List<AttachmentDto>();
-
-                if (files != null && files.Length > 0)
-                {
-                    var uploadPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads");
-                    Directory.CreateDirectory(uploadPath);
-
-                    foreach (var file in files.Where(f => f.Length > 0))
-                    {
-                        var fileName = Guid.NewGuid() + Path.GetExtension(file.FileName);
-                        var filePath = Path.Combine(uploadPath, fileName);
-                        var fileUrl = $"{_configuration["URL:API:HTTPS"]}/uploads/{fileName}";
-
-                        await using var stream = new FileStream(filePath, FileMode.Create);
-                        await file.CopyToAsync(stream, ct);
-
-                        var attachmentId = Guid.NewGuid();
-
-                        attachmentsInfo.Add(new AttachmentInfo
-                        {
-                            AttachmentId = attachmentId,
-                            FileName = file.FileName,
-                            FileType = file.ContentType ?? "application/octet-stream",
-                            SizeInBytes = file.Length,
-                            Url = fileUrl
-                        });
-
-                        attachmentDtos.Add(new AttachmentDto
-                        {
-                            AttachmentId = attachmentId,
-                            FileName = file.FileName,
-                            FileType = file.ContentType ?? "application/octet-stream",
-                            SizeInBytes = (int)file.Length,
-                            Url = fileUrl
-                        });
-                    }
-                }
-
-                var messageId = Guid.NewGuid();
-                var encryptedText = string.IsNullOrWhiteSpace(messageText)
-                    ? null
-                    : _encryptionService.Encrypt(messageText.Trim());
-
-                try
-                {
-                    await _messageService.PublishChatMessageAsync(new ChatMessageSent
-                    {
-                        MessageId = messageId,
-                        ChatId = chatId,
-                        SenderId = user.UserId,
-                        SenderName = $"{user.FirstName} {user.LastName}".Trim(),
-                        MessageText = encryptedText,
-                        SentAt = UtcDateTime.AsUtc(UtcDateTime.Now),
-                        HasAttachments = attachmentsInfo.Count > 0,
-                        Attachments = attachmentsInfo
-                    }, ct);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Ошибка при публикации сообщения в чат {ChatId}", chatId);
-                    return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure("Внутренняя ошибка сервера при отправке сообщения", "INTERNAL_ERROR"));
-                }
-
-                var decryptedText = string.IsNullOrEmpty(encryptedText)
-                    ? null
-                    : _encryptionService.TryDecryptSafe(encryptedText);
-
-                var finalMessageDto = new MessageDto
-                {
-                    MessageId = messageId,
-                    ChatId = chatId,
-                    SenderId = user.UserId,
-                    SenderName = $"{user.FirstName} {user.LastName}".Trim(),
-                    MessageText = decryptedText,
-                    SentAt = UtcDateTime.AsUtc(UtcDateTime.Now),
-                    Status = "Sent",
-                    Attachments = attachmentDtos
+                    MessageSendingFailure.UserNotFound => Unauthorized(
+                        ApiResponse.Failure(ex.Message, "UNAUTHORIZED")),
+                    MessageSendingFailure.ChatNotFound => NotFound(
+                        ApiResponse.Failure(ex.Message, "NOT_FOUND")),
+                    MessageSendingFailure.UserNotParticipant => StatusCode(
+                        StatusCodes.Status403Forbidden,
+                        ApiResponse.Failure(ex.Message, "FORBIDDEN")),
+                    _ => StatusCode(
+                        StatusCodes.Status500InternalServerError,
+                        ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"))
                 };
-
-                try
-                {
-                    await _hubContext.Clients.Group(chatId.ToString())
-                        .SendAsync("ReceiveMessage", finalMessageDto, ct);
-                    await _hubContext.Clients.Group(chatId.ToString())
-                        .SendAsync("MessageSendingStatus", new
-                        {
-                            MessageId = messageId,
-                            ChatId = chatId,
-                            Status = "Sent",
-                            Timestamp = DateTimeOffset.UtcNow
-                        }, ct);
-
-                    foreach (var participant in chat.ChatParticipants)
-                    {
-                        var userGroup = $"User_{participant.UserId}";
-                        await _hubContext.Clients.Group(userGroup)
-                            .SendAsync("ReceiveMessage", finalMessageDto, ct);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Сообщение {MessageId} сохранено, но SignalR-рассылка не удалась", messageId);
-                }
-
-                return Ok(ApiResponse.Success(finalMessageDto));
             }
             catch (UnauthorizedAccessException ex)
             {
@@ -298,7 +212,9 @@ namespace Messenger.API.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при отправке сообщения в чат {ChatId}", chatId);
-                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
+                return StatusCode(
+                    StatusCodes.Status500InternalServerError,
+                    ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
