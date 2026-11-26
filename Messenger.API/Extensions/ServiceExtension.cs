@@ -1,12 +1,8 @@
 using Messenger.API.Options;
 using Messenger.API.Providers;
 using Messenger.API.Services;
-using Messenger.Core.Interfaces;
-using Messenger.Core.Services;
-using Messenger.Infrastructure.Services;
 using Microsoft.AspNetCore.SignalR;
 using StackExchange.Redis;
-using WebPush;
 
 namespace Messenger.API.Extensions
 {
