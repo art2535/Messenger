@@ -111,6 +111,8 @@ namespace Messenger.Infrastructure.Extensions
                     MessageEditingWorkflowService>();
                 services.AddScoped<IMessageDeletionWorkflowService,
                     MessageDeletionWorkflowService>();
+                services.AddScoped<IMessageControllerWorkflowService,
+                    MessageControllerWorkflowService>();
                 services.AddScoped<IMessageRealtimeNotifier, MessageRealtimeNotifier>();
                 services.AddScoped<IAdminService, AdminService>();
                 services.AddScoped<IModerationService, ModerationService>();
