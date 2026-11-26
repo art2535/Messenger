@@ -140,6 +140,8 @@ namespace Messenger.Infrastructure.Extensions
                     MessageHistoryWorkflowService>();
                 services.AddScoped<IMessageRealtimeNotifier, MessageRealtimeNotifier>();
                 services.AddScoped<IAdminService, AdminService>();
+                services.AddScoped<IMessageNotificationOutboxRecoveryService,
+                    MessageNotificationOutboxRecoveryService>();
                 services.AddScoped<IModerationService, ModerationService>();
                 services.AddSingleton<WebPushClient>();
                 services.AddScoped<IPushSubscriptionService, PushSubscriptionService>();
