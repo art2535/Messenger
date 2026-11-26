@@ -123,7 +123,9 @@ namespace Messenger.API.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при выполнении GET /messages/{ChatId}/search", chatId);
-                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
+                return StatusCode(
+                    StatusCodes.Status500InternalServerError,
+                    ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -408,7 +410,10 @@ namespace Messenger.API.Controllers
             }
             catch (UnauthorizedAccessException ex)
             {
-                _logger.LogWarning(ex, "Ошибка авторизации при отметке прочтения в чате {ChatId}", chatId);
+                _logger.LogWarning(
+                    ex,
+                    "Ошибка авторизации при отметке прочтения в чате {ChatId}",
+                    chatId);
                 return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (Exception ex)
@@ -703,12 +708,16 @@ namespace Messenger.API.Controllers
 
                 if (request == null || request.MessageIds == null || request.MessageIds.Count == 0)
                 {
-                    return BadRequest(ApiResponse.Failure("Не указаны сообщения для удаления", "INVALID_REQUEST"));
+                    return BadRequest(ApiResponse.Failure(
+                        "Не указаны сообщения для удаления",
+                        "INVALID_REQUEST"));
                 }
 
                 if (request.MessageIds.Count > 100)
                 {
-                    return BadRequest(ApiResponse.Failure("За один раз можно удалить не более 100 сообщений", "INVALID_REQUEST"));
+                    return BadRequest(ApiResponse.Failure(
+                        "За один раз можно удалить не более 100 сообщений",
+                        "INVALID_REQUEST"));
                 }
 
                 var result = await _messageControllerWorkflowService.DeleteManyAsync(
@@ -735,7 +744,9 @@ namespace Messenger.API.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Ошибка при выполнении POST /messages/bulk-delete");
+                _logger.LogError(
+                    ex,
+                    "Ошибка при выполнении POST /messages/bulk-delete");
                 return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
@@ -789,7 +800,9 @@ namespace Messenger.API.Controllers
                         ApiResponse.Failure("Сообщение не найдено", "NOT_FOUND")),
                     MessageWorkflowStatus.Forbidden => StatusCode(
                         StatusCodes.Status403Forbidden,
-                        ApiResponse.Failure("Недостаточно прав для закрепления сообщения", "FORBIDDEN")),
+                        ApiResponse.Failure(
+                            "Недостаточно прав для закрепления сообщения",
+                            "FORBIDDEN")),
                     _ => StatusCode(
                         StatusCodes.Status500InternalServerError,
                         ApiResponse.Failure("Не удалось закрепить сообщение", "INTERNAL_ERROR"))
@@ -797,12 +810,18 @@ namespace Messenger.API.Controllers
             }
             catch (UnauthorizedAccessException ex)
             {
-                _logger.LogWarning(ex, "Ошибка авторизации при закреплении сообщения {MessageId}", messageId);
+                _logger.LogWarning(
+                    ex,
+                    "Ошибка авторизации при закреплении сообщения {MessageId}",
+                    messageId);
                 return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Ошибка при выполнении POST /messages/{MessageId}/pin", messageId);
+                _logger.LogError(
+                    ex,
+                    "Ошибка при выполнении POST /messages/{MessageId}/pin",
+                    messageId);
                 return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
@@ -842,7 +861,9 @@ namespace Messenger.API.Controllers
                         ApiResponse.Failure("Сообщение не найдено", "NOT_FOUND")),
                     MessageWorkflowStatus.Forbidden => StatusCode(
                         StatusCodes.Status403Forbidden,
-                        ApiResponse.Failure("Недостаточно прав для открепления сообщения", "FORBIDDEN")),
+                        ApiResponse.Failure(
+                            "Недостаточно прав для открепления сообщения",
+                            "FORBIDDEN")),
                     _ => StatusCode(
                         StatusCodes.Status500InternalServerError,
                         ApiResponse.Failure("Не удалось открепить сообщение", "INTERNAL_ERROR"))
@@ -850,12 +871,18 @@ namespace Messenger.API.Controllers
             }
             catch (UnauthorizedAccessException ex)
             {
-                _logger.LogWarning(ex, "Ошибка авторизации при откреплении сообщения {MessageId}", messageId);
+                _logger.LogWarning(
+                    ex,
+                    "Ошибка авторизации при откреплении сообщения {MessageId}",
+                    messageId);
                 return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Ошибка при выполнении DELETE /messages/{MessageId}/pin", messageId);
+                _logger.LogError(
+                    ex,
+                    "Ошибка при выполнении DELETE /messages/{MessageId}/pin",
+                    messageId);
                 return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
@@ -892,12 +919,17 @@ namespace Messenger.API.Controllers
                         ApiResponse.Failure("Вы не являетесь участником этого чата", "FORBIDDEN")),
                     _ => StatusCode(
                         StatusCodes.Status500InternalServerError,
-                        ApiResponse.Failure("Не удалось получить закреплённые сообщения", "INTERNAL_ERROR"))
+                        ApiResponse.Failure(
+                            "Не удалось получить закреплённые сообщения",
+                            "INTERNAL_ERROR"))
                 };
             }
             catch (UnauthorizedAccessException ex)
             {
-                _logger.LogWarning(ex, "Ошибка авторизации при получении закреплённых сообщений чата {ChatId}", chatId);
+                _logger.LogWarning(
+                    ex,
+                    "Ошибка авторизации при получении закреплённых сообщений чата {ChatId}",
+                    chatId);
                 return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (Exception ex)
