@@ -21,13 +21,15 @@ namespace Messenger.Infrastructure.Services
         private readonly IMessageSearchService _messageSearchService;
         private readonly IMessagePinningService _messagePinningService;
         private readonly IMessageMutationService _messageMutationService;
+        private readonly IMessageCreationService _messageCreationService;
 
         public MessageService(GuapMessengerContext context,
             IPublishEndpoint publishEndpoint, IMessagePaginationService messagePaginationService, ILogger<MessageService> logger,
             IMessageExportService messageExportService,
             IMessageSearchService messageSearchService,
             IMessagePinningService messagePinningService,
-            IMessageMutationService messageMutationService)
+            IMessageMutationService messageMutationService,
+            IMessageCreationService messageCreationService)
         {
             _context = context;
             _publishEndpoint = publishEndpoint;
@@ -37,6 +39,7 @@ namespace Messenger.Infrastructure.Services
             _messageSearchService = messageSearchService;
             _messagePinningService = messagePinningService;
             _messageMutationService = messageMutationService;
+            _messageCreationService = messageCreationService;
         }
 
         public async Task PublishChatMessageAsync(ChatMessageSent message, CancellationToken cancellationToken = default)
@@ -100,7 +103,7 @@ namespace Messenger.Infrastructure.Services
                     DeliveryStatus = MessageDeliveryStatus.Pending
                 };
 
-                await AddMessageAsync(message, token);
+                await _messageCreationService.CreateMessageAsync(message, token);
 
                 var savedMessage = await GetMessageByIdAsync(chatId, message.MessageId, token);
 
@@ -175,49 +178,6 @@ namespace Messenger.Infrastructure.Services
             CancellationToken token = default)
         {
             return _messageMutationService.DeleteMessagesAsync(messageIds, token);
-        }
-
-        private async Task AddMessageAsync(Message message, CancellationToken token = default)
-        {
-            await using var transaction = await _context.Database.BeginTransactionAsync(token);
-            try
-            {
-                var lockKey = BitConverter.ToInt64(message.ChatId.ToByteArray(), 0);
-                await _context.Database.ExecuteSqlRawAsync(
-                    "SELECT pg_advisory_xact_lock({0})",
-                    new object[] { lockKey },
-                    token);
-
-                var lastSeq = await _context.Messages
-                    .Where(m => m.ChatId == message.ChatId)
-                    .MaxAsync(m => (long?)m.SequenceNumber, token) ?? 0L;
-
-                message.SequenceNumber = lastSeq + 1;
-                message.DeliveryStatus = MessageDeliveryStatus.Pending;
-
-                await _context.Messages.AddAsync(message, token);
-                await _context.SaveChangesAsync(token);
-                await transaction.CommitAsync(token);
-
-                var forCache = await _context.Messages
-                    .AsNoTracking()
-                    .Include(m => m.Sender)
-                    .Include(m => m.Attachments)
-                    .Include(m => m.Reactions).ThenInclude(r => r.User)
-                    .FirstOrDefaultAsync(m => m.MessageId == message.MessageId, token);
-
-                if (forCache is not null)
-                    await _messagePaginationService.PrependMessageToCachesAsync(forCache, token);
-                else
-                    await _messagePaginationService.InvalidateMessageCachesAsync(message.ChatId, token);
-
-                await _messagePaginationService.InvalidateUserChatsCacheAsync(message.ChatId, token);
-            }
-            catch
-            {
-                await transaction.RollbackAsync(token);
-                throw;
-            }
         }
 
         public Task<Message?> PinMessageAsync(
