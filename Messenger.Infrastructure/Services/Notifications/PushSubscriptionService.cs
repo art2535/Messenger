@@ -9,7 +9,7 @@ using System.Text.Json;
 using WebPush;
 using PushSubscription = Messenger.Core.Models.PushSubscription;
 
-namespace Messenger.Infrastructure.Services
+namespace Messenger.Infrastructure.Services.PushSubscriptionService.cs
 {
     public class PushSubscriptionService : IPushSubscriptionService
     {
