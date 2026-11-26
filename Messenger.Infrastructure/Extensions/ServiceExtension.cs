@@ -89,6 +89,7 @@ namespace Messenger.Infrastructure.Extensions
                 services.AddScoped<IBroadcastService, BroadcastService>();
                 services.AddScoped<IMessageService, MessageService>();
                 services.AddScoped<IMessageExportService, MessageExportService>();
+                services.AddScoped<IMessageSearchService, MessageSearchService>();
                 services.AddScoped<IMessageSendingService, MessageSendingService>();
                 services.AddScoped<IMessageForwardingService, MessageForwardingService>();
                 services.AddScoped<IMessageRealtimeNotifier, MessageRealtimeNotifier>();
