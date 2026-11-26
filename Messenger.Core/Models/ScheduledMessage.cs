@@ -59,6 +59,7 @@ public class ScheduledMessage
 public static class ScheduledMessageStatus
 {
     public const string Pending = "Pending";
+    public const string Processing = "Processing";
     public const string Sent = "Sent";
     public const string Cancelled = "Cancelled";
     public const string Failed = "Failed";

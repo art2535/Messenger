@@ -93,13 +93,45 @@ public class ScheduledMessageService : IScheduledMessageService
 
     public async Task<List<ScheduledMessage>> GetDueAsync(DateTime nowUtc, int limit = 50, CancellationToken ct = default)
     {
-        // Берём с небольшим запасом в прошлое, чтобы не пропускать из-за задержек
+        // Возвращаем в обработку сообщения, захват которых завис после сбоя экземпляра API.
         var horizon = nowUtc.AddSeconds(2);
+        var leaseExpiredAt = nowUtc.AddMinutes(-5);
+
         return await _context.ScheduledMessages
-            .Where(x => x.Status == ScheduledMessageStatus.Pending && x.ScheduledAt <= horizon)
+            .AsNoTracking()
+            .Where(x =>
+                x.ScheduledAt <= horizon
+                && (x.Status == ScheduledMessageStatus.Pending
+                    || (x.Status == ScheduledMessageStatus.Processing
+                        && x.UpdatedAt <= leaseExpiredAt)))
             .OrderBy(x => x.ScheduledAt)
             .Take(limit)
             .ToListAsync(ct);
+    }
+
+    public async Task<bool> TryClaimAsync(
+        Guid scheduledMessageId,
+        DateTime nowUtc,
+        CancellationToken ct = default)
+    {
+        var utcNow = DateTime.SpecifyKind(nowUtc, DateTimeKind.Utc);
+        var horizon = utcNow.AddSeconds(2);
+        var leaseExpiredAt = utcNow.AddMinutes(-5);
+
+        var affectedRows = await _context.ScheduledMessages
+            .Where(x =>
+                x.ScheduledMessageId == scheduledMessageId
+                && x.ScheduledAt <= horizon
+                && (x.Status == ScheduledMessageStatus.Pending
+                    || (x.Status == ScheduledMessageStatus.Processing
+                        && x.UpdatedAt <= leaseExpiredAt)))
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(x => x.Status, ScheduledMessageStatus.Processing)
+                    .SetProperty(x => x.UpdatedAt, utcNow),
+                ct);
+
+        return affectedRows == 1;
     }
 
     public async Task<ScheduledMessage?> UpdateAsync(
@@ -159,26 +191,34 @@ public class ScheduledMessageService : IScheduledMessageService
 
     public async Task MarkSentAsync(Guid scheduledMessageId, Guid resultMessageId, CancellationToken ct = default)
     {
-        var entity = await _context.ScheduledMessages
-            .FirstOrDefaultAsync(x => x.ScheduledMessageId == scheduledMessageId, ct);
-        if (entity == null) return;
-
-        entity.Status = ScheduledMessageStatus.Sent;
-        entity.ResultMessageId = resultMessageId;
-        entity.UpdatedAt = DateTime.UtcNow;
-        await _context.SaveChangesAsync(ct);
+        var nowUtc = DateTime.UtcNow;
+        await _context.ScheduledMessages
+            .Where(x =>
+                x.ScheduledMessageId == scheduledMessageId
+                && x.Status == ScheduledMessageStatus.Processing)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(x => x.Status, ScheduledMessageStatus.Sent)
+                    .SetProperty(x => x.ResultMessageId, resultMessageId)
+                    .SetProperty(x => x.UpdatedAt, nowUtc),
+                ct);
     }
 
     public async Task MarkFailedAsync(Guid scheduledMessageId, string error, CancellationToken ct = default)
     {
-        var entity = await _context.ScheduledMessages
-            .FirstOrDefaultAsync(x => x.ScheduledMessageId == scheduledMessageId, ct);
-        if (entity == null) return;
+        var nowUtc = DateTime.UtcNow;
+        var safeError = error?.Length > 500 ? error[..500] : error;
 
-        entity.Status = ScheduledMessageStatus.Failed;
-        entity.ErrorMessage = error?.Length > 500 ? error[..500] : error;
-        entity.UpdatedAt = DateTime.UtcNow;
-        await _context.SaveChangesAsync(ct);
+        await _context.ScheduledMessages
+            .Where(x =>
+                x.ScheduledMessageId == scheduledMessageId
+                && x.Status == ScheduledMessageStatus.Processing)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(x => x.Status, ScheduledMessageStatus.Failed)
+                    .SetProperty(x => x.ErrorMessage, safeError)
+                    .SetProperty(x => x.UpdatedAt, nowUtc),
+                ct);
     }
 
     public ScheduledMessageDto ToDto(ScheduledMessage entity, string? decryptedText = null,

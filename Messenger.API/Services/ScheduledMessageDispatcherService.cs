@@ -85,9 +85,10 @@ public class ScheduledMessageDispatcherService : BackgroundService
 
             try
             {
-                // Optimistic lock: помечаем как обрабатываемые через повторную проверку статуса
-                var fresh = await scheduledService.GetByIdAsync(item.ScheduledMessageId, ct);
-                if (fresh == null || fresh.Status != ScheduledMessageStatus.Pending)
+                // Атомарно захватываем сообщение, чтобы его обработал только один экземпляр API.
+                var claimed = await scheduledService.TryClaimAsync(
+                    item.ScheduledMessageId, now, ct);
+                if (!claimed)
                     continue;
 
                 List<AttachmentInfo> attachments = new();

@@ -24,6 +24,11 @@ public interface IScheduledMessageService
 
     Task<List<ScheduledMessage>> GetDueAsync(DateTime nowUtc, int limit = 50, CancellationToken ct = default);
 
+    Task<bool> TryClaimAsync(
+        Guid scheduledMessageId,
+        DateTime nowUtc,
+        CancellationToken ct = default);
+
     Task<ScheduledMessage?> UpdateAsync(
         Guid scheduledMessageId,
         Guid userId,
