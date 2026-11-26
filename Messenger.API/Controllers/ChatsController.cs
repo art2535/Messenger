@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using System.ComponentModel;
 using Messenger.Core.Responses;
+using Messenger.Infrastructure.Interfaces.Chats;
 
 namespace Messenger.API.Controllers
 {
@@ -24,17 +25,20 @@ namespace Messenger.API.Controllers
     public class ChatsController : ControllerBase
     {
         private readonly IChatService _chatService;
+        private readonly IChatQueryWorkflowService _chatQueryWorkflowService;
         private readonly IHubContext<ChatHub> _hubContext;
         private readonly IUserService _userService;
         private readonly ILogger<ChatsController> _logger;
 
         public ChatsController(
             IChatService chatService,
+            IChatQueryWorkflowService chatQueryWorkflowService,
             IHubContext<ChatHub> hubContext,
             IUserService userService,
             ILogger<ChatsController> logger)
         {
             _chatService = chatService;
+            _chatQueryWorkflowService = chatQueryWorkflowService;
             _hubContext = hubContext;
             _userService = userService;
             _logger = logger;
@@ -55,7 +59,7 @@ namespace Messenger.API.Controllers
             try
             {
                 var userId = await User.GetCurrentUserIdAsync(_userService);
-                var chats = await _chatService.GetUserChatsWithLastMessageAsync(userId, ct);
+                var chats = await _chatQueryWorkflowService.GetUserChatsAsync(userId, ct);
 
                 return Ok(ApiResponse.Success(chats));
             }
@@ -91,55 +95,21 @@ namespace Messenger.API.Controllers
             {
                 var userId = await User.GetCurrentUserIdAsync(_userService);
 
-                var chat = await _chatService.GetChatByIdAsync(chatId, ct);
-                if (chat == null)
+                var result = await _chatQueryWorkflowService.GetChatDetailsAsync(chatId, userId, ct);
+
+                if (result.Status == ChatQueryStatus.NotFound)
                 {
-                    return NotFound(ApiResponse.Failure("Чат не найден", "NOT_FOUND"));
+                    return NotFound(ApiResponse.Failure(result.Error!, "NOT_FOUND"));
                 }
 
-                var participants = await _chatService.GetChatParticipantsAsync(chatId, ct);
-                if (!participants.Any(p => p.UserId == userId))
+                if (result.Status == ChatQueryStatus.Forbidden)
                 {
-                    return StatusCode(StatusCodes.Status403Forbidden, ApiResponse.Failure("Доступ к чату запрещён", "FORBIDDEN"));
+                    return StatusCode(
+                        StatusCodes.Status403Forbidden,
+                        ApiResponse.Failure(result.Error!, "FORBIDDEN"));
                 }
 
-                var participantDtos = participants.Select(p =>
-                {
-                    var role = p.Role;
-                    if (string.IsNullOrWhiteSpace(role))
-                        role = p.UserId == chat.UserId ? "владелец" : "участник";
-                    else if (p.UserId == chat.UserId && role.Trim().ToLowerInvariant() is not ("владелец" or "owner"))
-                        role = "владелец";
-
-                    return new
-                    {
-                        Id = p.UserId,
-                        UserId = p.UserId,
-                        Name = $"{p.User?.FirstName} {p.User?.LastName}".Trim(),
-                        FullName = $"{p.User?.FirstName} {p.User?.LastName}".Trim(),
-                        Avatar = p.User?.Account?.Avatar,
-                        Role = role
-                    };
-                }).ToList();
-
-                string displayName = chat.Type == "group"
-                    ? chat.Name
-                    : await GetPrivateChatDisplayNameAsync(chatId, userId, ct);
-
-                var result = new
-                {
-                    ChatId = chat.ChatId,
-                    Name = displayName,
-                    Type = chat.Type,
-                    UserId = chat.UserId,
-                    CreatorId = chat.UserId,
-                    Avatar = chat.Type == "group"
-                        ? (string?)null
-                        : await GetOtherUserAvatarAsync(participantDtos.FirstOrDefault(p => p.UserId != userId)?.UserId ?? userId, ct),
-                    Participants = participantDtos
-                };
-
-                return Ok(ApiResponse.Success(result));
+                return Ok(ApiResponse.Success(result.Data));
             }
             catch (UnauthorizedAccessException ex)
             {
