@@ -36,6 +36,7 @@ public partial class GuapMessengerContext : DbContext
     public virtual DbSet<UserMute> UserMutes { get; set; }
     public virtual DbSet<ModerationLog> ModerationLogs { get; set; }
     public virtual DbSet<Core.Models.ScheduledMessage> ScheduledMessages { get; set; }
+    public virtual DbSet<MessageNotificationOutbox> MessageNotificationOutbox { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
@@ -482,6 +483,29 @@ public partial class GuapMessengerContext : DbContext
                 .HasForeignKey(d => d.SenderId)
                 .OnDelete(DeleteBehavior.Cascade)
                 .HasConstraintName("fk_scheduled_message_sender");
+        });
+
+        modelBuilder.Entity<MessageNotificationOutbox>(entity =>
+        {
+            entity.ToTable("Message_Notification_Outbox");
+            entity.HasKey(e => e.OutboxId).HasName("Message_Notification_Outbox_pkey");
+            entity.Property(e => e.OutboxId).ValueGeneratedNever();
+            entity.Property(e => e.MessageId).HasColumnName("Message_ID");
+            entity.Property(e => e.ChatId).HasColumnName("Chat_ID");
+            entity.Property(e => e.SenderId).HasColumnName("Sender_ID");
+            entity.Property(e => e.SenderName).HasColumnName("Sender_Name");
+            entity.Property(e => e.Payload).HasColumnName("Payload");
+            entity.Property(e => e.MessageText).HasColumnName("Message_Text");
+            entity.Property(e => e.HasAttachments).HasColumnName("Has_Attachments");
+            entity.Property(e => e.Status).HasColumnName("Status").HasMaxLength(32);
+            entity.Property(e => e.AttemptCount).HasColumnName("Attempt_Count");
+            entity.Property(e => e.NextAttemptAt).HasColumnName("Next_Attempt_At");
+            entity.Property(e => e.LockedUntil).HasColumnName("Locked_Until");
+            entity.Property(e => e.CreatedAt).HasColumnName("Created_At");
+            entity.Property(e => e.DeliveredAt).HasColumnName("Delivered_At");
+            entity.Property(e => e.LastError).HasColumnName("Last_Error");
+            entity.HasIndex(e => e.MessageId).IsUnique();
+            entity.HasIndex(e => new { e.Status, e.NextAttemptAt });
         });
 
         OnModelCreatingPartial(modelBuilder);

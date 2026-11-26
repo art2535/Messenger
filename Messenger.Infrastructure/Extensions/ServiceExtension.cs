@@ -26,6 +26,7 @@ namespace Messenger.Infrastructure.Extensions
                 services.AddRabbitMQ(configuration);
                 services.AddSingleton<DatabaseMigrationStatus>();
                 services.AddHostedService<DatabaseMigrationHostedService>();
+                services.AddHostedService<MessageNotificationOutboxDispatcher>();
                 services.AddLogRetention(configuration);
 
                 return services;

@@ -8,6 +8,7 @@ using Messenger.Core.Models;
 using Messenger.Infrastructure.Data;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace Messenger.Infrastructure.Messaging.Consumers
 {
@@ -132,13 +133,6 @@ namespace Messenger.Infrastructure.Messaging.Consumers
                     }
                 }
 
-                savedMessage.DeliveryStatus = MessageDeliveryStatus.Delivered;
-                await _messageService.UpdateMessageAsync(savedMessage, context.CancellationToken);
-
-                var decryptedText = string.IsNullOrEmpty(msg.MessageText)
-                    ? null
-                    : _encryptionService.TryDecryptSafe(msg.MessageText);
-
                 var finalMessageDto = new MessageDto
                 {
                     MessageId = savedMessage.MessageId,
@@ -159,61 +153,30 @@ namespace Messenger.Infrastructure.Messaging.Consumers
                     }).ToList() ?? new List<AttachmentDto>()
                 };
 
-                try
-                {
-                    var chatIdStr = msg.ChatId.ToString();
-                    await _hubContext.Clients.Group(chatIdStr)
-                        .SendAsync("ReceiveMessage", finalMessageDto, context.CancellationToken);
-                    await _hubContext.Clients.Group(chatIdStr)
-                        .SendAsync("MessageSendingStatus", new
-                        {
-                            MessageId = msg.MessageId,
-                            ChatId = msg.ChatId,
-                            Status = "Sent",
-                            Timestamp = DateTimeOffset.UtcNow
-                        }, context.CancellationToken);
+                await using var transaction = await _context.Database.BeginTransactionAsync(
+                    context.CancellationToken);
 
-                    var chat = await _chatService.GetChatByIdAsync(
-                        msg.ChatId,
-                        context.CancellationToken);
-                    if (chat?.ChatParticipants != null)
-                    {
-                        foreach (var participant in chat.ChatParticipants)
-                        {
-                            var userGroup = $"User_{participant.UserId}";
-                            await _hubContext.Clients.Group(userGroup)
-                                .SendAsync("ReceiveMessage", finalMessageDto, context.CancellationToken);
-                        }
-                    }
+                savedMessage.DeliveryStatus = MessageDeliveryStatus.Delivered;
+                await _messageService.UpdateMessageAsync(savedMessage, context.CancellationToken);
 
-                    _logger.LogInformation(
-                        "SignalR ReceiveMessage отправлен MessageId={MessageId} ChatId={ChatId}",
-                        msg.MessageId, msg.ChatId);
-                }
-                catch (Exception signalrEx)
+                _context.MessageNotificationOutbox.Add(new MessageNotificationOutbox
                 {
-                    _logger.LogWarning(signalrEx,
-                        "Не удалось отправить SignalR для сообщения {MessageId} в чат {ChatId}",
-                        msg.MessageId, msg.ChatId);
-                }
+                    OutboxId = Guid.NewGuid(),
+                    MessageId = savedMessage.MessageId,
+                    ChatId = savedMessage.ChatId,
+                    SenderId = savedMessage.SenderId,
+                    SenderName = msg.SenderName ?? "Пользователь",
+                    Payload = JsonSerializer.Serialize(finalMessageDto),
+                    MessageText = msg.MessageText,
+                    HasAttachments = msg.HasAttachments,
+                    Status = "Pending",
+                    AttemptCount = 0,
+                    CreatedAt = DateTime.UtcNow,
+                    NextAttemptAt = DateTime.UtcNow
+                });
 
-                try
-                {
-                    await _subscriptionService.SendPushToOfflineUsersAsync(
-                        msg.ChatId,
-                        msg.SenderId,
-                        msg.SenderName ?? "Пользователь",
-                        msg.MessageText,
-                        msg.HasAttachments,
-                        false,
-                        context.CancellationToken);
-                }
-                catch (Exception pushEx)
-                {
-                    _logger.LogWarning(pushEx,
-                        "Не удалось отправить push для чата {ChatId}",
-                        msg.ChatId);
-                }
+                await _context.SaveChangesAsync(context.CancellationToken);
+                await transaction.CommitAsync(context.CancellationToken);
 
                 _logger.LogInformation(
                     "Сообщение {MessageId} полностью обработано и доставлено",
