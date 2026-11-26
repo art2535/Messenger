@@ -154,6 +154,8 @@ namespace Messenger.Infrastructure.Services.Notifications
         public async Task SendPushToOfflineUsersAsync(Guid chatId, Guid senderId, string senderName,
             string? messageText, bool hasAttachments, bool isMention = false, CancellationToken cancellationToken = default)
         {
+            var deliveryErrors = new List<Exception>();
+
             try
             {
                 string body = "Новое сообщение";
@@ -304,19 +306,31 @@ namespace Messenger.Infrastructure.Services.Notifications
                             }
                             catch (Exception ex)
                             {
+                                deliveryErrors.Add(ex);
                                 _logger.LogWarning(ex, "Ошибка отправки push пользователю {UserId}", participant.UserId);
                             }
                         }
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogWarning(ex, "Ошибка при создании уведомления или отправке push для пользователя {UserId}", participant.UserId);
+                        deliveryErrors.Add(ex);
+                        _logger.LogWarning(ex,
+                            "Ошибка при создании уведомления или отправке push для пользователя {UserId}",
+                            participant.UserId);
                     }
+                }
+
+                if (deliveryErrors.Count > 0)
+                {
+                    throw new AggregateException(
+                        "Не удалось доставить push всем получателям.",
+                        deliveryErrors);
                 }
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Общая ошибка при отправке push для чата {ChatId}", chatId);
+                throw;
             }
         }
     }
