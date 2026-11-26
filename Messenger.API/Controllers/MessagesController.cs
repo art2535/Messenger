@@ -2,14 +2,12 @@ using Asp.Versioning;
 using Messenger.API.Extensions;
 using MassTransit;
 using Messenger.Core.DTOs.Messages;
-using Messenger.Core.Hubs;
 using Messenger.Core.Interfaces;
 using Messenger.Core.Messages;
 using Messenger.Core.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
-using Microsoft.AspNetCore.SignalR;
 using System.ComponentModel;
 using System.Security.Claims;
 using Messenger.Core.Services;
@@ -31,7 +29,7 @@ namespace Messenger.API.Controllers
     {
         private readonly IMessageService _messageService;
         private readonly IConfiguration _configuration;
-        private readonly IHubContext<ChatHub> _hubContext;
+        private readonly IMessageRealtimeNotifier _messageRealtimeNotifier;
         private readonly IChatService _chatService;
         private readonly IUserService _userService;
         private readonly IEncryptionService _encryptionService;
@@ -45,7 +43,7 @@ namespace Messenger.API.Controllers
         public MessagesController(
             IMessageService messageService,
             IConfiguration configuration,
-            IHubContext<ChatHub> hubContext,
+            IMessageRealtimeNotifier messageRealtimeNotifier,
             IChatService chatService,
             IUserService userService,
             IEncryptionService encryptionService,
@@ -58,7 +56,7 @@ namespace Messenger.API.Controllers
         {
             _messageService = messageService;
             _configuration = configuration;
-            _hubContext = hubContext;
+            _messageRealtimeNotifier = messageRealtimeNotifier;
             _chatService = chatService;
             _userService = userService;
             _encryptionService = encryptionService;
@@ -412,14 +410,12 @@ namespace Messenger.API.Controllers
                             ReadAt = DateTime.UtcNow
                         };
 
-                        await _hubContext.Clients.Group(chatId.ToString())
-                            .SendAsync("MessagesRead", readPayload, ct);
-
-                        foreach (var participant in chat.ChatParticipants)
-                        {
-                            await _hubContext.Clients.Group($"User_{participant.UserId}")
-                                .SendAsync("MessagesRead", readPayload, ct);
-                        }
+                        await _messageRealtimeNotifier.SendToChatAndUsersAsync(
+                            chatId,
+                            chat.ChatParticipants.Select(participant => participant.UserId),
+                            "MessagesRead",
+                            readPayload,
+                            ct);
                     }
                 }
 
@@ -639,8 +635,11 @@ namespace Messenger.API.Controllers
                     Status = "Sent"
                 };
 
-                await _hubContext.Clients.Group(request.ChatId.ToString())
-                    .SendAsync("ReceiveMessage", updatedDto, ct);
+                await _messageRealtimeNotifier.SendToChatAsync(
+                    request.ChatId,
+                    "ReceiveMessage",
+                    updatedDto,
+                    ct);
 
                 return Ok(ApiResponse.Success(message: "Сообщение обновлено"));
             }
@@ -697,14 +696,12 @@ namespace Messenger.API.Controllers
                     ChatId = chatId
                 };
 
-                await _hubContext.Clients.Group(chatId.ToString())
-                    .SendAsync("MessageDeleted", deletedPayload, ct);
-
-                foreach (var participant in chat.ChatParticipants)
-                {
-                    await _hubContext.Clients.Group($"User_{participant.UserId}")
-                        .SendAsync("MessageDeleted", deletedPayload, ct);
-                }
+                await _messageRealtimeNotifier.SendToChatAndUsersAsync(
+                    chatId,
+                    chat.ChatParticipants.Select(participant => participant.UserId),
+                    "MessageDeleted",
+                    deletedPayload,
+                    ct);
 
                 return Ok(ApiResponse.Success(message: "Сообщение удалено"));
             }
@@ -781,14 +778,12 @@ namespace Messenger.API.Controllers
                         ChatId = chatId
                     };
 
-                    await _hubContext.Clients.Group(chatId.ToString())
-                        .SendAsync("MessageDeleted", payload, ct);
-
-                    foreach (var participant in participants)
-                    {
-                        await _hubContext.Clients.Group($"User_{participant.UserId}")
-                            .SendAsync("MessageDeleted", payload, ct);
-                    }
+                    await _messageRealtimeNotifier.SendToChatAndUsersAsync(
+                        chatId,
+                        participants.Select(participant => participant.UserId),
+                        "MessageDeleted",
+                        payload,
+                        ct);
                 }
 
                 return Ok(ApiResponse.Success(new { deletedCount = deleted, messageIds = allowed }, message: "Сообщения удалены"));
@@ -868,17 +863,20 @@ namespace Messenger.API.Controllers
                     PinnedBy = userId
                 };
 
-                await _hubContext.Clients.Group(message.ChatId.ToString())
-                    .SendAsync("MessagePinned", payload, ct);
+                await _messageRealtimeNotifier.SendToChatAsync(
+                    message.ChatId,
+                    "MessagePinned",
+                    payload,
+                    ct);
 
                 var chat = await _chatService.GetChatByIdAsync(message.ChatId, ct);
                 if (chat?.ChatParticipants != null)
                 {
-                    foreach (var participant in chat.ChatParticipants)
-                    {
-                        await _hubContext.Clients.Group($"User_{participant.UserId}")
-                            .SendAsync("MessagePinned", payload, ct);
-                    }
+                    await _messageRealtimeNotifier.SendToUsersAsync(
+                        chat.ChatParticipants.Select(participant => participant.UserId),
+                        "MessagePinned",
+                        payload,
+                        ct);
                 }
 
                 return Ok(ApiResponse.Success(payload, "Сообщение закреплено"));
@@ -940,17 +938,20 @@ namespace Messenger.API.Controllers
                     PinnedBy = userId
                 };
 
-                await _hubContext.Clients.Group(message.ChatId.ToString())
-                    .SendAsync("MessagePinned", payload, ct);
+                await _messageRealtimeNotifier.SendToChatAsync(
+                    message.ChatId,
+                    "MessagePinned",
+                    payload,
+                    ct);
 
                 var chat = await _chatService.GetChatByIdAsync(message.ChatId, ct);
                 if (chat?.ChatParticipants != null)
                 {
-                    foreach (var participant in chat.ChatParticipants)
-                    {
-                        await _hubContext.Clients.Group($"User_{participant.UserId}")
-                            .SendAsync("MessagePinned", payload, ct);
-                    }
+                    await _messageRealtimeNotifier.SendToUsersAsync(
+                        chat.ChatParticipants.Select(participant => participant.UserId),
+                        "MessagePinned",
+                        payload,
+                        ct);
                 }
 
                 return Ok(ApiResponse.Success(payload, "Сообщение откреплено"));
