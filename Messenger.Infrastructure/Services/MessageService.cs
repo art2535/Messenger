@@ -7,7 +7,6 @@ using Messenger.Core.Messages;
 using Messenger.Infrastructure.Data;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 
 namespace Messenger.Infrastructure.Services
 {
@@ -16,30 +15,31 @@ namespace Messenger.Infrastructure.Services
         private readonly GuapMessengerContext _context;
         private readonly IPublishEndpoint _publishEndpoint;
         private readonly IMessagePaginationService _messagePaginationService;
-        private readonly ILogger<MessageService> _logger;
         private readonly IMessageExportService _messageExportService;
         private readonly IMessageSearchService _messageSearchService;
         private readonly IMessagePinningService _messagePinningService;
         private readonly IMessageMutationService _messageMutationService;
         private readonly IMessageCreationService _messageCreationService;
+        private readonly IMessageReadService _messageReadService;
 
         public MessageService(GuapMessengerContext context,
-            IPublishEndpoint publishEndpoint, IMessagePaginationService messagePaginationService, ILogger<MessageService> logger,
+            IPublishEndpoint publishEndpoint, IMessagePaginationService messagePaginationService,
             IMessageExportService messageExportService,
             IMessageSearchService messageSearchService,
             IMessagePinningService messagePinningService,
             IMessageMutationService messageMutationService,
-            IMessageCreationService messageCreationService)
+            IMessageCreationService messageCreationService,
+            IMessageReadService messageReadService)
         {
             _context = context;
             _publishEndpoint = publishEndpoint;
             _messagePaginationService = messagePaginationService;
-            _logger = logger;
             _messageExportService = messageExportService;
             _messageSearchService = messageSearchService;
             _messagePinningService = messagePinningService;
             _messageMutationService = messageMutationService;
             _messageCreationService = messageCreationService;
+            _messageReadService = messageReadService;
         }
 
         public async Task PublishChatMessageAsync(ChatMessageSent message, CancellationToken cancellationToken = default)
@@ -56,23 +56,12 @@ namespace Messenger.Infrastructure.Services
             return _messageSearchService.SearchMessagesAsync(chatId, query, token);
         }
 
-        public async Task<int> MarkMessagesAsReadAsync(Guid chatId, Guid readerId, CancellationToken ct = default)
+        public Task<int> MarkMessagesAsReadAsync(
+            Guid chatId,
+            Guid readerId,
+            CancellationToken ct = default)
         {
-           var now = UtcDateTime.Now;
-
-            var updated = await _context.Messages
-                .Where(m => m.ChatId == chatId
-                         && m.SenderId != readerId
-                         && m.ReadTime == null)
-                .ExecuteUpdateAsync(s => s
-                    .SetProperty(m => m.ReadTime, now)
-                    .SetProperty(m => m.DeliveryStatus, MessageDeliveryStatus.Read),
-                ct);
-            
-            await _messagePaginationService.InvalidateUserChatsCacheForUserAsync(readerId, ct);
-            _logger.LogInformation("MarkAsRead: chatId={ChatId} count={Count}, messages cache kept, user chats cache invalidated",
-                chatId, updated);
-            return updated;
+            return _messageReadService.MarkMessagesAsReadAsync(chatId, readerId, ct);
         }
 
         public async Task<IEnumerable<Message>> GetMessagesAsync(Guid chatId, CancellationToken token = default)
