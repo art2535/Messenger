@@ -60,6 +60,11 @@ public partial class AddMessageNotificationOutboxDeliveries : Migration
             });
 
         migrationBuilder.CreateIndex(
+            name: "IX_Message_Notification_Outbox_Deliveries_Outbox_ID",
+            table: "Message_Notification_Outbox_Deliveries",
+            column: "Outbox_ID");
+
+        migrationBuilder.CreateIndex(
             name: "IX_Message_Notification_Outbox_Deliveries_Idempotency_Key",
             table: "Message_Notification_Outbox_Deliveries",
             column: "Idempotency_Key",
