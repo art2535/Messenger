@@ -90,6 +90,7 @@ namespace Messenger.Infrastructure.Extensions
                 services.AddScoped<IMessageService, MessageService>();
                 services.AddScoped<IMessageSendingService, MessageSendingService>();
                 services.AddScoped<IMessageForwardingService, MessageForwardingService>();
+                services.AddScoped<IMessageRealtimeNotifier, MessageRealtimeNotifier>();
                 services.AddScoped<IAdminService, AdminService>();
                 services.AddScoped<IModerationService, ModerationService>();
                 services.AddSingleton<WebPushClient>();
