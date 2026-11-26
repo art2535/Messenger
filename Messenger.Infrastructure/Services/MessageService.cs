@@ -20,12 +20,14 @@ namespace Messenger.Infrastructure.Services
         private readonly IMessageExportService _messageExportService;
         private readonly IMessageSearchService _messageSearchService;
         private readonly IMessagePinningService _messagePinningService;
+        private readonly IMessageMutationService _messageMutationService;
 
         public MessageService(GuapMessengerContext context,
             IPublishEndpoint publishEndpoint, IMessagePaginationService messagePaginationService, ILogger<MessageService> logger,
             IMessageExportService messageExportService,
             IMessageSearchService messageSearchService,
-            IMessagePinningService messagePinningService)
+            IMessagePinningService messagePinningService,
+            IMessageMutationService messageMutationService)
         {
             _context = context;
             _publishEndpoint = publishEndpoint;
@@ -34,6 +36,7 @@ namespace Messenger.Infrastructure.Services
             _messageExportService = messageExportService;
             _messageSearchService = messageSearchService;
             _messagePinningService = messagePinningService;
+            _messageMutationService = messageMutationService;
         }
 
         public async Task PublishChatMessageAsync(ChatMessageSent message, CancellationToken cancellationToken = default)
@@ -125,24 +128,14 @@ namespace Messenger.Infrastructure.Services
                 .FirstOrDefaultAsync(m => m.MessageId == messageId, token);
         }
 
-        public async Task DeleteMessageAsync(Guid messageId, CancellationToken token = default)
+        public Task DeleteMessageAsync(Guid messageId, CancellationToken token = default)
         {
-            var deletedMessage = await _context.Messages.FindAsync(new object[] { messageId }, token);
-            if (deletedMessage != null)
-            {
-                var chatId = deletedMessage.ChatId;
-                _context.Messages.Remove(deletedMessage);
-                await _context.SaveChangesAsync(token);
-                await _messagePaginationService.InvalidateMessageCachesAsync(chatId, token);
-                await _messagePaginationService.InvalidateUserChatsCacheAsync(chatId, token);
-            }
+            return _messageMutationService.DeleteMessageAsync(messageId, token);
         }
 
-        public async Task UpdateMessageAsync(Message message, CancellationToken token = default)
+        public Task UpdateMessageAsync(Message message, CancellationToken token = default)
         {
-            _context.Messages.Update(message);
-            await _context.SaveChangesAsync(token);
-            await _messagePaginationService.InvalidateMessageCachesAsync(message.ChatId, token);
+            return _messageMutationService.UpdateMessageAsync(message, token);
         }
 
         public async Task<ChatExportResult> ExportChatAsync(Guid chatId, string format, string? chatName = null, 
@@ -177,28 +170,11 @@ namespace Messenger.Infrastructure.Services
             return _messageExportService.Export(chatId, format, chatName, allMessages);
         }
 
-        public async Task<int> DeleteMessagesAsync(IEnumerable<Guid> messageIds, CancellationToken token = default)
+        public Task<int> DeleteMessagesAsync(
+            IEnumerable<Guid> messageIds,
+            CancellationToken token = default)
         {
-            var ids = messageIds?.Distinct().ToList() ?? new List<Guid>();
-            if (ids.Count == 0) 
-                return 0;
-
-            var messages = await _context.Messages
-                .Where(m => ids.Contains(m.MessageId))
-                .ToListAsync(token);
-
-            if (messages.Count == 0) 
-                return 0;
-
-            var chatIds = messages.Select(m => m.ChatId).Distinct().ToList();
-            _context.Messages.RemoveRange(messages);
-            await _context.SaveChangesAsync(token);
-            foreach (var chatId in chatIds)
-            {
-                await _messagePaginationService.InvalidateMessageCachesAsync(chatId, token);
-                await _messagePaginationService.InvalidateUserChatsCacheAsync(chatId, token);
-            }
-            return messages.Count;
+            return _messageMutationService.DeleteMessagesAsync(messageIds, token);
         }
 
         private async Task AddMessageAsync(Message message, CancellationToken token = default)
