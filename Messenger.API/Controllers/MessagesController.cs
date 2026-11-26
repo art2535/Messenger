@@ -30,9 +30,7 @@ namespace Messenger.API.Controllers
         private readonly IMessageService _messageService;
         private readonly IConfiguration _configuration;
         private readonly IMessageRealtimeNotifier _messageRealtimeNotifier;
-        private readonly IChatService _chatService;
         private readonly IUserService _userService;
-        private readonly IEncryptionService _encryptionService;
         private readonly IAttachmentService _attachmentService;
         private readonly IAccountSettingsService _accountSettingsService;
         private readonly ILogger<MessagesController> _logger;
@@ -42,14 +40,13 @@ namespace Messenger.API.Controllers
         private readonly IMessageEditingWorkflowService _messageEditingWorkflowService;
         private readonly IMessageDeletionWorkflowService _messageDeletionWorkflowService;
         private readonly IMessageControllerWorkflowService _messageControllerWorkflowService;
+        private readonly IMessageHistoryWorkflowService _messageHistoryWorkflowService;
 
         public MessagesController(
             IMessageService messageService,
             IConfiguration configuration,
             IMessageRealtimeNotifier messageRealtimeNotifier,
-            IChatService chatService,
             IUserService userService,
-            IEncryptionService encryptionService,
             IAttachmentService attachmentService,
             IAccountSettingsService accountSettingsService,
             ILogger<MessagesController> logger,
@@ -58,14 +55,13 @@ namespace Messenger.API.Controllers
             IMessageForwardingService messageForwardingService,
             IMessageEditingWorkflowService messageEditingWorkflowService,
             IMessageDeletionWorkflowService messageDeletionWorkflowService,
-            IMessageControllerWorkflowService messageControllerWorkflowService)
+            IMessageControllerWorkflowService messageControllerWorkflowService,
+            IMessageHistoryWorkflowService messageHistoryWorkflowService)
         {
             _messageService = messageService;
             _configuration = configuration;
             _messageRealtimeNotifier = messageRealtimeNotifier;
-            _chatService = chatService;
             _userService = userService;
-            _encryptionService = encryptionService;
             _attachmentService = attachmentService;
             _accountSettingsService = accountSettingsService;
             _logger = logger;
@@ -75,6 +71,7 @@ namespace Messenger.API.Controllers
             _messageEditingWorkflowService = messageEditingWorkflowService;
             _messageDeletionWorkflowService = messageDeletionWorkflowService;
             _messageControllerWorkflowService = messageControllerWorkflowService;
+            _messageHistoryWorkflowService = messageHistoryWorkflowService;
         }
 
         /// <summary>
@@ -448,63 +445,16 @@ namespace Messenger.API.Controllers
             {
                 await User.GetCurrentUserIdAsync(_userService);
 
-                var (messages, hasMore) = await _messageService.GetMessagesPagedAsync(
-                    chatId, beforeSequence, limit, ct);
+                var result = await _messageHistoryWorkflowService.GetMessagesAsync(
+                    chatId,
+                    beforeSequence,
+                    limit,
+                    ct);
 
-                var dtos = messages.Select(m => new MessageDto
+                return Ok(ApiResponse.Success(result.Messages, meta: new
                 {
-                    MessageId = m.MessageId,
-                    ChatId = m.ChatId == Guid.Empty ? chatId : m.ChatId,
-                    SenderId = m.SenderId,
-                    SenderName = m.Sender != null
-                        ? $"{m.Sender.FirstName} {m.Sender.LastName}".Trim()
-                        : "Удалённый пользователь",
-                    MessageText = string.IsNullOrEmpty(m.MessageText)
-                        ? null
-                        : _encryptionService.TryDecryptSafe(m.MessageText),
-                    SentAt = UtcDateTime.AsUtc(m.SendTime),
-                    SequenceNumber = m.SequenceNumber,
-                    Status = m.DeliveryStatus switch
-                    {
-                        MessageDeliveryStatus.Pending => "Pending",
-                        MessageDeliveryStatus.Sent => "Sent",
-                        MessageDeliveryStatus.Delivered => "Delivered",
-                        MessageDeliveryStatus.Read => "Read",
-                        MessageDeliveryStatus.Failed => "Failed",
-                        _ => "Invalid status"
-                    },
-                    Attachments = m.Attachments.Select(a => new AttachmentDto
-                    {
-                        AttachmentId = a.AttachmentId,
-                        FileName = a.FileName,
-                        FileType = a.FileType ?? GetMimeType(a.FileName),
-                        SizeInBytes = a.SizeInBytes ?? 0,
-                        Url = a.Url
-                    }).ToList(),
-                    Reactions = (m.Reactions ?? Enumerable.Empty<Reaction>())
-                        .GroupBy(r => r.ReactionType)
-                        .Select(g => new ReactionSummaryDto
-                        {
-                            ReactionType = g.Key,
-                            Count = g.Count(),
-                            Users = g.Select(r => new ReactionUserDto
-                            {
-                                UserId = r.UserId,
-                                UserName = r.User != null
-                                    ? $"{r.User.FirstName} {r.User.LastName}".Trim()
-                                    : null
-                            }).ToList()
-                        })
-                        .OrderByDescending(x => x.Count)
-                        .ToList(),
-                    IsPinned = m.IsPinned,
-                    PinnedAt = m.PinnedAt.HasValue ? UtcDateTime.AsUtc(m.PinnedAt.Value) : null
-                }).ToList();
-
-                return Ok(ApiResponse.Success(dtos, meta: new
-                {
-                    hasMore,
-                    nextBeforeSequence = dtos.Count > 0 ? dtos.Min(d => d.SequenceNumber) : (long?)null
+                    hasMore = result.HasMore,
+                    nextBeforeSequence = result.NextBeforeSequence
                 }));
             }
             catch (UnauthorizedAccessException ex)
@@ -545,27 +495,35 @@ namespace Messenger.API.Controllers
             {
                 var userId = await User.GetCurrentUserIdAsync(_userService);
 
-                var participants = await _chatService.GetChatParticipantsAsync(chatId, ct);
-                if (!participants.Any(p => p.UserId == userId))
+                var result = await _messageHistoryWorkflowService.ExportChatAsync(
+                    chatId,
+                    userId,
+                    format,
+                    ct);
+
+                return result.Status switch
                 {
-                    return StatusCode(StatusCodes.Status403Forbidden, ApiResponse.Failure("Вы не являетесь участником этого чата", "FORBIDDEN"));
-                }
-
-                var chat = await _chatService.GetChatByIdAsync(chatId, ct);
-                if (chat == null)
-                {
-                    return NotFound(ApiResponse.Failure("Чат не найден", "NOT_FOUND"));
-                }
-
-                var normalizedFormat = (format ?? "txt").Trim().ToLowerInvariant();
-                if (normalizedFormat is not ("txt" or "json" or "html" or "csv"))
-                {
-                    return BadRequest(ApiResponse.Failure("Поддерживаемые форматы: txt, json, html, csv", "INVALID_REQUEST"));
-                }
-
-                var result = await _messageService.ExportChatAsync(chatId, normalizedFormat, chat.Name, ct);
-
-                return File(result.Content, result.ContentType, result.FileName);
+                    MessageHistoryStatus.Success => File(
+                        result.Export!.Content,
+                        result.Export.ContentType,
+                        result.Export.FileName),
+                    MessageHistoryStatus.Forbidden => StatusCode(
+                        StatusCodes.Status403Forbidden,
+                        ApiResponse.Failure(
+                            "Вы не являетесь участником этого чата",
+                            "FORBIDDEN")),
+                    MessageHistoryStatus.NotFound => NotFound(
+                        ApiResponse.Failure("Чат не найден", "NOT_FOUND")),
+                    MessageHistoryStatus.InvalidFormat => BadRequest(
+                        ApiResponse.Failure(
+                            "Поддерживаемые форматы: txt, json, html, csv",
+                            "INVALID_REQUEST")),
+                    _ => StatusCode(
+                        StatusCodes.Status500InternalServerError,
+                        ApiResponse.Failure(
+                            "Не удалось экспортировать историю чата",
+                            "INTERNAL_ERROR"))
+                };
             }
             catch (UnauthorizedAccessException ex)
             {
@@ -764,20 +722,6 @@ namespace Messenger.API.Controllers
         }
 
         
-        private static string GetMimeType(string fileName)
-        {
-            var ext = Path.GetExtension(fileName)?.ToLowerInvariant();
-            return ext switch
-            {
-                ".jpg" or ".jpeg" => "image/jpeg",
-                ".png" => "image/png",
-                ".gif" => "image/gif",
-                ".webp" => "image/webp",
-                ".pdf" => "application/pdf",
-                _ => "application/octet-stream"
-            };
-        }
-
         /// <summary>
         /// Закрепить сообщение в чате.
         /// </summary>
