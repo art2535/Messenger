@@ -1,6 +1,6 @@
 using Messenger.Core.DTOs;
 
-namespace Messenger.Infrastructure.Services
+namespace Messenger.Infrastructure.Services.MessageExportFacade.cs
 {
     public sealed class MessageExportFacade
     {

@@ -1,6 +1,6 @@
 using Messenger.Core.Interfaces;
 
-namespace Messenger.Infrastructure.Services
+namespace Messenger.Infrastructure.Services.MessageDeletionWorkflowService.cs
 {
     public sealed class MessageDeletionWorkflowService : IMessageDeletionWorkflowService
     {

@@ -2,7 +2,7 @@ using Messenger.Core.Models;
 using Messenger.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
-namespace Messenger.Infrastructure.Services
+namespace Messenger.Infrastructure.Services.MessageCreationService.cs
 {
     public class MessageCreationService : IMessageCreationService
     {

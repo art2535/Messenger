@@ -1,7 +1,7 @@
 using Messenger.Core.DTOs;
 using Messenger.Core.Models;
 
-namespace Messenger.Infrastructure.Services
+namespace Messenger.Infrastructure.Services.MessageChatExportService.cs
 {
     public sealed class MessageChatExportService : IMessageChatExportService
     {

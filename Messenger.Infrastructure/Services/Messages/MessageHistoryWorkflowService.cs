@@ -3,7 +3,7 @@ using Messenger.Core.DTOs.Messages;
 using Messenger.Core.Interfaces;
 using Messenger.Core.Models;
 
-namespace Messenger.Infrastructure.Services
+namespace Messenger.Infrastructure.Services.MessageHistoryWorkflowService.cs
 {
     public sealed class MessageHistoryWorkflowService : IMessageHistoryWorkflowService
     {

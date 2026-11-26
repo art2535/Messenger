@@ -1,7 +1,7 @@
 using Messenger.Core.Interfaces;
 using Messenger.Infrastructure.Interfaces.Chats;
 
-namespace Messenger.Infrastructure.Services.Chats
+namespace Messenger.Infrastructure.Services.ChatQueryWorkflowService.cs.Chats
 {
     public sealed class ChatQueryWorkflowService : IChatQueryWorkflowService
     {
