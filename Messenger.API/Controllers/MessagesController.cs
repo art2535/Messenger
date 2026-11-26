@@ -39,6 +39,8 @@ namespace Messenger.API.Controllers
         private readonly SendMessageRateLimiterService _sendLimiter;
         private readonly IMessageSendingService _messageSendingService;
         private readonly IMessageForwardingService _messageForwardingService;
+        private readonly IMessageEditingWorkflowService _messageEditingWorkflowService;
+        private readonly IMessageDeletionWorkflowService _messageDeletionWorkflowService;
 
         public MessagesController(
             IMessageService messageService,
@@ -52,7 +54,9 @@ namespace Messenger.API.Controllers
             ILogger<MessagesController> logger,
             SendMessageRateLimiterService sendLimiter,
             IMessageSendingService messageSendingService,
-            IMessageForwardingService messageForwardingService)
+            IMessageForwardingService messageForwardingService,
+            IMessageEditingWorkflowService messageEditingWorkflowService,
+            IMessageDeletionWorkflowService messageDeletionWorkflowService)
         {
             _messageService = messageService;
             _configuration = configuration;
@@ -66,6 +70,8 @@ namespace Messenger.API.Controllers
             _sendLimiter = sendLimiter;
             _messageSendingService = messageSendingService;
             _messageForwardingService = messageForwardingService;
+            _messageEditingWorkflowService = messageEditingWorkflowService;
+            _messageDeletionWorkflowService = messageDeletionWorkflowService;
         }
 
         /// <summary>
@@ -610,38 +616,25 @@ namespace Messenger.API.Controllers
             try
             {
                 var userId = await User.GetCurrentUserIdAsync(_userService);
-
-                var message = await _messageService.GetMessageByIdAsync(request.ChatId, messageId, ct);
-                if (message == null)
-                {
-                    return NotFound(ApiResponse.Failure("Сообщение не найдено", "NOT_FOUND"));
-                }
-
-                if (message.SenderId != userId)
-                {
-                    return StatusCode(StatusCodes.Status403Forbidden, ApiResponse.Failure("Редактировать можно только своё сообщение", "FORBIDDEN"));
-                }
-
-                message.MessageText = _encryptionService.Encrypt(request.MessageText);
-                await _messageService.UpdateMessageAsync(message, ct);
-
-                var updatedDto = new MessageDto
-                {
-                    MessageId = message.MessageId,
-                    ChatId = request.ChatId,
-                    SenderId = message.SenderId,
-                    MessageText = request.MessageText.Trim(),
-                    SentAt = UtcDateTime.AsUtc(message.SendTime),
-                    Status = "Sent"
-                };
-
-                await _messageRealtimeNotifier.SendToChatAsync(
+                var result = await _messageEditingWorkflowService.EditAsync(
                     request.ChatId,
-                    "ReceiveMessage",
-                    updatedDto,
+                    messageId,
+                    userId,
+                    request.MessageText,
                     ct);
 
-                return Ok(ApiResponse.Success(message: "Сообщение обновлено"));
+                return result.Status switch
+                {
+                    MessageEditStatus.Updated => Ok(ApiResponse.Success(message: "Сообщение обновлено")),
+                    MessageEditStatus.NotFound => NotFound(
+                        ApiResponse.Failure("Сообщение не найдено", "NOT_FOUND")),
+                    MessageEditStatus.Forbidden => StatusCode(
+                        StatusCodes.Status403Forbidden,
+                        ApiResponse.Failure("Редактировать можно только своё сообщение", "FORBIDDEN")),
+                    _ => StatusCode(
+                        StatusCodes.Status500InternalServerError,
+                        ApiResponse.Failure("Не удалось обновить сообщение", "INTERNAL_ERROR"))
+                };
             }
             catch (UnauthorizedAccessException ex)
             {
@@ -675,35 +668,25 @@ namespace Messenger.API.Controllers
             try
             {
                 var userId = await User.GetCurrentUserIdAsync(_userService);
-
-                var message = await _messageService.GetMessageByIdAsync(chatId, messageId, ct);
-                if (message == null)
-                {
-                    return NotFound(ApiResponse.Failure("Сообщение не найдено", "NOT_FOUND"));
-                }
-
-                var chat = await _chatService.GetChatByIdAsync(chatId, ct);
-                if (chat == null || !chat.ChatParticipants.Any(p => p.UserId == userId))
-                {
-                    return StatusCode(StatusCodes.Status403Forbidden, ApiResponse.Failure("Вы не являетесь участником этого чата", "FORBIDDEN"));
-                }
-
-                await _messageService.DeleteMessageAsync(messageId, ct);
-
-                var deletedPayload = new
-                {
-                    MessageId = messageId,
-                    ChatId = chatId
-                };
-
-                await _messageRealtimeNotifier.SendToChatAndUsersAsync(
+                var result = await _messageDeletionWorkflowService.DeleteAsync(
                     chatId,
-                    chat.ChatParticipants.Select(participant => participant.UserId),
-                    "MessageDeleted",
-                    deletedPayload,
+                    messageId,
+                    userId,
                     ct);
 
-                return Ok(ApiResponse.Success(message: "Сообщение удалено"));
+                return result switch
+                {
+                    MessageDeletionStatus.Deleted => Ok(
+                        ApiResponse.Success(message: "Сообщение удалено")),
+                    MessageDeletionStatus.NotFound => NotFound(
+                        ApiResponse.Failure("Сообщение не найдено", "NOT_FOUND")),
+                    MessageDeletionStatus.Forbidden => StatusCode(
+                        StatusCodes.Status403Forbidden,
+                        ApiResponse.Failure("Вы не являетесь участником этого чата", "FORBIDDEN")),
+                    _ => StatusCode(
+                        StatusCodes.Status500InternalServerError,
+                        ApiResponse.Failure("Не удалось удалить сообщение", "INTERNAL_ERROR"))
+                };
             }
             catch (UnauthorizedAccessException ex)
             {
