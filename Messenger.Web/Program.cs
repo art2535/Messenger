@@ -50,7 +50,6 @@ namespace Messenger.Web
                         .AddPrometheusExporter();
                 });
 
-            builder.Services.AddMetricsProtection(builder.Configuration);
             builder.Services.AddAuthorization();
             builder.Services.AddSignalRService(builder.Configuration);
             builder.Services.AddScoped<ApiHelper>();
@@ -167,7 +166,7 @@ namespace Messenger.Web
             app.MapStaticAssets();
             app.MapControllers();
 
-            app.MapProtectedPrometheusScrapingEndpoint("/metrics");
+            app.MapPrometheusScrapingEndpoint("/metrics");
 
             try
             {

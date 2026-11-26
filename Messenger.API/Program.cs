@@ -68,7 +68,6 @@ namespace Messenger.API
             builder.Services.AddLogRetention(builder.Configuration);
             builder.Services.AddMessengerHealthChecks();
             builder.Services.AddRedisMetrics();
-            builder.Services.AddMetricsProtection(builder.Configuration);
 
             builder.Services.AddOpenTelemetry()
                 .ConfigureResource(r => r.AddService(
@@ -125,38 +124,38 @@ namespace Messenger.API
                     var appliedMigrations = db.Database.GetAppliedMigrations().ToList();
                     var currentMigration = appliedMigrations.LastOrDefault();
 
-                    logger.LogInformation("Текущая миграция базы данных: {Migration}", currentMigration ?? "Нет");
+                    logger.LogInformation("РўРµРєСѓС‰Р°СЏ РјРёРіСЂР°С†РёСЏ Р±Р°Р·С‹ РґР°РЅРЅС‹С…: {Migration}", currentMigration ?? "РќРµС‚");
 
                     var pendingMigrations = db.Database.GetPendingMigrations().ToList();
 
                     if (pendingMigrations.Count == 0)
                     {
-                        logger.LogInformation("Нет ожидающих миграций для применения.");
+                        logger.LogInformation("РќРµС‚ РѕР¶РёРґР°СЋС‰РёС… РјРёРіСЂР°С†РёР№ РґР»СЏ РїСЂРёРјРµРЅРµРЅРёСЏ.");
                     }
                     else
                     {
-                        logger.LogInformation("Найдено {Count} ожидающих миграций. Применяю...", pendingMigrations.Count);
+                        logger.LogInformation("РќР°Р№РґРµРЅРѕ {Count} РѕР¶РёРґР°СЋС‰РёС… РјРёРіСЂР°С†РёР№. РџСЂРёРјРµРЅСЏСЋ...", pendingMigrations.Count);
 
                         foreach (var migration in pendingMigrations)
                         {
-                            logger.LogInformation("Применяю миграцию: {Migration}", migration);
+                            logger.LogInformation("РџСЂРёРјРµРЅСЏСЋ РјРёРіСЂР°С†РёСЋ: {Migration}", migration);
                             db.Database.Migrate(migration);
-                            logger.LogInformation("Миграция успешно применена: {Migration}", migration);
+                            logger.LogInformation("РњРёРіСЂР°С†РёСЏ СѓСЃРїРµС€РЅРѕ РїСЂРёРјРµРЅРµРЅР°: {Migration}", migration);
                         }
 
-                        logger.LogInformation("Все ожидающие миграции успешно применены.");
+                        logger.LogInformation("Р’СЃРµ РѕР¶РёРґР°СЋС‰РёРµ РјРёРіСЂР°С†РёРё СѓСЃРїРµС€РЅРѕ РїСЂРёРјРµРЅРµРЅС‹.");
                     }
 
                     var finalMigration = db.Database
                         .GetAppliedMigrations()
                         .LastOrDefault();
 
-                    logger.LogInformation("Миграция базы данных завершена. Текущая миграция: {Migration}",
-                        finalMigration ?? "Нет");
+                    logger.LogInformation("РњРёРіСЂР°С†РёСЏ Р±Р°Р·С‹ РґР°РЅРЅС‹С… Р·Р°РІРµСЂС€РµРЅР°. РўРµРєСѓС‰Р°СЏ РјРёРіСЂР°С†РёСЏ: {Migration}",
+                        finalMigration ?? "РќРµС‚");
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError(ex, "Ошибка при применении миграций базы данных.");
+                    logger.LogError(ex, "РћС€РёР±РєР° РїСЂРё РїСЂРёРјРµРЅРµРЅРёРё РјРёРіСЂР°С†РёР№ Р±Р°Р·С‹ РґР°РЅРЅС‹С….");
                     throw;
                 }
             }
@@ -188,7 +187,7 @@ namespace Messenger.API
 
             app.MapMessengerHealthChecks();
 
-            app.MapProtectedPrometheusScrapingEndpoint("/metrics");
+            app.MapPrometheusScrapingEndpoint("/metrics");
 
             app.UseUploads();
             app.UseCors(WebCorsPolicy);
@@ -210,12 +209,12 @@ namespace Messenger.API
 
             try
             {
-                Log.Information("Запуск Messenger.API...");
+                Log.Information("Р—Р°РїСѓСЃРє Messenger.API...");
                 app.Run();
             }
             catch (Exception ex)
             {
-                Log.Fatal(ex, "Messenger.API неожиданно завершил работу");
+                Log.Fatal(ex, "Messenger.API РЅРµРѕР¶РёРґР°РЅРЅРѕ Р·Р°РІРµСЂС€РёР» СЂР°Р±РѕС‚Сѓ");
                 throw;
             }
             finally
