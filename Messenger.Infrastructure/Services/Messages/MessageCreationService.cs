@@ -22,11 +22,34 @@ namespace Messenger.Infrastructure.Services.Messages
             await using var transaction = await _context.Database.BeginTransactionAsync(token);
             try
             {
-                var lockKey = BitConverter.ToInt64(message.ChatId.ToByteArray(), 0);
+                var messageLockKey = BitConverter.ToInt64(message.MessageId.ToByteArray(), 0);
                 await _context.Database.ExecuteSqlRawAsync(
                     "SELECT pg_advisory_xact_lock({0})",
-                    new object[] { lockKey },
+                    new object[] { messageLockKey },
                     token);
+
+                var chatLockKey = BitConverter.ToInt64(message.ChatId.ToByteArray(), 0);
+                await _context.Database.ExecuteSqlRawAsync(
+                    "SELECT pg_advisory_xact_lock({0})",
+                    new object[] { chatLockKey },
+                    token);
+
+                var existingMessage = await _context.Messages
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(m => m.MessageId == message.MessageId, token);
+
+                if (existingMessage is not null)
+                {
+                    if (existingMessage.ChatId != message.ChatId ||
+                        existingMessage.SenderId != message.SenderId)
+                    {
+                        throw new InvalidOperationException(
+                            "Идентификатор сообщения уже используется другим сообщением");
+                    }
+
+                    await transaction.CommitAsync(token);
+                    return;
+                }
 
                 var lastSeq = await _context.Messages
                     .Where(m => m.ChatId == message.ChatId)

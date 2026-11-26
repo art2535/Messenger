@@ -52,6 +52,14 @@ namespace Messenger.Infrastructure.Messaging.Consumers
 
                 var savedMessage = serviceResult.data;
 
+                if (savedMessage.DeliveryStatus == MessageDeliveryStatus.Delivered)
+                {
+                    _logger.LogInformation(
+                        "Повторная доставка уже обработанного сообщения {MessageId} пропущена",
+                        msg.MessageId);
+                    return;
+                }
+
                 if (msg.Attachments?.Any() == true)
                 {
                     foreach (var attInfo in msg.Attachments)
@@ -149,6 +157,8 @@ namespace Messenger.Infrastructure.Messaging.Consumers
             {
                 _logger.LogError(ex, "ОШИБКА обработки сообщения {MessageId} в consumer", msg.MessageId);
 
+                var shouldNotifyFailure = true;
+
                 try
                 {
                     var failedMessage = await _messageService.GetMessageByIdAsync(
@@ -156,24 +166,37 @@ namespace Messenger.Infrastructure.Messaging.Consumers
 
                     if (failedMessage != null)
                     {
-                        failedMessage.DeliveryStatus = MessageDeliveryStatus.Failed;
-                        await _messageService.UpdateMessageAsync(failedMessage, context.CancellationToken);
+                        shouldNotifyFailure =
+                            failedMessage.DeliveryStatus != MessageDeliveryStatus.Delivered;
+
+                        if (shouldNotifyFailure)
+                        {
+                            failedMessage.DeliveryStatus = MessageDeliveryStatus.Failed;
+                            await _messageService.UpdateMessageAsync(
+                                failedMessage,
+                                context.CancellationToken);
+                        }
                     }
                 }
                 catch (Exception innerEx)
                 {
-                    _logger.LogError(innerEx, "Не удалось обновить статус Failed для сообщения {MessageId}", msg.MessageId);
+                    _logger.LogError(innerEx,
+                        "Не удалось обновить статус Failed для сообщения {MessageId}",
+                        msg.MessageId);
                 }
 
-                await _hubContext.Clients.Group(msg.ChatId.ToString())
-                    .SendAsync("MessageSendingStatus", new
-                    {
-                        MessageId = msg.MessageId,
-                        ChatId = msg.ChatId,
-                        Status = "Failed",
-                        Reason = "Ошибка обработки сообщения на сервере",
-                        Timestamp = DateTimeOffset.UtcNow
-                    }, context.CancellationToken);
+                if (shouldNotifyFailure)
+                {
+                    await _hubContext.Clients.Group(msg.ChatId.ToString())
+                        .SendAsync("MessageSendingStatus", new
+                        {
+                            MessageId = msg.MessageId,
+                            ChatId = msg.ChatId,
+                            Status = "Failed",
+                            Reason = "Ошибка обработки сообщения на сервере",
+                            Timestamp = DateTimeOffset.UtcNow
+                        }, context.CancellationToken);
+                }
 
                 throw;
             }
