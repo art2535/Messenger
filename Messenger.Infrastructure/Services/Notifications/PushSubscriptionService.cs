@@ -602,7 +602,7 @@ namespace Messenger.Infrastructure.Services.Notifications
             return $"{outboxId:N}:{recipientId:N}:{subscriptionId:N}:push";
         }
 
-        private static string BuildPushBody(string? messageText, bool hasAttachments)
+        private string BuildPushBody(string? messageText, bool hasAttachments)
         {
             if (!string.IsNullOrWhiteSpace(messageText))
             {
