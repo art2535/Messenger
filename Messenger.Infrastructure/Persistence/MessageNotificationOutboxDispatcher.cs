@@ -127,7 +127,7 @@ public sealed class MessageNotificationOutboxDispatcher(
 
         var hub = services.GetRequiredService<IHubContext<ChatHub>>();
         var chatService = services.GetRequiredService<IChatService>();
-        var pushService = services.GetRequiredService<IPushSubscriptionService>();
+        var pushService = services.GetRequiredService<PushSubscriptionService>();
         var encryptionService = services.GetRequiredService<IEncryptionService>();
 
         message.MessageText = string.IsNullOrEmpty(message.MessageText)
@@ -158,7 +158,8 @@ public sealed class MessageNotificationOutboxDispatcher(
             }
         }
 
-        await pushService.SendPushToOfflineUsersAsync(
+        await pushService.SendPushToOfflineUsersIdempotentlyAsync(
+            row.OutboxId,
             row.ChatId,
             row.SenderId,
             row.SenderName,
