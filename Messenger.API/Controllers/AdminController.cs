@@ -22,15 +22,18 @@ namespace Messenger.API.Controllers
     public class AdminController : ControllerBase
     {
         private readonly IAdminWorkflowService _adminWorkflowService;
+        private readonly IMessageNotificationOutboxRecoveryService _outboxRecoveryService;
         private readonly IUserService _userService;
         private readonly ILogger<AdminController> _logger;
 
         public AdminController(
             IAdminWorkflowService adminWorkflowService,
+            IMessageNotificationOutboxRecoveryService outboxRecoveryService,
             IUserService userService,
             ILogger<AdminController> logger)
         {
             _adminWorkflowService = adminWorkflowService;
+            _outboxRecoveryService = outboxRecoveryService;
             _userService = userService;
             _logger = logger;
         }
@@ -73,6 +76,55 @@ namespace Messenger.API.Controllers
             {
                 _logger.LogError(ex, "Ошибка при выполнении GET /admin/me");
                 return StatusCode(StatusCodes.Status500InternalServerError,
+                    ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
+            }
+        }
+
+        /// <summary>
+        /// Восстановить сообщения из DeadLetter Outbox.
+        /// </summary>
+        [HttpPost("message-notification-outbox/dead-letter/recover")]
+        [EndpointName("AdminRecoverMessageNotificationOutbox")]
+        [EndpointSummary("Восстановить DeadLetter Outbox")]
+        [EndpointDescription(
+            "Возвращает ограниченное количество записей DeadLetter в очередь повторной доставки.")]
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status403Forbidden)]
+        public async Task<IActionResult> RecoverMessageNotificationOutboxAsync(
+            [FromQuery, Description("Максимальное количество записей")] int take = 100,
+            CancellationToken ct = default)
+        {
+            try
+            {
+                await EnsureAdminAsync(ct);
+
+                var recovered = await _outboxRecoveryService.RecoverDeadLettersAsync(
+                    take,
+                    ct);
+
+                return Ok(ApiResponse.Success(
+                    new { recovered },
+                    "DeadLetter записи возвращены в очередь."));
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "Ошибка авторизации при восстановлении DeadLetter Outbox.");
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
+            }
+            catch (AdminForbiddenAccessException ex)
+            {
+                return ForbiddenResult(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Ошибка при восстановлении DeadLetter Outbox.");
+                return StatusCode(
+                    StatusCodes.Status500InternalServerError,
                     ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
