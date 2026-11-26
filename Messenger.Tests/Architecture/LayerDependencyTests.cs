@@ -1,3 +1,4 @@
+using Xunit;
 using System.Reflection;
 using Messenger.Core.Interfaces;
 using Messenger.Infrastructure.Services;
