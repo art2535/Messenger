@@ -15,7 +15,6 @@ namespace Messenger.Infrastructure.Services
     public class MessageService : IMessageService
     {
         private readonly GuapMessengerContext _context;
-        private readonly IEncryptionService _encryptionService;
         private readonly IPublishEndpoint _publishEndpoint;
         private readonly ICacheService _cache;
         private readonly ILogger<MessageService> _logger;
@@ -24,15 +23,12 @@ namespace Messenger.Infrastructure.Services
 
         private static readonly TimeSpan LatestMessagesTtl = TimeSpan.FromSeconds(25);
 
-        private const int SearchScanLimit = 300;
-
-        public MessageService(GuapMessengerContext context, IEncryptionService encryptionService,
+        public MessageService(GuapMessengerContext context,
             IPublishEndpoint publishEndpoint, ICacheService cache, ILogger<MessageService> logger,
             IMessageExportService messageExportService,
             IMessageSearchService messageSearchService)
         {
             _context = context;
-            _encryptionService = encryptionService;
             _publishEndpoint = publishEndpoint;
             _cache = cache;
             _logger = logger;
