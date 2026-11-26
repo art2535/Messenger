@@ -14,6 +14,7 @@ namespace Messenger.Infrastructure.Services
         Task InvalidateMessageCachesAsync(Guid chatId, CancellationToken token = default);
         Task PrependMessageToCachesAsync(Message message, CancellationToken token = default);
         Task InvalidateUserChatsCacheAsync(Guid chatId, CancellationToken token = default);
+        Task InvalidateUserChatsCacheForUserAsync(Guid userId, CancellationToken token = default);
     }
 
     public class MessagePaginationService : IMessagePaginationService
@@ -92,6 +93,11 @@ namespace Messenger.Infrastructure.Services
                 return;
 
             await _cache.RemoveAsync(userIds.Select(id => $"user:{id:N}:chats"), token);
+        }
+
+        public Task InvalidateUserChatsCacheForUserAsync(Guid userId, CancellationToken token = default)
+        {
+            return _cache.RemoveAsync($"user:{userId:N}:chats", token);
         }
 
         private static CachedMessageItem ToCacheItem(Message m) => new()
@@ -239,79 +245,6 @@ namespace Messenger.Infrastructure.Services
             return (batch, hasMore);
         }
 
-        private static CachedMessageItem ToCacheItem(Message m) => new()
-        {
-            MessageId = m.MessageId,
-            ChatId = m.ChatId,
-            SenderId = m.SenderId,
-            SenderFirstName = m.Sender?.FirstName,
-            SenderLastName = m.Sender?.LastName,
-            MessageText = m.MessageText ?? string.Empty,
-            SendTime = m.SendTime,
-            SequenceNumber = m.SequenceNumber,
-            DeliveryStatus = m.DeliveryStatus,
-            ReadTime = m.ReadTime,
-            HasAttachments = m.HasAttachments,
-            IsPinned = m.IsPinned,
-            PinnedAt = m.PinnedAt,
-            Attachments = (m.Attachments ?? Enumerable.Empty<Attachment>())
-                .Select(a => new CachedAttachmentItem
-                {
-                    AttachmentId = a.AttachmentId,
-                    FileName = a.FileName,
-                    FileType = a.FileType,
-                    SizeInBytes = a.SizeInBytes,
-                    Url = a.Url
-                }).ToList(),
-            Reactions = (m.Reactions ?? Enumerable.Empty<Reaction>())
-                .Select(r => new CachedReactionItem
-                {
-                    ReactionType = r.ReactionType,
-                    UserId = r.UserId,
-                    UserFirstName = r.User?.FirstName,
-                    UserLastName = r.User?.LastName
-                }).ToList()
-        };
-
-        private static Message ToMessage(CachedMessageItem c) => new()
-        {
-            MessageId = c.MessageId,
-            ChatId = c.ChatId,
-            SenderId = c.SenderId,
-            MessageText = c.MessageText,
-            SendTime = c.SendTime,
-            SequenceNumber = c.SequenceNumber,
-            DeliveryStatus = c.DeliveryStatus,
-            ReadTime = c.ReadTime,
-            HasAttachments = c.HasAttachments,
-            IsPinned = c.IsPinned,
-            PinnedAt = c.PinnedAt,
-            Sender = new User
-            {
-                UserId = c.SenderId,
-                FirstName = c.SenderFirstName ?? string.Empty,
-                LastName = c.SenderLastName ?? string.Empty
-            },
-            Attachments = c.Attachments.Select(a => new Attachment
-            {
-                AttachmentId = a.AttachmentId,
-                FileName = a.FileName ?? string.Empty,
-                FileType = a.FileType,
-                SizeInBytes = a.SizeInBytes,
-                Url = a.Url ?? string.Empty
-            }).ToList(),
-            Reactions = c.Reactions.Select(r => new Reaction
-            {
-                ReactionType = r.ReactionType ?? string.Empty,
-                UserId = r.UserId,
-                User = new User
-                {
-                    UserId = r.UserId,
-                    FirstName = r.UserFirstName ?? string.Empty,
-                    LastName = r.UserLastName ?? string.Empty
-                }
-            }).ToList()
-        };
 
 
     }
