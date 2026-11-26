@@ -47,6 +47,8 @@ public sealed class MessageNotificationOutboxDispatcher(
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<GuapMessengerContext>();
+        await using var claimTransaction = await db.Database.BeginTransactionAsync(
+            cancellationToken);
         var now = DateTime.UtcNow;
         var rows = await db.MessageNotificationOutbox
             .FromSqlInterpolated($"""
@@ -69,6 +71,7 @@ public sealed class MessageNotificationOutboxDispatcher(
         }
 
         await db.SaveChangesAsync(cancellationToken);
+        await claimTransaction.CommitAsync(cancellationToken);
 
         foreach (var row in rows)
         {
