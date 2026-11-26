@@ -4,7 +4,7 @@ using Messenger.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
-namespace Messenger.Infrastructure.Services.ChatService.cs
+namespace Messenger.Infrastructure.Services.Chats
 {
     public class ChatService : IChatService
     {

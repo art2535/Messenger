@@ -2,7 +2,7 @@ using Messenger.Core.DTOs;
 using Messenger.Core.Messages;
 using Messenger.Core.Models;
 
-namespace Messenger.Infrastructure.Services.MessageCommandFacade.cs
+namespace Messenger.Infrastructure.Services.Messages
 {
     public sealed class MessageCommandFacade
     {

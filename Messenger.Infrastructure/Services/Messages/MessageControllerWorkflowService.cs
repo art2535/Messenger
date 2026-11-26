@@ -1,7 +1,7 @@
 using Messenger.Core.Interfaces;
 using Messenger.Core.Models;
 
-namespace Messenger.Infrastructure.Services.MessageControllerWorkflowService.cs
+namespace Messenger.Infrastructure.Services.Messages
 {
     public sealed class MessageControllerWorkflowService : IMessageControllerWorkflowService
     {

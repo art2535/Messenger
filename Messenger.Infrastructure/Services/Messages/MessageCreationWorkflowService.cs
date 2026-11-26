@@ -1,7 +1,7 @@
 using Messenger.Core.DTOs;
 using Messenger.Core.Models;
 
-namespace Messenger.Infrastructure.Services.MessageCreationWorkflowService.cs
+namespace Messenger.Infrastructure.Services.Messages
 {
     public sealed class MessageCreationWorkflowService : IMessageCreationWorkflowService
     {

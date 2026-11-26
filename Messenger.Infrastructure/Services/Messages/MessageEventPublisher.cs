@@ -2,7 +2,7 @@ using MassTransit;
 using Messenger.Core.Messages;
 using Messenger.Infrastructure.Data;
 
-namespace Messenger.Infrastructure.Services.MessageEventPublisher.cs
+namespace Messenger.Infrastructure.Services.Messages
 {
     public class MessageEventPublisher : IMessageEventPublisher
     {
