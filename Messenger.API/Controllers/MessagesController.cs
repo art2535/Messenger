@@ -12,6 +12,8 @@ using System.ComponentModel;
 using System.Security.Claims;
 using Messenger.Core.Services;
 using Messenger.Core.Responses;
+using Messenger.Infrastructure.Interfaces.Messages;
+using Messenger.Infrastructure.Services.Messages;
 
 namespace Messenger.API.Controllers
 {

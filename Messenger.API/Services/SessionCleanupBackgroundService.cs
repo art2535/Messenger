@@ -4,6 +4,7 @@ using Messenger.Core.Interfaces;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Options;
 using Messenger.Core.Models;
+using Messenger.Infrastructure.Services.Caching;
 
 namespace Messenger.API.Services
 {
