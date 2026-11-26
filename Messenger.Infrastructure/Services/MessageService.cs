@@ -8,7 +8,6 @@ using Messenger.Infrastructure.Data;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Messenger.Core.DTOs.Cache;
 
 namespace Messenger.Infrastructure.Services
 {
@@ -20,8 +19,6 @@ namespace Messenger.Infrastructure.Services
         private readonly ILogger<MessageService> _logger;
         private readonly IMessageExportService _messageExportService;
         private readonly IMessageSearchService _messageSearchService;
-
-        private static readonly TimeSpan LatestMessagesTtl = TimeSpan.FromSeconds(25);
 
         public MessageService(GuapMessengerContext context,
             IPublishEndpoint publishEndpoint, IMessagePaginationService messagePaginationService, ILogger<MessageService> logger,
@@ -63,7 +60,7 @@ namespace Messenger.Infrastructure.Services
                     .SetProperty(m => m.DeliveryStatus, MessageDeliveryStatus.Read),
                 ct);
             
-            await _cache.RemoveAsync($"user:{readerId:N}:chats", ct);
+            await _messagePaginationService.InvalidateUserChatsCacheForUserAsync(readerId, ct);
             _logger.LogInformation("MarkAsRead: chatId={ChatId} count={Count}, messages cache kept, user chats cache invalidated",
                 chatId, updated);
             return updated;
@@ -142,7 +139,7 @@ namespace Messenger.Infrastructure.Services
         {
             _context.Messages.Update(message);
             await _context.SaveChangesAsync(token);
-            await InvalidateMessageCachesAsync(message.ChatId, token);
+            await _messagePaginationService.InvalidateMessageCachesAsync(message.ChatId, token);
         }
 
         public async Task<ChatExportResult> ExportChatAsync(Guid chatId, string format, string? chatName = null, 
@@ -195,8 +192,8 @@ namespace Messenger.Infrastructure.Services
             await _context.SaveChangesAsync(token);
             foreach (var chatId in chatIds)
             {
-                await InvalidateMessageCachesAsync(chatId, token);
-                await InvalidateUserChatsCacheAsync(chatId, token);
+                await _messagePaginationService.InvalidateMessageCachesAsync(chatId, token);
+                await _messagePaginationService.InvalidateUserChatsCacheAsync(chatId, token);
             }
             return messages.Count;
         }
@@ -233,9 +230,9 @@ namespace Messenger.Infrastructure.Services
                 if (forCache is not null)
                     await _messagePaginationService.PrependMessageToCachesAsync(forCache, token);
                 else
-                    await InvalidateMessageCachesAsync(message.ChatId, token);
+                    await _messagePaginationService.InvalidateMessageCachesAsync(message.ChatId, token);
 
-                await InvalidateUserChatsCacheAsync(message.ChatId, token);
+                await _messagePaginationService.InvalidateUserChatsCacheAsync(message.ChatId, token);
             }
             catch
             {
@@ -263,7 +260,7 @@ namespace Messenger.Infrastructure.Services
             message.IsPinned = true;
             message.PinnedAt = Messenger.Core.Models.UtcDateTime.Now;
             await _context.SaveChangesAsync(token);
-            await InvalidateMessageCachesAsync(message.ChatId, token);
+            await _messagePaginationService.InvalidateMessageCachesAsync(message.ChatId, token);
             return message;
         }
 
@@ -286,7 +283,7 @@ namespace Messenger.Infrastructure.Services
             message.IsPinned = false;
             message.PinnedAt = null;
             await _context.SaveChangesAsync(token);
-            await InvalidateMessageCachesAsync(message.ChatId, token);
+            await _messagePaginationService.InvalidateMessageCachesAsync(message.ChatId, token);
             return message;
         }
 
