@@ -31,7 +31,8 @@ namespace Messenger.Infrastructure.Extensions
 
             public IServiceCollection AddRedisCache(IConfiguration configuration)
             {
-                var redisCs = configuration.GetConnectionString("Redis") ?? configuration["ConnectionStrings:Redis"];
+                var redisCs = configuration.GetConnectionString("Redis")
+                    ?? configuration["ConnectionStrings:Redis"];
 
                 if (!string.IsNullOrWhiteSpace(redisCs))
                 {
@@ -99,7 +100,8 @@ namespace Messenger.Infrastructure.Extensions
                 services.AddScoped<IMessagePinningService, MessagePinningService>();
                 services.AddScoped<IMessageMutationService, MessageMutationService>();
                 services.AddScoped<IMessageCreationService, MessageCreationService>();
-                services.AddScoped<IMessageCreationWorkflowService, MessageCreationWorkflowService>();
+                services.AddScoped<IMessageCreationWorkflowService,
+                    MessageCreationWorkflowService>();
                 services.AddScoped<IMessageReadService, MessageReadService>();
                 services.AddScoped<IMessageLookupService, MessageLookupService>();
                 services.AddScoped<IMessageEventPublisher, MessageEventPublisher>();
