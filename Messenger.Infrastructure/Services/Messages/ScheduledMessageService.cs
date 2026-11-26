@@ -191,17 +191,21 @@ public class ScheduledMessageService : IScheduledMessageService, IScheduledMessa
 
     public async Task MarkSentAsync(Guid scheduledMessageId, Guid resultMessageId, CancellationToken ct = default)
     {
-        var nowUtc = DateTime.UtcNow;
-        await _context.ScheduledMessages
-            .Where(x =>
-                x.ScheduledMessageId == scheduledMessageId
-                && x.Status == ScheduledMessageStatus.Processing)
-            .ExecuteUpdateAsync(
-                setters => setters
-                    .SetProperty(x => x.Status, ScheduledMessageStatus.Sent)
-                    .SetProperty(x => x.ResultMessageId, resultMessageId)
-                    .SetProperty(x => x.UpdatedAt, nowUtc),
+        var entity = await _context.ScheduledMessages
+            .FirstOrDefaultAsync(
+                x => x.ScheduledMessageId == scheduledMessageId
+                     && x.Status == ScheduledMessageStatus.Processing,
                 ct);
+
+        if (entity == null)
+            return;
+
+        entity.Status = ScheduledMessageStatus.Sent;
+        entity.ResultMessageId = resultMessageId;
+        entity.UpdatedAt = DateTime.UtcNow;
+
+        // Сохраняем статус и сообщения MassTransit Outbox одним SaveChanges.
+        await _context.SaveChangesAsync(ct);
     }
 
     public async Task MarkFailedAsync(Guid scheduledMessageId, string error, CancellationToken ct = default)
