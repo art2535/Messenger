@@ -419,7 +419,9 @@ namespace Messenger.API.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при выполнении POST /messages/{ChatId}/read", chatId);
-                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
+                return StatusCode(
+                    StatusCodes.Status500InternalServerError,
+                    ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -513,7 +515,9 @@ namespace Messenger.API.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при выполнении GET /messages/{ChatId}", chatId);
-                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
+                return StatusCode(
+                    StatusCodes.Status500InternalServerError,
+                    ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -571,7 +575,9 @@ namespace Messenger.API.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при выполнении GET /messages/{ChatId}/export", chatId);
-                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
+                return StatusCode(
+                    StatusCodes.Status500InternalServerError,
+                    ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -629,7 +635,9 @@ namespace Messenger.API.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при выполнении PUT /messages/{MessageId}", messageId);
-                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
+                return StatusCode(
+                    StatusCodes.Status500InternalServerError,
+                    ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -681,7 +689,9 @@ namespace Messenger.API.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при выполнении DELETE /messages/{MessageId}", messageId);
-                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
+                return StatusCode(
+                    StatusCodes.Status500InternalServerError,
+                    ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -747,7 +757,9 @@ namespace Messenger.API.Controllers
                 _logger.LogError(
                     ex,
                     "Ошибка при выполнении POST /messages/bulk-delete");
-                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
+                return StatusCode(
+                    StatusCodes.Status500InternalServerError,
+                    ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -822,7 +834,9 @@ namespace Messenger.API.Controllers
                     ex,
                     "Ошибка при выполнении POST /messages/{MessageId}/pin",
                     messageId);
-                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
+                return StatusCode(
+                    StatusCodes.Status500InternalServerError,
+                    ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -883,7 +897,9 @@ namespace Messenger.API.Controllers
                     ex,
                     "Ошибка при выполнении DELETE /messages/{MessageId}/pin",
                     messageId);
-                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
+                return StatusCode(
+                    StatusCodes.Status500InternalServerError,
+                    ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -935,7 +951,9 @@ namespace Messenger.API.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при выполнении GET /messages/{ChatId}/pinned", chatId);
-                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
+                return StatusCode(
+                    StatusCodes.Status500InternalServerError,
+                    ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 

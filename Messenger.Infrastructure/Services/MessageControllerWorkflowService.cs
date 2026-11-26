@@ -201,7 +201,8 @@ namespace Messenger.Infrastructure.Services
             CancellationToken cancellationToken = default)
         {
             var chat = await _chatService.GetChatByIdAsync(chatId, cancellationToken);
-            if (chat == null || !chat.ChatParticipants.Any(participant => participant.UserId == userId))
+            if (chat == null || !chat.ChatParticipants.Any(
+                participant => participant.UserId == userId))
             {
                 return new PinnedMessagesResult(
                     MessageWorkflowStatus.Forbidden,
