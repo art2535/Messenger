@@ -1,6 +1,6 @@
 using Messenger.Core.Messages;
 
-namespace Messenger.Infrastructure.Services
+namespace Messenger.Infrastructure.Interfaces.Messages
 {
     public interface IMessageEventPublisher
     {

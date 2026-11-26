@@ -1,4 +1,4 @@
-namespace Messenger.Infrastructure.Services
+namespace Messenger.Infrastructure.Interfaces.Messages
 {
     public interface IMessageReadService
     {

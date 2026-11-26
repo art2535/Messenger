@@ -1,6 +1,6 @@
 using Messenger.Core.Models;
 
-namespace Messenger.Infrastructure.Services
+namespace Messenger.Infrastructure.Interfaces.Messages
 {
     public interface IMessagePaginationService
     {
