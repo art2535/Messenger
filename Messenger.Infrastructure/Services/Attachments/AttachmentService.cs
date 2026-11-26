@@ -3,7 +3,7 @@ using Messenger.Core.Models;
 using Messenger.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
-namespace Messenger.Infrastructure.Services.AttachmentService.cs
+namespace Messenger.Infrastructure.Services.Attachments
 {
     public class AttachmentService : IAttachmentService
     {

@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Logging;
 using StackExchange.Redis;
 
-namespace Messenger.Infrastructure.Services.RedisDistributedLock.cs
+namespace Messenger.Infrastructure.Services.Caching
 {
     public sealed class RedisDistributedLock
     {

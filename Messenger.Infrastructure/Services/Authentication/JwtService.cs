@@ -6,7 +6,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 
-namespace Messenger.Infrastructure.Services.JwtService.cs
+namespace Messenger.Infrastructure.Services.Authentication
 {
     public class JwtService
     {

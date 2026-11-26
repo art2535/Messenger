@@ -5,7 +5,7 @@ using Messenger.Core.Models;
 using Messenger.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
-namespace Messenger.Infrastructure.Services.ModerationService.cs
+namespace Messenger.Infrastructure.Services.Administration
 {
     public class ModerationService : IModerationService
     {

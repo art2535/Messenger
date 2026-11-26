@@ -4,7 +4,7 @@ using Messenger.Core.Models;
 using Messenger.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
-namespace Messenger.Infrastructure.Services.ChatFolderService.cs
+namespace Messenger.Infrastructure.Services.Chats
 {
     public class ChatFolderService : IChatFolderService
     {

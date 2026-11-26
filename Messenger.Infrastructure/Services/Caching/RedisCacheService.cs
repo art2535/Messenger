@@ -4,7 +4,7 @@ using Messenger.Core.Interfaces;
 using Microsoft.Extensions.Logging;
 using StackExchange.Redis;
 
-namespace Messenger.Infrastructure.Services.RedisCacheService.cs
+namespace Messenger.Infrastructure.Services.Caching
 {
     public class RedisCacheService : ICacheService
     {

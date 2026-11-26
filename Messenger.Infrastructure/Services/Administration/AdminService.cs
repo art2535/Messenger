@@ -5,7 +5,7 @@ using Messenger.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
-namespace Messenger.Infrastructure.Services.AdminService.cs
+namespace Messenger.Infrastructure.Services.Administration
 {
     public class AdminService : IAdminService
     {
