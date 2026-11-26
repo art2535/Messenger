@@ -66,7 +66,7 @@ public class ScheduledMessageDispatcherService : BackgroundService
 
     private async Task ProcessDueAsync(CancellationToken ct)
     {
-        using var scope = _scopeFactory.CreateScope();
+        await using var scope = _scopeFactory.CreateAsyncScope();
         var scheduledService = scope.ServiceProvider.GetRequiredService<IScheduledMessageService>();
         var publishEndpoint = scope.ServiceProvider.GetRequiredService<IPublishEndpoint>();
         var userService = scope.ServiceProvider.GetRequiredService<IUserService>();
