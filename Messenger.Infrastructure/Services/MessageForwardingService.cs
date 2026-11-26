@@ -230,7 +230,24 @@ namespace Messenger.Infrastructure.Services
 
                 var newFileName = Guid.NewGuid() + extension;
                 var destinationPath = Path.Combine(uploadPath, newFileName);
-                File.Copy(sourcePath, destinationPath, overwrite: true);
+
+                await using (var sourceStream = new FileStream(
+                    sourcePath,
+                    FileMode.Open,
+                    FileAccess.Read,
+                    FileShare.Read,
+                    81920,
+                    FileOptions.Asynchronous))
+                await using (var destinationStream = new FileStream(
+                    destinationPath,
+                    FileMode.Create,
+                    FileAccess.Write,
+                    FileShare.None,
+                    81920,
+                    FileOptions.Asynchronous))
+                {
+                    await sourceStream.CopyToAsync(destinationStream, cancellationToken);
+                }
 
                 var attachmentId = Guid.NewGuid();
                 var fileUrl = $"{apiBase}/uploads/{newFileName}";

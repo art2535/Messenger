@@ -14,7 +14,7 @@ namespace Messenger.Infrastructure.Services
     {
         public MessageForwardingFailure? Failure { get; init; }
 
-        public string? ErrorMessage { get; init; }
+        public string ErrorMessage { get; init; } = string.Empty;
 
         public int Published { get; init; }
 
