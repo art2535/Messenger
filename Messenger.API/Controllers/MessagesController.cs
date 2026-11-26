@@ -40,6 +40,7 @@ namespace Messenger.API.Controllers
         private readonly ILogger<MessagesController> _logger;
         private readonly SendMessageRateLimiterService _sendLimiter;
         private readonly IMessageSendingService _messageSendingService;
+        private readonly IMessageForwardingService _messageForwardingService;
 
         public MessagesController(
             IMessageService messageService,
@@ -52,7 +53,8 @@ namespace Messenger.API.Controllers
             IAccountSettingsService accountSettingsService,
             ILogger<MessagesController> logger,
             SendMessageRateLimiterService sendLimiter,
-            IMessageSendingService messageSendingService)
+            IMessageSendingService messageSendingService,
+            IMessageForwardingService messageForwardingService)
         {
             _messageService = messageService;
             _configuration = configuration;
@@ -65,6 +67,7 @@ namespace Messenger.API.Controllers
             _logger = logger;
             _sendLimiter = sendLimiter;
             _messageSendingService = messageSendingService;
+            _messageForwardingService = messageForwardingService;
         }
 
         /// <summary>
@@ -239,230 +242,108 @@ namespace Messenger.API.Controllers
             try
             {
                 var userId = await User.GetCurrentUserIdAsync(_userService);
-                var user = await _userService.GetUserByIdAsync(userId, ct);
-                if (user == null)
-                {
-                    return Unauthorized(ApiResponse.Failure("Пользователь не найден", "UNAUTHORIZED"));
-                }
 
                 if (request == null)
                 {
-                    return BadRequest(ApiResponse.Failure("Тело запроса пустое или неверный JSON", "INVALID_REQUEST"));
+                    return BadRequest(ApiResponse.Failure(
+                        "Тело запроса пустое или неверный JSON",
+                        "INVALID_REQUEST"));
                 }
 
                 if (request.MessageIds == null || request.MessageIds.Count == 0)
                 {
-                    return BadRequest(ApiResponse.Failure("Не указаны сообщения для пересылки", "INVALID_REQUEST"));
+                    return BadRequest(ApiResponse.Failure(
+                        "Не указаны сообщения для пересылки",
+                        "INVALID_REQUEST"));
                 }
 
                 if (request.TargetChatIds == null || request.TargetChatIds.Count == 0)
                 {
-                    return BadRequest(ApiResponse.Failure("Не указаны целевые чаты", "INVALID_REQUEST"));
+                    return BadRequest(ApiResponse.Failure(
+                        "Не указаны целевые чаты",
+                        "INVALID_REQUEST"));
                 }
 
                 if (request.MessageIds.Count > 20)
                 {
-                    return BadRequest(ApiResponse.Failure("Можно переслать не более 20 сообщений за раз", "INVALID_REQUEST"));
+                    return BadRequest(ApiResponse.Failure(
+                        "Можно переслать не более 20 сообщений за раз",
+                        "INVALID_REQUEST"));
                 }
 
                 if (request.TargetChatIds.Count > 5)
                 {
-                    return BadRequest(ApiResponse.Failure("Можно выбрать не более 5 чатов", "INVALID_REQUEST"));
+                    return BadRequest(ApiResponse.Failure(
+                        "Можно выбрать не более 5 чатов",
+                        "INVALID_REQUEST"));
                 }
 
-                request.MessageIds = request.MessageIds.Where(id => id != Guid.Empty).Distinct().ToList();
-                request.TargetChatIds = request.TargetChatIds.Where(id => id != Guid.Empty).Distinct().ToList();
+                var messageIds = request.MessageIds
+                    .Where(id => id != Guid.Empty)
+                    .Distinct()
+                    .ToList();
 
-                if (request.MessageIds.Count == 0)
+                var targetChatIds = request.TargetChatIds
+                    .Where(id => id != Guid.Empty)
+                    .Distinct()
+                    .ToList();
+
+                if (messageIds.Count == 0)
                 {
-                    return BadRequest(ApiResponse.Failure("Некорректные ID сообщений", "INVALID_REQUEST"));
+                    return BadRequest(ApiResponse.Failure(
+                        "Некорректные ID сообщений",
+                        "INVALID_REQUEST"));
                 }
 
-                if (request.TargetChatIds.Count == 0)
+                if (targetChatIds.Count == 0)
                 {
-                    return BadRequest(ApiResponse.Failure("Некорректные ID чатов", "INVALID_REQUEST"));
+                    return BadRequest(ApiResponse.Failure(
+                        "Некорректные ID чатов",
+                        "INVALID_REQUEST"));
                 }
 
-                var senderName = $"{user.FirstName} {user.LastName}".Trim();
-                if (string.IsNullOrWhiteSpace(senderName))
-                    senderName = "Пользователь";
+                var result = await _messageForwardingService.ForwardAsync(
+                    userId,
+                    messageIds,
+                    targetChatIds,
+                    ct);
 
-                var sourceMessages = new List<(Message msg, string? plainText, List<Attachment> attachments)>();
-                foreach (var mid in request.MessageIds.Distinct())
+                if (result.Failure != null)
                 {
-                    var msg = await _messageService.GetMessageByIdGlobalAsync(mid, ct);
-                    if (msg == null)
+                    return result.Failure switch
                     {
-                        return NotFound(ApiResponse.Failure($"Сообщение {mid} не найдено", "NOT_FOUND"));
-                    }
-
-                    var sourceChat = await _chatService.GetChatByIdAsync(msg.ChatId, ct);
-                    if (sourceChat == null || !sourceChat.ChatParticipants.Any(p => p.UserId == user.UserId))
-                    {
-                        return StatusCode(StatusCodes.Status403Forbidden, ApiResponse.Failure("Нет доступа к исходному чату", "FORBIDDEN"));
-                    }
-
-                    var plain = string.IsNullOrEmpty(msg.MessageText)
-                        ? null
-                        : _encryptionService.TryDecryptSafe(msg.MessageText);
-
-                    var atts = msg.Attachments?.ToList()
-                        ?? (await _attachmentService.GetAttachmentsByMessageIdAsync(mid, ct)).ToList();
-                    sourceMessages.Add((msg, plain, atts));
+                        MessageForwardingFailure.UserNotFound => Unauthorized(
+                            ApiResponse.Failure(result.ErrorMessage, "UNAUTHORIZED")),
+                        MessageForwardingFailure.SourceMessageNotFound => NotFound(
+                            ApiResponse.Failure(result.ErrorMessage, "NOT_FOUND")),
+                        MessageForwardingFailure.SourceChatAccessDenied => StatusCode(
+                            StatusCodes.Status403Forbidden,
+                            ApiResponse.Failure(result.ErrorMessage, "FORBIDDEN")),
+                        MessageForwardingFailure.TargetChatNotFound => NotFound(
+                            ApiResponse.Failure(result.ErrorMessage, "NOT_FOUND")),
+                        MessageForwardingFailure.TargetChatAccessDenied => StatusCode(
+                            StatusCodes.Status403Forbidden,
+                            ApiResponse.Failure(result.ErrorMessage, "FORBIDDEN")),
+                        MessageForwardingFailure.NothingPublished => StatusCode(
+                            StatusCodes.Status500InternalServerError,
+                            ApiResponse.Failure(result.ErrorMessage, "INTERNAL_ERROR")),
+                        _ => StatusCode(
+                            StatusCodes.Status500InternalServerError,
+                            ApiResponse.Failure(result.ErrorMessage, "INTERNAL_ERROR"))
+                    };
                 }
 
-                var targetChats = new List<Chat>();
-                foreach (var targetChatId in request.TargetChatIds.Distinct())
-                {
-                    var chat = await _chatService.GetChatByIdAsync(targetChatId, ct);
-                    if (chat == null)
+                return Ok(ApiResponse.Success(
+                    new
                     {
-                        return NotFound(ApiResponse.Failure($"Чат {targetChatId} не найден", "NOT_FOUND"));
-                    }
-
-                    if (!chat.ChatParticipants.Any(p => p.UserId == user.UserId))
+                        published = result.Published,
+                        errors = result.Errors
+                    },
+                    meta: new
                     {
-                        return StatusCode(StatusCodes.Status403Forbidden, ApiResponse.Failure($"Нет доступа к целевому чату {targetChatId}", "FORBIDDEN"));
-                    }
-
-                    targetChats.Add(chat);
-                }
-
-                var uploadPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads");
-                Directory.CreateDirectory(uploadPath);
-                var apiBase = (_configuration["URL:API:HTTPS"] ?? "").TrimEnd('/');
-
-                int published = 0;
-                var errors = new List<string>();
-
-                foreach (var target in targetChats)
-                {
-                    foreach (var (srcMsg, plainText, attachments) in sourceMessages)
-                    {
-                        try
-                        {
-                            var originalSender = srcMsg.Sender != null
-                                ? $"{srcMsg.Sender.FirstName} {srcMsg.Sender.LastName}".Trim()
-                                : "Пользователь";
-                            if (string.IsNullOrWhiteSpace(originalSender))
-                                originalSender = "Пользователь";
-
-                            var body = plainText ?? "";
-                            var forwardHeader = "\u200BFORWARD:" + srcMsg.MessageId.ToString() + "|" + originalSender.Replace("|", " ") + "\u200B\n";
-                            var contentToEncrypt = forwardHeader + body;
-                            var encryptedText = string.IsNullOrWhiteSpace(contentToEncrypt)
-                                ? null
-                                : _encryptionService.Encrypt(contentToEncrypt.TrimEnd());
-
-                            var newMessageId = Guid.NewGuid();
-                            var attachmentsInfo = new List<AttachmentInfo>();
-
-                            foreach (var att in attachments)
-                            {
-                                var diskName = ExtractUploadFileName(att.Url, att.FileName);
-                                var srcPath = Path.Combine(uploadPath, diskName);
-                                if (!System.IO.File.Exists(srcPath))
-                                {
-                                    _logger.LogWarning("Файл вложения не найден: {Path}", srcPath);
-                                    continue;
-                                }
-
-                                var ext = Path.GetExtension(diskName);
-                                if (string.IsNullOrEmpty(ext) && !string.IsNullOrEmpty(att.FileName))
-                                    ext = Path.GetExtension(att.FileName);
-                                var newFileName = Guid.NewGuid().ToString() + ext;
-                                var destPath = Path.Combine(uploadPath, newFileName);
-                                System.IO.File.Copy(srcPath, destPath, overwrite: true);
-
-                                var newAttId = Guid.NewGuid();
-                                var fileUrl = $"{apiBase}/uploads/{newFileName}";
-                                var size = att.SizeInBytes ?? (int)new FileInfo(destPath).Length;
-
-                                attachmentsInfo.Add(new AttachmentInfo
-                                {
-                                    AttachmentId = newAttId,
-                                    FileName = att.FileName,
-                                    FileType = att.FileType ?? "application/octet-stream",
-                                    SizeInBytes = size,
-                                    Url = fileUrl
-                                });
-                            }
-
-                            await _messageService.PublishChatMessageAsync(new ChatMessageSent
-                            {
-                                MessageId = newMessageId,
-                                ChatId = target.ChatId,
-                                SenderId = user.UserId,
-                                SenderName = senderName,
-                                MessageText = encryptedText,
-                                SentAt = UtcDateTime.AsUtc(UtcDateTime.Now),
-                                HasAttachments = attachmentsInfo.Count > 0,
-                                Attachments = attachmentsInfo
-                            }, ct);
-
-                            try
-                            {
-                                var plainForDto = string.IsNullOrEmpty(encryptedText)
-                                    ? null
-                                    : _encryptionService.TryDecryptSafe(encryptedText);
-                                var forwardDto = new MessageDto
-                                {
-                                    MessageId = newMessageId,
-                                    ChatId = target.ChatId,
-                                    SenderId = user.UserId,
-                                    SenderName = senderName,
-                                    MessageText = plainForDto,
-                                    SentAt = UtcDateTime.AsUtc(UtcDateTime.Now),
-                                    Status = "Sent",
-                                    Attachments = attachmentsInfo.Select(a => new AttachmentDto
-                                    {
-                                        AttachmentId = a.AttachmentId,
-                                        FileName = a.FileName,
-                                        FileType = a.FileType,
-                                        SizeInBytes = (int)a.SizeInBytes,
-                                        Url = a.Url
-                                    }).ToList()
-                                };
-                                var chatIdStr = target.ChatId.ToString();
-                                await _hubContext.Clients.Group(chatIdStr)
-                                    .SendAsync("ReceiveMessage", forwardDto, ct);
-                                await _hubContext.Clients.Group(chatIdStr)
-                                    .SendAsync("MessageSendingStatus", new
-                                    {
-                                        MessageId = newMessageId,
-                                        ChatId = target.ChatId,
-                                        Status = "Sent",
-                                        Timestamp = DateTimeOffset.UtcNow
-                                    }, ct);
-                                foreach (var participant in target.ChatParticipants)
-                                {
-                                    await _hubContext.Clients.Group($"User_{participant.UserId}")
-                                        .SendAsync("ReceiveMessage", forwardDto, ct);
-                                }
-                            }
-                            catch (Exception signalrEx)
-                            {
-                                _logger.LogWarning(signalrEx,
-                                    "SignalR после forward не удался MessageId={MessageId} ChatId={ChatId}",
-                                    newMessageId, target.ChatId);
-                            }
-
-                            published++;
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogError(ex, "Ошибка пересылки сообщения {MessageId} в чат {ChatId}", srcMsg.MessageId, target.ChatId);
-                            errors.Add(ex.Message);
-                        }
-                    }
-                }
-
-                if (published == 0)
-                {
-                    return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(errors.FirstOrDefault() ?? "Не удалось переслать сообщения", "INTERNAL_ERROR"));
-                }
-
-                return Ok(ApiResponse.Success(new { published, errors }, meta: new { published, errorCount = errors?.Count ?? 0 }));
+                        published = result.Published,
+                        errorCount = result.Errors.Count
+                    }));
             }
             catch (UnauthorizedAccessException ex)
             {
@@ -472,30 +353,10 @@ namespace Messenger.API.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при выполнении POST /messages/forward");
-                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
+                return StatusCode(
+                    StatusCodes.Status500InternalServerError,
+                    ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
-        }
-
-        private static string ExtractUploadFileName(string? url, string? fileName)
-        {
-            if (!string.IsNullOrWhiteSpace(url))
-            {
-                try
-                {
-                    var path = url;
-                    if (Uri.TryCreate(url, UriKind.Absolute, out var uri))
-                        path = uri.AbsolutePath;
-                    var name = Path.GetFileName(path.Split('?')[0]);
-                    if (!string.IsNullOrWhiteSpace(name))
-                        return name;
-                }
-                catch { }
-            }
-            if (!string.IsNullOrWhiteSpace(fileName))
-            {
-                return Path.GetFileName(fileName);
-            }
-            return "file";
         }
 
         /// <summary>
