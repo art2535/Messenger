@@ -16,34 +16,26 @@ public partial class GuapMessengerContext : DbContext
     }
 
     public virtual DbSet<AccountSetting> AccountSettings { get; set; }
-
     public virtual DbSet<Attachment> Attachments { get; set; }
-
     public virtual DbSet<Chat> Chats { get; set; }
-
     public virtual DbSet<ChatParticipant> ChatParticipants { get; set; }
-
     public virtual DbSet<Login> Logins { get; set; }
-
     public virtual DbSet<Message> Messages { get; set; }
-
     public virtual DbSet<Notification> Notifications { get; set; }
-
     public virtual DbSet<Reaction> Reactions { get; set; }
-
     public virtual DbSet<Role> Roles { get; set; }
-
     public virtual DbSet<User> Users { get; set; }
-
     public virtual DbSet<UserStatus> UserStatuses { get; set; }
-
     public virtual DbSet<Broadcast> Broadcasts { get; set; }
-
     public virtual DbSet<BroadcastRecipient> BroadcastRecipients { get; set; }
-
     public virtual DbSet<PushSubscription> PushSubscriptions { get; set; }
-
     public virtual DbSet<Log> Logs { get; set; }
+    public virtual DbSet<ChatFolder> ChatFolders { get; set; }
+    public virtual DbSet<ChatFolderChat> ChatFolderChats { get; set; }
+    public virtual DbSet<MessageReport> MessageReports { get; set; }
+    public virtual DbSet<UserMute> UserMutes { get; set; }
+    public virtual DbSet<ModerationLog> ModerationLogs { get; set; }
+    public virtual DbSet<Core.Models.ScheduledMessage> ScheduledMessages { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
@@ -236,7 +228,7 @@ public partial class GuapMessengerContext : DbContext
 
             entity.HasOne(d => d.Account)
                 .WithOne(p => p.User)
-                .HasForeignKey<AccountSetting>(a => a.AccountId)   // shared PK
+                .HasForeignKey<AccountSetting>(a => a.AccountId)
                 .HasConstraintName("fk_account")
                 .OnDelete(DeleteBehavior.Cascade);
 
@@ -383,6 +375,113 @@ public partial class GuapMessengerContext : DbContext
                 .HasDatabaseName("IX_logs_level");
             entity.HasIndex(e => e.Application)
                 .HasDatabaseName("IX_logs_application");
+        });
+
+        modelBuilder.Entity<ChatFolder>(entity =>
+        {
+            entity.ToTable("ChatFolders");
+            entity.HasKey(e => e.FolderId);
+            entity.Property(e => e.Name).HasMaxLength(64).IsRequired();
+            entity.HasIndex(e => e.UserId);
+            entity.HasOne(e => e.User).WithMany().HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ChatFolderChat>(entity =>
+        {
+            entity.ToTable("ChatFolderChats");
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => new { e.FolderId, e.ChatId }).IsUnique();
+            entity.HasOne(e => e.Folder).WithMany(f => f.Chats).HasForeignKey(e => e.FolderId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.Chat).WithMany().HasForeignKey(e => e.ChatId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<MessageReport>(entity =>
+        {
+            entity.ToTable("Message_Reports");
+            entity.HasKey(e => e.ReportId);
+            entity.Property(e => e.ReportId).HasColumnName("Report_ID");
+            entity.Property(e => e.MessageId).HasColumnName("Message_ID");
+            entity.Property(e => e.ChatId).HasColumnName("Chat_ID");
+            entity.Property(e => e.ReporterId).HasColumnName("Reporter_ID");
+            entity.Property(e => e.CreatedAt).HasColumnName("Created_At");
+            entity.Property(e => e.ReviewedAt).HasColumnName("Reviewed_At");
+            entity.Property(e => e.ReviewedBy).HasColumnName("Reviewed_By");
+            entity.Property(e => e.AdminNote).HasColumnName("Admin_Note");
+            entity.HasIndex(e => e.Status);
+        });
+
+        modelBuilder.Entity<UserMute>(entity =>
+        {
+            entity.ToTable("User_Mutes");
+            entity.HasKey(e => e.MuteId);
+            entity.Property(e => e.MuteId).HasColumnName("Mute_ID");
+            entity.Property(e => e.UserId).HasColumnName("User_ID");
+            entity.Property(e => e.ChatId).HasColumnName("Chat_ID");
+            entity.Property(e => e.MutedBy).HasColumnName("Muted_By");
+            entity.Property(e => e.MutedUntil).HasColumnName("Muted_Until");
+            entity.Property(e => e.CreatedAt).HasColumnName("Created_At");
+            entity.Property(e => e.IsActive).HasColumnName("Is_Active");
+        });
+
+        modelBuilder.Entity<ModerationLog>(entity =>
+        {
+            entity.ToTable("Moderation_Logs");
+            entity.HasKey(e => e.LogId);
+            entity.Property(e => e.LogId).HasColumnName("Log_ID");
+            entity.Property(e => e.ActorId).HasColumnName("Actor_ID");
+            entity.Property(e => e.TargetUserId).HasColumnName("Target_User_ID");
+            entity.Property(e => e.ChatId).HasColumnName("Chat_ID");
+            entity.Property(e => e.MessageId).HasColumnName("Message_ID");
+            entity.Property(e => e.CreatedAt).HasColumnName("Created_At");
+        });
+
+        modelBuilder.Entity<Core.Models.ScheduledMessage>(entity =>
+        {
+            entity.ToTable("Scheduled_Messages");
+            entity.HasKey(e => e.ScheduledMessageId).HasName("Scheduled_Messages_pkey");
+
+            entity.Property(e => e.ScheduledMessageId)
+                .HasColumnName("Scheduled_Message_ID")
+                .ValueGeneratedNever();
+
+            entity.Property(e => e.ChatId).HasColumnName("Chat_ID");
+            entity.Property(e => e.SenderId).HasColumnName("Sender_ID");
+            entity.Property(e => e.MessageText).HasColumnName("Message_Text");
+            entity.Property(e => e.HasAttachments).HasColumnName("Has_Attachments");
+            entity.Property(e => e.AttachmentsJson).HasColumnName("Attachments_Json");
+            entity.Property(e => e.ScheduledAt)
+                .HasColumnName("Scheduled_At")
+                .HasColumnType("timestamp with time zone");
+            entity.Property(e => e.CreatedAt)
+                .HasColumnName("Created_At")
+                .HasColumnType("timestamp with time zone");
+            entity.Property(e => e.UpdatedAt)
+                .HasColumnName("Updated_At")
+                .HasColumnType("timestamp with time zone");
+            entity.Property(e => e.Status)
+                .HasColumnName("Status")
+                .HasMaxLength(32);
+            entity.Property(e => e.ResultMessageId).HasColumnName("Result_Message_ID");
+            entity.Property(e => e.ErrorMessage).HasColumnName("Error_Message");
+            entity.Property(e => e.ReplyToMessageId).HasColumnName("Reply_To_Message_ID");
+
+            entity.HasIndex(e => e.ChatId).HasDatabaseName("IX_Scheduled_Messages_Chat_ID");
+            entity.HasIndex(e => new { e.SenderId, e.Status })
+                .HasDatabaseName("IX_Scheduled_Messages_Sender_ID_Status");
+            entity.HasIndex(e => new { e.Status, e.ScheduledAt })
+                .HasDatabaseName("IX_Scheduled_Messages_Status_Scheduled_At");
+
+            entity.HasOne(d => d.Chat)
+                .WithMany()
+                .HasForeignKey(d => d.ChatId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_scheduled_message_chat");
+
+            entity.HasOne(d => d.Sender)
+                .WithMany()
+                .HasForeignKey(d => d.SenderId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_scheduled_message_sender");
         });
 
         OnModelCreatingPartial(modelBuilder);

@@ -1,21 +1,24 @@
 ﻿using Asp.Versioning;
+using Messenger.API.Extensions;
 using Messenger.Core.DTOs.Push;
 using Messenger.Core.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel;
-using System.Security.Claims;
 using WebPush;
+using Messenger.Core.Responses;
 
 namespace Messenger.API.Controllers
 {
     /// <summary>
-    /// Push-уведомления — управление подписками, настройками и отправкой веб-push
+    /// Push-уведомления — управление подписками, настройками и отправкой веб-push.
     /// </summary>
-    [Authorize]
     [ApiController]
-    [Route("api/v{version:apiVersion}/[controller]")]
+    [Route("api/v{version:apiVersion}/push")]
     [ApiVersion("1.0")]
+    [Authorize]
+    [Produces("application/json")]
+    [Consumes("application/json")]
     [Tags("Push")]
     public class PushController : ControllerBase
     {
@@ -25,72 +28,88 @@ namespace Messenger.API.Controllers
         private readonly IUserService _userService;
         private readonly INotificationService _notificationService;
 
-        public PushController(IPushSubscriptionService subscriptionService, IConfiguration configuration,
-            ILogger<PushController> logger, IUserService userService, INotificationService notificationService)
+        public PushController(
+            IPushSubscriptionService subscriptionService,
+            IConfiguration configuration,
+            ILogger<PushController> logger,
+            IUserService userService,
+            INotificationService notificationService)
         {
             _subscriptionService = subscriptionService;
             _logger = logger;
-
-            var vapidSection = configuration.GetSection("Vapid");
-
-            _vapidDetails = new VapidDetails(vapidSection["Subject"], vapidSection["PublicKey"]!, 
-                vapidSection["PrivateKey"]!);
-
             _userService = userService;
             _notificationService = notificationService;
+
+            var vapidSection = configuration.GetSection("Vapid");
+            _vapidDetails = new VapidDetails(
+                vapidSection["Subject"],
+                vapidSection["PublicKey"]!,
+                vapidSection["PrivateKey"]!);
         }
 
         /// <summary>
-        /// Подписать пользователя на push-уведомления
+        /// Подписать пользователя на push-уведомления.
         /// </summary>
         [HttpPost("subscribe")]
         [EndpointName("SubscribeToPush")]
         [EndpointSummary("Подписать пользователя на push-уведомления")]
-        [EndpointDescription("Сохраняет push-подписку браузера для последующей отправки веб-уведомлений. " +
-            "Если подписка с таким Endpoint уже существует — она будет заменена.")]
+        [EndpointDescription("Сохраняет push-подписку браузера для последующей отправки веб-уведомлений. Если подписка с таким Endpoint уже существует — она будет заменена.")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [Consumes("application/json")]
-        public async Task<IActionResult> SubscribeAsync(
-            [FromBody, Description("Данные для создания подписки")] PushSubscriptionRequest subscriptionDto)
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> PostSubscribeAsync(
+            [FromBody, Description("Данные для создания подписки")] PushSubscriptionRequest subscriptionDto,
+            CancellationToken ct = default)
         {
-            if (subscriptionDto == null || string.IsNullOrEmpty(subscriptionDto.Endpoint))
-                return BadRequest(new { error = "Некорректные данные подписки" });
-
-            var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier)
-                           ?? User.FindFirstValue("sub");
-
-            var user = await _userService.GetUserByExternalIdAsync(userIdClaim);
-
-            if (string.IsNullOrEmpty(subscriptionDto.P256dh) || string.IsNullOrEmpty(subscriptionDto.Auth))
+            try
             {
-                _logger.LogWarning("Подписка от пользователя {UserId} пришла без p256dh/auth ключей", user!.UserId);
-                return BadRequest(new { error = "Отсутствуют ключи шифрования p256dh или auth" });
+                if (subscriptionDto == null || string.IsNullOrEmpty(subscriptionDto.Endpoint))
+                {
+                    return BadRequest(ApiResponse.Failure("Некорректные данные подписки", "INVALID_REQUEST"));
+                }
+
+                var userId = await User.GetCurrentUserIdAsync(_userService);
+
+                if (string.IsNullOrEmpty(subscriptionDto.P256dh) || string.IsNullOrEmpty(subscriptionDto.Auth))
+                {
+                    _logger.LogWarning("Подписка от пользователя {UserId} пришла без p256dh/auth ключей", userId);
+                    return BadRequest(ApiResponse.Failure("Отсутствуют ключи шифрования p256dh или auth", "INVALID_REQUEST"));
+                }
+
+                var subscription = new Core.Models.PushSubscription
+                {
+                    UserId = userId,
+                    Endpoint = subscriptionDto.Endpoint,
+                    P256dh = subscriptionDto.P256dh,
+                    Auth = subscriptionDto.Auth,
+                    CreatedAt = DateTime.UtcNow,
+                    LastUsedAt = DateTime.UtcNow
+                };
+
+                await _subscriptionService.RemoveByEndpointAsync(subscriptionDto.Endpoint, ct);
+                await _subscriptionService.AddSubscriptionAsync(subscription, ct);
+                await _subscriptionService.EnsurePushEnabledAsync(userId, ct);
+
+                _logger.LogInformation("Push-подписка успешно сохранена для пользователя {UserId}. P256dh length: {Len}",
+                    userId, subscription.P256dh.Length);
+
+                return Ok(ApiResponse.Success(message: "Подписка успешно сохранена"));
             }
-
-            var subscription = new Core.Models.PushSubscription
+            catch (UnauthorizedAccessException ex)
             {
-                UserId = user!.UserId,
-                Endpoint = subscriptionDto.Endpoint,
-                P256dh = subscriptionDto.P256dh,
-                Auth = subscriptionDto.Auth,
-                CreatedAt = DateTime.UtcNow,
-                LastUsedAt = DateTime.UtcNow
-            };
-
-            await _subscriptionService.RemoveByEndpointAsync(subscriptionDto.Endpoint);
-
-            await _subscriptionService.AddSubscriptionAsync(subscription);
-
-            _logger.LogInformation("Push-подписка успешно сохранена для пользователя {UserId}. P256dh length: {Len}",
-                user!.UserId, subscription.P256dh.Length);
-
-            return Ok(new { message = "Подписка успешно сохранена" });
+                _logger.LogWarning(ex, "Ошибка авторизации при подписке на push-уведомления");
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка при сохранении push-подписки");
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
+            }
         }
 
         /// <summary>
-        /// Отписать пользователя от push-уведомлений
+        /// Отписать пользователя от push-уведомлений.
         /// </summary>
         [HttpDelete("unsubscribe")]
         [EndpointName("UnsubscribeFromPush")]
@@ -99,20 +118,31 @@ namespace Messenger.API.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [Consumes("application/json")]
-        public async Task<IActionResult> UnsubscribeAsync(
-            [FromBody, Description("Endpoint для удаления подписки")] string endpoint)
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> DeleteUnsubscribeAsync(
+            [FromBody, Description("Endpoint для удаления подписки")] string endpoint,
+            CancellationToken ct = default)
         {
-            if (string.IsNullOrEmpty(endpoint))
-                return BadRequest();
+            try
+            {
+                if (string.IsNullOrEmpty(endpoint))
+                {
+                    return BadRequest(ApiResponse.Failure("Endpoint не может быть пустым", "INVALID_REQUEST"));
+                }
 
-            await _subscriptionService.RemoveByEndpointAsync(endpoint);
+                await _subscriptionService.RemoveByEndpointAsync(endpoint, ct);
 
-            return Ok(new { message = "Подписка удалена" });
+                return Ok(ApiResponse.Success(message: "Подписка удалена"));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка при удалении push-подписки");
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
+            }
         }
 
         /// <summary>
-        /// Пометить уведомление как прочитанное
+        /// Пометить уведомление как прочитанное.
         /// </summary>
         [HttpPost("{notificationId}/read")]
         [EndpointName("MarkNotificationAsRead")]
@@ -120,78 +150,100 @@ namespace Messenger.API.Controllers
         [EndpointDescription("Отмечает конкретное push-уведомление как прочитанное для текущего пользователя.")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        public async Task<IActionResult> MarkAsReadAsync([Description("Идентификатор уведомления")] Guid notificationId)
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> PostMarkAsReadAsync(
+            [Description("Идентификатор уведомления")] Guid notificationId,
+            CancellationToken ct = default)
         {
-            await _notificationService.MarkAsReadAsync(notificationId);
+            try
+            {
+                await _notificationService.MarkAsReadAsync(notificationId, ct);
 
-            return Ok(new { message = "Уведомление помечено как прочитанное" });
+                return Ok(ApiResponse.Success(message: "Уведомление помечено как прочитанное"));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка при пометке уведомления {NotificationId} как прочитанного", notificationId);
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
+            }
         }
 
         /// <summary>
-        /// Получить настройки push-уведомлений текущего пользователя
+        /// Получить настройки push-уведомлений текущего пользователя.
         /// </summary>
         [HttpGet("settings")]
         [EndpointName("GetPushSettings")]
         [EndpointSummary("Получить настройки push-уведомлений")]
         [EndpointDescription("Возвращает текущие настройки push-уведомлений (включены ли уведомления, о сообщениях, группах и упоминаниях).")]
-        [ProducesResponseType(typeof(PushSubscriptionUpdateRequest), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        public async Task<IActionResult> GetSettingsAsync(CancellationToken token = default)
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> GetSettingsAsync(CancellationToken ct = default)
         {
-            var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
-            var user = await _userService.GetUserByExternalIdAsync(userIdClaim);
-
-            if (user == null || user?.AccountId == null)
-                return Ok(new PushSubscriptionUpdateRequest());
-
-            var settings = await _subscriptionService.GetPushSettingsAsync(user.AccountId, token);
-
-            if (settings == null)
+            try
             {
-                return Ok(new PushSubscriptionUpdateRequest
+                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var settings = await _subscriptionService.GetPushSettingsAsync(userId, ct);
+
+                var result = new PushSubscriptionUpdateRequest
                 {
-                    PushEnabled = true,
-                    NotifyMessages = true,
-                    NotifyGroupChats = true,
-                    NotifyMentions = true
-                });
-            }
+                    PushEnabled = settings.PushEnabled,
+                    NotifyMessages = settings.NotifyMessages,
+                    NotifyGroupChats = settings.NotifyGroupChats,
+                    NotifyMentions = settings.NotifyMentions
+                };
 
-            return Ok(new PushSubscriptionUpdateRequest
+                return Ok(ApiResponse.Success(result));
+            }
+            catch (UnauthorizedAccessException ex)
             {
-                PushEnabled = settings.PushEnabled,
-                NotifyMessages = settings.NotifyMessages,
-                NotifyGroupChats = settings.NotifyGroupChats,
-                NotifyMentions = settings.NotifyMentions
-            });
+                _logger.LogWarning(ex, "Ошибка авторизации при получении настроек push-уведомлений");
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка при получении настроек push-уведомлений");
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
+            }
         }
 
         /// <summary>
-        /// Сохранить настройки push-уведомлений
+        /// Сохранить настройки push-уведомлений.
         /// </summary>
         [HttpPost("settings")]
         [EndpointName("SavePushSettings")]
         [EndpointSummary("Сохранить настройки push-уведомлений")]
-        [EndpointDescription("Обновляет настройки push-уведомлений пользователя " +
-            "(включение/отключение всех уведомлений, сообщений, групп и упоминаний).")]
+        [EndpointDescription("Обновляет настройки push-уведомлений пользователя (включение/отключение всех уведомлений, сообщений, групп и упоминаний).")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        public async Task<IActionResult> SaveSettingsAsync(
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> PostSaveSettingsAsync(
             [FromBody, Description("Настройки push-уведомлений")] PushSubscriptionUpdateRequest request,
-            CancellationToken token = default)
+            CancellationToken ct = default)
         {
-            var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
-            var user = await _userService.GetUserByExternalIdAsync(userIdClaim);
+            try
+            {
+                var userId = await User.GetCurrentUserIdAsync(_userService);
+                await _subscriptionService.SavePushSettingsAsync(userId, request, ct);
 
-            await _subscriptionService.SavePushSettingsAsync(user.UserId, user.AccountId, request, token);
+                _logger.LogInformation("Настройки push-уведомлений обновлены для пользователя {UserId}", userId);
 
-            _logger.LogInformation("Настройки push-уведомлений обновлены для пользователя {UserId}", user.UserId);
-
-            return Ok(new { message = "Настройки push-уведомлений успешно сохранены" });
+                return Ok(ApiResponse.Success(message: "Настройки push-уведомлений успешно сохранены"));
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Ошибка авторизации при сохранении настроек push-уведомлений");
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка при сохранении настроек push-уведомлений");
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
+            }
         }
 
         /// <summary>
-        /// Отправить push-уведомления участникам чата
+        /// Отправить push-уведомления участникам чата.
         /// </summary>
         [HttpPost("send")]
         [EndpointName("SendPushNotification")]
@@ -201,48 +253,58 @@ namespace Messenger.API.Controllers
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> SendPushNotificationAsync(
+        public async Task<IActionResult> PostSendPushNotificationAsync(
             [FromBody, Description("Данные для отправки уведомления")] SendPushNotificationRequest request,
-            CancellationToken cancellationToken = default)
+            CancellationToken ct = default)
         {
-            if (request == null || request.ChatId == Guid.Empty)
-                return BadRequest(new { error = "Некорректные данные запроса" });
-
-            var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier)
-                           ?? User.FindFirstValue("sub");
-
-            var sender = await _userService.GetUserByExternalIdAsync(userIdClaim);
-            if (sender == null)
-                return Unauthorized();
-
             try
             {
-                await _subscriptionService.SendPushToOfflineUsersAsync(request.ChatId, sender.UserId,
-                    request.SenderName ?? "Пользователь", request.MessageText, request.HasAttachments,
-                    request.IsMention, cancellationToken);
+                if (request == null || request.ChatId == Guid.Empty)
+                {
+                    return BadRequest(ApiResponse.Failure("Некорректные данные запроса", "INVALID_REQUEST"));
+                }
 
-                return Ok(new { message = "Push-уведомления обработаны" });
+                var senderId = await User.GetCurrentUserIdAsync(_userService);
+
+                await _subscriptionService.SendPushToOfflineUsersAsync(
+                    request.ChatId,
+                    senderId,
+                    request.SenderName ?? "Пользователь",
+                    request.MessageText,
+                    request.HasAttachments,
+                    request.IsMention,
+                    ct);
+
+                return Ok(ApiResponse.Success(message: "Push-уведомления обработаны"));
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Ошибка авторизации при отправке push-уведомлений");
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Ошибка при обработке push-уведомлений для чата {ChatId}", request.ChatId);
-                return StatusCode(500, new { error = "Внутренняя ошибка сервера при отправке push" });
+                _logger.LogError(ex, "Ошибка при обработке push-уведомлений для чата {ChatId}", request?.ChatId);
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
+
         /// <summary>
-        /// Получить публичный VAPID-ключ
+        /// Получить публичный VAPID-ключ.
         /// </summary>
         [HttpGet("vapid-public-key")]
         [AllowAnonymous]
         [EndpointName("GetVapidPublicKey")]
         [EndpointSummary("Получить публичный VAPID-ключ")]
-        [EndpointDescription("Возвращает публичный VAPID-ключ, необходимый на клиентской стороне для создания push-подписки " +
-            "через Service Worker.")]
-        [ProducesResponseType(typeof(string), StatusCodes.Status200OK)]
-        public IActionResult GetVapidPublicKey()
+        [EndpointDescription("Возвращает публичный VAPID-ключ, необходимый на клиентской стороне для создания push-подписки через Service Worker.")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        public IActionResult GetVapidPublicKeyAsync()
         {
-            var publicKey = _vapidDetails.PublicKey;
-            return Content(publicKey, "text/plain");
-        }        
+            return Ok(ApiResponse.Success(data: _vapidDetails.PublicKey));
+        }
     }
 }

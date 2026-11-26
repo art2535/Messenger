@@ -1,0 +1,423 @@
+@page "/inside/settings/admin"
+@model Messenger.Web.Pages.Inside.Settings.Admin.IndexModel
+@{
+    ViewData["Title"] = "Админ-панель";
+    ViewData["DisplayName"] = Model.DisplayName;
+    ViewData["AccessToken"] = Model.AccessToken;
+    ViewData["ApiBaseUrl"] = Model.ApiBaseUrl;
+    ViewData["HubUrl"] = Model.HubUrl;
+}
+
+<div class="max-w-5xl mx-auto space-y-5 sm:space-y-6">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <h2 class="text-xl sm:text-2xl font-semibold text-gray-800 dark:text-white">Админ-панель</h2>
+        <button type="button" id="admin-refresh" class="admin-btn ok text-sm px-3 py-1.5 rounded-lg">
+            Обновить
+        </button>
+    </div>
+    <p class="text-sm text-gray-500 dark:text-gray-400 -mt-2">
+        Только для роли «Администратор». Статистика, жалобы, mute, логи модерации.
+    </p>
+
+    <div id="admin-loading" class="settings-card text-sm text-gray-500 dark:text-gray-400">Загрузка…</div>
+    <div id="admin-forbidden" class="hidden settings-card border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300">
+        Недостаточно прав. Нужна роль «Администратор».
+    </div>
+
+    <div id="admin-content" class="hidden space-y-5 sm:space-y-6">
+        <section class="settings-card">
+            <div class="settings-card-header">
+                <div class="settings-icon-wrap bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
+                    <i data-feather="activity" class="w-5 h-5"></i>
+                </div>
+                <div class="min-w-0">
+                    <h3 class="settings-card-title">Активность</h3>
+                    <p class="settings-card-desc">Сводка по системе</p>
+                </div>
+            </div>
+            <div class="admin-stats-grid" id="admin-stats"></div>
+        </section>
+
+        <section class="settings-card">
+            <div class="settings-card-header">
+                <div class="settings-icon-wrap bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400">
+                    <i data-feather="flag" class="w-5 h-5"></i>
+                </div>
+                <div class="min-w-0">
+                    <h3 class="settings-card-title">Жалобы</h3>
+                    <p class="settings-card-desc">Ожидают рассмотрения</p>
+                </div>
+            </div>
+            <div class="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700">
+                <table class="admin-table" id="admin-reports">
+                    <thead>
+                        <tr>
+                            <th>Дата</th>
+                            <th>Причина</th>
+                            <th>Сообщение</th>
+                            <th>Статус</th>
+                            <th style="min-width:200px">Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="settings-card">
+            <div class="settings-card-header">
+                <div class="settings-icon-wrap bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400">
+                    <i data-feather="slash" class="w-5 h-5"></i>
+                </div>
+                <div class="min-w-0">
+                    <h3 class="settings-card-title">Активные mute</h3>
+                    <p class="settings-card-desc">Временные ограничения пользователей</p>
+                </div>
+            </div>
+            <div class="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700">
+                <table class="admin-table" id="admin-mutes">
+                    <thead>
+                        <tr>
+                            <th>User ID</th>
+                            <th>До</th>
+                            <th>Причина</th>
+                            <th style="min-width:120px">Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="settings-card">
+            <div class="settings-card-header">
+                <div class="settings-icon-wrap bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                    <i data-feather="file-text" class="w-5 h-5"></i>
+                </div>
+                <div class="min-w-0">
+                    <h3 class="settings-card-title">Логи модерации</h3>
+                    <p class="settings-card-desc">Последние действия</p>
+                </div>
+            </div>
+            <div class="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700">
+                <table class="admin-table" id="admin-logs">
+                    <thead>
+                        <tr>
+                            <th>Дата</th>
+                            <th>Действие</th>
+                            <th>Детали</th>
+                            <th style="min-width:100px">Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+</div>
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/admin-panel.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/toast.css" asp-append-version="true" />
+}
+
+@section Scripts {
+    <script src="~/js/utils/toast.js" asp-append-version="true"></script>
+    <script>
+        (function () {
+            const toast = window.MessengerToast || {
+                error: (m) => console.error(m),
+                warning: (m) => console.warn(m),
+                success: (m) => console.log(m),
+                info: (m) => console.log(m)
+            };
+
+            function resolveApiBase() {
+                const fromWindow = (window.API_BASE_URL || '').toString().trim();
+                const fromMeta = (document.querySelector('meta[name="api-base"]')?.content || '').trim();
+                const fromModel = '@Model.ApiBaseUrl'.trim();
+                let base = fromWindow || fromMeta || fromModel || '';
+                base = base.replace(/\/$/, '');
+                if (base && !/\/api\/v[\d.]+$/i.test(base)) {
+                    // если пришёл только origin без /api/vX
+                    if (!/\/api\//i.test(base)) base += '/api/v1.0';
+                }
+                window.API_BASE_URL = base;
+                return base;
+            }
+
+            function resolveToken() {
+                const meta = (document.querySelector('meta[name="access-token"]')?.content || '').trim();
+                let ls = '';
+                try { ls = (localStorage.getItem('token') || '').trim(); } catch (_) {}
+                let t = meta || ls || '';
+                t = t.replace(/^Bearer\s+/i, '');
+                return t;
+            }
+
+            function authHeaders() {
+                const t = resolveToken();
+                const h = { 'Accept': 'application/json', 'Content-Type': 'application/json' };
+                if (t) h['Authorization'] = 'Bearer ' + t;
+                return h;
+            }
+
+            async function api(path, opts = {}) {
+                const API = resolveApiBase();
+                if (!API) throw new Error('API_BASE_URL не задан');
+                const sep = path.includes('?') ? '&' : '?';
+                // cache-bust для GET
+                const method = (opts.method || 'GET').toUpperCase();
+                const url = API + path + (method === 'GET' ? sep + '_=' + Date.now() : '');
+                const res = await fetch(url, {
+                    ...opts,
+                    method,
+                    headers: { ...authHeaders(), ...(opts.headers || {}) },
+                    credentials: 'same-origin',
+                    cache: 'no-store'
+                });
+                let json = null;
+                try { json = await res.json(); } catch (_) { json = {}; }
+                return { res, json };
+            }
+
+            function esc(s) {
+                return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+            }
+            function btn(cls, label, attrs) {
+                return '<button type="button" class="admin-btn ' + cls + '" ' + attrs + '>' + label + '</button>';
+            }
+            function unwrapData(json) {
+                if (!json || typeof json !== 'object') return null;
+                if (json.data !== undefined && json.data !== null) return json.data;
+                if (json.Data !== undefined && json.Data !== null) return json.Data;
+                return json;
+            }
+            function pick(obj, ...keys) {
+                if (!obj) return undefined;
+                for (const k of keys) {
+                    if (obj[k] !== undefined && obj[k] !== null) return obj[k];
+                }
+                return undefined;
+            }
+            function isSuccess(json, res) {
+                if (json && typeof json.isSuccess === 'boolean') return json.isSuccess;
+                if (json && typeof json.IsSuccess === 'boolean') return json.IsSuccess;
+                return res.ok;
+            }
+            function errorMessage(json, fallback) {
+                return (json && (json.error || json.Error || json.message || json.Message)) || fallback || 'Ошибка запроса';
+            }
+
+            function renderStats(s) {
+                const cards = [
+                    ['Пользователи', pick(s, 'totalUsers', 'TotalUsers') ?? 0],
+                    ['Онлайн', pick(s, 'onlineUsers', 'OnlineUsers') ?? 0],
+                    ['Сообщения 24ч', pick(s, 'messagesLast24h', 'MessagesLast24h') ?? 0],
+                    ['Сообщения 7д', pick(s, 'messagesLast7d', 'MessagesLast7d') ?? 0],
+                    ['Чаты 24ч', pick(s, 'activeChatsLast24h', 'ActiveChatsLast24h') ?? 0],
+                    ['Жалобы', pick(s, 'pendingReports', 'PendingReports') ?? 0],
+                    ['Mute', pick(s, 'activeMutes', 'ActiveMutes') ?? 0]
+                ];
+                const el = document.getElementById('admin-stats');
+                if (!el) return;
+                el.innerHTML = cards.map(([label, value]) =>
+                    '<div class="admin-stat-card"><div class="value text-gray-900 dark:text-white">' + value +
+                    '</div><div class="label text-gray-600 dark:text-gray-400">' + label + '</div></div>'
+                ).join('');
+            }
+
+            async function loadStats() {
+                const { res, json } = await api('/admin/stats');
+                if (res.status === 401) {
+                    location.href = '/login';
+                    return false;
+                }
+                if (res.status === 403 || !res.ok) {
+                    document.getElementById('admin-forbidden')?.classList.remove('hidden');
+                    document.getElementById('admin-content')?.classList.add('hidden');
+                    document.getElementById('admin-loading')?.classList.add('hidden');
+                    if (res.status !== 403) {
+                        toast.error(errorMessage(json, 'Не удалось загрузить статистику'));
+                    }
+                    return false;
+                }
+                document.getElementById('admin-forbidden')?.classList.add('hidden');
+                document.getElementById('admin-content')?.classList.remove('hidden');
+                renderStats(unwrapData(json) || {});
+                return true;
+            }
+
+            async function loadReports() {
+                const { json } = await api('/admin/reports');
+                const list = unwrapData(json) || [];
+                const arr = Array.isArray(list) ? list : [];
+                const tb = document.querySelector('#admin-reports tbody');
+                if (!tb) return;
+                if (!arr.length) {
+                    tb.innerHTML = '<tr><td colspan="5" class="text-gray-500">Нет жалоб</td></tr>';
+                    return;
+                }
+                tb.innerHTML = arr.map(r => {
+                    const id = pick(r, 'reportId', 'ReportId') || '';
+                    const date = pick(r, 'createdAt', 'CreatedAt');
+                    const reason = esc(pick(r, 'reason', 'Reason') || '');
+                    const preview = esc(pick(r, 'messagePreview', 'MessagePreview', 'comment', 'Comment') || '');
+                    const status = esc(pick(r, 'status', 'Status') || 'pending');
+                    return '<tr data-id="' + id + '">' +
+                        '<td class="text-gray-700 dark:text-gray-300">' + (date ? new Date(date).toLocaleString() : '') + '</td>' +
+                        '<td class="text-gray-700 dark:text-gray-300">' + reason + '</td>' +
+                        '<td class="text-gray-500 max-w-xs truncate" title="' + preview + '">' + preview + '</td>' +
+                        '<td><span class="text-xs px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200">' + status + '</span></td>' +
+                        '<td class="space-x-1 whitespace-nowrap">' +
+                        btn('ok', 'Принять', 'data-act="action_taken" data-id="' + id + '"') +
+                        btn('warn', 'Отклонить', 'data-act="dismissed" data-id="' + id + '"') +
+                        btn('danger', 'Удалить', 'data-act="delete" data-id="' + id + '"') +
+                        '</td></tr>';
+                }).join('');
+                tb.querySelectorAll('button[data-act]').forEach(btnEl => {
+                    btnEl.onclick = async () => {
+                        const id = btnEl.dataset.id;
+                        const act = btnEl.dataset.act;
+                        btnEl.disabled = true;
+                        let result;
+                        if (act === 'delete') {
+                            result = await api('/admin/reports/' + id, { method: 'DELETE' });
+                        } else {
+                            result = await api('/admin/reports/' + id + '/review', {
+                                method: 'POST',
+                                body: JSON.stringify({ status: act })
+                            });
+                        }
+                        if (isSuccess(result.json, result.res)) {
+                            toast.success(result.json?.message || result.json?.Message || 'Готово');
+                            loadReports();
+                            loadStats();
+                        } else {
+                            btnEl.disabled = false;
+                            toast.error(errorMessage(result.json, 'Не удалось выполнить действие'));
+                        }
+                    };
+                });
+            }
+
+            async function loadMutes() {
+                const { json } = await api('/admin/mutes');
+                const list = unwrapData(json) || [];
+                const arr = Array.isArray(list) ? list : [];
+                const tb = document.querySelector('#admin-mutes tbody');
+                if (!tb) return;
+                if (!arr.length) {
+                    tb.innerHTML = '<tr><td colspan="4" class="text-gray-500">Нет активных mute</td></tr>';
+                    return;
+                }
+                tb.innerHTML = arr.map(m => {
+                    const id = pick(m, 'muteId', 'MuteId', 'userId', 'UserId') || '';
+                    const uid = esc(pick(m, 'userId', 'UserId') || '');
+                    const until = pick(m, 'mutedUntil', 'MutedUntil');
+                    const reason = esc(pick(m, 'reason', 'Reason') || '');
+                    return '<tr>' +
+                        '<td class="text-gray-700 dark:text-gray-300 font-mono text-xs">' + uid + '</td>' +
+                        '<td class="text-gray-700 dark:text-gray-300">' + (until ? new Date(until).toLocaleString() : '') + '</td>' +
+                        '<td class="text-gray-500">' + reason + '</td>' +
+                        '<td>' + btn('ok', 'Снять', 'data-unmute="' + id + '"') + '</td></tr>';
+                }).join('');
+                tb.querySelectorAll('[data-unmute]').forEach(btnEl => {
+                    btnEl.onclick = async () => {
+                        btnEl.disabled = true;
+                        const result = await api('/moderation/unmute/' + btnEl.dataset.unmute, { method: 'POST' });
+                        if (isSuccess(result.json, result.res)) {
+                            toast.success('Mute снят');
+                            loadMutes();
+                            loadStats();
+                        } else {
+                            btnEl.disabled = false;
+                            toast.error(errorMessage(result.json, 'Не удалось снять mute'));
+                        }
+                    };
+                });
+            }
+
+            async function loadLogs() {
+                const { json } = await api('/admin/logs?take=50');
+                const list = unwrapData(json) || [];
+                const arr = Array.isArray(list) ? list : [];
+                const tb = document.querySelector('#admin-logs tbody');
+                if (!tb) return;
+                if (!arr.length) {
+                    tb.innerHTML = '<tr><td colspan="4" class="text-gray-500">Пусто</td></tr>';
+                    return;
+                }
+                tb.innerHTML = arr.map(l => {
+                    const id = pick(l, 'logId', 'LogId') || '';
+                    const date = pick(l, 'createdAt', 'CreatedAt');
+                    const action = esc(pick(l, 'action', 'Action') || '');
+                    const details = esc(pick(l, 'details', 'Details') || '');
+                    return '<tr data-log="' + id + '">' +
+                        '<td class="text-gray-700 dark:text-gray-300">' + (date ? new Date(date).toLocaleString() : '') + '</td>' +
+                        '<td class="text-gray-700 dark:text-gray-300">' + action + '</td>' +
+                        '<td class="text-gray-500 max-w-md truncate" title="' + details + '">' + details + '</td>' +
+                        '<td>' + (id ? btn('danger', 'Удалить', 'data-del-log="' + id + '"') : '') + '</td></tr>';
+                }).join('');
+                tb.querySelectorAll('[data-del-log]').forEach(btnEl => {
+                    btnEl.onclick = async () => {
+                        if (!confirm('Удалить запись лога?')) return;
+                        btnEl.disabled = true;
+                        const result = await api('/admin/logs/' + btnEl.dataset.delLog, { method: 'DELETE' });
+                        if (isSuccess(result.json, result.res)) {
+                            toast.success('Запись удалена');
+                            btnEl.closest('tr')?.remove();
+                            if (!tb.querySelector('tr')) {
+                                tb.innerHTML = '<tr><td colspan="4" class="text-gray-500">Пусто</td></tr>';
+                            }
+                        } else {
+                            btnEl.disabled = false;
+                            toast.error(errorMessage(result.json, 'Не удалось удалить'));
+                        }
+                    };
+                });
+            }
+
+            let loading = false;
+            async function refreshAll(showLoader) {
+                if (loading) return;
+                loading = true;
+                const loader = document.getElementById('admin-loading');
+                if (showLoader !== false) loader?.classList.remove('hidden');
+                try {
+                    const ok = await loadStats();
+                    if (!ok) return;
+                    await Promise.all([loadReports(), loadMutes(), loadLogs()]);
+                    if (typeof feather !== 'undefined') feather.replace();
+                } catch (e) {
+                    console.error('Admin panel load error:', e);
+                    toast.error((e && e.message) || 'Ошибка загрузки админ-панели');
+                    // одна повторная попытка через 600 мс
+                    await new Promise(r => setTimeout(r, 600));
+                    try {
+                        const ok2 = await loadStats();
+                        if (ok2) await Promise.all([loadReports(), loadMutes(), loadLogs()]);
+                    } catch (e2) {
+                        console.error('Admin panel retry failed:', e2);
+                    }
+                } finally {
+                    loader?.classList.add('hidden');
+                    loading = false;
+                }
+            }
+
+            function boot() {
+                document.getElementById('admin-refresh')?.addEventListener('click', () => refreshAll(true));
+                refreshAll(true);
+                setInterval(() => { loadStats().catch(() => {}); }, 30000);
+            }
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', boot);
+            } else {
+                // DOM уже готов — чуть отложим, чтобы layout успел записать token в localStorage
+                setTimeout(boot, 0);
+            }
+        })();
+    </script>
+}

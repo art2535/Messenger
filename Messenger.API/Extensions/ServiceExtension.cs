@@ -21,17 +21,22 @@ namespace Messenger.API.Extensions
             {
                 services.AddScoped<IUserService, UserService>();
                 services.AddScoped<IChatService, ChatService>();
+                services.AddScoped<IChatFolderService, ChatFolderService>();
                 services.AddScoped<INotificationService, NotificationService>();
                 services.AddScoped<IAttachmentService, AttachmentService>();
                 services.AddScoped<IReactionService, ReactionService>();
                 services.AddScoped<ILoginService, LoginService>();
+                services.AddScoped<IAccountSettingsService, AccountSettingsService>();
                 services.AddScoped<IUserStatusService, UserStatusService>();
                 services.AddScoped<IBroadcastService, BroadcastService>();
                 services.AddScoped<IMessageService, MessageService>();
+                services.AddScoped<IAdminService, AdminService>();
+                services.AddScoped<IModerationService, ModerationService>();
                 services.AddSingleton<WebPushClient>();
                 services.AddScoped<IPushSubscriptionService, PushSubscriptionService>();
                 services.AddSingleton<TypingRateLimiterService>();
                 services.AddSingleton<SendMessageRateLimiterService>();
+                services.AddScoped<IScheduledMessageService, ScheduledMessageService>();
 
                 return services;
             }

@@ -21,12 +21,6 @@ namespace Messenger.Web
 
             var builder = WebApplication.CreateBuilder(args);
 
-            Console.WriteLine("=============================================================");
-            Console.WriteLine($"[WEB DEBUG] Среда: {builder.Environment.EnvironmentName}");
-            Console.WriteLine($"[WEB DEBUG] ASPNETCORE_URLS: '{builder.Configuration["ASPNETCORE_URLS"]}'");
-            Console.WriteLine($"[WEB DEBUG] ASPNETCORE_HTTPS_PORTS: '{builder.Configuration["ASPNETCORE_HTTPS_PORTS"]}'");
-            Console.WriteLine("=============================================================");
-
             builder.ConfigureDevelopmentCertificate();
 
             builder.AddMessengerSerilog("Messenger.Web");
@@ -56,7 +50,6 @@ namespace Messenger.Web
                         .AddPrometheusExporter();
                 });
 
-            builder.Services.AddMetricsProtection(builder.Configuration);
             builder.Services.AddAuthorization();
             builder.Services.AddSignalRService(builder.Configuration);
             builder.Services.AddScoped<ApiHelper>();
@@ -112,7 +105,7 @@ namespace Messenger.Web
 
             if (!app.Environment.IsDevelopment())
             {
-                app.UseExceptionHandler("/Error");
+                app.UseExceptionHandler("/Error/Index");
                 app.UseHsts();
             }
 
@@ -173,16 +166,16 @@ namespace Messenger.Web
             app.MapStaticAssets();
             app.MapControllers();
 
-            app.MapProtectedPrometheusScrapingEndpoint("/metrics");
+            app.MapPrometheusScrapingEndpoint("/metrics");
 
             try
             {
-                Log.Information("Messenger.Web starting...");
+                Log.Information("Запуск Messenger.Web...");
                 app.Run();
             }
             catch (Exception ex)
             {
-                Log.Fatal(ex, "Messenger.Web terminated unexpectedly");
+                Log.Fatal(ex, "Messenger.Web неожиданно завершил работу");
                 throw;
             }
             finally

@@ -1,21 +1,21 @@
 ﻿using Asp.Versioning;
-using Messenger.API.Responses;
-using Messenger.API.Services;
+using Messenger.API.Extensions;
 using Messenger.Core.DTOs.UserStatuses;
 using Messenger.Core.Interfaces;
 using Messenger.Core.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel;
+using Messenger.Core.Responses;
 
 namespace Messenger.API.Controllers
 {
     /// <summary>
-    /// Контроллер для управления статусами пользователей
+    /// Контроллер для управления статусами пользователей.
     /// </summary>
     [Authorize]
     [ApiController]
-    [Route("api/v{version:apiVersion}/[controller]")]
+    [Route("api/v{version:apiVersion}/user-statuses")]
     [ApiVersion("1.0")]
     [Produces("application/json")]
     [Consumes("application/json")]
@@ -24,107 +24,95 @@ namespace Messenger.API.Controllers
     {
         private readonly IUserStatusService _userStatusService;
         private readonly IUserService _userService;
+        private readonly ILogger<UserStatusesController> _logger;
 
-        public UserStatusesController(IUserStatusService userStatusService, IUserService userService)
+        public UserStatusesController(
+            IUserStatusService userStatusService,
+            IUserService userService,
+            ILogger<UserStatusesController> logger)
         {
             _userStatusService = userStatusService;
             _userService = userService;
+            _logger = logger;
         }
 
         /// <summary>
-        /// Получить статус текущего пользователя
+        /// Получить статус текущего пользователя.
         /// </summary>
         [HttpGet]
         [EndpointName("GetUserStatus")]
         [EndpointSummary("Получить статус текущего пользователя")]
         [EndpointDescription("Возвращает текущий статус авторизованного пользователя: онлайн/офлайн и время последней активности.")]
-        [ProducesResponseType(typeof(GetUserStatusSuccessResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> GetUserStatusesAsync(CancellationToken cancellationToken = default)
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> GetUserStatusAsync(CancellationToken ct = default)
         {
             try
             {
-                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
-                if (error != null)
-                {
-                    return error;
-                }
+                var userId = await User.GetCurrentUserIdAsync(_userService);
 
-                var status = await _userStatusService.GetUserStatusByUserIdAsync(user!.UserId, cancellationToken);
+                var status = await _userStatusService.GetUserStatusByUserIdAsync(userId, ct);
 
                 if (status == null)
                 {
-                    return NotFound(new
-                    {
-                        IsSuccess = false,
-                        Error = "Статус пользователя не найден"
-                    });
+                    return NotFound(ApiResponse.Failure("Статус пользователя не найден", "NOT_FOUND"));
                 }
 
-                return Ok(new GetUserStatusSuccessResponse
-                {
-                    IsSuccess = true,
-                    Data = status
-                });
+                return Ok(ApiResponse.Success(status));
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Ошибка авторизации при получении статуса пользователя");
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new ErrorResponse
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                _logger.LogError(ex, "Ошибка при получении статуса пользователя");
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
         /// <summary>
-        /// Обновить статус текущего пользователя
+        /// Обновить статус текущего пользователя.
         /// </summary>
         [HttpPut]
         [EndpointName("UpdateUserStatus")]
         [EndpointSummary("Обновить статус текущего пользователя")]
-        [EndpointDescription("Обновляет статус онлайн/офлайн для авторизованного пользователя. " +
-            "Поле LastActivity автоматически устанавливается на текущее время сервера.")]
-        [ProducesResponseType(typeof(UpdateUserStatusSuccessResponse), StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [EndpointDescription("Обновляет статус онлайн/офлайн для авторизованного пользователя. Поле LastActivity автоматически устанавливается на текущее время сервера.")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> UpdateStatusAsync(
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> PutUpdateStatusAsync(
             [FromBody, Description("Новый статус пользователя")] UpdateStatusRequest request,
-            CancellationToken cancellationToken = default)
+            CancellationToken ct = default)
         {
             try
             {
-                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
-                if (error != null)
-                {
-                    return error;
-                }
+                var userId = await User.GetCurrentUserIdAsync(_userService);
 
                 var userStatus = new UserStatus
                 {
-                    UserId = user!.UserId,
+                    UserId = userId,
                     Online = request.Online,
-                    LastActivity = UtcDateTime.Now
+                    LastActivity = DateTime.UtcNow
                 };
 
-                await _userStatusService.UpdateUserStatusAsync(userStatus, cancellationToken);
+                await _userStatusService.UpdateUserStatusAsync(userStatus, ct);
 
-                return Ok(new UpdateUserStatusSuccessResponse
-                {
-                    IsSuccess = true,
-                    Message = "Статус пользователя обновлен"
-                });
+                return Ok(ApiResponse.Success(message: "Статус пользователя обновлен"));
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Ошибка авторизации при обновлении статуса пользователя");
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new ErrorResponse
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                _logger.LogError(ex, "Ошибка при обновлении статуса пользователя");
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
     }

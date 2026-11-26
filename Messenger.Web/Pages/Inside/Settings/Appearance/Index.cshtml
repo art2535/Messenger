@@ -1,0 +1,85 @@
+@page "/inside/settings/appearance"
+@model Messenger.Web.Pages.Inside.Settings.Appearance.IndexModel
+@{
+    ViewData["Title"] = "Внешний вид";
+    ViewData["DisplayName"] = Model.DisplayName;
+    ViewData["AccessToken"] = Model.AccessToken;
+    ViewData["ApiBaseUrl"] = Model.ApiBaseUrl;
+    ViewData["HubUrl"] = Model.HubUrl;
+}
+
+<div class="max-w-4xl mx-auto space-y-5 sm:space-y-6">
+    <h2 class="text-xl sm:text-2xl font-semibold text-gray-800 dark:text-white hidden sm:block">Внешний вид</h2>
+
+    <section class="settings-card">
+        <div class="settings-card-header">
+            <div class="settings-icon-wrap bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400">
+                <i data-feather="moon" class="w-5 h-5"></i>
+            </div>
+            <div class="min-w-0">
+                <h3 class="settings-card-title">Тема</h3>
+                <p class="settings-card-desc">Светлая, тёмная или как в системе</p>
+            </div>
+        </div>
+
+        <div class="theme-grid" role="radiogroup" aria-label="Тема оформления">
+            <button type="button" class="theme-option" data-theme="light" aria-pressed="false">
+                <span class="theme-preview theme-preview-light"></span>
+                <span class="theme-option-label">Светлая</span>
+            </button>
+            <button type="button" class="theme-option" data-theme="dark" aria-pressed="false">
+                <span class="theme-preview theme-preview-dark"></span>
+                <span class="theme-option-label">Тёмная</span>
+            </button>
+            <button type="button" class="theme-option" data-theme="system" aria-pressed="false">
+                <span class="theme-preview theme-preview-system"></span>
+                <span class="theme-option-label">Системная</span>
+            </button>
+        </div>
+    </section>
+
+    <section class="settings-card">
+        <div class="settings-card-header">
+            <div class="settings-icon-wrap bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400">
+                <i data-feather="type" class="w-5 h-5"></i>
+            </div>
+            <div class="min-w-0">
+                <h3 class="settings-card-title">Отображение</h3>
+                <p class="settings-card-desc">Размер шрифта и плотность списка чатов</p>
+            </div>
+        </div>
+
+        <div class="settings-row">
+            <div class="settings-row-text">
+                <span class="settings-row-label">Крупный шрифт</span>
+                <span class="settings-row-hint">Увеличить текст сообщений и интерфейса</span>
+            </div>
+            <label class="toggle">
+                <input type="checkbox" class="toggle-input pref-toggle" data-pref="appearance.largeFont">
+                <span class="toggle-track"></span>
+            </label>
+        </div>
+        <div class="settings-row border-0">
+            <div class="settings-row-text">
+                <span class="settings-row-label">Компактный список</span>
+                <span class="settings-row-hint">Меньше отступы и аватары в списке чатов</span>
+            </div>
+            <label class="toggle">
+                <input type="checkbox" class="toggle-input pref-toggle" data-pref="appearance.compactList">
+                <span class="toggle-track"></span>
+            </label>
+        </div>
+    </section>
+
+</div>
+
+@section Scripts {
+    <script src="~/js/settings/settings-prefs.js" asp-append-version="true"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            if (typeof feather !== 'undefined') feather.replace();
+            if (typeof initPrefToggles === 'function') initPrefToggles();
+            if (typeof initThemePicker === 'function') initThemePicker();
+        });
+    </script>
+}

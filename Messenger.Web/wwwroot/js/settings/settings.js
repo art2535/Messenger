@@ -1,0 +1,860 @@
+function getApiUrl() {
+    let base = (window.API_BASE_URL || '').toString().trim().replace(/\/$/, '');
+    if (!base) {
+        const meta = document.querySelector('meta[name="api-base"]');
+        if (meta && meta.content) base = meta.content.trim().replace(/\/$/, '');
+    }
+    if (!base) return '';
+    if (!/\/api\/v\d/i.test(base)) base += '/api/v1.0';
+    return base;
+}
+let connection = null;
+const avatarInput = document.getElementById('avatarInput');
+let currentAvatar = document.getElementById('current-avatar');
+const previewContainer = document.getElementById('avatar-preview-container');
+const previewImg = document.getElementById('avatar-preview');
+const cancelPreviewBtn = document.getElementById('cancel-preview');
+const deleteAvatarTrigger = document.getElementById('delete-avatar-trigger');
+const deleteAvatarFlag = document.getElementById('delete-avatar-flag');
+let hasOriginalAvatar = '@hasAvatar'.toLowerCase() === 'true';
+let pushToggle = null;
+let currentSubscription = null;
+let pushToggleBusy = false;
+
+const sidebar = document.getElementById('sidebar');
+const overlay = document.getElementById('sidebar-overlay');
+const menuToggle = document.getElementById('menu-toggle');
+
+function openSidebar() {
+    sidebar?.classList.add('open');
+    overlay?.classList.add('active');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeSidebar() {
+    sidebar?.classList.remove('open');
+    overlay?.classList.remove('active');
+    document.body.style.overflow = '';
+}
+
+menuToggle?.addEventListener('click', openSidebar);
+overlay?.addEventListener('click', closeSidebar);
+
+document.querySelectorAll('.sidebar-link').forEach(link => {
+    link.addEventListener('click', () => {
+        if (window.innerWidth < 768) closeSidebar();
+    });
+});
+
+function cleanToken(t) {
+    return (t || '').trim().replace(/^Bearer\s+/i, '');
+}
+
+function jwtExpiresAtMs(token) {
+    try {
+        const payload = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+        const json = JSON.parse(atob(payload + '='.repeat((4 - payload.length % 4) % 4)));
+        return json.exp ? json.exp * 1000 : 0;
+    } catch (_) {
+        return 0;
+    }
+}
+
+function getJwtToken() {
+    const candidates = [
+        document.querySelector('meta[name="access-token"]')?.content,
+        localStorage.getItem('token'),
+        sessionStorage.getItem('token')
+    ].map(cleanToken).filter(Boolean);
+
+    if (!candidates.length) return '';
+    candidates.sort((a, b) => jwtExpiresAtMs(b) - jwtExpiresAtMs(a));
+    return candidates[0];
+}
+
+function getAuthToken() {
+    const token = getJwtToken();
+    return token ? 'Bearer ' + token : '';
+}
+
+async function fetchFreshToken() {
+    try {
+        const res = await fetch('/inside/settings/profile?handler=Token', {
+            credentials: 'same-origin',
+            cache: 'no-store',
+            headers: { 'Accept': 'application/json' }
+        });
+        if (!res.ok) return '';
+        const data = await res.json();
+        const fresh = cleanToken(data?.accessToken);
+        if (!fresh) return '';
+
+        try { localStorage.setItem('token', fresh); } catch (_) { }
+        const meta = document.querySelector('meta[name="access-token"]');
+        if (meta) meta.content = fresh;
+        return fresh;
+    } catch (_) {
+        return '';
+    }
+}
+
+async function ensureFreshToken() {
+    const token = getJwtToken();
+    const exp = token ? jwtExpiresAtMs(token) : 0;
+    if (!token || (exp && exp - Date.now() < 30000)) {
+        await fetchFreshToken();
+    }
+}
+
+async function apiFetch(endpoint, options = {}, retried = false) {
+    const base = getApiUrl();
+    if (!base) {
+        console.warn('API_BASE_URL не задан, запрос пропущен:', endpoint);
+        throw new Error('API_BASE_URL не задан');
+    }
+    await ensureFreshToken();
+    const token = getAuthToken();
+    const headers = {
+        'Authorization': token,
+        'Content-Type': 'application/json',
+        ...options.headers
+    };
+    const path = endpoint.startsWith('/') ? endpoint : '/' + endpoint;
+    const response = await fetch(base + path, { ...options, headers });
+
+    if (response.status === 401 && !retried && await fetchFreshToken()) {
+        return apiFetch(endpoint, options, true);
+    }
+
+    let json = null;
+    try { json = await response.json(); } catch (_) { json = null; }
+
+    if (!response.ok) {
+        const err = (json && (json.error || json.message)) || ('Ошибка: ' + response.statusText);
+        const e = new Error(err);
+        e.status = response.status;
+        e.errorCode = json && json.errorCode;
+        e.payload = json;
+        throw e;
+    }
+
+    // ApiResponse<T>: отдаём data, если контракт распознан
+    if (json && typeof json === 'object' && ('isSuccess' in json || 'data' in json)) {
+        if (json.isSuccess === false) {
+            const e = new Error(json.error || json.message || 'Ошибка API');
+            e.errorCode = json.errorCode;
+            e.payload = json;
+            throw e;
+        }
+        if ('data' in json) return json.data;
+    }
+    return json;
+}
+
+function showToast(message, type = 'info') {
+    if (!message) return;
+    const t = window.MessengerToast;
+    if (t && typeof t.show === 'function') {
+        const map = { error: 'error', success: 'success', warning: 'warning', info: 'info' };
+        const kind = map[type] || 'info';
+        if (typeof t[kind] === 'function') t[kind](message);
+        else t.show(message, kind);
+        return;
+    }
+    const root = document.getElementById('toast-container') || document.body;
+    const el = document.createElement('div');
+    el.className = 'messenger-toast messenger-toast--' + (type || 'info') + ' messenger-toast--visible';
+    el.textContent = String(message);
+    el.style.cssText = 'position:fixed;top:16px;right:16px;z-index:99999;padding:12px 14px;border-radius:12px;background:#1e293b;color:#fff;max-width:360px;';
+    root.appendChild(el);
+    setTimeout(() => el.remove(), 4000);
+}
+
+
+async function initSignalR() {
+    if (typeof signalR === 'undefined') {
+        console.debug('SignalR не загружен на странице — пропускаем');
+        return;
+    }
+
+    if (typeof signalR === 'undefined') {
+        console.debug('SignalR не загружен на странице — пропускаем');
+        return;
+    }
+    await ensureFreshToken();
+    if (!getJwtToken()) {
+        console.warn("⚠️ SignalR: Токен не найден");
+        return;
+    }
+
+    connection = new signalR.HubConnectionBuilder()
+        .withUrl(HUB_URL, { accessTokenFactory: () => getJwtToken() })
+        .withAutomaticReconnect()
+        .configureLogging(signalR.LogLevel.Warning)
+        .build();
+
+    const myUserId = '@(Model.CurrentUser?.UserId ?? "")';
+    const myDisplayName = '@fullName'.replace(/&#x27;/g, "'");
+
+    function applyProfileUpdate(data) {
+        if (!data?.userId) return;
+        if (String(data.userId).toLowerCase() !== myUserId.toLowerCase()) return;
+
+        const url = data.avatarUrl ?? data.AvatarUrl ?? null;
+        updateAvatarDisplay(url);
+        hasOriginalAvatar = !!url;
+        if (deleteAvatarTrigger) {
+            deleteAvatarTrigger.classList.toggle('hidden', !hasOriginalAvatar);
+        }
+    }
+
+    connection.on("ProfileUpdated", applyProfileUpdate);
+    connection.on("AvatarUpdated", applyProfileUpdate);
+
+    try {
+        await connection.start();
+        console.log("SignalR успешно подключён!");
+
+        if (window.__profileJustSaved) {
+            const avatarUrl = window.__savedAvatarUrl || null;
+            const displayName = window.__savedDisplayName || myDisplayName;
+            try {
+                await connection.invoke("NotifyProfileUpdated", myUserId, avatarUrl, displayName);
+                await connection.invoke("NotifyAvatarUpdated", myUserId, avatarUrl || "");
+                console.log("ProfileUpdated/AvatarUpdated разосланы через SignalR");
+            } catch (e) {
+                console.warn("Не удалось разослать ProfileUpdated:", e);
+            }
+            window.__profileJustSaved = false;
+        }
+    } catch (err) {
+        console.error("SignalR НЕ подключился:", err);
+    }
+}
+
+function updateAvatarDisplay(avatarUrl) {
+    currentAvatar = document.getElementById('current-avatar');
+    const defAv = document.getElementById('default-avatar');
+    const urlWithCache = avatarUrl ? (String(avatarUrl).split('?')[0] + '?t=' + Date.now()) : '';
+
+    if (!urlWithCache) {
+        // удаление: спрятать фото, показать человечка
+        if (currentAvatar && currentAvatar.tagName === 'IMG') {
+            currentAvatar.style.display = 'none';
+        }
+        if (defAv) {
+            defAv.classList.remove('hidden');
+            defAv.style.display = 'flex';
+            defAv.classList.add('flex');
+        }
+        return;
+    }
+
+    if (!currentAvatar) return;
+
+    if (currentAvatar.tagName === 'IMG') {
+        currentAvatar.style.display = 'block';
+        currentAvatar.style.opacity = '1';
+        currentAvatar.classList.remove('opacity-0');
+        currentAvatar.style.zIndex = '10';
+        currentAvatar.src = urlWithCache;
+        if (defAv) {
+            defAv.classList.add('hidden');
+            defAv.style.display = 'none';
+        }
+    } else {
+        const img = document.createElement('img');
+        img.id = 'current-avatar';
+        img.alt = 'Аватар';
+        img.className = 'w-36 h-36 sm:w-40 sm:h-40 rounded-full object-cover border-4 border-gray-200 dark:border-gray-600 shadow-xl relative z-10';
+        img.style.display = 'block';
+        img.referrerPolicy = 'no-referrer';
+        img.src = urlWithCache;
+        img.onerror = function () {
+            this.style.display = 'none';
+            if (defAv) { defAv.classList.remove('hidden'); defAv.style.display = 'flex'; }
+        };
+        currentAvatar.replaceWith(img);
+        currentAvatar = img;
+        if (defAv) {
+            defAv.classList.add('hidden');
+            defAv.style.display = 'none';
+        }
+    }
+}
+
+
+avatarInput?.addEventListener('change', function (e) {
+    const file = e.target.files[0];
+    if (!file) return hidePreview();
+
+    if (!file.type.startsWith('image/') || file.size > 2 * 1024 * 1024) {
+        showToast('Выберите изображение до 2 МБ', 'error');
+        this.value = '';
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+        previewImg.onload = () => {
+            previewImg.style.opacity = '1';
+        };
+        previewImg.src = ev.target.result;
+        previewImg.style.opacity = '1';
+        previewImg.style.display = 'block';
+        previewContainer.classList.remove('hidden');
+        if (currentAvatar) currentAvatar.style.visibility = 'hidden';
+        const defAv = document.getElementById('default-avatar');
+        if (defAv) defAv.classList.add('hidden');
+        cancelPreviewBtn.classList.remove('hidden');
+        deleteAvatarTrigger.classList.add('hidden');
+        showToast('Фото будет установлено после сохранения изменений. Нажмите «Сохранить».', 'info');
+    };
+    reader.onerror = () => {
+        showToast('Не удалось прочитать файл', 'error');
+        hidePreview();
+    };
+    reader.readAsDataURL(file);
+});
+
+function hidePreview() {
+    previewContainer?.classList.add('hidden');
+    if (previewImg) previewImg.src = '';
+    cancelPreviewBtn?.classList.add('hidden');
+    if (currentAvatar) currentAvatar.style.visibility = '';
+    if (hasOriginalAvatar) deleteAvatarTrigger?.classList.remove('hidden');
+}
+
+if (cancelPreviewBtn) cancelPreviewBtn.onclick = () => {
+    avatarInput.value = '';
+    hidePreview();
+};
+
+if (deleteAvatarTrigger) if (deleteAvatarTrigger) deleteAvatarTrigger.onclick = async () => {
+    const ok = await showConfirm('Удалить аватар?', {
+        title: 'Удаление фото',
+        okText: 'Удалить',
+        cancelText: 'Отмена',
+        danger: true
+    });
+    if (!ok) return;
+    deleteAvatarFlag.value = 'true';
+    updateAvatarDisplay(null);
+    hidePreview();
+    showToast('Фото будет удалено после сохранения изменений. Нажмите «Сохранить».', 'info');
+};
+
+function isIOS() {
+    return /iPad|iPhone|iPod/.test(navigator.userAgent)
+        || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
+function isStandalonePWA() {
+    return window.matchMedia('(display-mode: standalone)').matches
+        || window.navigator.standalone === true
+        || document.referrer.includes('android-app://');
+}
+
+function updatePushHints() {
+    const iosHint = document.getElementById('ios-push-hint');
+    const unsupportedHint = document.getElementById('push-unsupported-hint');
+    const statusText = document.getElementById('push-status-text');
+    const hasPush = ('PushManager' in window) && ('serviceWorker' in navigator);
+
+    if (!hasPush) {
+        unsupportedHint?.classList.remove('hidden');
+        iosHint?.classList.add('hidden');
+        return;
+    }
+
+    unsupportedHint?.classList.add('hidden');
+
+    if (isIOS() && !isStandalonePWA()) {
+        iosHint?.classList.remove('hidden');
+        if (statusText) {
+            statusText.textContent = 'Сначала установите приложение на экран «Домой»';
+        }
+    } else {
+        iosHint?.classList.add('hidden');
+        if (statusText && Notification.permission !== 'denied') {
+            statusText.textContent = 'Получать уведомления даже когда приложение закрыто';
+        }
+    }
+}
+
+function setPushToggleUnavailable(unavailable) {
+    const slider = document.getElementById('push-toggle-slider');
+    if (!pushToggle) pushToggle = document.getElementById('push-toggle');
+    if (pushToggle) pushToggle.disabled = !!unavailable;
+    if (!slider) return;
+    if (unavailable) {
+        slider.classList.add('!bg-gray-400', 'cursor-not-allowed', 'opacity-60');
+    } else {
+        slider.classList.remove('!bg-gray-400', 'cursor-not-allowed', 'opacity-60');
+    }
+}
+
+function setNotificationTypesVisible(visible) {
+    const show = !!visible;
+    document.getElementById('notification-types')?.classList.toggle('hidden', !show);
+    document.getElementById('notification-inapp')?.classList.toggle('hidden', !show);
+}
+
+async function ensureServiceWorker() {
+    if (!('serviceWorker' in navigator)) {
+        throw new Error('Service Worker не поддерживается');
+    }
+
+    let reg = await navigator.serviceWorker.getRegistration();
+    if (reg) {
+        await navigator.serviceWorker.ready;
+        return reg;
+    }
+
+    const candidates = ['/service-worker.js', '/sw.js', '/js/sw.js'];
+    let lastError = null;
+    for (const path of candidates) {
+        try {
+            reg = await navigator.serviceWorker.register(path, { scope: '/' });
+            await navigator.serviceWorker.ready;
+            console.log('SW зарегистрирован:', path);
+            return reg;
+        } catch (e) {
+            lastError = e;
+        }
+    }
+    throw lastError || new Error('Не удалось зарегистрировать Service Worker');
+}
+
+async function checkPushStatus() {
+    pushToggle = document.getElementById('push-toggle');
+    if (!pushToggle) return;
+
+    updatePushHints();
+
+    if (!('PushManager' in window) || !('serviceWorker' in navigator)) {
+        setPushToggleUnavailable(true);
+        return;
+    }
+
+    if (isIOS() && !isStandalonePWA()) {
+        setPushToggleUnavailable(true);
+        return;
+    }
+
+    if (Notification.permission === 'denied') {
+        setPushToggleUnavailable(true);
+        const statusText = document.getElementById('push-status-text');
+        if (statusText) {
+            statusText.textContent = 'Разрешение отклонено. Включите уведомления в настройках системы';
+        }
+        return;
+    }
+
+    setPushToggleUnavailable(false);
+
+    try {
+        const registration = await ensureServiceWorker();
+        currentSubscription = await registration.pushManager.getSubscription();
+    } catch (e) {
+        console.error('Ошибка проверки статуса push:', e);
+    }
+}
+
+async function subscribeToPush() {
+    try {
+        if (isIOS() && !isStandalonePWA()) {
+            if (pushToggle) pushToggle.checked = false;
+            document.getElementById('ios-push-hint')?.classList.remove('hidden');
+            showToast('На iPhone откройте приложение с экрана «Домой»', 'error');
+            return false;
+        }
+
+        if (!('Notification' in window)) {
+            throw new Error('Notification API недоступен');
+        }
+
+        if (Notification.permission === 'denied') {
+            if (pushToggle) pushToggle.checked = false;
+            setPushToggleUnavailable(true);
+            showToast('Уведомления запрещены в настройках браузера/системы', 'error');
+            return false;
+        }
+
+        if (Notification.permission === 'default') {
+            const permission = await Notification.requestPermission();
+            if (permission !== 'granted') {
+                if (pushToggle) pushToggle.checked = false;
+                showToast('Разрешение на уведомления отклонено', 'error');
+                return false;
+            }
+        }
+
+        const registration = await ensureServiceWorker();
+        const keyRes = await fetch(`${getApiUrl()}/push/vapid-public-key`, {
+            headers: { 'Accept': 'application/json, text/plain, */*' }
+        });
+        if (!keyRes.ok) throw new Error('Не удалось получить VAPID-ключ');
+        const vapidPublicKey = await extractVapidPublicKey(keyRes);
+        if (!vapidPublicKey) throw new Error('Пустой VAPID-ключ');
+
+        let subscription = await registration.pushManager.getSubscription();
+        if (!subscription) {
+            subscription = await registration.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
+            });
+        }
+
+        await ensureFreshToken();
+        const token = getAuthToken();
+        if (!token) throw new Error('Нет токена авторизации');
+
+        const subJson = subscription.toJSON();
+        const res = await fetch(`${getApiUrl()}/push/subscribe`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': token
+            },
+            body: JSON.stringify({
+                endpoint: subscription.endpoint,
+                p256dh: subJson.keys?.p256dh,
+                auth: subJson.keys?.auth
+            })
+        });
+
+        if (res.ok) {
+            currentSubscription = subscription;
+            if (pushToggle) pushToggle.checked = true;
+            try {
+                localStorage.setItem('pushSubscribed', 'true');
+                localStorage.setItem('pushSubscriptionEndpoint', subscription.endpoint);
+                localStorage.setItem('pushEnabled', 'true');
+            } catch (_) { }
+            if (typeof window.markPushSynced === 'function') {
+                window.markPushSynced(subscription.endpoint, true);
+            }
+            showToast('Push-уведомления включены', 'success');
+            return true;
+        }
+
+        const errText = await res.text().catch(() => '');
+        throw new Error(errText || `Не удалось сохранить подписку (${res.status})`);
+    } catch (err) {
+        console.error(err);
+        if (pushToggle) pushToggle.checked = false;
+        currentSubscription = null;
+        const msg = (err && err.message) ? String(err.message) : 'Не удалось включить push-уведомления';
+        showToast(msg.length > 120 ? 'Не удалось включить push-уведомления' : msg, 'error');
+        return false;
+    }
+}
+
+async function unsubscribeFromPush() {
+    try {
+        if (!currentSubscription) {
+            try {
+                const registration = await ensureServiceWorker();
+                currentSubscription = await registration.pushManager.getSubscription();
+            } catch (_) {
+                currentSubscription = null;
+            }
+        }
+
+        if (currentSubscription) {
+            const endpoint = currentSubscription.endpoint;
+            try {
+                await currentSubscription.unsubscribe();
+            } catch (e) {
+                console.warn('Browser unsubscribe:', e);
+            }
+            const token = getAuthToken();
+            if (token && endpoint) {
+                try {
+                    await fetch(`${getApiUrl()}/push/unsubscribe`, {
+                        method: 'DELETE',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': token
+                        },
+                        body: JSON.stringify(endpoint)
+                    });
+                } catch (e) {
+                    console.warn('Server unsubscribe:', e);
+                }
+            }
+            currentSubscription = null;
+        }
+
+        if (pushToggle) pushToggle.checked = false;
+        try {
+            localStorage.removeItem('pushSubscribed');
+            localStorage.removeItem('pushSubscriptionEndpoint');
+            localStorage.setItem('pushEnabled', 'false');
+        } catch (_) { }
+        if (typeof window.clearPushSyncMarkers === 'function') window.clearPushSyncMarkers();
+        showToast('Push-уведомления отключены', 'info');
+        return true;
+    } catch (err) {
+        console.error(err);
+        if (pushToggle) pushToggle.checked = false;
+        currentSubscription = null;
+        try {
+            localStorage.removeItem('pushSubscribed');
+            localStorage.removeItem('pushSubscriptionEndpoint');
+            localStorage.setItem('pushEnabled', 'false');
+        } catch (_) { }
+        if (typeof window.clearPushSyncMarkers === 'function') window.clearPushSyncMarkers();
+        showToast('Push-уведомления отключены', 'info');
+        return true;
+    }
+}
+
+async function extractVapidPublicKey(response) {
+    const ct = (response.headers.get('content-type') || '').toLowerCase();
+    if (ct.includes('application/json')) {
+        const json = await response.json();
+        const key = (json && (json.data ?? json.Data ?? json.publicKey ?? json.key)) || '';
+        return String(key).trim().replace(/^"|"$/g, '');
+    }
+    const text = (await response.text()).trim();
+    // Иногда приходит JSON без content-type
+    if (text.startsWith('{')) {
+        try {
+            const json = JSON.parse(text);
+            const key = json.data ?? json.Data ?? json.publicKey ?? json.key ?? '';
+            return String(key).trim().replace(/^"|"$/g, '');
+        } catch (_) { /* plain */ }
+    }
+    return text.replace(/^"|"$/g, '');
+}
+
+function urlBase64ToUint8Array(base64String) {
+    let s = String(base64String || '').trim().replace(/^"|"$/g, '');
+    // если случайно пришёл весь JSON
+    if (s.startsWith('{')) {
+        try {
+            const json = JSON.parse(s);
+            s = String(json.data ?? json.Data ?? json.publicKey ?? json.key ?? '').trim();
+        } catch (e) {
+            throw new Error('Некорректный VAPID-ключ');
+        }
+    }
+    // убрать пробелы/переносы
+    s = s.replace(/\s+/g, '');
+    if (!s || /[^A-Za-z0-9\-_+=\/]/.test(s)) {
+        throw new Error('VAPID-ключ имеет неверный формат');
+    }
+    const padding = '='.repeat((4 - s.length % 4) % 4);
+    const base64 = (s + padding).replace(/-/g, '+').replace(/_/g, '/');
+    let rawData;
+    try {
+        rawData = window.atob(base64);
+    } catch (e) {
+        throw new Error('Не удалось декодировать VAPID-ключ');
+    }
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+}
+
+async function loadPushSettings() {
+    try {
+        let settings = null;
+        try {
+            settings = await apiFetch('/push/settings');
+        } catch (_) {
+            settings = null;
+        }
+        if (!settings || settings.pushEnabled === undefined) {
+            try {
+                const full = await apiFetch('/account-settings');
+                settings = full || {};
+            } catch (_) {
+                settings = settings || {};
+            }
+        }
+
+        pushToggle = document.getElementById('push-toggle');
+        const isEnabled = !!settings.pushEnabled;
+        if (pushToggle) pushToggle.checked = isEnabled;
+        setNotificationTypesVisible(isEnabled);
+
+        const map = {
+            'notif.messages': settings.notifyMessages,
+            'notif.groupChats': settings.notifyGroupChats,
+            'notif.mentions': settings.notifyMentions,
+            'notif.reactions': settings.notifyReactions,
+            'notif.system': settings.notifySystem,
+            'notif.sound': settings.notifySound,
+            'notif.suppressOpenChat': settings.suppressOpenChat,
+            'notif.preview': settings.notifyPreview
+        };
+        document.querySelectorAll('.pref-toggle[data-pref]').forEach(el => {
+            const key = el.getAttribute('data-pref');
+            if (key && key in map && map[key] !== undefined && map[key] !== null) {
+                el.checked = !!map[key];
+            }
+        });
+        const nm = document.getElementById('notifyMessages');
+        const ng = document.getElementById('notifyGroup');
+        const nmen = document.getElementById('notifyMentions');
+        if (nm) nm.checked = !!settings.notifyMessages;
+        if (ng) ng.checked = !!settings.notifyGroupChats;
+        if (nmen) nmen.checked = !!settings.notifyMentions;
+    } catch (e) {
+        console.error('Не удалось загрузить настройки push:', e);
+        setNotificationTypesVisible(!!document.getElementById('push-toggle')?.checked);
+    }
+}
+
+async function togglePushNotifications() {
+    if (!pushToggle) pushToggle = document.getElementById('push-toggle');
+    if (!pushToggle) return;
+
+    if (pushToggleBusy) {
+        pushToggle.checked = !pushToggle.checked;
+        return;
+    }
+
+    pushToggleBusy = true;
+    pushToggle.disabled = true;
+
+    try {
+        const wantEnable = pushToggle.checked;
+
+        if (wantEnable) {
+            const ok = await subscribeToPush();
+            if (!ok) {
+                pushToggle.checked = false;
+                setNotificationTypesVisible(false);
+                await saveNotificationSettings();
+                return;
+            }
+            setNotificationTypesVisible(true);
+        } else {
+            await unsubscribeFromPush();
+            pushToggle.checked = false;
+            setNotificationTypesVisible(false);
+        }
+
+        await saveNotificationSettings();
+    } finally {
+        pushToggleBusy = false;
+        if (Notification.permission !== 'denied' &&
+            !((isIOS() && !isStandalonePWA())) &&
+            ('PushManager' in window) && ('serviceWorker' in navigator)) {
+            pushToggle.disabled = false;
+        }
+    }
+}
+
+function prefChecked(pref, fallbackId) {
+    const byPref = document.querySelector(`.pref-toggle[data-pref="${pref}"]`);
+    if (byPref) return !!byPref.checked;
+    if (fallbackId) {
+        const el = document.getElementById(fallbackId);
+        if (el) return !!el.checked;
+    }
+    return true;
+}
+
+async function saveNotificationSettings() {
+    const dto = {
+        pushEnabled: !!(document.getElementById('push-toggle')?.checked),
+        notifyMessages: prefChecked('notif.messages', 'notifyMessages'),
+        notifyGroupChats: prefChecked('notif.groupChats', 'notifyGroup'),
+        notifyMentions: prefChecked('notif.mentions', 'notifyMentions')
+    };
+
+    try {
+        await apiFetch('/push/settings', {
+            method: 'POST',
+            body: JSON.stringify(dto)
+        });
+        if (window.AccountSettings && typeof AccountSettings.save === 'function') {
+            AccountSettings.save({
+                pushEnabled: dto.pushEnabled,
+                notifyMessages: dto.notifyMessages,
+                notifyGroupChats: dto.notifyGroupChats,
+                notifyMentions: dto.notifyMentions
+            });
+        }
+    } catch (err) {
+        console.error('Ошибка сохранения настроек:', err);
+        if (typeof showToast === 'function') {
+            showToast('Не удалось сохранить настройки уведомлений', 'error');
+        }
+    }
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+    if (typeof feather !== 'undefined') feather.replace();
+
+    const pushToggleEl = document.getElementById('push-toggle');
+    if (pushToggleEl) {
+        setNotificationTypesVisible(!!pushToggleEl.checked);
+        pushToggleEl.addEventListener('change', async (e) => {
+            setNotificationTypesVisible(!!pushToggleEl.checked);
+            if (typeof togglePushNotifications === 'function') {
+                await togglePushNotifications();
+            }
+            if (window.AccountSettings && typeof AccountSettings.save === 'function') {
+                AccountSettings.save({ pushEnabled: !!pushToggleEl.checked });
+            }
+        });
+    }
+
+    document.querySelectorAll('#notification-types input[type="checkbox"], #notification-inapp input[type="checkbox"]').forEach(cb => {
+        cb.addEventListener('change', () => {
+            const pref = cb.getAttribute('data-pref') || '';
+            const isPushType = pref === 'notif.messages' || pref === 'notif.groupChats' || pref === 'notif.mentions'
+                || cb.id === 'notifyMessages' || cb.id === 'notifyGroup' || cb.id === 'notifyMentions';
+            if (isPushType && typeof saveNotificationSettings === 'function') {
+                saveNotificationSettings();
+            }
+        });
+    });
+
+    initSignalR();
+    await loadPushSettings();
+    await checkPushStatus();
+    setNotificationTypesVisible(!!document.getElementById('push-toggle')?.checked);
+
+    document.getElementById('confirmYesBtn') && (document.getElementById('confirmYesBtn').onclick = () => closeConfirm(true));
+
+    document.querySelectorAll('.modal-overlay').forEach(m => {
+        m.onclick = (e) => {
+            if (e.target === m) {
+                m.classList.remove('active');
+                if (m.id === 'confirmModal') closeConfirm(false);
+            }
+        };
+    });
+
+    function updateThemeUI() {
+        const isDark = document.documentElement.classList.contains('dark');
+        document.querySelectorAll('.theme-icon-dark').forEach(el => el.classList.toggle('hidden', !isDark));
+        document.querySelectorAll('.theme-icon-light').forEach(el => el.classList.toggle('hidden', isDark));
+        const label = document.getElementById('theme-label');
+        if (label) label.textContent = isDark ? 'Тёмная' : 'Светлая';
+
+        const meta = document.querySelector('meta[name="theme-color"]:not([media])') ||
+            document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.setAttribute('content', isDark ? '#111827' : '#ffffff');
+    }
+
+    function toggleTheme() {
+        const html = document.documentElement;
+        const isDark = html.classList.toggle('dark');
+        localStorage.setItem('theme', isDark ? 'dark' : 'light');
+        updateThemeUI();
+        feather.replace();
+    }
+
+    document.getElementById('theme-toggle-settings')?.addEventListener('click', toggleTheme);
+    updateThemeUI();
+});

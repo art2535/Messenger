@@ -1,0 +1,123 @@
+@page "/inside/settings/profile"
+@model Messenger.Web.Pages.Inside.Settings.Profile.IndexModel
+@{
+    var hasAvatar = Model.HasAvatar;
+    var avatarUrl = Model.AvatarUrl;
+    var lastName = Model.Profile.LastName;
+    var firstName = Model.Profile.FirstName;
+    var fullName = $"{lastName} {firstName}";
+
+    ViewData["Title"] = "Настройки аккаунта";
+    ViewData["DisplayName"] = fullName;
+    ViewData["AccessToken"] = Model.AccessToken;
+    ViewData["ApiBaseUrl"] = Model.ApiBaseUrl;
+    ViewData["HubUrl"] = Model.HubUrl;
+}
+
+@if (TempData["SuccessMessage"] != null)
+{
+    <script>
+        window.__profileJustSaved = true;
+        window.__savedAvatarUrl = @Html.Raw(hasAvatar && !string.IsNullOrEmpty(avatarUrl)
+                                ? $"'{avatarUrl.Replace("'", "\\'")}'"
+                                : "null");
+        window.__savedDisplayName = @Html.Raw($"'{fullName.Replace("'", "\\'")}'");
+        document.addEventListener('DOMContentLoaded', () => {
+            showToast(@Html.Raw(System.Text.Json.JsonSerializer.Serialize(TempData["SuccessMessage"]?.ToString() ?? "")), 'success');
+        });
+    </script>
+}
+
+<div class="max-w-4xl mx-auto px-2 sm:px-0">
+    <h2 class="text-2xl sm:text-3xl font-bold text-gray-800 dark:text-white mb-6 sm:mb-8 hidden sm:block">
+        Настройки аккаунта
+    </h2>
+</div>
+
+<form method="post" enctype="multipart/form-data" asp-page-handler="Save" class="max-w-4xl mx-auto space-y-6 sm:space-y-8">
+
+    <section id="profile" class="bg-white dark:bg-gray-800 rounded-2xl shadow-md p-5 sm:p-8">
+        <h3 class="text-xl sm:text-2xl font-semibold text-gray-800 dark:text-white mb-6 sm:mb-8">Профиль</h3>
+
+        <div class="flex flex-col md:flex-row gap-8 md:gap-10 items-start">
+            <div class="flex flex-col items-center space-y-4 w-full md:w-auto">
+                <div class="relative w-36 h-36 sm:w-40 sm:h-40">
+                    @if (hasAvatar && !string.IsNullOrEmpty(avatarUrl))
+                    {
+                        <img id="current-avatar"
+                                src="@avatarUrl?t=@DateTimeOffset.UtcNow.ToUnixTimeSeconds()"
+                                alt="Аватар"
+                                class="w-36 h-36 sm:w-40 sm:h-40 rounded-full object-cover border-4 border-gray-200 dark:border-gray-600 shadow-xl relative z-10"
+                                referrerpolicy="no-referrer"
+                                style="display:block;"
+                                onerror="this.remove(); var d=document.getElementById('default-avatar'); if(d){ d.classList.remove('hidden'); d.style.display='flex'; }">
+                        <div id="default-avatar"
+                                class="hidden avatar-placeholder-user w-36 h-36 sm:w-40 sm:h-40 rounded-full items-center justify-center shadow-xl absolute inset-0 z-0">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-white opacity-90"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                        </div>
+                    }
+                    else
+                    {
+                        <div id="current-avatar" class="avatar-placeholder-user w-36 h-36 sm:w-40 sm:h-40 rounded-full flex items-center justify-center shadow-xl relative z-10">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-white opacity-90"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                        </div>
+                        <div id="default-avatar" class="hidden"></div>
+                    }
+
+                    <div id="avatar-preview-container" class="hidden absolute inset-0 rounded-full overflow-hidden border-4 border-blue-500 shadow-2xl z-20 pointer-events-none" style="background:#e5e7eb;">
+                        <img id="avatar-preview" src="" alt="Предпросмотр" class="w-full h-full object-cover" style="display:block;">
+                    </div>
+                </div>
+
+                <div class="flex flex-col space-y-2.5 w-full max-w-xs">
+                    <input type="file" id="avatarInput" name="AvatarFile" accept="image/*" class="hidden">
+                    <label for="avatarInput"
+                            class="guap-gradient text-white py-3 px-6 rounded-xl hover:opacity-90 active:scale-[0.98] cursor-pointer font-medium text-center transition text-sm sm:text-base">
+                        Изменить фото
+                    </label>
+                    <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400 text-center">
+                        JPG, PNG, GIF, WEBP · до 2 МБ
+                    </p>
+                    <button type="button" id="cancel-preview"
+                            class="text-sm text-gray-600 dark:text-gray-400 hover:underline hidden py-1">
+                        Отменить выбор
+                    </button>
+                    <button type="button" id="delete-avatar-trigger"
+                            class="text-sm text-red-600 hover:text-red-800 hover:underline py-1 @(hasAvatar ? "" : "hidden")">
+                        Удалить фото
+                    </button>
+                </div>
+                <input type="hidden" name="DeleteAvatar" id="delete-avatar-flag" value="false" />
+            </div>
+
+            <div class="flex-1 space-y-5 w-full">
+                <div class="grid sm:grid-cols-2 gap-5">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Фамилия</label>
+                        <input asp-for="Profile.LastName" class="input-field" readonly>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Имя</label>
+                        <input asp-for="Profile.FirstName" class="input-field" readonly>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Логин (email)</label>
+                    <input asp-for="Profile.Login" type="email" class="input-field" readonly>
+                </div>
+            </div>
+        </div>
+    </section>
+
+
+    <div class="form-actions flex justify-end gap-3 sm:gap-4 py-4 sm:py-6">
+        <button type="button" onclick="history.back()"
+                class="px-6 py-3.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-xl hover:bg-gray-300 dark:hover:bg-gray-600 font-medium active:scale-[0.98] transition">
+            Отмена
+        </button>
+        <button type="submit"
+                class="px-8 py-3.5 guap-gradient text-white rounded-xl hover:opacity-90 font-medium active:scale-[0.98] transition">
+            Сохранить изменения
+        </button>
+    </div>
+</form>

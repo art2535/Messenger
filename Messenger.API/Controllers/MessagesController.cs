@@ -1,7 +1,6 @@
 using Asp.Versioning;
+using Messenger.API.Extensions;
 using MassTransit;
-using Messenger.API.Responses;
-using Messenger.API.Services;
 using Messenger.Core.DTOs.Messages;
 using Messenger.Core.Hubs;
 using Messenger.Core.Interfaces;
@@ -12,15 +11,18 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
 using System.ComponentModel;
+using System.Security.Claims;
+using Messenger.Core.Services;
+using Messenger.Core.Responses;
 
 namespace Messenger.API.Controllers
 {
     /// <summary>
-    /// Контроллер для управления сообщениями
+    /// Контроллер для управления сообщениями.
     /// </summary>
     [Authorize]
     [ApiController]
-    [Route("api/v{version:apiVersion}/[controller]")]
+    [Route("api/v{version:apiVersion}/messages")]
     [ApiVersion("1.0")]
     [Produces("application/json")]
     [Tags("Messages")]
@@ -33,14 +35,21 @@ namespace Messenger.API.Controllers
         private readonly IUserService _userService;
         private readonly IEncryptionService _encryptionService;
         private readonly IAttachmentService _attachmentService;
+        private readonly IAccountSettingsService _accountSettingsService;
         private readonly ILogger<MessagesController> _logger;
-        private readonly Messenger.Core.Services.SendMessageRateLimiterService _sendLimiter;
+        private readonly SendMessageRateLimiterService _sendLimiter;
 
-        public MessagesController(IMessageService messageService, IConfiguration configuration,
-            IHubContext<ChatHub> hubContext, IChatService chatService, IUserService userService,
-            IEncryptionService encryptionService, IAttachmentService attachmentService,
+        public MessagesController(
+            IMessageService messageService,
+            IConfiguration configuration,
+            IHubContext<ChatHub> hubContext,
+            IChatService chatService,
+            IUserService userService,
+            IEncryptionService encryptionService,
+            IAttachmentService attachmentService,
+            IAccountSettingsService accountSettingsService,
             ILogger<MessagesController> logger,
-            Messenger.Core.Services.SendMessageRateLimiterService sendLimiter)
+            SendMessageRateLimiterService sendLimiter)
         {
             _messageService = messageService;
             _configuration = configuration;
@@ -49,54 +58,63 @@ namespace Messenger.API.Controllers
             _userService = userService;
             _encryptionService = encryptionService;
             _attachmentService = attachmentService;
+            _accountSettingsService = accountSettingsService;
             _logger = logger;
             _sendLimiter = sendLimiter;
         }
 
         /// <summary>
-        /// Поиск сообщений в чате
+        /// Поиск сообщений в чате.
         /// </summary>
         [HttpGet("{chatId:guid}/search")]
         [EndpointName("SearchMessages")]
         [EndpointSummary("Поиск сообщений в чате")]
         [EndpointDescription("Возвращает сообщения, соответствующие критерию поиска в указанном чате.")]
-        [ProducesResponseType(typeof(MessageSearchResponse), StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> SearchMessages([Description("Идентификатор чата (GUID)")] Guid chatId,
-            [FromQuery, Description("Критерий поиска")] string query)
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> GetSearchMessagesAsync(
+            [FromRoute, Description("Идентификатор чата (GUID)")] Guid chatId,
+            [FromQuery, Description("Критерий поиска")] string query,
+            CancellationToken ct = default)
         {
-            if (string.IsNullOrWhiteSpace(query))
-            {
-                return Ok(new MessageSearchResponse
-                {
-                    IsSuccess = true,
-                    Data = new List<MessageDto>()
-                });
-            }
-
             try
             {
-                var results = await _messageService.SearchMessagesAsync(chatId, query.Trim());
-                return Ok(new MessageSearchResponse
+                await User.GetCurrentUserIdAsync(_userService);
+
+                if (string.IsNullOrWhiteSpace(query))
                 {
-                    IsSuccess = true,
-                    Data = results
-                });
+                    return Ok(ApiResponse.Success(new List<MessageDto>()
+                    ));
+                }
+
+                var results = await _messageService.SearchMessagesAsync(chatId, query.Trim());
+
+                return Ok(ApiResponse.Success(results));
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Ошибка авторизации при поиске сообщений в чате {ChatId}", chatId);
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
             }
             catch (Exception ex)
             {
-                return BadRequest(new ErrorResponse
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                _logger.LogError(ex, "Ошибка при выполнении GET /messages/{ChatId}/search", chatId);
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
         /// <summary>
-        /// Отправить сообщение в чат
+        /// Отправить сообщение в чат.
         /// </summary>
         [HttpPost("{chatId:guid}")]
         [DisableRateLimiting]
@@ -105,71 +123,65 @@ namespace Messenger.API.Controllers
         [EndpointDescription("Отправляет текстовое сообщение и/или файлы (вложения) в указанный чат. " +
             "Сообщение сохраняется асинхронно через consumer и рассылается через SignalR.")]
         [Consumes("multipart/form-data", "application/json")]
-        [ProducesResponseType(typeof(SendMessageSuccessResponse), StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
         [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> SendMessageAsync(
-            [Description("Идентификатор чата (GUID)")] Guid chatId,
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> PostSendMessageAsync(
+            [FromRoute, Description("Идентификатор чата (GUID)")] Guid chatId,
             [FromForm, Description("Текст сообщения (опционально)")] string? messageText,
             [FromForm, Description("Файлы-вложения (опционально, несколько файлов)")] IFormFile[]? files,
-            CancellationToken cancellationToken = default)
+            CancellationToken ct = default)
         {
             try
             {
                 var rateKey = User.FindFirst("sub")?.Value
-                    ?? User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                    ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value
                     ?? HttpContext.Connection.RemoteIpAddress?.ToString()
                     ?? "anonymous";
 
                 if (!await _sendLimiter.TryAcquireAsync(rateKey))
                 {
                     _logger.LogWarning("SendMessage rate limit exceeded for {Key}", rateKey);
-                    return StatusCode(StatusCodes.Status429TooManyRequests, new
-                    {
-                        isSuccess = false,
-                        error = "Слишком много запросов. Подождите немного и попробуйте снова."
-                    });
+                    return StatusCode(StatusCodes.Status429TooManyRequests, ApiResponse.Failure("Слишком много запросов. Подождите немного и попробуйте снова.", "RATE_LIMIT_EXCEEDED"));
                 }
 
-                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
-                if (error != null)
-                    return error;
+                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var user = await _userService.GetUserByIdAsync(userId, ct);
+                if (user == null)
+                {
+                    return Unauthorized(ApiResponse.Failure("Пользователь не найден"
+                    , "UNAUTHORIZED"));
+                }
 
-                const long MAX_FILE_SIZE = 10 * 1024 * 1024;
+                const long maxFileSize = 10 * 1024 * 1024;
                 if (files != null && files.Length > 0)
                 {
                     foreach (var file in files)
                     {
-                        if (file.Length > MAX_FILE_SIZE)
+                        if (file.Length > maxFileSize)
                         {
-                            return BadRequest(new ErrorResponse
-                            {
-                                IsSuccess = false,
-                                Error = $"Файл '{file.FileName}' превышает максимальный размер 10 МБ. " +
-                                        $"Текущий размер: {file.Length / (1024 * 1024):F2} МБ"
-                            });
+                            return BadRequest(ApiResponse.Failure(
+                                $"Файл '{file.FileName}' превышает максимальный размер 10 МБ. " +
+                                $"Текущий размер: {file.Length / (1024 * 1024):F2} МБ",
+                                "INVALID_REQUEST"));
                         }
                     }
                 }
 
-                var chat = await _chatService.GetChatByIdAsync(chatId, cancellationToken);
+                var chat = await _chatService.GetChatByIdAsync(chatId, ct);
                 if (chat == null)
                 {
-                    return NotFound(new ErrorResponse { Error = "Чат не найден" });
+                    return NotFound(ApiResponse.Failure("Чат не найден", "NOT_FOUND"));
                 }
 
-                if (!chat.ChatParticipants.Any(p => p.UserId == user!.UserId))
+                if (!chat.ChatParticipants.Any(p => p.UserId == user.UserId))
                 {
-                    return Forbid();
+                    return StatusCode(StatusCodes.Status403Forbidden, ApiResponse.Failure("Вы не являетесь участником этого чата", "FORBIDDEN"));
                 }
-
-                var contentToSave = string.IsNullOrWhiteSpace(messageText)
-                    ? null
-                    : _encryptionService.Encrypt(messageText.Trim());
 
                 var attachmentsInfo = new List<AttachmentInfo>();
                 var attachmentDtos = new List<AttachmentDto>();
@@ -186,7 +198,7 @@ namespace Messenger.API.Controllers
                         var fileUrl = $"{_configuration["URL:API:HTTPS"]}/uploads/{fileName}";
 
                         await using var stream = new FileStream(filePath, FileMode.Create);
-                        await file.CopyToAsync(stream, cancellationToken);
+                        await file.CopyToAsync(stream, ct);
 
                         var attachmentId = Guid.NewGuid();
 
@@ -221,44 +233,40 @@ namespace Messenger.API.Controllers
                     {
                         MessageId = messageId,
                         ChatId = chatId,
-                        SenderId = user!.UserId,
+                        SenderId = user.UserId,
                         SenderName = $"{user.FirstName} {user.LastName}".Trim(),
                         MessageText = encryptedText,
                         SentAt = UtcDateTime.AsUtc(UtcDateTime.Now),
                         HasAttachments = attachmentsInfo.Count > 0,
                         Attachments = attachmentsInfo
-                    }, cancellationToken);
+                    }, ct);
                 }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Ошибка при публикации сообщения в чат {ChatId}", chatId);
-                    return StatusCode(500, new ErrorResponse
-                    {
-                        IsSuccess = false,
-                        Error = "Внутренняя ошибка сервера при отправке сообщения"
-                    });
+                    return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure("Внутренняя ошибка сервера при отправке сообщения", "INTERNAL_ERROR"));
                 }
+
+                var decryptedText = string.IsNullOrEmpty(encryptedText)
+                    ? null
+                    : _encryptionService.TryDecryptSafe(encryptedText);
+
+                var finalMessageDto = new MessageDto
+                {
+                    MessageId = messageId,
+                    ChatId = chatId,
+                    SenderId = user.UserId,
+                    SenderName = $"{user.FirstName} {user.LastName}".Trim(),
+                    MessageText = decryptedText,
+                    SentAt = UtcDateTime.AsUtc(UtcDateTime.Now),
+                    Status = "Sent",
+                    Attachments = attachmentDtos
+                };
 
                 try
                 {
-                    var decryptedText = string.IsNullOrEmpty(encryptedText)
-                        ? null
-                        : _encryptionService.TryDecryptSafe(encryptedText);
-
-                    var finalMessageDto = new MessageDto
-                    {
-                        MessageId = messageId,
-                        ChatId = chatId,
-                        SenderId = user!.UserId,
-                        SenderName = $"{user.FirstName} {user.LastName}".Trim(),
-                        MessageText = decryptedText,
-                        SentAt = UtcDateTime.AsUtc(UtcDateTime.Now),
-                        Status = "Sent",
-                        Attachments = attachmentDtos
-                    };
-
                     await _hubContext.Clients.Group(chatId.ToString())
-                        .SendAsync("ReceiveMessage", finalMessageDto, cancellationToken);
+                        .SendAsync("ReceiveMessage", finalMessageDto, ct);
                     await _hubContext.Clients.Group(chatId.ToString())
                         .SendAsync("MessageSendingStatus", new
                         {
@@ -266,124 +274,141 @@ namespace Messenger.API.Controllers
                             ChatId = chatId,
                             Status = "Sent",
                             Timestamp = DateTimeOffset.UtcNow
-                        }, cancellationToken);
+                        }, ct);
 
                     foreach (var participant in chat.ChatParticipants)
                     {
                         var userGroup = $"User_{participant.UserId}";
                         await _hubContext.Clients.Group(userGroup)
-                            .SendAsync("ReceiveMessage", finalMessageDto, cancellationToken);
+                            .SendAsync("ReceiveMessage", finalMessageDto, ct);
                     }
-
-                    return Ok(new SendMessageSuccessResponse
-                    {
-                        IsSuccess = true,
-                        Data = finalMessageDto
-                    });
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Сообщение {MessageId} сохранено, но SignalR/ответ не удались", messageId);
-                    return Ok(new SendMessageSuccessResponse
-                    {
-                        IsSuccess = true,
-                        Data = new MessageDto
-                        {
-                            MessageId = messageId,
-                            ChatId = chatId,
-                            SenderId = user!.UserId,
-                            SenderName = $"{user.FirstName} {user.LastName}".Trim(),
-                            MessageText = string.IsNullOrEmpty(encryptedText) ? null : _encryptionService.TryDecryptSafe(encryptedText),
-                            SentAt = UtcDateTime.AsUtc(UtcDateTime.Now),
-                            Status = "Sent",
-                            Attachments = attachmentDtos
-                        }
-                    });
+                    _logger.LogError(ex, "Сообщение {MessageId} сохранено, но SignalR-рассылка не удалась", messageId);
                 }
+
+                return Ok(ApiResponse.Success(finalMessageDto));
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Ошибка авторизации при отправке сообщения в чат {ChatId}", chatId);
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при отправке сообщения в чат {ChatId}", chatId);
-                return StatusCode(500, new ErrorResponse
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
         /// <summary>
-        /// Переслать одно или несколько сообщений в другие чаты (включая вложения)
+        /// Переслать одно или несколько сообщений в другие чаты (включая вложения).
         /// </summary>
         [HttpPost("forward")]
         [EndpointName("ForwardMessages")]
         [EndpointSummary("Пересылка сообщений")]
         [EndpointDescription("Копирует выбранные сообщения (текст + файлы на диске) в указанные чаты. До 20 сообщений и 5 чатов за раз.")]
+        [Consumes("application/json")]
         [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> ForwardMessagesAsync(
-            [FromBody] ForwardMessagesRequest request,
-            CancellationToken cancellationToken = default)
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> PostForwardMessagesAsync(
+            [FromBody, Description("Данные для пересылки сообщений")] ForwardMessagesRequest request,
+            CancellationToken ct = default)
         {
             try
             {
-                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
-                if (error != null)
-                    return error;
+                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var user = await _userService.GetUserByIdAsync(userId, ct);
+                if (user == null)
+                {
+                    return Unauthorized(ApiResponse.Failure("Пользователь не найден", "UNAUTHORIZED"));
+                }
 
                 if (request == null)
-                    return BadRequest(new ErrorResponse { Error = "Тело запроса пустое или неверный JSON" });
+                {
+                    return BadRequest(ApiResponse.Failure("Тело запроса пустое или неверный JSON", "INVALID_REQUEST"));
+                }
+
                 if (request.MessageIds == null || request.MessageIds.Count == 0)
-                    return BadRequest(new ErrorResponse { Error = "Не указаны сообщения для пересылки" });
+                {
+                    return BadRequest(ApiResponse.Failure("Не указаны сообщения для пересылки", "INVALID_REQUEST"));
+                }
+
                 if (request.TargetChatIds == null || request.TargetChatIds.Count == 0)
-                    return BadRequest(new ErrorResponse { Error = "Не указаны целевые чаты" });
+                {
+                    return BadRequest(ApiResponse.Failure("Не указаны целевые чаты", "INVALID_REQUEST"));
+                }
+
                 if (request.MessageIds.Count > 20)
-                    return BadRequest(new ErrorResponse { Error = "Можно переслать не более 20 сообщений за раз" });
+                {
+                    return BadRequest(ApiResponse.Failure("Можно переслать не более 20 сообщений за раз", "INVALID_REQUEST"));
+                }
+
                 if (request.TargetChatIds.Count > 5)
-                    return BadRequest(new ErrorResponse { Error = "Можно выбрать не более 5 чатов" });
+                {
+                    return BadRequest(ApiResponse.Failure("Можно выбрать не более 5 чатов", "INVALID_REQUEST"));
+                }
 
                 request.MessageIds = request.MessageIds.Where(id => id != Guid.Empty).Distinct().ToList();
                 request.TargetChatIds = request.TargetChatIds.Where(id => id != Guid.Empty).Distinct().ToList();
-                if (request.MessageIds.Count == 0)
-                    return BadRequest(new ErrorResponse { Error = "Некорректные ID сообщений" });
-                if (request.TargetChatIds.Count == 0)
-                    return BadRequest(new ErrorResponse { Error = "Некорректные ID чатов" });
 
-                var senderName = $"{user!.FirstName} {user.LastName}".Trim();
+                if (request.MessageIds.Count == 0)
+                {
+                    return BadRequest(ApiResponse.Failure("Некорректные ID сообщений", "INVALID_REQUEST"));
+                }
+
+                if (request.TargetChatIds.Count == 0)
+                {
+                    return BadRequest(ApiResponse.Failure("Некорректные ID чатов", "INVALID_REQUEST"));
+                }
+
+                var senderName = $"{user.FirstName} {user.LastName}".Trim();
                 if (string.IsNullOrWhiteSpace(senderName))
                     senderName = "Пользователь";
 
                 var sourceMessages = new List<(Message msg, string? plainText, List<Attachment> attachments)>();
                 foreach (var mid in request.MessageIds.Distinct())
                 {
-                    var msg = await _messageService.GetMessageByIdGlobalAsync(mid, cancellationToken);
+                    var msg = await _messageService.GetMessageByIdGlobalAsync(mid, ct);
                     if (msg == null)
-                        return NotFound(new ErrorResponse { Error = $"Сообщение {mid} не найдено" });
+                    {
+                        return NotFound(ApiResponse.Failure($"Сообщение {mid} не найдено", "NOT_FOUND"));
+                    }
 
-                    var sourceChat = await _chatService.GetChatByIdAsync(msg.ChatId, cancellationToken);
+                    var sourceChat = await _chatService.GetChatByIdAsync(msg.ChatId, ct);
                     if (sourceChat == null || !sourceChat.ChatParticipants.Any(p => p.UserId == user.UserId))
-                        return Forbid();
+                    {
+                        return StatusCode(StatusCodes.Status403Forbidden, ApiResponse.Failure("Нет доступа к исходному чату", "FORBIDDEN"));
+                    }
 
                     var plain = string.IsNullOrEmpty(msg.MessageText)
                         ? null
                         : _encryptionService.TryDecryptSafe(msg.MessageText);
 
                     var atts = msg.Attachments?.ToList()
-                        ?? (await _attachmentService.GetAttachmentsByMessageIdAsync(mid, cancellationToken)).ToList();
+                        ?? (await _attachmentService.GetAttachmentsByMessageIdAsync(mid, ct)).ToList();
                     sourceMessages.Add((msg, plain, atts));
                 }
 
                 var targetChats = new List<Chat>();
-                foreach (var chatId in request.TargetChatIds.Distinct())
+                foreach (var targetChatId in request.TargetChatIds.Distinct())
                 {
-                    var chat = await _chatService.GetChatByIdAsync(chatId, cancellationToken);
+                    var chat = await _chatService.GetChatByIdAsync(targetChatId, ct);
                     if (chat == null)
-                        return NotFound(new ErrorResponse { Error = $"Чат {chatId} не найден" });
+                    {
+                        return NotFound(ApiResponse.Failure($"Чат {targetChatId} не найден", "NOT_FOUND"));
+                    }
+
                     if (!chat.ChatParticipants.Any(p => p.UserId == user.UserId))
-                        return Forbid();
+                    {
+                        return StatusCode(StatusCodes.Status403Forbidden, ApiResponse.Failure($"Нет доступа к целевому чату {targetChatId}", "FORBIDDEN"));
+                    }
+
                     targetChats.Add(chat);
                 }
 
@@ -457,7 +482,7 @@ namespace Messenger.API.Controllers
                                 SentAt = UtcDateTime.AsUtc(UtcDateTime.Now),
                                 HasAttachments = attachmentsInfo.Count > 0,
                                 Attachments = attachmentsInfo
-                            }, cancellationToken);
+                            }, ct);
 
                             try
                             {
@@ -484,7 +509,7 @@ namespace Messenger.API.Controllers
                                 };
                                 var chatIdStr = target.ChatId.ToString();
                                 await _hubContext.Clients.Group(chatIdStr)
-                                    .SendAsync("ReceiveMessage", forwardDto, cancellationToken);
+                                    .SendAsync("ReceiveMessage", forwardDto, ct);
                                 await _hubContext.Clients.Group(chatIdStr)
                                     .SendAsync("MessageSendingStatus", new
                                     {
@@ -492,11 +517,11 @@ namespace Messenger.API.Controllers
                                         ChatId = target.ChatId,
                                         Status = "Sent",
                                         Timestamp = DateTimeOffset.UtcNow
-                                    }, cancellationToken);
+                                    }, ct);
                                 foreach (var participant in target.ChatParticipants)
                                 {
                                     await _hubContext.Clients.Group($"User_{participant.UserId}")
-                                        .SendAsync("ReceiveMessage", forwardDto, cancellationToken);
+                                        .SendAsync("ReceiveMessage", forwardDto, ct);
                                 }
                             }
                             catch (Exception signalrEx)
@@ -518,24 +543,20 @@ namespace Messenger.API.Controllers
 
                 if (published == 0)
                 {
-                    return StatusCode(500, new ErrorResponse
-                    {
-                        IsSuccess = false,
-                        Error = errors.FirstOrDefault() ?? "Не удалось переслать сообщения"
-                    });
+                    return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(errors.FirstOrDefault() ?? "Не удалось переслать сообщения", "INTERNAL_ERROR"));
                 }
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    published,
-                    errors
-                });
+                return Ok(ApiResponse.Success(new { published, errors }, meta: new { published, errorCount = errors?.Count ?? 0 }));
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Ошибка авторизации при пересылке сообщений");
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Ошибка ForwardMessages");
-                return StatusCode(500, new ErrorResponse { IsSuccess = false, Error = ex.Message });
+                _logger.LogError(ex, "Ошибка при выполнении POST /messages/forward");
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -562,69 +583,85 @@ namespace Messenger.API.Controllers
         }
 
         /// <summary>
-        /// Пометить все сообщения чата как прочитанные (для текущего пользователя)
+        /// Пометить все сообщения чата как прочитанные (для текущего пользователя).
         /// </summary>
         [HttpPost("{chatId:guid}/read")]
         [EndpointName("MarkChatAsRead")]
         [EndpointSummary("Пометить все сообщения чата как прочитанные")]
         [EndpointDescription("Обновляет статус сообщения на прочитанный")]
         [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> MarkChatAsReadAsync([Description("Идентификатор чата")] Guid chatId,
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> PostMarkChatAsReadAsync(
+            [FromRoute, Description("Идентификатор чата")] Guid chatId,
             CancellationToken ct = default)
         {
             try
             {
-                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
-                if (error != null)
-                    return error;
+                var userId = await User.GetCurrentUserIdAsync(_userService);
 
                 var chat = await _chatService.GetChatByIdAsync(chatId, ct);
                 if (chat == null)
-                    return NotFound(new ErrorResponse { Error = "Чат не найден" });
+                {
+                    return NotFound(ApiResponse.Failure("Чат не найден", "NOT_FOUND"));
+                }
 
-                if (!chat.ChatParticipants.Any(p => p.UserId == user!.UserId))
-                    return Forbid();
+                if (!chat.ChatParticipants.Any(p => p.UserId == userId))
+                {
+                    return StatusCode(StatusCodes.Status403Forbidden, ApiResponse.Failure("Вы не являетесь участником этого чата", "FORBIDDEN"));
+                }
 
-                var updated = await _messageService.MarkMessagesAsReadAsync(chatId, user!.UserId, ct);
+                var updated = await _messageService.MarkMessagesAsReadAsync(chatId, userId, ct);
 
                 if (updated > 0)
                 {
-                    var readPayload = new
+                    var sendReceipts = true;
+                    try
                     {
-                        chatId,
-                        readerId = user.UserId,
-                        readAt = DateTime.UtcNow
-                    };
+                        var settings = await _accountSettingsService.GetByUserIdAsync(userId, ct);
+                        sendReceipts = settings.ReadReceipts;
+                    }
+                    catch { }
 
-                    await _hubContext.Clients.Group(chatId.ToString())
-                        .SendAsync("MessagesRead", readPayload, ct);
-
-                    foreach (var participant in chat.ChatParticipants)
+                    if (sendReceipts)
                     {
-                        await _hubContext.Clients.Group($"User_{participant.UserId}")
+                        var readPayload = new
+                        {
+                            ChatId = chatId,
+                            ReaderId = userId,
+                            ReadAt = DateTime.UtcNow
+                        };
+
+                        await _hubContext.Clients.Group(chatId.ToString())
                             .SendAsync("MessagesRead", readPayload, ct);
+
+                        foreach (var participant in chat.ChatParticipants)
+                        {
+                            await _hubContext.Clients.Group($"User_{participant.UserId}")
+                                .SendAsync("MessagesRead", readPayload, ct);
+                        }
                     }
                 }
 
-                return Ok(new { IsSuccess = true, UpdatedCount = updated });
+                return Ok(ApiResponse.Success(new { updatedCount = updated }, message: "Сообщения обновлены"));
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Ошибка авторизации при отметке прочтения в чате {ChatId}", chatId);
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new ErrorResponse
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                _logger.LogError(ex, "Ошибка при выполнении POST /messages/{ChatId}/read", chatId);
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
         /// <summary>
-        /// Получить сообщения чата
+        /// Получить сообщения чата.
         /// </summary>
         [HttpGet("{chatId:guid}")]
         [EndpointName("GetMessagesByChat")]
@@ -632,18 +669,21 @@ namespace Messenger.API.Controllers
         [EndpointDescription(
             "Возвращает страницу сообщений. Параметр beforeSequence — SequenceNumber самого старого уже загруженного сообщения " +
             "(для подгрузки истории). Без параметра возвращаются последние limit сообщений.")]
-        [ProducesResponseType(typeof(GetMessagesSuccessResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> GetMessagesByChatAsync([Description("Идентификатор чата (GUID)")] Guid chatId,
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> GetMessagesByChatAsync(
+            [FromRoute, Description("Идентификатор чата (GUID)")] Guid chatId,
             [FromQuery, Description("Загрузить сообщения старше этого SequenceNumber")] long? beforeSequence = null,
             [FromQuery, Description("Размер страницы (1–200, по умолчанию 50)")] int limit = 50,
-            CancellationToken cancellationToken = default)
+            CancellationToken ct = default)
         {
             try
             {
+                await User.GetCurrentUserIdAsync(_userService);
+
                 var (messages, hasMore) = await _messageService.GetMessagesPagedAsync(
-                    chatId, beforeSequence, limit, cancellationToken);
+                    chatId, beforeSequence, limit, ct);
 
                 var dtos = messages.Select(m => new MessageDto
                 {
@@ -653,7 +693,8 @@ namespace Messenger.API.Controllers
                     SenderName = m.Sender != null
                         ? $"{m.Sender.FirstName} {m.Sender.LastName}".Trim()
                         : "Удалённый пользователь",
-                    MessageText = string.IsNullOrEmpty(m.MessageText) ? null
+                    MessageText = string.IsNullOrEmpty(m.MessageText)
+                        ? null
                         : _encryptionService.TryDecryptSafe(m.MessageText),
                     SentAt = UtcDateTime.AsUtc(m.SendTime),
                     SequenceNumber = m.SequenceNumber,
@@ -694,26 +735,26 @@ namespace Messenger.API.Controllers
                     PinnedAt = m.PinnedAt.HasValue ? UtcDateTime.AsUtc(m.PinnedAt.Value) : null
                 }).ToList();
 
-                return Ok(new GetMessagesSuccessResponse
+                return Ok(ApiResponse.Success(dtos, meta: new
                 {
-                    IsSuccess = true,
-                    Data = dtos,
-                    HasMore = hasMore,
-                    NextBeforeSequence = dtos.Count > 0 ? dtos.Min(d => d.SequenceNumber) : (long?)null
-                });
+                    hasMore,
+                    nextBeforeSequence = dtos.Count > 0 ? dtos.Min(d => d.SequenceNumber) : (long?)null
+                }));
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Ошибка авторизации при получении сообщений чата {ChatId}", chatId);
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new ErrorResponse
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                _logger.LogError(ex, "Ошибка при выполнении GET /messages/{ChatId}", chatId);
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
         /// <summary>
-        /// Экспорт истории чата в разных форматах
+        /// Экспорт истории чата в разных форматах.
         /// </summary>
         [HttpGet("{chatId:guid}/export")]
         [EndpointName("ExportChat")]
@@ -721,117 +762,91 @@ namespace Messenger.API.Controllers
         [EndpointDescription(
             "Скачивает историю сообщений чата в одном из форматов: txt, json, html, csv. " +
             "Доступно только участникам чата. Максимум 5000 сообщений.")]
-        [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> ExportChatAsync(
-            [Description("Идентификатор чата (GUID)")] Guid chatId,
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> GetExportChatAsync(
+            [FromRoute, Description("Идентификатор чата (GUID)")] Guid chatId,
             [FromQuery, Description("Формат экспорта: txt | json | html | csv (по умолчанию txt)")] string format = "txt",
-            CancellationToken cancellationToken = default)
+            CancellationToken ct = default)
         {
             try
             {
-                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
-                if (error != null)
+                var userId = await User.GetCurrentUserIdAsync(_userService);
+
+                var participants = await _chatService.GetChatParticipantsAsync(chatId, ct);
+                if (!participants.Any(p => p.UserId == userId))
                 {
-                    return error;
+                    return StatusCode(StatusCodes.Status403Forbidden, ApiResponse.Failure("Вы не являетесь участником этого чата", "FORBIDDEN"));
                 }
 
-                var participants = await _chatService.GetChatParticipantsAsync(chatId, cancellationToken);
-                if (!participants.Any(p => p.UserId == user!.UserId))
-                {
-                    return StatusCode(StatusCodes.Status403Forbidden, new ErrorResponse
-                    {
-                        IsSuccess = false,
-                        Error = "Вы не являетесь участником этого чата"
-                    });
-                }
-
-                var chat = await _chatService.GetChatByIdAsync(chatId, cancellationToken);
+                var chat = await _chatService.GetChatByIdAsync(chatId, ct);
                 if (chat == null)
                 {
-                    return NotFound(new ErrorResponse
-                    {
-                        IsSuccess = false,
-                        Error = "Чат не найден"
-                    });
+                    return NotFound(ApiResponse.Failure("Чат не найден", "NOT_FOUND"));
                 }
 
                 var normalizedFormat = (format ?? "txt").Trim().ToLowerInvariant();
                 if (normalizedFormat is not ("txt" or "json" or "html" or "csv"))
                 {
-                    return BadRequest(new ErrorResponse
-                    {
-                        IsSuccess = false,
-                        Error = "Поддерживаемые форматы: txt, json, html, csv"
-                    });
+                    return BadRequest(ApiResponse.Failure("Поддерживаемые форматы: txt, json, html, csv", "INVALID_REQUEST"));
                 }
 
-                var result = await _messageService.ExportChatAsync(chatId, normalizedFormat, chat.Name, cancellationToken);
+                var result = await _messageService.ExportChatAsync(chatId, normalizedFormat, chat.Name, ct);
 
                 return File(result.Content, result.ContentType, result.FileName);
             }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Ошибка авторизации при экспорте чата {ChatId}", chatId);
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
+            }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Ошибка экспорта чата {ChatId}", chatId);
-                return StatusCode(500, new ErrorResponse
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                _logger.LogError(ex, "Ошибка при выполнении GET /messages/{ChatId}/export", chatId);
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
         /// <summary>
-        /// Редактировать сообщение
+        /// Редактировать сообщение.
         /// </summary>
-        [HttpPut("{messageId}")]
+        [HttpPut("{messageId:guid}")]
         [EndpointName("UpdateMessage")]
         [EndpointSummary("Редактировать сообщение")]
         [EndpointDescription("Изменяет текст существующего сообщения. Доступно только отправителю.")]
-        [ProducesResponseType(typeof(UpdateMessageSuccessResponse), StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> UpdateMessageAsync(
-            [Description("Идентификатор сообщения")] Guid messageId,
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> PutUpdateMessageAsync(
+            [FromRoute, Description("Идентификатор сообщения (GUID)")] Guid messageId,
             [FromBody, Description("Новый текст сообщения и ID чата")] UpdateMessageRequest request,
             CancellationToken ct = default)
         {
             if (string.IsNullOrWhiteSpace(request.MessageText))
             {
-                return BadRequest(new ErrorResponse
-                {
-                    IsSuccess = false,
-                    Error = "Текст не может быть пустым"
-                });
+                return BadRequest(ApiResponse.Failure("Текст не может быть пустым", "INVALID_REQUEST"));
             }
 
             try
             {
-                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
-                if (error != null)
-                {
-                    return error;
-                }
+                var userId = await User.GetCurrentUserIdAsync(_userService);
 
                 var message = await _messageService.GetMessageByIdAsync(request.ChatId, messageId, ct);
                 if (message == null)
                 {
-                    return NotFound(new ErrorResponse
-                    {
-                        IsSuccess = false,
-                        Error = "Сообщение не найдено"
-                    });
+                    return NotFound(ApiResponse.Failure("Сообщение не найдено", "NOT_FOUND"));
                 }
-                if (message.SenderId != user!.UserId)
+
+                if (message.SenderId != userId)
                 {
-                    return Forbid();
+                    return StatusCode(StatusCodes.Status403Forbidden, ApiResponse.Failure("Редактировать можно только своё сообщение", "FORBIDDEN"));
                 }
 
                 message.MessageText = _encryptionService.Encrypt(request.MessageText);
@@ -850,119 +865,113 @@ namespace Messenger.API.Controllers
                 await _hubContext.Clients.Group(request.ChatId.ToString())
                     .SendAsync("ReceiveMessage", updatedDto, ct);
 
-                return Ok(new UpdateMessageSuccessResponse
-                {
-                    IsSuccess = true,
-                    Message = "Сообщение обновлено"
-                });
+                return Ok(ApiResponse.Success(message: "Сообщение обновлено"));
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Ошибка авторизации при редактировании сообщения {MessageId}", messageId);
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { IsSuccess = false, Error = ex.Message });
+                _logger.LogError(ex, "Ошибка при выполнении PUT /messages/{MessageId}", messageId);
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
         /// <summary>
-        /// Удалить сообщение
+        /// Удалить сообщение.
         /// </summary>
-        [HttpDelete("{messageId}")]
+        [HttpDelete("{messageId:guid}")]
         [EndpointName("DeleteMessage")]
         [EndpointSummary("Удалить сообщение")]
         [EndpointDescription("Удаляет сообщение. Доступно только отправителю. Уведомление рассылается через SignalR.")]
-        [ProducesResponseType(typeof(DeleteMessageSuccessResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> DeleteMessageAsync(
-            [Description("Идентификатор сообщения")] Guid messageId,
+            [FromRoute, Description("Идентификатор сообщения (GUID)")] Guid messageId,
             [FromQuery, Description("Идентификатор чата (обязателен для проверки прав)")] Guid chatId,
             CancellationToken ct = default)
         {
             try
             {
-                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
-                if (error != null)
-                {
-                    return error;
-                }
+                var userId = await User.GetCurrentUserIdAsync(_userService);
 
                 var message = await _messageService.GetMessageByIdAsync(chatId, messageId, ct);
                 if (message == null)
                 {
-                    return NotFound();
+                    return NotFound(ApiResponse.Failure("Сообщение не найдено", "NOT_FOUND"));
                 }
 
                 var chat = await _chatService.GetChatByIdAsync(chatId, ct);
-                if (chat == null || !chat.ChatParticipants.Any(p => p.UserId == user!.UserId))
+                if (chat == null || !chat.ChatParticipants.Any(p => p.UserId == userId))
                 {
-                    return Forbid();
+                    return StatusCode(StatusCodes.Status403Forbidden, ApiResponse.Failure("Вы не являетесь участником этого чата", "FORBIDDEN"));
                 }
 
                 await _messageService.DeleteMessageAsync(messageId, ct);
-                var deletedPayload = new { messageId, chatId };
+
+                var deletedPayload = new
+                {
+                    MessageId = messageId,
+                    ChatId = chatId
+                };
+
                 await _hubContext.Clients.Group(chatId.ToString())
                     .SendAsync("MessageDeleted", deletedPayload, ct);
+
                 foreach (var participant in chat.ChatParticipants)
                 {
                     await _hubContext.Clients.Group($"User_{participant.UserId}")
                         .SendAsync("MessageDeleted", deletedPayload, ct);
                 }
 
-                return Ok(new DeleteMessageSuccessResponse
-                {
-                    IsSuccess = true,
-                    Message = "Сообщение удалено"
-                });
+                return Ok(ApiResponse.Success(message: "Сообщение удалено"));
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Ошибка авторизации при удалении сообщения {MessageId}", messageId);
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new ErrorResponse
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                _logger.LogError(ex, "Ошибка при выполнении DELETE /messages/{MessageId}", messageId);
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
         /// <summary>
-        /// Удалить несколько сообщений
+        /// Удалить несколько сообщений.
         /// </summary>
         [HttpPost("bulk-delete")]
         [EndpointName("BulkDeleteMessages")]
         [EndpointSummary("Удалить несколько сообщений")]
         [EndpointDescription("Удаляет указанные сообщения. Можно удалить только свои сообщения. Уведомления рассылаются через SignalR.")]
         [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> BulkDeleteMessagesAsync(
-            [FromBody] BulkDeleteMessagesRequest request,
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> PostBulkDeleteMessagesAsync(
+            [FromBody, Description("Данные для массового удаления сообщений")] BulkDeleteMessagesRequest request,
             CancellationToken ct = default)
         {
             try
             {
-                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
-                if (error != null)
-                    return error;
+                await User.GetCurrentUserIdAsync(_userService);
 
                 if (request == null || request.MessageIds == null || request.MessageIds.Count == 0)
                 {
-                    return BadRequest(new ErrorResponse
-                    {
-                        IsSuccess = false,
-                        Error = "Не указаны сообщения для удаления"
-                    });
+                    return BadRequest(ApiResponse.Failure("Не указаны сообщения для удаления", "INVALID_REQUEST"));
                 }
 
                 if (request.MessageIds.Count > 100)
                 {
-                    return BadRequest(new ErrorResponse
-                    {
-                        IsSuccess = false,
-                        Error = "За один раз можно удалить не более 100 сообщений"
-                    });
+                    return BadRequest(ApiResponse.Failure("За один раз можно удалить не более 100 сообщений", "INVALID_REQUEST"));
                 }
 
                 var chatId = request.ChatId;
@@ -978,11 +987,7 @@ namespace Messenger.API.Controllers
 
                 if (allowed.Count == 0)
                 {
-                    return NotFound(new ErrorResponse
-                    {
-                        IsSuccess = false,
-                        Error = "Сообщения не найдены"
-                    });
+                    return NotFound(ApiResponse.Failure("Сообщения не найдены", "NOT_FOUND"));
                 }
 
                 var deleted = await _messageService.DeleteMessagesAsync(allowed, ct);
@@ -993,9 +998,15 @@ namespace Messenger.API.Controllers
 
                 foreach (var mid in allowed)
                 {
-                    var payload = new { messageId = mid, chatId };
+                    var payload = new
+                    {
+                        MessageId = mid,
+                        ChatId = chatId
+                    };
+
                     await _hubContext.Clients.Group(chatId.ToString())
                         .SendAsync("MessageDeleted", payload, ct);
+
                     foreach (var participant in participants)
                     {
                         await _hubContext.Clients.Group($"User_{participant.UserId}")
@@ -1003,21 +1014,17 @@ namespace Messenger.API.Controllers
                     }
                 }
 
-                return Ok(new
-                {
-                    IsSuccess = true,
-                    DeletedCount = deleted,
-                    MessageIds = allowed
-                });
+                return Ok(ApiResponse.Success(new { deletedCount = deleted, messageIds = allowed }, message: "Сообщения удалены"));
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Ошибка авторизации при массовом удалении сообщений");
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Ошибка массового удаления сообщений");
-                return StatusCode(500, new ErrorResponse
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                _logger.LogError(ex, "Ошибка при выполнении POST /messages/bulk-delete");
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
@@ -1034,46 +1041,40 @@ namespace Messenger.API.Controllers
                 _ => "application/octet-stream"
             };
         }
-        
+
         /// <summary>
-        /// Закрепить сообщение в чате
+        /// Закрепить сообщение в чате.
         /// </summary>
         [HttpPost("{messageId:guid}/pin")]
         [EndpointName("PinMessage")]
         [EndpointSummary("Закрепить сообщение")]
         [EndpointDescription("Закрепляет сообщение в чате. Доступно любому участнику чата.")]
-        [ProducesResponseType(typeof(PinMessageSuccessResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> PinMessageAsync(
-            [Description("Идентификатор сообщения")] Guid messageId,
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> PostPinMessageAsync(
+            [FromRoute, Description("Идентификатор сообщения (GUID)")] Guid messageId,
             CancellationToken ct = default)
         {
             try
             {
-                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
-                if (error != null)
-                    return error;
+                var userId = await User.GetCurrentUserIdAsync(_userService);
 
                 Message? message;
                 try
                 {
-                    message = await _messageService.PinMessageAsync(messageId, user!.UserId, ct);
+                    message = await _messageService.PinMessageAsync(messageId, userId, ct);
                 }
                 catch (UnauthorizedAccessException)
                 {
-                    return Forbid();
+                    return StatusCode(StatusCodes.Status403Forbidden, ApiResponse.Failure("Недостаточно прав для закрепления сообщения", "FORBIDDEN"));
                 }
 
                 if (message == null)
                 {
-                    return NotFound(new ErrorResponse
-                    {
-                        IsSuccess = false,
-                        Error = "Сообщение не найдено"
-                    });
+                    return NotFound(ApiResponse.Failure("Сообщение не найдено", "NOT_FOUND"));
                 }
 
                 var text = string.IsNullOrEmpty(message.MessageText)
@@ -1082,12 +1083,12 @@ namespace Messenger.API.Controllers
 
                 var payload = new
                 {
-                    messageId = message.MessageId,
-                    chatId = message.ChatId,
-                    isPinned = true,
-                    pinnedAt = message.PinnedAt.HasValue ? UtcDateTime.AsUtc(message.PinnedAt.Value) : (DateTime?)null,
-                    text = (text ?? string.Empty).Length > 200 ? (text ?? string.Empty)[..200] : (text ?? string.Empty),
-                    pinnedBy = user.UserId
+                    MessageId = message.MessageId,
+                    ChatId = message.ChatId,
+                    IsPinned = true,
+                    PinnedAt = message.PinnedAt.HasValue ? UtcDateTime.AsUtc(message.PinnedAt.Value) : (DateTime?)null,
+                    Text = (text ?? string.Empty).Length > 200 ? (text ?? string.Empty)[..200] : (text ?? string.Empty),
+                    PinnedBy = userId
                 };
 
                 await _hubContext.Clients.Group(message.ChatId.ToString())
@@ -1103,72 +1104,63 @@ namespace Messenger.API.Controllers
                     }
                 }
 
-                return Ok(new PinMessageSuccessResponse
-                {
-                    IsSuccess = true,
-                    Message = "Сообщение закреплено",
-                    Data = payload
-                });
+                return Ok(ApiResponse.Success(payload, "Сообщение закреплено"));
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Ошибка авторизации при закреплении сообщения {MessageId}", messageId);
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new ErrorResponse
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                _logger.LogError(ex, "Ошибка при выполнении POST /messages/{MessageId}/pin", messageId);
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
         /// <summary>
-        /// Открепить сообщение
+        /// Открепить сообщение.
         /// </summary>
         [HttpDelete("{messageId:guid}/pin")]
         [EndpointName("UnpinMessage")]
         [EndpointSummary("Открепить сообщение")]
         [EndpointDescription("Снимает закрепление с сообщения. Доступно любому участнику чата.")]
-        [ProducesResponseType(typeof(PinMessageSuccessResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> UnpinMessageAsync(
-            [Description("Идентификатор сообщения")] Guid messageId,
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> DeleteUnpinMessageAsync(
+            [FromRoute, Description("Идентификатор сообщения (GUID)")] Guid messageId,
             CancellationToken ct = default)
         {
             try
             {
-                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
-                if (error != null)
-                    return error;
+                var userId = await User.GetCurrentUserIdAsync(_userService);
 
                 Message? message;
                 try
                 {
-                    message = await _messageService.UnpinMessageAsync(messageId, user!.UserId, ct);
+                    message = await _messageService.UnpinMessageAsync(messageId, userId, ct);
                 }
                 catch (UnauthorizedAccessException)
                 {
-                    return Forbid();
+                    return StatusCode(StatusCodes.Status403Forbidden, ApiResponse.Failure("Недостаточно прав для открепления сообщения", "FORBIDDEN"));
                 }
 
                 if (message == null)
                 {
-                    return NotFound(new ErrorResponse
-                    {
-                        IsSuccess = false,
-                        Error = "Сообщение не найдено"
-                    });
+                    return NotFound(ApiResponse.Failure("Сообщение не найдено", "NOT_FOUND"));
                 }
 
                 var payload = new
                 {
-                    messageId = message.MessageId,
-                    chatId = message.ChatId,
-                    isPinned = false,
-                    pinnedAt = (DateTime?)null,
-                    text = (string?)null,
-                    pinnedBy = user.UserId
+                    MessageId = message.MessageId,
+                    ChatId = message.ChatId,
+                    IsPinned = false,
+                    PinnedAt = (DateTime?)null,
+                    Text = (string?)null,
+                    PinnedBy = userId
                 };
 
                 await _hubContext.Clients.Group(message.ChatId.ToString())
@@ -1184,47 +1176,43 @@ namespace Messenger.API.Controllers
                     }
                 }
 
-                return Ok(new PinMessageSuccessResponse
-                {
-                    IsSuccess = true,
-                    Message = "Сообщение откреплено",
-                    Data = payload
-                });
+                return Ok(ApiResponse.Success(payload, "Сообщение откреплено"));
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Ошибка авторизации при откреплении сообщения {MessageId}", messageId);
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new ErrorResponse
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                _logger.LogError(ex, "Ошибка при выполнении DELETE /messages/{MessageId}/pin", messageId);
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
         /// <summary>
-        /// Получить закреплённые сообщения чата
+        /// Получить закреплённые сообщения чата.
         /// </summary>
         [HttpGet("{chatId:guid}/pinned")]
         [EndpointName("GetPinnedMessages")]
         [EndpointSummary("Список закреплённых сообщений")]
         [EndpointDescription("Возвращает все закреплённые сообщения указанного чата (от старых к новым).")]
-        [ProducesResponseType(typeof(GetPinnedMessagesSuccessResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> GetPinnedMessagesAsync(
-            [Description("Идентификатор чата")] Guid chatId,
+            [FromRoute, Description("Идентификатор чата (GUID)")] Guid chatId,
             CancellationToken ct = default)
         {
             try
             {
-                var (user, error) = await UserValidationService.GetCurrentUserOrErrorAsync(User, _userService);
-                if (error != null)
-                    return error;
+                var userId = await User.GetCurrentUserIdAsync(_userService);
 
                 var chat = await _chatService.GetChatByIdAsync(chatId, ct);
-                if (chat == null || !chat.ChatParticipants.Any(p => p.UserId == user!.UserId))
+                if (chat == null || !chat.ChatParticipants.Any(p => p.UserId == userId))
                 {
-                    return Forbid();
+                    return StatusCode(StatusCodes.Status403Forbidden, ApiResponse.Failure("Вы не являетесь участником этого чата", "FORBIDDEN"));
                 }
 
                 var messages = await _messageService.GetPinnedMessagesAsync(chatId, ct);
@@ -1235,35 +1223,32 @@ namespace Messenger.API.Controllers
                         : _encryptionService.TryDecryptSafe(m.MessageText);
                     return new
                     {
-                        messageId = m.MessageId,
-                        chatId = m.ChatId,
-                        text = (decrypted ?? string.Empty).Length > 200
+                        MessageId = m.MessageId,
+                        ChatId = m.ChatId,
+                        Text = (decrypted ?? string.Empty).Length > 200
                             ? (decrypted ?? string.Empty)[..200]
                             : (decrypted ?? string.Empty),
-                        pinnedAt = m.PinnedAt.HasValue ? UtcDateTime.AsUtc(m.PinnedAt.Value) : (DateTime?)null,
-                        sequenceNumber = m.SequenceNumber,
-                        senderId = m.SenderId,
-                        senderName = m.Sender != null
+                        PinnedAt = m.PinnedAt.HasValue ? UtcDateTime.AsUtc(m.PinnedAt.Value) : (DateTime?)null,
+                        SequenceNumber = m.SequenceNumber,
+                        SenderId = m.SenderId,
+                        SenderName = m.Sender != null
                             ? $"{m.Sender.FirstName} {m.Sender.LastName}".Trim()
                             : (string?)null
                     };
                 }).ToList();
 
-                return Ok(new GetPinnedMessagesSuccessResponse
-                {
-                    IsSuccess = true,
-                    Data = data
-                });
+                return Ok(ApiResponse.Success(data));
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Ошибка авторизации при получении закреплённых сообщений чата {ChatId}", chatId);
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new ErrorResponse
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                _logger.LogError(ex, "Ошибка при выполнении GET /messages/{ChatId}/pinned", chatId);
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
-
     }
 }

@@ -405,43 +405,78 @@ function buildForwardPayload(forwardMeta, bodyText) {
     if (!forwardMeta || !forwardMeta.senderName) return bodyText || '';
     const name = String(forwardMeta.senderName || 'Пользователь').replace(/\|/g, ' ').slice(0, 80);
     const originalId = String(forwardMeta.messageId || '').replace(/\|/g, '');
-    return FORWARD_PREFIX + originalId + '|' + name + FORWARD_SUFFIX + (bodyText || '');
+    const senderId = String(forwardMeta.senderId || forwardMeta.SenderId || '').replace(/\|/g, '');
+    // messageId|senderName|senderId
+    return FORWARD_PREFIX + originalId + '|' + name + '|' + senderId + FORWARD_SUFFIX + (bodyText || '');
 }
 
 function parseForwardPayload(raw) {
     const s = String(raw || '');
     const replyParsed = parseReplyPayload(s);
-    const base = replyParsed.text || '';
-    if (!base.startsWith(FORWARD_PREFIX)) {
-        return { text: base, forward: null, reply: replyParsed.reply };
+    let base = replyParsed.text || '';
+
+    // После шифрования/расшифровки ZWSP (\u200B) может пропасть — принимаем оба варианта
+    let prefix = FORWARD_PREFIX; // \u200BFORWARD:
+    if (!base.startsWith(prefix)) {
+        // plain "FORWARD:" at start (possibly after trim of leading whitespace)
+        const trimmed = base.replace(/^\u200B+/, '');
+        if (/^FORWARD:/i.test(trimmed)) {
+            base = trimmed;
+            prefix = 'FORWARD:';
+        } else {
+            return { text: base, forward: null, reply: replyParsed.reply };
+        }
     }
-    const rest = base.slice(FORWARD_PREFIX.length);
+
+    const rest = base.slice(prefix.length);
     const end = rest.indexOf(FORWARD_SUFFIX);
     let header, body;
     if (end < 0) {
+        // fallback: first newline or end of header-looking segment
         const nl = rest.indexOf('\n');
-        if (nl < 0) return { text: base, forward: null, reply: replyParsed.reply };
-        header = rest.slice(0, nl);
-        body = rest.slice(nl + 1);
+        if (nl < 0) {
+            // no body — treat whole header as meta, body empty
+            // e.g. "FORWARD:uuid|Name" without body
+            header = rest.replace(/\u200B/g, '');
+            body = '';
+        } else {
+            header = rest.slice(0, nl).replace(/\u200B/g, '');
+            body = rest.slice(nl + 1);
+        }
     } else {
-        header = rest.slice(0, end);
+        header = rest.slice(0, end).replace(/\u200B/g, '');
         body = rest.slice(end + FORWARD_SUFFIX.length);
     }
     const parts = header.split('|');
     return {
         text: body,
-        forward: { messageId: parts[0] || '', senderName: parts[1] || 'Пользователь' },
+        forward: {
+            messageId: parts[0] || '',
+            senderName: parts[1] || 'Пользователь',
+            senderId: parts[2] || ''
+        },
         reply: replyParsed.reply
     };
 }
 
 function stripForwardForPreview(raw) {
     const p = parseForwardPayload(raw);
-    return p.text || '';
+    let t = (p && p.text != null) ? String(p.text) : '';
+    // safety: if still looks like FORWARD meta, hide it
+    if (/^​?FORWARD:/i.test(t.trim())) {
+        const again = parseForwardPayload(t);
+        t = (again && again.text) || '';
+    }
+    if (/^​?FORWARD:/i.test(t.trim())) t = '';
+    return t;
 }
 
 function stripMessageMetaForPreview(raw) {
-    return stripForwardForPreview(raw);
+    let t = stripForwardForPreview(raw);
+    if (typeof parseReplyPayload === 'function') {
+        try { t = parseReplyPayload(t).text || t; } catch (_) {}
+    }
+    return t;
 }
 
 function startReply(messageId, previewText, senderName) {
@@ -553,6 +588,75 @@ const lightboxImg = document.getElementById('lightbox-img');
 
 let pendingMessages = new Map();
 let currentChatId = null;
+
+const CHATS_BASE_PATH = '/inside/chats';
+
+function chatsUrlFor(chatId) {
+    if (chatId) return CHATS_BASE_PATH + '/' + encodeURIComponent(String(chatId));
+    return CHATS_BASE_PATH;
+}
+
+function setChatUrl(chatId, replace = false) {
+    try {
+        const url = chatsUrlFor(chatId);
+        const current = window.location.pathname.replace(/\/$/, '') || '/';
+        const target = url.replace(/\/$/, '') || '/';
+        if (current === target) return;
+        if (replace) {
+            history.replaceState({ chatId: chatId || null }, '', url);
+        } else {
+            history.pushState({ chatId: chatId || null }, '', url);
+        }
+    } catch (e) {
+        console.warn('setChatUrl failed', e);
+    }
+}
+
+function getChatIdFromPath() {
+    try {
+        const m = window.location.pathname.match(/\/inside\/chats\/([0-9a-fA-F-]{36})\/?$/);
+        return m ? m[1] : null;
+    } catch (_) {
+        return null;
+    }
+}
+
+async function openChatFromUrlIfNeeded(replaceUrl = true) {
+    const fromConfig = (window.CHATS_CONFIG && window.CHATS_CONFIG.initialChatId) || '';
+    const fromPath = typeof getChatIdFromPath === 'function' ? getChatIdFromPath() : null;
+    const chatId = fromPath || (fromConfig && fromConfig.trim()) || null;
+    if (!chatId) return;
+
+    const item = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
+    if (!item) {
+        return;
+    }
+    if (String(currentChatId) === String(chatId)) {
+        if (replaceUrl && typeof setChatUrl === 'function') setChatUrl(chatId, true);
+        return;
+    }
+    if (typeof openChat === 'function') {
+        await openChat(item);
+        if (replaceUrl && typeof setChatUrl === 'function') setChatUrl(chatId, true);
+    }
+}
+
+window.addEventListener('popstate', (e) => {
+    const chatId = (e.state && e.state.chatId) || (typeof getChatIdFromPath === 'function' ? getChatIdFromPath() : null);
+    if (chatId) {
+        const item = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
+        if (item && typeof openChat === 'function') openChat(item);
+    } else if (currentChatId && typeof closeCurrentChat === 'function') {
+        const prev = currentChatId;
+        const orig = window.setChatUrl;
+        if (typeof orig === 'function') {
+            window.setChatUrl = function (id, replace) { return orig(id, true); };
+        }
+        closeCurrentChat();
+        if (typeof orig === 'function') window.setChatUrl = orig;
+    }
+});
+
 let userStatuses = new Map();
 let selectedFiles = [];
 let connection = null;
@@ -586,7 +690,7 @@ async function fetchWithAuth(url, options = {}) {
 
     if (response.status === 401 || response.status === 403) {
         console.warn('Токен недействителен — редирект на логин');
-        window.location.href = "/Authorization/Authorization";
+        window.location.href = "/login";
         return null;
     }
 

@@ -1,4 +1,4 @@
-﻿using System.Net;
+using System.Net;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 
@@ -11,19 +11,27 @@ namespace Messenger.Web.Services
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IConfiguration _configuration;
         private readonly TokenRefreshOptions _options;
+        private readonly UserTokenStore _store;
         private readonly ILogger<TokenRefresher> _logger;
 
-        public TokenRefresher(IHttpClientFactory httpClientFactory, IConfiguration configuration,
-            IOptions<TokenRefreshOptions> options, ILogger<TokenRefresher> logger)
+        public TokenRefresher(
+            IHttpClientFactory httpClientFactory,
+            IConfiguration configuration,
+            IOptions<TokenRefreshOptions> options,
+            UserTokenStore store,
+            ILogger<TokenRefresher> logger)
         {
             _httpClientFactory = httpClientFactory;
             _configuration = configuration;
             _options = options.Value;
+            _store = store;
             _logger = logger;
         }
 
         public bool NeedsRefresh(TokenEntry entry)
-            => entry.Tokens.ExpiresAtUtc - DateTime.UtcNow <= TimeSpan.FromSeconds(_options.RefreshBeforeExpirySeconds);
+            => !entry.IsRevoked
+               && entry.Tokens.ExpiresAtUtc - DateTime.UtcNow
+                  <= TimeSpan.FromSeconds(_options.RefreshBeforeExpirySeconds);
 
         private string OidcBase
         {
@@ -39,13 +47,16 @@ namespace Messenger.Web.Services
         }
 
         private string TokenEndpoint => $"{OidcBase}/token";
-
         private string RevokeEndpoint => $"{OidcBase}/revoke";
 
         public async Task RefreshIfNeededAsync(TokenEntry entry, CancellationToken cancellationToken)
         {
             if (entry.IsRevoked || !NeedsRefresh(entry))
+                return;
+
+            if (_store.IsRevoked(entry.Key, entry.Tokens.RefreshToken))
             {
+                DropSession(entry, "tombstone");
                 return;
             }
 
@@ -53,7 +64,11 @@ namespace Messenger.Web.Services
             try
             {
                 if (entry.IsRevoked || !NeedsRefresh(entry))
+                    return;
+
+                if (_store.IsRevoked(entry.Key, entry.Tokens.RefreshToken))
                 {
+                    DropSession(entry, "tombstone");
                     return;
                 }
 
@@ -77,6 +92,21 @@ namespace Messenger.Web.Services
 
                 if (response.IsSuccessStatusCode)
                 {
+                    if (entry.IsRevoked || _store.IsRevoked(entry.Key, current.RefreshToken))
+                    {
+                        using var docEarly = JsonDocument.Parse(body);
+                        var rootEarly = docEarly.RootElement;
+                        var newRefreshEarly = rootEarly.TryGetProperty("refresh_token", out var re)
+                            ? re.GetString()
+                            : null;
+                        _logger.LogWarning(
+                            "[TokenRefresh] Сессия {Key}: выход во время обновления — новый refresh-токен отзывается",
+                            entry.Key);
+                        await RevokeRefreshTokenAsync(newRefreshEarly ?? current.RefreshToken, CancellationToken.None);
+                        DropSession(entry, "revoked-during-refresh");
+                        return;
+                    }
+
                     using var doc = JsonDocument.Parse(body);
                     var root = doc.RootElement;
 
@@ -87,16 +117,7 @@ namespace Messenger.Web.Services
 
                     if (string.IsNullOrEmpty(newAccess))
                     {
-                        _logger.LogError("[TokenRefresh] SSO вернул пустой access_token");
-                        return;
-                    }
-
-                    if (entry.IsRevoked)
-                    {
-                        _logger.LogWarning(
-                            "[TokenRefresh] Сессия {Key}: выход произошёл во время обновления — новый refresh-токен отзывается",
-                            entry.Key);
-                        await RevokeRefreshTokenAsync(newRefresh ?? current.RefreshToken, CancellationToken.None);
+                        _logger.LogError("[TokenRefresh] SSO вернул пустой access_token для {Key}", entry.Key);
                         return;
                     }
 
@@ -116,16 +137,19 @@ namespace Messenger.Web.Services
                         updated.RefreshToken != current.RefreshToken ? "заменён" : "прежний");
                 }
                 else if (response.StatusCode is HttpStatusCode.BadRequest
-                         or HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+                         or HttpStatusCode.Unauthorized
+                         or HttpStatusCode.Forbidden)
                 {
-                    entry.IsRevoked = true;
-                    _logger.LogWarning("[TokenRefresh] Refresh-токен сессии {Key} отклонён ({Status}): {Body}",
-                        entry.Key, (int)response.StatusCode, body);
+                    _logger.LogWarning(
+                        "[TokenRefresh] Сессия {Key} окончательно отозвана SSO ({Status}): {Body}",
+                        entry.Key, (int)response.StatusCode, Truncate(body, 200));
+                    DropSession(entry, "sso-rejected");
                 }
                 else
                 {
-                    _logger.LogError("[TokenRefresh] Ошибка обновления: {Status} - {Body}",
-                        (int)response.StatusCode, body);
+                    _logger.LogError(
+                        "[TokenRefresh] Временная ошибка обновления {Key}: {Status} - {Body}",
+                        entry.Key, (int)response.StatusCode, Truncate(body, 200));
                 }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -138,9 +162,29 @@ namespace Messenger.Web.Services
             }
             finally
             {
-                entry.RefreshLock.Release();
+                try
+                {
+                    entry.RefreshLock.Release();
+                }
+                catch { }
             }
         }
+
+        private void DropSession(TokenEntry entry, string reason)
+        {
+            entry.IsRevoked = true;
+            _store.RevokeSession(entry.Key, entry.Tokens.AccessToken, entry.Tokens.RefreshToken);
+            _logger.LogInformation(
+                "[TokenRefresh] Сессия {Key} удалена из TokenStore ({Reason})",
+                entry.Key, reason);
+        }
+
+        private static string Truncate(string? s, int max)
+        {
+            if (string.IsNullOrEmpty(s)) return "";
+            return s.Length <= max ? s : s[..max] + "…";
+        }
+
         public async Task<bool> RevokeRefreshTokenAsync(string? refreshToken, CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrEmpty(refreshToken))
@@ -173,8 +217,14 @@ namespace Messenger.Web.Services
                 }
 
                 var body = await response.Content.ReadAsStringAsync(timeout.Token);
+                if ((int)response.StatusCode is 400 or 401)
+                {
+                    _logger.LogDebug("[TokenRefresh] SSO revoke: сессия уже недействительна ({Status})", (int)response.StatusCode);
+                    return true;
+                }
+
                 _logger.LogWarning("[TokenRefresh] SSO revoke вернул {Status}: {Body}",
-                    (int)response.StatusCode, body);
+                    (int)response.StatusCode, Truncate(body, 200));
                 return false;
             }
             catch (Exception ex)

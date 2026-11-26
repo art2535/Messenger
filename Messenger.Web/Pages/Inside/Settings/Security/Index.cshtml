@@ -1,0 +1,140 @@
+@page "/inside/settings/security"
+@model Messenger.Web.Pages.Inside.Settings.Security.IndexModel
+@{
+    ViewData["Title"] = "Безопасность";
+    ViewData["DisplayName"] = Model.DisplayName;
+    ViewData["AccessToken"] = Model.AccessToken;
+    ViewData["ApiBaseUrl"] = Model.ApiBaseUrl;
+    ViewData["HubUrl"] = Model.HubUrl;
+}
+
+<div class="max-w-4xl mx-auto space-y-5 sm:space-y-6">
+    <h2 class="text-xl sm:text-2xl font-semibold text-gray-800 dark:text-white hidden sm:block">Безопасность</h2>
+
+    <section class="settings-card">
+        <div class="settings-card-header">
+            <div class="settings-icon-wrap bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
+                <i data-feather="shield" class="w-5 h-5"></i>
+            </div>
+            <div class="min-w-0">
+                <h3 class="settings-card-title">Вход через SSO ГУАП</h3>
+                <p class="settings-card-desc">Аутентификация через корпоративный Keycloak</p>
+            </div>
+        </div>
+        <div class="rounded-xl bg-gray-50 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-700 p-4 text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
+            Пароль и двухфакторная аутентификация управляются в&nbsp;личном кабинете ГУАП / SSO.
+            В мессенджере хранится только сессия и токены доступа.
+        </div>
+    </section>
+
+    <section class="settings-card">
+        <div class="settings-card-header">
+            <div class="settings-icon-wrap bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400">
+                <i data-feather="smartphone" class="w-5 h-5"></i>
+            </div>
+            <div class="min-w-0">
+                <h3 class="settings-card-title">Сессии</h3>
+                <p class="settings-card-desc">Управление активными входами</p>
+            </div>
+        </div>
+
+        <div id="sessions-list" class="mb-2"></div>
+
+        <form asp-page="/Logout" method="post" data-logout="true" class="mt-2">
+            <button type="submit"
+                    class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm font-medium hover:bg-red-100 dark:hover:bg-red-900/40 transition active:scale-[0.98]">
+                <i data-feather="log-out" class="w-4 h-4"></i>
+                Выйти на этом устройстве
+            </button>
+        </form>
+    </section>
+
+    <section class="settings-card">
+        <div class="settings-card-header">
+            <div class="settings-icon-wrap bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400">
+                <i data-feather="lock" class="w-5 h-5"></i>
+            </div>
+            <div class="min-w-0">
+                <h3 class="settings-card-title">Шифрование</h3>
+                <p class="settings-card-desc">Защита данных в покое</p>
+            </div>
+        </div>
+        <ul class="space-y-3 text-sm text-gray-600 dark:text-gray-300">
+            <li class="flex gap-3 items-start">
+                <i data-feather="check-circle" class="w-4 h-4 text-emerald-500 mt-0.5 flex-shrink-0"></i>
+                <span>Тела сообщений шифруются на сервере (AES-GCM)</span>
+            </li>
+            <li class="flex gap-3 items-start">
+                <i data-feather="check-circle" class="w-4 h-4 text-emerald-500 mt-0.5 flex-shrink-0"></i>
+                <span>Соединение с приложением — HTTPS / TLS</span>
+            </li>
+            <li class="flex gap-3 items-start">
+                <i data-feather="check-circle" class="w-4 h-4 text-emerald-500 mt-0.5 flex-shrink-0"></i>
+                <span>Токены обновляются в фоне и отзываются при выходе</span>
+            </li>
+        </ul>
+    </section>
+
+    <section class="settings-card border-red-100 dark:border-red-900/40">
+        <div class="settings-card-header">
+            <div class="settings-icon-wrap bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400">
+                <i data-feather="alert-triangle" class="w-5 h-5"></i>
+            </div>
+            <div class="min-w-0">
+                <h3 class="settings-card-title">Опасная зона</h3>
+                <p class="settings-card-desc">Действия, которые нельзя отменить локально</p>
+            </div>
+        </div>
+        <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            Удаление аккаунта и полная очистка данных выполняются через администрацию ГУАП или службу поддержки мессенджера.
+        </p>
+        <button type="button" id="btn-clear-local"
+                class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-600 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition active:scale-[0.98]">
+            <i data-feather="trash-2" class="w-4 h-4"></i>
+            Очистить локальный кэш (offline)
+        </button>
+    </section>
+</div>
+
+@section Scripts {
+    <script src="~/js/settings/settings-prefs.js" asp-append-version="true"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            if (typeof feather !== 'undefined') feather.replace();
+            if (typeof initPrefToggles === 'function') initPrefToggles();
+            if (typeof loadSessionsList === 'function') loadSessionsList(document.getElementById('sessions-list'));
+
+            const hint = document.getElementById('session-device-hint');
+            if (hint) {
+                const ua = navigator.userAgent || '';
+                let device = 'Браузер';
+                if (/iPhone|iPad/i.test(ua)) device = 'iOS';
+                else if (/Android/i.test(ua)) device = 'Android';
+                else if (/Windows/i.test(ua)) device = 'Windows';
+                else if (/Mac/i.test(ua)) device = 'macOS';
+                hint.textContent = device + ' · этот браузер · активная сессия';
+            }
+
+            document.getElementById('btn-clear-local')?.addEventListener('click', async () => {
+                try {
+                    if (window.indexedDB && indexedDB.databases) {
+                        const dbs = await indexedDB.databases();
+                        for (const db of dbs) {
+                            if (db.name) indexedDB.deleteDatabase(db.name);
+                        }
+                    }
+                    const keys = [];
+                    for (let i = 0; i < localStorage.length; i++) {
+                        const k = localStorage.key(i);
+                        if (k && (k.startsWith('notif.') || k.startsWith('privacy.') || k.startsWith('security.') || k === 'pushSubscribed'))
+                            keys.push(k);
+                    }
+                    keys.forEach(k => localStorage.removeItem(k));
+                    alert('Локальный кэш очищен');
+                } catch (e) {
+                    alert('Не удалось очистить кэш');
+                }
+            });
+        });
+    </script>
+}

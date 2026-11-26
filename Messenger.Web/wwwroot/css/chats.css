@@ -2009,3 +2009,7 @@ body.select-mode-active #right-panel {
         gap: 0.5rem;
     }
 }
+
+.hidden {
+    display: none !important;
+}

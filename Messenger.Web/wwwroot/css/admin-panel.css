@@ -1,0 +1,15 @@
+.admin-stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
+.admin-stat-card { background: rgba(59,130,246,.08); border: 1px solid rgba(148,163,184,.25); border-radius: 12px; padding: 14px; }
+.admin-stat-card .value { font-size: 22px; font-weight: 700; }
+.admin-stat-card .label { font-size: 12px; opacity: .7; }
+.admin-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.admin-table th, .admin-table td { padding: 8px; border-bottom: 1px solid rgba(148,163,184,.25); text-align: left; }
+.dark .admin-stat-card { background: rgba(30,41,59,.8); }
+.admin-btn { font-size: 12px; padding: 4px 10px; border-radius: 8px; font-weight: 500; border: none; cursor: pointer; }
+.admin-btn.ok { background: #dcfce7; color: #166534; }
+.admin-btn.warn { background: #fef3c7; color: #92400e; }
+.admin-btn.danger { background: #fee2e2; color: #991b1b; }
+.dark .admin-btn.ok { background: rgba(22,101,52,.35); color: #86efac; }
+.dark .admin-btn.warn { background: rgba(146,64,14,.35); color: #fcd34d; }
+.dark .admin-btn.danger { background: rgba(153,27,27,.35); color: #fca5a5; }
+.admin-btn:disabled { opacity: .5; cursor: wait; }
