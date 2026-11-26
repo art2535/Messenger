@@ -1,50 +1,36 @@
 using Messenger.Core.DTOs;
 using Messenger.Core.DTOs.Messages;
 using Messenger.Core.Interfaces;
-using Messenger.Core.Models;
 using Messenger.Core.Messages;
+using Messenger.Core.Models;
 using Microsoft.AspNetCore.Http;
 
 namespace Messenger.Infrastructure.Services
 {
-    public class MessageService : IMessageService
+    public sealed class MessageService : IMessageService
     {
-        private readonly IMessagePaginationService _messagePaginationService;
-        private readonly IMessageChatExportService _messageChatExportService;
-        private readonly IMessageSearchService _messageSearchService;
-        private readonly IMessagePinningService _messagePinningService;
-        private readonly IMessageMutationService _messageMutationService;
-        private readonly IMessageCreationWorkflowService _messageCreationWorkflowService;
-        private readonly IMessageReadService _messageReadService;
-        private readonly IMessageLookupService _messageLookupService;
-        private readonly IMessageEventPublisher _messageEventPublisher;
+        private readonly MessageQueryFacade _queryFacade;
+        private readonly MessageCommandFacade _commandFacade;
+        private readonly MessageReadFacade _readFacade;
+        private readonly MessageExportFacade _exportFacade;
 
-        public MessageService(IMessagePaginationService messagePaginationService,
-            IMessageChatExportService messageChatExportService,
-            IMessageSearchService messageSearchService,
-            IMessagePinningService messagePinningService,
-            IMessageMutationService messageMutationService,
-            IMessageCreationWorkflowService messageCreationWorkflowService,
-            IMessageReadService messageReadService,
-            IMessageLookupService messageLookupService,
-            IMessageEventPublisher messageEventPublisher)
+        public MessageService(
+            MessageQueryFacade queryFacade,
+            MessageCommandFacade commandFacade,
+            MessageReadFacade readFacade,
+            MessageExportFacade exportFacade)
         {
-            _messagePaginationService = messagePaginationService;
-            _messageChatExportService = messageChatExportService;
-            _messageSearchService = messageSearchService;
-            _messagePinningService = messagePinningService;
-            _messageMutationService = messageMutationService;
-            _messageCreationWorkflowService = messageCreationWorkflowService;
-            _messageReadService = messageReadService;
-            _messageLookupService = messageLookupService;
-            _messageEventPublisher = messageEventPublisher;
+            _queryFacade = queryFacade;
+            _commandFacade = commandFacade;
+            _readFacade = readFacade;
+            _exportFacade = exportFacade;
         }
 
         public Task PublishChatMessageAsync(
             ChatMessageSent message,
             CancellationToken cancellationToken = default)
         {
-            return _messageEventPublisher.PublishChatMessageAsync(message, cancellationToken);
+            return _commandFacade.PublishChatMessageAsync(message, cancellationToken);
         }
 
         public Task<List<MessageDto>> SearchMessagesAsync(
@@ -52,7 +38,7 @@ namespace Messenger.Infrastructure.Services
             string query,
             CancellationToken token = default)
         {
-            return _messageSearchService.SearchMessagesAsync(chatId, query, token);
+            return _queryFacade.SearchMessagesAsync(chatId, query, token);
         }
 
         public Task<int> MarkMessagesAsReadAsync(
@@ -60,19 +46,23 @@ namespace Messenger.Infrastructure.Services
             Guid readerId,
             CancellationToken ct = default)
         {
-            return _messageReadService.MarkMessagesAsReadAsync(chatId, readerId, ct);
+            return _readFacade.MarkMessagesAsReadAsync(chatId, readerId, ct);
         }
 
-        public async Task<IEnumerable<Message>> GetMessagesAsync(Guid chatId, CancellationToken token = default)
+        public Task<IEnumerable<Message>> GetMessagesAsync(
+            Guid chatId,
+            CancellationToken token = default)
         {
-            var (items, _) = await _messagePaginationService.GetMessagesByChatIdPagedAsync(chatId, null, 100, token);
-            return items;
+            return _queryFacade.GetMessagesAsync(chatId, token);
         }
 
-        public async Task<(IReadOnlyList<Message> Items, bool HasMore)> GetMessagesPagedAsync(
-            Guid chatId, long? beforeSequence = null, int limit = 50, CancellationToken token = default)
+        public Task<(IReadOnlyList<Message> Items, bool HasMore)> GetMessagesPagedAsync(
+            Guid chatId,
+            long? beforeSequence = null,
+            int limit = 50,
+            CancellationToken token = default)
         {
-            return await _messagePaginationService.GetMessagesByChatIdPagedAsync(chatId, beforeSequence, limit, token);
+            return _queryFacade.GetMessagesPagedAsync(chatId, beforeSequence, limit, token);
         }
 
         public Task<ServiceResult<Message>> SendMessageAsync(
@@ -84,7 +74,7 @@ namespace Messenger.Infrastructure.Services
             IFormFile[]? files = null,
             CancellationToken token = default)
         {
-            return _messageCreationWorkflowService.SendMessageAsync(
+            return _commandFacade.SendMessageAsync(
                 messageId,
                 chatId,
                 senderId,
@@ -98,24 +88,24 @@ namespace Messenger.Infrastructure.Services
             Guid messageId,
             CancellationToken token = default)
         {
-            return _messageLookupService.GetMessageByIdAsync(chatId, messageId, token);
+            return _queryFacade.GetMessageByIdAsync(chatId, messageId, token);
         }
 
         public Task<Message?> GetMessageByIdGlobalAsync(
             Guid messageId,
             CancellationToken token = default)
         {
-            return _messageLookupService.GetMessageByIdGlobalAsync(messageId, token);
+            return _queryFacade.GetMessageByIdGlobalAsync(messageId, token);
         }
 
         public Task DeleteMessageAsync(Guid messageId, CancellationToken token = default)
         {
-            return _messageMutationService.DeleteMessageAsync(messageId, token);
+            return _commandFacade.DeleteMessageAsync(messageId, token);
         }
 
         public Task UpdateMessageAsync(Message message, CancellationToken token = default)
         {
-            return _messageMutationService.UpdateMessageAsync(message, token);
+            return _commandFacade.UpdateMessageAsync(message, token);
         }
 
         public Task<ChatExportResult> ExportChatAsync(
@@ -124,14 +114,14 @@ namespace Messenger.Infrastructure.Services
             string? chatName = null,
             CancellationToken token = default)
         {
-            return _messageChatExportService.ExportChatAsync(chatId, format, chatName, token);
+            return _exportFacade.ExportChatAsync(chatId, format, chatName, token);
         }
 
         public Task<int> DeleteMessagesAsync(
             IEnumerable<Guid> messageIds,
             CancellationToken token = default)
         {
-            return _messageMutationService.DeleteMessagesAsync(messageIds, token);
+            return _commandFacade.DeleteMessagesAsync(messageIds, token);
         }
 
         public Task<Message?> PinMessageAsync(
@@ -139,7 +129,7 @@ namespace Messenger.Infrastructure.Services
             Guid userId,
             CancellationToken token = default)
         {
-            return _messagePinningService.PinMessageAsync(messageId, userId, token);
+            return _commandFacade.PinMessageAsync(messageId, userId, token);
         }
 
         public Task<Message?> UnpinMessageAsync(
@@ -147,14 +137,14 @@ namespace Messenger.Infrastructure.Services
             Guid userId,
             CancellationToken token = default)
         {
-            return _messagePinningService.UnpinMessageAsync(messageId, userId, token);
+            return _commandFacade.UnpinMessageAsync(messageId, userId, token);
         }
 
         public Task<List<Message>> GetPinnedMessagesAsync(
             Guid chatId,
             CancellationToken token = default)
         {
-            return _messagePinningService.GetPinnedMessagesAsync(chatId, token);
+            return _queryFacade.GetPinnedMessagesAsync(chatId, token);
         }
     }
 }

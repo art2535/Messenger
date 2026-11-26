@@ -88,6 +88,10 @@ namespace Messenger.Infrastructure.Extensions
                 services.AddScoped<IUserStatusService, UserStatusService>();
                 services.AddScoped<IBroadcastService, BroadcastService>();
                 services.AddScoped<IMessageService, MessageService>();
+                services.AddScoped<MessageQueryFacade>();
+                services.AddScoped<MessageCommandFacade>();
+                services.AddScoped<MessageReadFacade>();
+                services.AddScoped<MessageExportFacade>();
                 services.AddScoped<IMessageExportService, MessageExportService>();
                 services.AddScoped<IMessageChatExportService, MessageChatExportService>();
                 services.AddScoped<IMessageSearchService, MessageSearchService>();
