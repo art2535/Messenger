@@ -5,12 +5,15 @@ using Messenger.Core.Hubs;
 using Messenger.Core.Interfaces;
 using Messenger.Core.Messages;
 using Messenger.Core.Models;
+using Messenger.Infrastructure.Data;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
 
 namespace Messenger.Infrastructure.Messaging.Consumers
 {
     public class ChatMessageSentConsumer : IConsumer<ChatMessageSent>
     {
+        private readonly GuapMessengerContext _context;
         private readonly IHubContext<ChatHub> _hubContext;
         private readonly IMessageService _messageService;
         private readonly IAttachmentService _attachmentService;
@@ -19,10 +22,17 @@ namespace Messenger.Infrastructure.Messaging.Consumers
         private readonly ILogger<ChatMessageSentConsumer> _logger;
         private readonly IPushSubscriptionService _subscriptionService;
 
-        public ChatMessageSentConsumer(IHubContext<ChatHub> hubContext, IMessageService messageService,
-            IAttachmentService attachmentService, IEncryptionService encryptionService, IChatService chatService,
-            ILogger<ChatMessageSentConsumer> logger, IPushSubscriptionService subscriptionService)
+        public ChatMessageSentConsumer(
+            GuapMessengerContext context,
+            IHubContext<ChatHub> hubContext,
+            IMessageService messageService,
+            IAttachmentService attachmentService,
+            IEncryptionService encryptionService,
+            IChatService chatService,
+            ILogger<ChatMessageSentConsumer> logger,
+            IPushSubscriptionService subscriptionService)
         {
+            _context = context;
             _hubContext = hubContext;
             _messageService = messageService;
             _attachmentService = attachmentService;
@@ -36,6 +46,43 @@ namespace Messenger.Infrastructure.Messaging.Consumers
 
         public async Task Consume(ConsumeContext<ChatMessageSent> context)
         {
+            var messageId = context.Message.MessageId;
+            var lockKey = BitConverter.ToInt64(messageId.ToByteArray(), 0);
+            var lockAcquired = false;
+
+            await _context.Database.OpenConnectionAsync(context.CancellationToken);
+
+            try
+            {
+                await _context.Database.ExecuteSqlRawAsync(
+                    "SELECT pg_advisory_lock({0})",
+                    new object[] { lockKey },
+                    context.CancellationToken);
+                lockAcquired = true;
+
+                await ProcessMessageAsync(context);
+            }
+            finally
+            {
+                try
+                {
+                    if (lockAcquired)
+                    {
+                        await _context.Database.ExecuteSqlRawAsync(
+                            "SELECT pg_advisory_unlock({0})",
+                            new object[] { lockKey },
+                            CancellationToken.None);
+                    }
+                }
+                finally
+                {
+                    await _context.Database.CloseConnectionAsync();
+                }
+            }
+        }
+
+        private async Task ProcessMessageAsync(ConsumeContext<ChatMessageSent> context)
+        {
             var msg = context.Message;
 
             _logger.LogInformation(
@@ -44,8 +91,14 @@ namespace Messenger.Infrastructure.Messaging.Consumers
 
             try
             {
-                var serviceResult = await _messageService.SendMessageAsync(msg.MessageId, msg.ChatId, msg.SenderId,
-                    msg.MessageText, msg.HasAttachments, null, context.CancellationToken);
+                var serviceResult = await _messageService.SendMessageAsync(
+                    msg.MessageId,
+                    msg.ChatId,
+                    msg.SenderId,
+                    msg.MessageText,
+                    msg.HasAttachments,
+                    null,
+                    context.CancellationToken);
 
                 if (!serviceResult.isSuccess || serviceResult.data == null)
                     throw new Exception(serviceResult.error ?? "Unknown error");
@@ -73,7 +126,9 @@ namespace Messenger.Infrastructure.Messaging.Consumers
                             SizeInBytes = (int)attInfo.SizeInBytes,
                             Url = attInfo.Url
                         };
-                        await _attachmentService.AddAttachmentAsync(attachment, context.CancellationToken);
+                        await _attachmentService.AddAttachmentAsync(
+                            attachment,
+                            context.CancellationToken);
                     }
                 }
 
@@ -118,7 +173,9 @@ namespace Messenger.Infrastructure.Messaging.Consumers
                             Timestamp = DateTimeOffset.UtcNow
                         }, context.CancellationToken);
 
-                    var chat = await _chatService.GetChatByIdAsync(msg.ChatId, context.CancellationToken);
+                    var chat = await _chatService.GetChatByIdAsync(
+                        msg.ChatId,
+                        context.CancellationToken);
                     if (chat?.ChatParticipants != null)
                     {
                         foreach (var participant in chat.ChatParticipants)
@@ -143,26 +200,40 @@ namespace Messenger.Infrastructure.Messaging.Consumers
                 try
                 {
                     await _subscriptionService.SendPushToOfflineUsersAsync(
-                        msg.ChatId, msg.SenderId, msg.SenderName ?? "Пользователь",
-                        msg.MessageText, msg.HasAttachments, false, context.CancellationToken);
+                        msg.ChatId,
+                        msg.SenderId,
+                        msg.SenderName ?? "Пользователь",
+                        msg.MessageText,
+                        msg.HasAttachments,
+                        false,
+                        context.CancellationToken);
                 }
                 catch (Exception pushEx)
                 {
-                    _logger.LogWarning(pushEx, "Не удалось отправить push для чата {ChatId}", msg.ChatId);
+                    _logger.LogWarning(pushEx,
+                        "Не удалось отправить push для чата {ChatId}",
+                        msg.ChatId);
                 }
 
-                _logger.LogInformation("Сообщение {MessageId} полностью обработано и доставлено", msg.MessageId);
+                _logger.LogInformation(
+                    "Сообщение {MessageId} полностью обработано и доставлено",
+                    msg.MessageId);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "ОШИБКА обработки сообщения {MessageId} в consumer", msg.MessageId);
+                _logger.LogError(
+                    ex,
+                    "ОШИБКА обработки сообщения {MessageId} в consumer",
+                    msg.MessageId);
 
                 var shouldNotifyFailure = true;
 
                 try
                 {
                     var failedMessage = await _messageService.GetMessageByIdAsync(
-                        msg.ChatId, msg.MessageId, context.CancellationToken);
+                        msg.ChatId,
+                        msg.MessageId,
+                        context.CancellationToken);
 
                     if (failedMessage != null)
                     {
