@@ -614,6 +614,85 @@ namespace Messenger.Infrastructure.Migrations
                     b.ToTable("Logins");
                 });
 
+            modelBuilder.Entity("Messenger.Core.Models.MessageNotificationOutboxDelivery", b =>
+                {
+                    b.Property<Guid>("DeliveryId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("Delivery_ID");
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("Attempt_Count");
+
+                    b.Property<string>("Channel")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("Channel");
+
+                    b.Property<DateTime?>("DeliveredAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("Delivered_At");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("Idempotency_Key");
+
+                    b.Property<DateTime?>("LastError")
+                        .HasColumnType("text")
+                        .HasColumnName("Last_Error");
+
+                    b.Property<DateTime?>("LockedUntil")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("Locked_Until");
+
+                    b.Property<Guid>("MessageId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("Message_ID");
+
+                    b.Property<DateTime>("NextAttemptAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("Next_Attempt_At");
+
+                    b.Property<Guid?>("NotificationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("Notification_ID");
+
+                    b.Property<Guid>("OutboxId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("Outbox_ID");
+
+                    b.Property<Guid>("RecipientId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("Recipient_ID");
+
+                    b.Property<Guid>("SubscriptionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("Subscription_ID");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("Status");
+
+                    b.HasKey("DeliveryId")
+                        .HasName("Message_Notification_Outbox_Deliveries_pkey");
+
+                    b.HasIndex("IdempotencyKey")
+                        .IsUnique();
+
+                    b.HasIndex("OutboxId", "Status", "NextAttemptAt");
+
+                    b.HasIndex("RecipientId", "SubscriptionId");
+
+                    b.HasIndex("OutboxId");
+
+                    b.ToTable("Message_Notification_Outbox_Deliveries");
+                });
+
             modelBuilder.Entity("Messenger.Core.Models.MessageNotificationOutbox", b =>
                 {
                     b.Property<Guid>("OutboxId")
