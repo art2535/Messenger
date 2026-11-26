@@ -1,7 +1,7 @@
 using Xunit;
 using System.Reflection;
 using Messenger.Core.Interfaces;
-using Messenger.Infrastructure.Services;
+using Messenger.Infrastructure.Services.Messages;
 
 namespace Messenger.Tests.Architecture;
 
@@ -83,7 +83,7 @@ public sealed class LayerDependencyTests
         Assert.All(facadeTypes, facadeType =>
         {
             Assert.True(facadeType.IsSealed);
-            Assert.Equal("Messenger.Infrastructure.Services", facadeType.Namespace);
+            Assert.Equal("Messenger.Infrastructure.Services.Messages", facadeType.Namespace);
         });
     }
 }
