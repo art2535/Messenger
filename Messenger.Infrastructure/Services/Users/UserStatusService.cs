@@ -3,7 +3,7 @@ using Messenger.Core.Models;
 using Messenger.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
-namespace Messenger.Infrastructure.Services.UserStatusService.cs
+namespace Messenger.Infrastructure.Services.Users
 {
     public class UserStatusService : IUserStatusService
     {

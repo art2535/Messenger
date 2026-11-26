@@ -3,7 +3,7 @@ using System.Text;
 using Microsoft.Extensions.Options;
 using Messenger.Core.Interfaces;
 
-namespace Messenger.Infrastructure.Services.AesGcmEncryptionService.cs
+namespace Messenger.Infrastructure.Services.Security
 {
     public class AesGcmEncryptionOptions
     {

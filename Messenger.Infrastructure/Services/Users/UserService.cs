@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 
-namespace Messenger.Infrastructure.Services.UserService.cs
+namespace Messenger.Infrastructure.Services.Users
 {
     public class UserService : IUserService
     {

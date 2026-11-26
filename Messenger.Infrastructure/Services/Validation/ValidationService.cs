@@ -1,7 +1,7 @@
 ﻿using System.Text.RegularExpressions;
 using Bcrypt = BCrypt.Net.BCrypt;
 
-namespace Messenger.Infrastructure.Services.ValidationService.cs
+namespace Messenger.Infrastructure.Services.Validation
 {
     public static class ValidationService
     {

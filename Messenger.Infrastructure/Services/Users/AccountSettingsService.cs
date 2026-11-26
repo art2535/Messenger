@@ -4,7 +4,7 @@ using Messenger.Core.Models;
 using Messenger.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
-namespace Messenger.Infrastructure.Services.AccountSettingsService.cs
+namespace Messenger.Infrastructure.Services.Users
 {
     public class AccountSettingsService : IAccountSettingsService
     {

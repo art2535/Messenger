@@ -4,7 +4,7 @@ using Messenger.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
-namespace Messenger.Infrastructure.Services.NotificationService.cs
+namespace Messenger.Infrastructure.Services.Notifications
 {
     public class NotificationService : INotificationService
     {
