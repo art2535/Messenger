@@ -1,3 +1,4 @@
+using Messenger.Core.DTOs;
 using Messenger.Core.DTOs.Messages;
 using Messenger.Core.Interfaces;
 using Messenger.Core.Models;
