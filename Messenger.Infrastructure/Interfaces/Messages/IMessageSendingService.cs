@@ -1,7 +1,7 @@
 using Messenger.Core.DTOs.Messages;
 using Microsoft.AspNetCore.Http;
 
-namespace Messenger.Infrastructure.Services
+namespace Messenger.Infrastructure.Interfaces.Messages
 {
     public interface IMessageSendingService
     {

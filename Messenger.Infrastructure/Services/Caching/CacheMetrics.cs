@@ -1,6 +1,6 @@
 using System.Diagnostics.Metrics;
 
-namespace Messenger.Infrastructure.Services
+namespace Messenger.Infrastructure.Services.CacheMetrics.cs
 {
     public static class CacheMetrics
     {

@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using System.Security.Cryptography;
 using System.Text;
 
-namespace Messenger.Infrastructure.Services
+namespace Messenger.Infrastructure.Services.LoginService.cs
 {
     public class LoginService : ILoginService
     {
