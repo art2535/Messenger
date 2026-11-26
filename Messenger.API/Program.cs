@@ -109,7 +109,6 @@ namespace Messenger.API
                 options.MessageTemplate = "HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000} ms";
             });
 
-            app.InitializeMessengerDatabase();
 
             if (app.Environment.IsDevelopment())
             {

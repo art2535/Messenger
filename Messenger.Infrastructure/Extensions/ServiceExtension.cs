@@ -1,6 +1,8 @@
 using Messenger.Core.Interfaces;
 using Messenger.Core.Services;
 using Messenger.Infrastructure.Services;
+using Messenger.Infrastructure.Persistence;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -20,6 +22,8 @@ namespace Messenger.Infrastructure.Extensions
                 services.AddServices();
                 services.AddEncryption(configuration);
                 services.AddRabbitMQ(configuration);
+                services.AddSingleton<DatabaseMigrationStatus>();
+                services.AddHostedService<DatabaseMigrationHostedService>();
 
                 return services;
             }
