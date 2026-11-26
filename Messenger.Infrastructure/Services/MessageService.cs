@@ -19,11 +19,13 @@ namespace Messenger.Infrastructure.Services
         private readonly ILogger<MessageService> _logger;
         private readonly IMessageExportService _messageExportService;
         private readonly IMessageSearchService _messageSearchService;
+        private readonly IMessagePinningService _messagePinningService;
 
         public MessageService(GuapMessengerContext context,
             IPublishEndpoint publishEndpoint, IMessagePaginationService messagePaginationService, ILogger<MessageService> logger,
             IMessageExportService messageExportService,
-            IMessageSearchService messageSearchService)
+            IMessageSearchService messageSearchService,
+            IMessagePinningService messagePinningService)
         {
             _context = context;
             _publishEndpoint = publishEndpoint;
@@ -31,6 +33,7 @@ namespace Messenger.Infrastructure.Services
             _logger = logger;
             _messageExportService = messageExportService;
             _messageSearchService = messageSearchService;
+            _messagePinningService = messagePinningService;
         }
 
         public async Task PublishChatMessageAsync(ChatMessageSent message, CancellationToken cancellationToken = default)
@@ -241,61 +244,27 @@ namespace Messenger.Infrastructure.Services
             }
         }
 
-        public async Task<Message?> PinMessageAsync(Guid messageId, Guid userId, CancellationToken token = default)
+        public Task<Message?> PinMessageAsync(
+            Guid messageId,
+            Guid userId,
+            CancellationToken token = default)
         {
-            var message = await _context.Messages
-                .FirstOrDefaultAsync(m => m.MessageId == messageId, token);
-            if (message == null)
-                return null;
-
-            var isParticipant = await _context.ChatParticipants
-                .AsNoTracking()
-                .AnyAsync(p => p.ChatId == message.ChatId && p.UserId == userId, token);
-            if (!isParticipant)
-                throw new UnauthorizedAccessException("Вы не участник этого чата");
-
-            if (message.IsPinned)
-                return message;
-
-            message.IsPinned = true;
-            message.PinnedAt = Messenger.Core.Models.UtcDateTime.Now;
-            await _context.SaveChangesAsync(token);
-            await _messagePaginationService.InvalidateMessageCachesAsync(message.ChatId, token);
-            return message;
+            return _messagePinningService.PinMessageAsync(messageId, userId, token);
         }
 
-        public async Task<Message?> UnpinMessageAsync(Guid messageId, Guid userId, CancellationToken token = default)
+        public Task<Message?> UnpinMessageAsync(
+            Guid messageId,
+            Guid userId,
+            CancellationToken token = default)
         {
-            var message = await _context.Messages
-                .FirstOrDefaultAsync(m => m.MessageId == messageId, token);
-            if (message == null)
-                return null;
-
-            var isParticipant = await _context.ChatParticipants
-                .AsNoTracking()
-                .AnyAsync(p => p.ChatId == message.ChatId && p.UserId == userId, token);
-            if (!isParticipant)
-                throw new UnauthorizedAccessException("Вы не участник этого чата");
-
-            if (!message.IsPinned)
-                return message;
-
-            message.IsPinned = false;
-            message.PinnedAt = null;
-            await _context.SaveChangesAsync(token);
-            await _messagePaginationService.InvalidateMessageCachesAsync(message.ChatId, token);
-            return message;
+            return _messagePinningService.UnpinMessageAsync(messageId, userId, token);
         }
 
-        public async Task<List<Message>> GetPinnedMessagesAsync(Guid chatId, CancellationToken token = default)
+        public Task<List<Message>> GetPinnedMessagesAsync(
+            Guid chatId,
+            CancellationToken token = default)
         {
-            return await _context.Messages
-                .AsNoTracking()
-                .Where(m => m.ChatId == chatId && m.IsPinned)
-                .OrderBy(m => m.PinnedAt)
-                .ThenBy(m => m.SequenceNumber)
-                .Include(m => m.Sender)
-                .ToListAsync(token);
+            return _messagePinningService.GetPinnedMessagesAsync(chatId, token);
         }
     }
 }
