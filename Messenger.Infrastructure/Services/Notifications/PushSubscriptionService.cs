@@ -427,10 +427,9 @@ namespace Messenger.Infrastructure.Services.Notifications
                             continue;
 
                         notificationId ??= await EnsureIdempotentNotificationAsync(
-                            outboxId,
                             participant.UserId,
                             notificationText,
-                            key,
+                            $"{outboxId:N}:{participant.UserId:N}:notification",
                             cancellationToken);
 
                         if (delivery == null)
@@ -557,7 +556,6 @@ namespace Messenger.Infrastructure.Services.Notifications
         }
 
         private async Task<Guid> EnsureIdempotentNotificationAsync(
-            Guid outboxId,
             Guid recipientId,
             string text,
             string idempotencyKey,
@@ -608,7 +606,7 @@ namespace Messenger.Infrastructure.Services.Notifications
         {
             if (!string.IsNullOrWhiteSpace(messageText))
             {
-                var decrypted = messageText;
+                var decrypted = _encryptionService.TryDecryptSafe(messageText);
 
                 if (!decrypted.StartsWith("Encrypted:"))
                     return decrypted.Length > 60
