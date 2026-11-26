@@ -128,6 +128,11 @@ public sealed class MessageNotificationOutboxDispatcher(
         var hub = services.GetRequiredService<IHubContext<ChatHub>>();
         var chatService = services.GetRequiredService<IChatService>();
         var pushService = services.GetRequiredService<IPushSubscriptionService>();
+        var encryptionService = services.GetRequiredService<IEncryptionService>();
+
+        message.MessageText = string.IsNullOrEmpty(message.MessageText)
+            ? null
+            : encryptionService.TryDecryptSafe(message.MessageText);
 
         var chatGroup = row.ChatId.ToString();
         await hub.Clients.Group(chatGroup).SendAsync(

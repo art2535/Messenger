@@ -170,7 +170,18 @@ namespace Messenger.Infrastructure.Messaging.Consumers
                     ChatId = savedMessage.ChatId,
                     SenderId = savedMessage.SenderId,
                     SenderName = msg.SenderName ?? "Пользователь",
-                    Payload = JsonSerializer.Serialize(finalMessageDto),
+                    Payload = JsonSerializer.Serialize(new MessageDto
+                    {
+                        MessageId = finalMessageDto.MessageId,
+                        ChatId = finalMessageDto.ChatId,
+                        SenderId = finalMessageDto.SenderId,
+                        SenderName = finalMessageDto.SenderName,
+                        MessageText = msg.MessageText,
+                        SentAt = finalMessageDto.SentAt,
+                        SequenceNumber = finalMessageDto.SequenceNumber,
+                        Status = finalMessageDto.Status,
+                        Attachments = finalMessageDto.Attachments
+                    }),
                     MessageText = msg.MessageText,
                     HasAttachments = msg.HasAttachments,
                     Status = "Pending",
