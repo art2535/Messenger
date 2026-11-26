@@ -2,18 +2,13 @@ using Messenger.Core.DTOs;
 using Messenger.Core.DTOs.Messages;
 using Messenger.Core.Interfaces;
 using Messenger.Core.Models;
-using MassTransit;
 using Messenger.Core.Messages;
-using Messenger.Infrastructure.Data;
 using Microsoft.AspNetCore.Http;
-using Microsoft.EntityFrameworkCore;
 
 namespace Messenger.Infrastructure.Services
 {
     public class MessageService : IMessageService
     {
-        private readonly GuapMessengerContext _context;
-        private readonly IPublishEndpoint _publishEndpoint;
         private readonly IMessagePaginationService _messagePaginationService;
         private readonly IMessageExportService _messageExportService;
         private readonly IMessageSearchService _messageSearchService;
@@ -21,18 +16,19 @@ namespace Messenger.Infrastructure.Services
         private readonly IMessageMutationService _messageMutationService;
         private readonly IMessageCreationService _messageCreationService;
         private readonly IMessageReadService _messageReadService;
+        private readonly IMessageLookupService _messageLookupService;
+        private readonly IMessageEventPublisher _messageEventPublisher;
 
-        public MessageService(GuapMessengerContext context,
-            IPublishEndpoint publishEndpoint, IMessagePaginationService messagePaginationService,
+        public MessageService(IMessagePaginationService messagePaginationService,
             IMessageExportService messageExportService,
             IMessageSearchService messageSearchService,
             IMessagePinningService messagePinningService,
             IMessageMutationService messageMutationService,
             IMessageCreationService messageCreationService,
-            IMessageReadService messageReadService)
+            IMessageReadService messageReadService,
+            IMessageLookupService messageLookupService,
+            IMessageEventPublisher messageEventPublisher)
         {
-            _context = context;
-            _publishEndpoint = publishEndpoint;
             _messagePaginationService = messagePaginationService;
             _messageExportService = messageExportService;
             _messageSearchService = messageSearchService;
@@ -40,12 +36,15 @@ namespace Messenger.Infrastructure.Services
             _messageMutationService = messageMutationService;
             _messageCreationService = messageCreationService;
             _messageReadService = messageReadService;
+            _messageLookupService = messageLookupService;
+            _messageEventPublisher = messageEventPublisher;
         }
 
-        public async Task PublishChatMessageAsync(ChatMessageSent message, CancellationToken cancellationToken = default)
+        public Task PublishChatMessageAsync(
+            ChatMessageSent message,
+            CancellationToken cancellationToken = default)
         {
-            await _publishEndpoint.Publish(message, cancellationToken);
-            await _context.SaveChangesAsync(cancellationToken);
+            return _messageEventPublisher.PublishChatMessageAsync(message, cancellationToken);
         }
 
         public Task<List<MessageDto>> SearchMessagesAsync(
@@ -106,18 +105,19 @@ namespace Messenger.Infrastructure.Services
             }
         }
 
-        public async Task<Message?> GetMessageByIdAsync(Guid chatId, Guid messageId, CancellationToken token = default)
+        public Task<Message?> GetMessageByIdAsync(
+            Guid chatId,
+            Guid messageId,
+            CancellationToken token = default)
         {
-            return await _context.Messages
-                .FirstOrDefaultAsync(m => m.ChatId == chatId && m.MessageId == messageId, token);
+            return _messageLookupService.GetMessageByIdAsync(chatId, messageId, token);
         }
 
-        public async Task<Message?> GetMessageByIdGlobalAsync(Guid messageId, CancellationToken token = default)
+        public Task<Message?> GetMessageByIdGlobalAsync(
+            Guid messageId,
+            CancellationToken token = default)
         {
-            return await _context.Messages
-                .Include(m => m.Attachments)
-                .Include(m => m.Sender)
-                .FirstOrDefaultAsync(m => m.MessageId == messageId, token);
+            return _messageLookupService.GetMessageByIdGlobalAsync(messageId, token);
         }
 
         public Task DeleteMessageAsync(Guid messageId, CancellationToken token = default)
