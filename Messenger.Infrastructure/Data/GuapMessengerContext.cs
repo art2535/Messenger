@@ -37,6 +37,7 @@ public partial class GuapMessengerContext : DbContext
     public virtual DbSet<ModerationLog> ModerationLogs { get; set; }
     public virtual DbSet<Core.Models.ScheduledMessage> ScheduledMessages { get; set; }
     public virtual DbSet<MessageNotificationOutbox> MessageNotificationOutbox { get; set; }
+    public virtual DbSet<MessageNotificationOutboxDelivery> MessageNotificationOutboxDeliveries { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
@@ -483,6 +484,38 @@ public partial class GuapMessengerContext : DbContext
                 .HasForeignKey(d => d.SenderId)
                 .OnDelete(DeleteBehavior.Cascade)
                 .HasConstraintName("fk_scheduled_message_sender");
+        });
+
+        modelBuilder.Entity<MessageNotificationOutboxDelivery>(entity =>
+        {
+            entity.ToTable("Message_Notification_Outbox_Deliveries");
+            entity.HasKey(e => e.DeliveryId)
+                .HasName("Message_Notification_Outbox_Deliveries_pkey");
+            entity.Property(e => e.DeliveryId).ValueGeneratedNever();
+            entity.Property(e => e.OutboxId).HasColumnName("Outbox_ID");
+            entity.Property(e => e.MessageId).HasColumnName("Message_ID");
+            entity.Property(e => e.RecipientId).HasColumnName("Recipient_ID");
+            entity.Property(e => e.SubscriptionId).HasColumnName("Subscription_ID");
+            entity.Property(e => e.Channel).HasColumnName("Channel").HasMaxLength(32);
+            entity.Property(e => e.Status).HasColumnName("Status").HasMaxLength(32);
+            entity.Property(e => e.AttemptCount).HasColumnName("Attempt_Count");
+            entity.Property(e => e.NextAttemptAt).HasColumnName("Next_Attempt_At");
+            entity.Property(e => e.LockedUntil).HasColumnName("Locked_Until");
+            entity.Property(e => e.NotificationId).HasColumnName("Notification_ID");
+            entity.Property(e => e.IdempotencyKey)
+                .HasColumnName("Idempotency_Key")
+                .HasMaxLength(128);
+            entity.Property(e => e.DeliveredAt).HasColumnName("Delivered_At");
+            entity.Property(e => e.LastError).HasColumnName("Last_Error");
+
+            entity.HasIndex(e => e.IdempotencyKey).IsUnique();
+            entity.HasIndex(e => new { e.OutboxId, e.Status, e.NextAttemptAt });
+            entity.HasIndex(e => new { e.RecipientId, e.SubscriptionId });
+
+            entity.HasOne<MessageNotificationOutbox>()
+                .WithMany()
+                .HasForeignKey(e => e.OutboxId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<MessageNotificationOutbox>(entity =>
