@@ -4,6 +4,7 @@ using Messenger.Core.Services;
 using Messenger.Infrastructure.Data;
 using Messenger.Infrastructure.Messaging.Consumers;
 using Messenger.Infrastructure.Services;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -196,9 +197,12 @@ namespace Messenger.Infrastructure.Extensions
                 return services;
             }
 
+        }
+
+        extension(WebApplication app)
+        {
             public WebApplication InitializeMessengerDatabase()
             {
-                var app = this;
                 using var migrationScope = app.Services.CreateScope();
                 var logger = migrationScope.ServiceProvider.GetRequiredService<ILogger<WebApplication>>();
                 var db = migrationScope.ServiceProvider.GetRequiredService<GuapMessengerContext>();
