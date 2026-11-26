@@ -1,4 +1,3 @@
-using Messenger.Infrastructure.Data;
 using Messenger.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
@@ -17,11 +16,7 @@ namespace Messenger.API.Extensions
             {
                 var builder = services.AddHealthChecks()
                     .AddCheck("self", () => HealthCheckResult.Healthy("API is running"), tags: new[] { "live" })
-                    .AddCheck<DatabaseMigrationHealthCheck>("database-migrations", tags: new[] { "ready", "db" })
-                    .AddDbContextCheck<GuapMessengerContext>(
-                        name: "postgresql",
-                        failureStatus: HealthStatus.Unhealthy,
-                        tags: new[] { "ready", "db" });
+                    .AddMessengerDatabaseHealthChecks();
 
                 if (services.Any(d => d.ServiceType == typeof(IConnectionMultiplexer)))
                 {

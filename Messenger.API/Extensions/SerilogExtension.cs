@@ -1,4 +1,3 @@
-using Messenger.API.Services;
 using NpgsqlTypes;
 using Serilog;
 using Serilog.Debugging;

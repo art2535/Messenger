@@ -2,7 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
-namespace Messenger.API.Services
+namespace Messenger.Infrastructure.Persistence
 {
     public sealed class LogRetentionOptions
     {
