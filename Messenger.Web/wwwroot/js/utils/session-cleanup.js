@@ -85,6 +85,11 @@ function markIntentionalLogout() {
         closeSessionTimer = null;
     }
     localStorage.removeItem('token');
+    try {
+        localStorage.removeItem('pushSubscribed');
+        localStorage.removeItem('pushSubscriptionEndpoint');
+    } catch (_) {}
+    if (typeof window.clearPushSyncMarkers === 'function') window.clearPushSyncMarkers();
 }
 
 function markInternalNavigation() {

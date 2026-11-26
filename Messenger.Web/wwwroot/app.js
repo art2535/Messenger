@@ -52,10 +52,100 @@ if ('serviceWorker' in navigator) {
     });
 }
 
-async function initializePushNotifications(registration) {
+/**
+ * Push в БД регистрируем только когда нужно:
+ * - нет локальной отметки синхронизации / сменился endpoint
+ * - forceSync = true (вход, смена настроек)
+ * На каждом открытии страницы API не дергаем.
+ */
+const PUSH_LS_SUBSCRIBED = 'pushSubscribed';
+const PUSH_LS_ENDPOINT = 'pushSubscriptionEndpoint';
+const PUSH_LS_ENABLED = 'pushEnabled';
+
+function isPushLocallySynced(endpoint) {
+    try {
+        if (localStorage.getItem(PUSH_LS_SUBSCRIBED) !== 'true') return false;
+        if (localStorage.getItem(PUSH_LS_ENABLED) === 'false') return false;
+        const saved = localStorage.getItem(PUSH_LS_ENDPOINT) || '';
+        return !!endpoint && saved === endpoint;
+    } catch (_) {
+        return false;
+    }
+}
+
+function markPushSynced(endpoint, enabled) {
+    try {
+        if (endpoint) localStorage.setItem(PUSH_LS_ENDPOINT, endpoint);
+        localStorage.setItem(PUSH_LS_SUBSCRIBED, 'true');
+        if (enabled === false) localStorage.setItem(PUSH_LS_ENABLED, 'false');
+        else localStorage.setItem(PUSH_LS_ENABLED, 'true');
+    } catch (_) { /* private mode */ }
+}
+
+function clearPushSyncMarkers() {
+    try {
+        localStorage.removeItem(PUSH_LS_SUBSCRIBED);
+        localStorage.removeItem(PUSH_LS_ENDPOINT);
+        // pushEnabled оставляем — предпочтение пользователя
+    } catch (_) { }
+}
+
+async function fetchVapidPublicKey() {
+    const keyResponse = await fetch(`${API_BASE_URL}/push/vapid-public-key`, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json, text/plain, */*' }
+    });
+    if (!keyResponse.ok) throw new Error('Не удалось получить VAPID ключ');
+    let publicKey = '';
+    const ct = (keyResponse.headers.get('content-type') || '').toLowerCase();
+    if (ct.includes('json')) {
+        const j = await keyResponse.json();
+        publicKey = String(j.data ?? j.Data ?? j.publicKey ?? '').trim();
+    } else {
+        const text = (await keyResponse.text()).trim();
+        if (text.startsWith('{')) {
+            try {
+                const j = JSON.parse(text);
+                publicKey = String(j.data ?? j.Data ?? j.publicKey ?? '').trim();
+            } catch { publicKey = text; }
+        } else publicKey = text;
+    }
+    publicKey = publicKey.replace(/^"|"$/g, '');
+    if (!publicKey) throw new Error('Пустой VAPID ключ');
+    return publicKey;
+}
+
+async function postPushSubscribe(subscription, token) {
+    const subJson = subscription.toJSON();
+    const response = await fetch(`${API_BASE_URL}/push/subscribe`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': token
+        },
+        body: JSON.stringify({
+            endpoint: subscription.endpoint,
+            p256dh: subJson.keys?.p256dh,
+            auth: subJson.keys?.auth
+        })
+    });
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || ('HTTP ' + response.status));
+    }
+    markPushSynced(subscription.endpoint, true);
+    return true;
+}
+
+/**
+ * @param {ServiceWorkerRegistration} registration
+ * @param {{ forceSync?: boolean }} [options]
+ */
+async function initializePushNotifications(registration, options) {
+    const forceSync = !!(options && options.forceSync);
     const token = getAuthToken();
     if (!token) {
-        console.warn('⚠️ Push: Токен авторизации не найден. Подписка отложена.');
+        if (forceSync) console.warn('⚠️ Push: нет токена, синхронизация отложена');
         return;
     }
 
@@ -66,100 +156,74 @@ async function initializePushNotifications(registration) {
 
     try {
         if (!('Notification' in window) || !('PushManager' in window)) {
-            console.warn('Push API недоступен');
             return;
         }
 
         if (Notification.permission === 'denied') {
-            console.warn('Push уведомления запрещены пользователем');
             return;
         }
 
         if (Notification.permission !== 'granted') {
-            console.log('Push: permission не granted — автоматическая подписка пропущена');
+            // не запрашиваем permission на каждой странице
             return;
         }
 
-        let serverPushEnabled = true;
+        // Локальный флаг «выключено в настройках» — без запроса к API
         try {
-            const settingsRes = await fetch(`${API_BASE_URL}/push/settings`, {
-                method: 'GET',
-                headers: { 'Authorization': token }
-            });
-            if (settingsRes.ok) {
-                const settings = await settingsRes.json();
-                if (settings && ((settings.data && settings.data.pushEnabled === false) || settings.pushEnabled === false)) {
-                    serverPushEnabled = false;
-                    console.log('Push: на сервере отключены — авто-подписка пропущена');
-                    return;
-                }
+            if (!forceSync && localStorage.getItem(PUSH_LS_ENABLED) === 'false') {
+                return;
             }
-        } catch (e) {
-            console.warn('Push: не удалось прочитать настройки, продолжаем синхронизацию', e);
-        }
+        } catch (_) { /* */ }
 
         let subscription = await registration.pushManager.getSubscription();
 
-        if (!subscription) {
-            const keyResponse = await fetch(`${API_BASE_URL}/push/vapid-public-key`, {
-                method: 'GET',
-                headers: { 'Accept': 'application/json, text/plain, */*' }
-            });
-            if (!keyResponse.ok) throw new Error('Не удалось получить VAPID ключ');
-            let publicKey = '';
-            const ct = (keyResponse.headers.get('content-type') || '').toLowerCase();
-            if (ct.includes('json')) {
-                const j = await keyResponse.json();
-                publicKey = String(j.data ?? j.Data ?? j.publicKey ?? '').trim();
-            } else {
-                const text = (await keyResponse.text()).trim();
-                if (text.startsWith('{')) {
-                    try {
-                        const j = JSON.parse(text);
-                        publicKey = String(j.data ?? j.Data ?? j.publicKey ?? '').trim();
-                    } catch { publicKey = text; }
-                } else publicKey = text;
-            }
-            publicKey = publicKey.replace(/^"|"$/g, '');
-            if (!publicKey) throw new Error('Пустой VAPID ключ');
+        // Уже синхронизировано с тем же endpoint — не трогаем API
+        if (!forceSync && subscription && isPushLocallySynced(subscription.endpoint)) {
+            return;
+        }
 
+        // Нет браузерной подписки: создаём только при forceSync или если раньше push был включён
+        if (!subscription) {
+            let shouldCreate = forceSync;
+            try {
+                shouldCreate = shouldCreate || localStorage.getItem(PUSH_LS_ENABLED) === 'true'
+                    || localStorage.getItem(PUSH_LS_SUBSCRIBED) === 'true';
+            } catch (_) { /* */ }
+            if (!shouldCreate) {
+                return;
+            }
+            const publicKey = await fetchVapidPublicKey();
             subscription = await registration.pushManager.subscribe({
                 userVisibleOnly: true,
                 applicationServerKey: urlBase64ToUint8Array(publicKey)
             });
             console.log('Новая push-подписка создана');
-        } else {
-            console.log('Существующая подписка найдена, синхронизация с сервером…');
         }
 
-        const subJson = subscription.toJSON();
-
-        const response = await fetch(`${API_BASE_URL}/push/subscribe`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': token
-            },
-            body: JSON.stringify({
-                endpoint: subscription.endpoint,
-                p256dh: subJson.keys?.p256dh,
-                auth: subJson.keys?.auth
-            })
-        });
-
-        if (response.ok) {
-            console.log('✅ Push-подписка успешно синхронизирована с сервером');
-            localStorage.setItem('pushSubscribed', 'true');
-            localStorage.setItem('pushSubscriptionEndpoint', subscription.endpoint);
-        } else {
-            const errorText = await response.text();
-            console.error('❌ Ошибка при отправке подписки:', errorText);
-            localStorage.removeItem('pushSubscribed');
-        }
+        await postPushSubscribe(subscription, token);
+        console.log('✅ Push-подписка синхронизирована с сервером');
     } catch (err) {
         console.error('❌ Ошибка при инициализации Push-уведомлений:', err);
+        try { localStorage.removeItem(PUSH_LS_SUBSCRIBED); } catch (_) { }
     }
 }
+
+/** Вызов после логина или из настроек — принудительная запись в БД */
+async function syncPushSubscriptionToServer() {
+    if (!('serviceWorker' in navigator)) return false;
+    try {
+        const registration = await navigator.serviceWorker.ready;
+        await initializePushNotifications(registration, { forceSync: true });
+        return true;
+    } catch (e) {
+        console.error('syncPushSubscriptionToServer:', e);
+        return false;
+    }
+}
+
+window.syncPushSubscriptionToServer = syncPushSubscriptionToServer;
+window.clearPushSyncMarkers = clearPushSyncMarkers;
+window.markPushSynced = markPushSynced;
 
 function urlBase64ToUint8Array(base64String) {
     let s = String(base64String || '').trim().replace(/^"|"$/g, '').replace(/\s+/g, '');

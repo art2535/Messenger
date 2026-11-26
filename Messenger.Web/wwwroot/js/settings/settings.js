@@ -530,7 +530,11 @@ async function subscribeToPush() {
             try {
                 localStorage.setItem('pushSubscribed', 'true');
                 localStorage.setItem('pushSubscriptionEndpoint', subscription.endpoint);
+                localStorage.setItem('pushEnabled', 'true');
             } catch (_) { }
+            if (typeof window.markPushSynced === 'function') {
+                window.markPushSynced(subscription.endpoint, true);
+            }
             showToast('Push-уведомления включены', 'success');
             return true;
         }
@@ -587,7 +591,9 @@ async function unsubscribeFromPush() {
         try {
             localStorage.removeItem('pushSubscribed');
             localStorage.removeItem('pushSubscriptionEndpoint');
+            localStorage.setItem('pushEnabled', 'false');
         } catch (_) { }
+        if (typeof window.clearPushSyncMarkers === 'function') window.clearPushSyncMarkers();
         showToast('Push-уведомления отключены', 'info');
         return true;
     } catch (err) {
@@ -597,7 +603,9 @@ async function unsubscribeFromPush() {
         try {
             localStorage.removeItem('pushSubscribed');
             localStorage.removeItem('pushSubscriptionEndpoint');
+            localStorage.setItem('pushEnabled', 'false');
         } catch (_) { }
+        if (typeof window.clearPushSyncMarkers === 'function') window.clearPushSyncMarkers();
         showToast('Push-уведомления отключены', 'info');
         return true;
     }
