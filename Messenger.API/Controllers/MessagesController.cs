@@ -27,7 +27,6 @@ namespace Messenger.API.Controllers
     [Tags("Messages")]
     public class MessagesController : ControllerBase
     {
-        private readonly IMessageService _messageService;
         private readonly IConfiguration _configuration;
         private readonly IMessageRealtimeNotifier _messageRealtimeNotifier;
         private readonly IUserService _userService;
@@ -41,9 +40,9 @@ namespace Messenger.API.Controllers
         private readonly IMessageDeletionWorkflowService _messageDeletionWorkflowService;
         private readonly IMessageControllerWorkflowService _messageControllerWorkflowService;
         private readonly IMessageHistoryWorkflowService _messageHistoryWorkflowService;
+        private readonly IMessageSearchWorkflowService _messageSearchWorkflowService;
 
         public MessagesController(
-            IMessageService messageService,
             IConfiguration configuration,
             IMessageRealtimeNotifier messageRealtimeNotifier,
             IUserService userService,
@@ -56,9 +55,9 @@ namespace Messenger.API.Controllers
             IMessageEditingWorkflowService messageEditingWorkflowService,
             IMessageDeletionWorkflowService messageDeletionWorkflowService,
             IMessageControllerWorkflowService messageControllerWorkflowService,
-            IMessageHistoryWorkflowService messageHistoryWorkflowService)
+            IMessageHistoryWorkflowService messageHistoryWorkflowService,
+            IMessageSearchWorkflowService messageSearchWorkflowService)
         {
-            _messageService = messageService;
             _configuration = configuration;
             _messageRealtimeNotifier = messageRealtimeNotifier;
             _userService = userService;
@@ -72,6 +71,7 @@ namespace Messenger.API.Controllers
             _messageDeletionWorkflowService = messageDeletionWorkflowService;
             _messageControllerWorkflowService = messageControllerWorkflowService;
             _messageHistoryWorkflowService = messageHistoryWorkflowService;
+            _messageSearchWorkflowService = messageSearchWorkflowService;
         }
 
         /// <summary>
@@ -94,13 +94,10 @@ namespace Messenger.API.Controllers
             {
                 await User.GetCurrentUserIdAsync(_userService);
 
-                if (string.IsNullOrWhiteSpace(query))
-                {
-                    return Ok(ApiResponse.Success(new List<MessageDto>()
-                    ));
-                }
-
-                var results = await _messageService.SearchMessagesAsync(chatId, query.Trim());
+                var results = await _messageSearchWorkflowService.SearchAsync(
+                    chatId,
+                    query,
+                    ct);
 
                 return Ok(ApiResponse.Success(results));
             }
