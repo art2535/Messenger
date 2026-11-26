@@ -14,7 +14,7 @@ namespace Messenger.Infrastructure.Services
         private readonly IMessageSearchService _messageSearchService;
         private readonly IMessagePinningService _messagePinningService;
         private readonly IMessageMutationService _messageMutationService;
-        private readonly IMessageCreationService _messageCreationService;
+        private readonly IMessageCreationWorkflowService _messageCreationWorkflowService;
         private readonly IMessageReadService _messageReadService;
         private readonly IMessageLookupService _messageLookupService;
         private readonly IMessageEventPublisher _messageEventPublisher;
@@ -24,7 +24,7 @@ namespace Messenger.Infrastructure.Services
             IMessageSearchService messageSearchService,
             IMessagePinningService messagePinningService,
             IMessageMutationService messageMutationService,
-            IMessageCreationService messageCreationService,
+            IMessageCreationWorkflowService messageCreationWorkflowService,
             IMessageReadService messageReadService,
             IMessageLookupService messageLookupService,
             IMessageEventPublisher messageEventPublisher)
@@ -34,7 +34,7 @@ namespace Messenger.Infrastructure.Services
             _messageSearchService = messageSearchService;
             _messagePinningService = messagePinningService;
             _messageMutationService = messageMutationService;
-            _messageCreationService = messageCreationService;
+            _messageCreationWorkflowService = messageCreationWorkflowService;
             _messageReadService = messageReadService;
             _messageLookupService = messageLookupService;
             _messageEventPublisher = messageEventPublisher;
@@ -75,34 +75,22 @@ namespace Messenger.Infrastructure.Services
             return await _messagePaginationService.GetMessagesByChatIdPagedAsync(chatId, beforeSequence, limit, token);
         }
 
-        public async Task<ServiceResult<Message>> SendMessageAsync(Guid messageId, Guid chatId, Guid senderId,
-            string? content, bool hasAttachments, IFormFile[]? files = null, CancellationToken token = default)
+        public Task<ServiceResult<Message>> SendMessageAsync(
+            Guid messageId,
+            Guid chatId,
+            Guid senderId,
+            string? content,
+            bool hasAttachments,
+            IFormFile[]? files = null,
+            CancellationToken token = default)
         {
-            try
-            {
-                var message = new Message
-                {
-                    MessageId = messageId,
-                    ChatId = chatId,
-                    SenderId = senderId,
-                    MessageText = content ?? string.Empty,
-                    HasAttachments = hasAttachments,
-                    SendTime = UtcDateTime.Now,
-                    DeliveryStatus = MessageDeliveryStatus.Pending
-                };
-
-                await _messageCreationService.CreateMessageAsync(message, token);
-
-                var savedMessage = await GetMessageByIdAsync(chatId, message.MessageId, token);
-
-                return savedMessage != null
-                    ? ServiceResult<Message>.Success(savedMessage)
-                    : ServiceResult<Message>.Failure("Не удалось сохранить сообщение");
-            }
-            catch (Exception ex)
-            {
-                return ServiceResult<Message>.Failure(ex.Message, ex.InnerException?.Message);
-            }
+            return _messageCreationWorkflowService.SendMessageAsync(
+                messageId,
+                chatId,
+                senderId,
+                content,
+                hasAttachments,
+                token);
         }
 
         public Task<Message?> GetMessageByIdAsync(
