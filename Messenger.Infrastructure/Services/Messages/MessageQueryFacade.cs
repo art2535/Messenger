@@ -1,7 +1,7 @@
 using Messenger.Core.DTOs.Messages;
 using Messenger.Core.Models;
 
-namespace Messenger.Infrastructure.Services.MessageQueryFacade.cs
+namespace Messenger.Infrastructure.Services.Messages
 {
     public sealed class MessageQueryFacade
     {

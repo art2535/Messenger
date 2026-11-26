@@ -1,4 +1,4 @@
-namespace Messenger.Infrastructure.Services.MessageForwardingResult.cs
+namespace Messenger.Infrastructure.Services.Messages
 {
     public enum MessageForwardingFailure
     {

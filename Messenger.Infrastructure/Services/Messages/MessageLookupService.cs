@@ -2,7 +2,7 @@ using Messenger.Core.Models;
 using Messenger.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
-namespace Messenger.Infrastructure.Services.MessageLookupService.cs
+namespace Messenger.Infrastructure.Services.Messages
 {
     public class MessageLookupService : IMessageLookupService
     {

@@ -5,7 +5,7 @@ using Messenger.Core.Models;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
-namespace Messenger.Infrastructure.Services.MessageForwardingService.cs
+namespace Messenger.Infrastructure.Services.Messages
 {
     public sealed class MessageForwardingService : IMessageForwardingService
     {
