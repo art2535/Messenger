@@ -68,6 +68,7 @@ public class ScheduledMessageDispatcherService : BackgroundService
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
         var scheduledService = scope.ServiceProvider.GetRequiredService<IScheduledMessageService>();
+        var claimService = scope.ServiceProvider.GetRequiredService<IScheduledMessageClaimService>();
         var publishEndpoint = scope.ServiceProvider.GetRequiredService<IPublishEndpoint>();
         var userService = scope.ServiceProvider.GetRequiredService<IUserService>();
         var hub = scope.ServiceProvider.GetRequiredService<IHubContext<ChatHub>>();
@@ -86,7 +87,7 @@ public class ScheduledMessageDispatcherService : BackgroundService
             try
             {
                 // Атомарно захватываем сообщение, чтобы его обработал только один экземпляр API.
-                var claimed = await scheduledService.TryClaimAsync(
+                var claimed = await claimService.TryClaimAsync(
                     item.ScheduledMessageId, now, ct);
                 if (!claimed)
                     continue;

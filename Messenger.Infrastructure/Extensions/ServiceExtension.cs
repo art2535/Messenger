@@ -145,6 +145,8 @@ namespace Messenger.Infrastructure.Extensions
                 services.AddSingleton<TypingRateLimiterService>();
                 services.AddSingleton<SendMessageRateLimiterService>();
                 services.AddScoped<IScheduledMessageService, ScheduledMessageService>();
+                services.AddScoped<IScheduledMessageClaimService>(sp =>
+                    sp.GetRequiredService<IScheduledMessageService>());
 
                 return services;
             }

@@ -9,7 +9,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Messenger.Infrastructure.Services.Messages;
 
-public class ScheduledMessageService : IScheduledMessageService
+public class ScheduledMessageService : IScheduledMessageService, IScheduledMessageClaimService
 {
     private readonly GuapMessengerContext _context;
     private readonly IEncryptionService _encryption;
