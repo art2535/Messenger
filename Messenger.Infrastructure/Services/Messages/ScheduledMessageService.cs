@@ -181,22 +181,30 @@ public class ScheduledMessageService : IScheduledMessageService, IScheduledMessa
 
     public async Task<bool> CancelAsync(Guid scheduledMessageId, Guid userId, CancellationToken ct = default)
     {
-        var entity = await _context.ScheduledMessages
-            .FirstOrDefaultAsync(x => x.ScheduledMessageId == scheduledMessageId, ct);
+        var senderId = await _context.ScheduledMessages
+            .Where(x => x.ScheduledMessageId == scheduledMessageId)
+            .Select(x => (Guid?)x.SenderId)
+            .FirstOrDefaultAsync(ct);
 
-        if (entity == null)
+        if (!senderId.HasValue)
             return false;
 
-        if (entity.SenderId != userId)
+        if (senderId.Value != userId)
             throw new UnauthorizedAccessException("Можно отменять только свои запланированные сообщения");
 
-        if (entity.Status != ScheduledMessageStatus.Pending)
-            return false;
+        var nowUtc = DateTime.UtcNow;
+        var affectedRows = await _context.ScheduledMessages
+            .Where(x =>
+                x.ScheduledMessageId == scheduledMessageId
+                && x.SenderId == userId
+                && x.Status == ScheduledMessageStatus.Pending)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(x => x.Status, ScheduledMessageStatus.Cancelled)
+                    .SetProperty(x => x.UpdatedAt, nowUtc),
+                ct);
 
-        entity.Status = ScheduledMessageStatus.Cancelled;
-        entity.UpdatedAt = DateTime.UtcNow;
-        await _context.SaveChangesAsync(ct);
-        return true;
+        return affectedRows == 1;
     }
 
     public async Task MarkSentAsync(Guid scheduledMessageId, Guid resultMessageId, CancellationToken ct = default)

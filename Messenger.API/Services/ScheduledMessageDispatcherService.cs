@@ -156,12 +156,20 @@ public class ScheduledMessageDispatcherService : BackgroundService
                     "Scheduled {ScheduledId} → Message {MessageId} published for chat {ChatId}",
                     item.ScheduledMessageId, messageId.Value, item.ChatId);
             }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                // Оставляем Processing: после истечения lease запись безопасно восстановится.
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to dispatch scheduled {Id}", item.ScheduledMessageId);
                 try
                 {
-                    await scheduledService.MarkFailedAsync(item.ScheduledMessageId, ex.Message, ct);
+                    await scheduledService.MarkFailedAsync(
+                        item.ScheduledMessageId,
+                        ex.Message,
+                        CancellationToken.None);
                 }
                 catch (Exception markEx)
                 {
