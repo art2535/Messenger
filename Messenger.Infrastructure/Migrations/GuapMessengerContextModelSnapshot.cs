@@ -640,7 +640,7 @@ namespace Messenger.Infrastructure.Migrations
                         .HasColumnType("character varying(128)")
                         .HasColumnName("Idempotency_Key");
 
-                    b.Property<DateTime?>("LastError")
+                    b.Property<string>("LastError")
                         .HasColumnType("text")
                         .HasColumnName("Last_Error");
 
