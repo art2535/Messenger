@@ -86,10 +86,11 @@ public class ScheduledMessageDispatcherService : BackgroundService
 
             try
             {
-                // Атомарно захватываем сообщение, чтобы его обработал только один экземпляр API.
-                var claimed = await claimService.TryClaimAsync(
-                    item.ScheduledMessageId, now, ct);
-                if (!claimed)
+                // Сохраняем идентификатор, чтобы восстановление не создавало дубль.
+                var candidateMessageId = Guid.NewGuid();
+                var messageId = await claimService.TryClaimAsync(
+                    item.ScheduledMessageId, candidateMessageId, now, ct);
+                if (!messageId.HasValue)
                     continue;
 
                 List<AttachmentInfo> attachments = new();
@@ -115,12 +116,11 @@ public class ScheduledMessageDispatcherService : BackgroundService
                 }
                 catch { /* ignore */ }
 
-                var messageId = Guid.NewGuid();
                 var sentAt = DateTime.UtcNow;
 
                 var payload = new ChatMessageSent
                 {
-                    MessageId = messageId,
+                    MessageId = messageId.Value,
                     ChatId = item.ChatId,
                     SenderId = item.SenderId,
                     SenderName = string.IsNullOrWhiteSpace(senderName) ? "Пользователь" : senderName,
@@ -132,7 +132,7 @@ public class ScheduledMessageDispatcherService : BackgroundService
                 };
 
                 await publishEndpoint.Publish(payload, ct);
-                await scheduledService.MarkSentAsync(item.ScheduledMessageId, messageId, ct);
+                await scheduledService.MarkSentAsync(item.ScheduledMessageId, messageId.Value, ct);
 
                 // Уведомляем отправителя, что запланированное ушло
                 try
@@ -141,7 +141,7 @@ public class ScheduledMessageDispatcherService : BackgroundService
                     await hub.Clients.Group(userGroup).SendAsync("ScheduledMessageSent", new
                     {
                         ScheduledMessageId = item.ScheduledMessageId,
-                        MessageId = messageId,
+                        MessageId = messageId.Value,
                         ChatId = item.ChatId,
                         ScheduledAt = item.ScheduledAt,
                         SentAt = sentAt
@@ -154,7 +154,7 @@ public class ScheduledMessageDispatcherService : BackgroundService
 
                 _logger.LogInformation(
                     "Scheduled {ScheduledId} → Message {MessageId} published for chat {ChatId}",
-                    item.ScheduledMessageId, messageId, item.ChatId);
+                    item.ScheduledMessageId, messageId.Value, item.ChatId);
             }
             catch (Exception ex)
             {

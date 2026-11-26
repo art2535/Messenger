@@ -109,8 +109,9 @@ public class ScheduledMessageService : IScheduledMessageService, IScheduledMessa
             .ToListAsync(ct);
     }
 
-    public async Task<bool> TryClaimAsync(
+    public async Task<Guid?> TryClaimAsync(
         Guid scheduledMessageId,
+        Guid candidateMessageId,
         DateTime nowUtc,
         CancellationToken ct = default)
     {
@@ -128,10 +129,19 @@ public class ScheduledMessageService : IScheduledMessageService, IScheduledMessa
             .ExecuteUpdateAsync(
                 setters => setters
                     .SetProperty(x => x.Status, ScheduledMessageStatus.Processing)
+                    .SetProperty(x => x.ResultMessageId,
+                        x => x.ResultMessageId ?? candidateMessageId)
                     .SetProperty(x => x.UpdatedAt, utcNow),
                 ct);
 
-        return affectedRows == 1;
+        if (affectedRows != 1)
+            return null;
+
+        return await _context.ScheduledMessages
+            .AsNoTracking()
+            .Where(x => x.ScheduledMessageId == scheduledMessageId)
+            .Select(x => x.ResultMessageId)
+            .SingleOrDefaultAsync(ct);
     }
 
     public async Task<ScheduledMessage?> UpdateAsync(
