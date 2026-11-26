@@ -6,7 +6,7 @@ using Messenger.Core.Messages;
 using Messenger.Core.Models;
 using Microsoft.AspNetCore.SignalR;
 
-namespace Messenger.API.Consumers
+namespace Messenger.Infrastructure.Messaging.Consumers
 {
     public class ChatMessageSentConsumer : IConsumer<ChatMessageSent>
     {

@@ -1,12 +1,4 @@
-using Messenger.API.Options;
-using Messenger.API.Providers;
 using Messenger.API.Services;
-using Messenger.Core.Interfaces;
-using Messenger.Core.Services;
-using Messenger.Infrastructure.Services;
-using Microsoft.AspNetCore.SignalR;
-using StackExchange.Redis;
-using WebPush;
 
 namespace Messenger.API.Extensions
 {
@@ -17,76 +9,6 @@ namespace Messenger.API.Extensions
 
         extension(IServiceCollection services)
         {
-            public IServiceCollection AddServices()
-            {
-                services.AddScoped<IUserService, UserService>();
-                services.AddScoped<IChatService, ChatService>();
-                services.AddScoped<IChatFolderService, ChatFolderService>();
-                services.AddScoped<INotificationService, NotificationService>();
-                services.AddScoped<IAttachmentService, AttachmentService>();
-                services.AddScoped<IReactionService, ReactionService>();
-                services.AddScoped<ILoginService, LoginService>();
-                services.AddScoped<IAccountSettingsService, AccountSettingsService>();
-                services.AddScoped<IUserStatusService, UserStatusService>();
-                services.AddScoped<IBroadcastService, BroadcastService>();
-                services.AddScoped<IMessageService, MessageService>();
-                services.AddScoped<IAdminService, AdminService>();
-                services.AddScoped<IModerationService, ModerationService>();
-                services.AddSingleton<WebPushClient>();
-                services.AddScoped<IPushSubscriptionService, PushSubscriptionService>();
-                services.AddSingleton<TypingRateLimiterService>();
-                services.AddSingleton<SendMessageRateLimiterService>();
-                services.AddScoped<IScheduledMessageService, ScheduledMessageService>();
-
-                return services;
-            }
-
-            public IServiceCollection AddRedisCache(IConfiguration configuration)
-            {
-                var redisCs = GetRedisConnectionString(configuration);
-
-                if (!string.IsNullOrWhiteSpace(redisCs))
-                {
-                    services.AddSingleton<IConnectionMultiplexer>(_ =>
-                    {
-                        var options = ConfigurationOptions.Parse(redisCs);
-                        options.AbortOnConnectFail = false;
-                        options.AllowAdmin = true;
-                        return ConnectionMultiplexer.Connect(options);
-                    });
-
-                    services.AddSingleton<ICacheService>(sp =>
-                    {
-                        var mux = sp.GetRequiredService<IConnectionMultiplexer>();
-                        var logger = sp.GetRequiredService<ILogger<RedisCacheService>>();
-                        return new RedisCacheService(mux, logger);
-                    });
-
-                    services.AddSingleton<RedisDistributedLock>(sp =>
-                    {
-                        var mux = sp.GetRequiredService<IConnectionMultiplexer>();
-                        var logger = sp.GetRequiredService<ILogger<RedisDistributedLock>>();
-                        return new RedisDistributedLock(mux, logger);
-                    });
-                }
-                else
-                {
-                    services.AddSingleton<ICacheService>(sp =>
-                    {
-                        var logger = sp.GetRequiredService<ILogger<RedisCacheService>>();
-                        return new RedisCacheService(null, logger);
-                    });
-
-                    services.AddSingleton<RedisDistributedLock>(sp =>
-                    {
-                        var logger = sp.GetRequiredService<ILogger<RedisDistributedLock>>();
-                        return new RedisDistributedLock(null, logger);
-                    });
-                }
-
-                return services;
-            }
-
             public IServiceCollection AddSessionCleanup(IConfiguration configuration)
             {
                 services.Configure<SessionCleanupOptions>(configuration.GetSection(SessionCleanupOptions.SectionName));
@@ -120,13 +42,6 @@ namespace Messenger.API.Extensions
                 return services;
             }
 
-            public IServiceCollection AddEncryption(IConfiguration configuration)
-            {
-                services.Configure<AesGcmEncryptionOptions>(configuration.GetSection("Encryption"));
-                services.AddSingleton<IEncryptionService, AesGcmEncryptionService>();
-
-                return services;
-            }
         }
     }
 }

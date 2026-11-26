@@ -1,8 +1,7 @@
 using Messenger.API.Extensions;
 using Messenger.API.Services;
 using Messenger.Core.Hubs;
-using Messenger.Infrastructure.Data;
-using Microsoft.EntityFrameworkCore;
+using Messenger.Infrastructure.Extensions;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using Serilog;
@@ -54,12 +53,8 @@ namespace Messenger.API
             });
             builder.Services.AddValidation();
             builder.Services.AddSignalRService(builder.Configuration);
-            builder.Services.AddRedisCache(builder.Configuration);
             builder.Services.AddScalarApi(builder.Configuration);
-            builder.Services.AddPostgreSQL(builder.Configuration);
-            builder.Services.AddServices();
-            builder.Services.AddEncryption(builder.Configuration);
-            builder.Services.AddRabbitMQ(builder.Configuration);
+            builder.Services.AddMessengerInfrastructure(builder.Configuration);
             builder.Services.AddHttpClient();
             builder.Services.AddHostedService<ScheduledMessageDispatcherService>();
             builder.Services.AddEtaApiAuthentication(builder.Configuration, !builder.Environment.IsDevelopment());
@@ -114,51 +109,7 @@ namespace Messenger.API
                 options.MessageTemplate = "HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000} ms";
             });
 
-            using (var migrationScope = app.Services.CreateScope())
-            {
-                var logger = migrationScope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-                var db = migrationScope.ServiceProvider.GetRequiredService<GuapMessengerContext>();
-
-                try
-                {
-                    var appliedMigrations = db.Database.GetAppliedMigrations().ToList();
-                    var currentMigration = appliedMigrations.LastOrDefault();
-
-                    logger.LogInformation("Текущая миграция базы данных: {Migration}", currentMigration ?? "Нет");
-
-                    var pendingMigrations = db.Database.GetPendingMigrations().ToList();
-
-                    if (pendingMigrations.Count == 0)
-                    {
-                        logger.LogInformation("Нет ожидающих миграций для применения.");
-                    }
-                    else
-                    {
-                        logger.LogInformation("Найдено {Count} ожидающих миграций. Применяю...", pendingMigrations.Count);
-
-                        foreach (var migration in pendingMigrations)
-                        {
-                            logger.LogInformation("Применяю миграцию: {Migration}", migration);
-                            db.Database.Migrate(migration);
-                            logger.LogInformation("Миграция успешно применена: {Migration}", migration);
-                        }
-
-                        logger.LogInformation("Все ожидающие миграции успешно применены.");
-                    }
-
-                    var finalMigration = db.Database
-                        .GetAppliedMigrations()
-                        .LastOrDefault();
-
-                    logger.LogInformation("Миграция базы данных завершена. Текущая миграция: {Migration}",
-                        finalMigration ?? "Нет");
-                }
-                catch (Exception ex)
-                {
-                    logger.LogError(ex, "Ошибка при применении миграций базы данных.");
-                    throw;
-                }
-            }
+            app.InitializeMessengerDatabase();
 
             if (app.Environment.IsDevelopment())
             {
