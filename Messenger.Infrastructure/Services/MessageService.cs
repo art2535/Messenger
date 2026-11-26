@@ -10,7 +10,7 @@ namespace Messenger.Infrastructure.Services
     public class MessageService : IMessageService
     {
         private readonly IMessagePaginationService _messagePaginationService;
-        private readonly IMessageExportService _messageExportService;
+        private readonly IMessageChatExportService _messageChatExportService;
         private readonly IMessageSearchService _messageSearchService;
         private readonly IMessagePinningService _messagePinningService;
         private readonly IMessageMutationService _messageMutationService;
@@ -20,7 +20,7 @@ namespace Messenger.Infrastructure.Services
         private readonly IMessageEventPublisher _messageEventPublisher;
 
         public MessageService(IMessagePaginationService messagePaginationService,
-            IMessageExportService messageExportService,
+            IMessageChatExportService messageChatExportService,
             IMessageSearchService messageSearchService,
             IMessagePinningService messagePinningService,
             IMessageMutationService messageMutationService,
@@ -30,7 +30,7 @@ namespace Messenger.Infrastructure.Services
             IMessageEventPublisher messageEventPublisher)
         {
             _messagePaginationService = messagePaginationService;
-            _messageExportService = messageExportService;
+            _messageChatExportService = messageChatExportService;
             _messageSearchService = messageSearchService;
             _messagePinningService = messagePinningService;
             _messageMutationService = messageMutationService;
@@ -130,36 +130,13 @@ namespace Messenger.Infrastructure.Services
             return _messageMutationService.UpdateMessageAsync(message, token);
         }
 
-        public async Task<ChatExportResult> ExportChatAsync(Guid chatId, string format, string? chatName = null, 
+        public Task<ChatExportResult> ExportChatAsync(
+            Guid chatId,
+            string format,
+            string? chatName = null,
             CancellationToken token = default)
         {
-            format = (format ?? "txt").Trim().ToLowerInvariant();
-            if (format is not ("txt" or "json" or "html" or "csv"))
-                format = "txt";
-
-            var allMessages = new List<Message>();
-            long? beforeSeq = null;
-            const int pageSize = 200;
-            const int maxMessages = 5000;
-            bool hasMore = true;
-
-            while (hasMore && allMessages.Count < maxMessages)
-            {
-                var (batch, more) = await _messagePaginationService.GetMessagesByChatIdPagedAsync(chatId, beforeSeq, pageSize, token);
-                if (batch.Count == 0)
-                    break;
-
-                allMessages.InsertRange(0, batch);
-                beforeSeq = batch.Min(m => m.SequenceNumber);
-                hasMore = more;
-
-                if (batch.Count < pageSize)
-                    hasMore = false;
-            }
-
-            allMessages = allMessages.OrderBy(m => m.SequenceNumber).ToList();
-
-            return _messageExportService.Export(chatId, format, chatName, allMessages);
+            return _messageChatExportService.ExportChatAsync(chatId, format, chatName, token);
         }
 
         public Task<int> DeleteMessagesAsync(
