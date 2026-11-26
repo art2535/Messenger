@@ -1,6 +1,5 @@
 using Messenger.Core.Interfaces;
 using Messenger.Core.Services;
-using Messenger.Infrastructure.Services;
 using Messenger.Infrastructure.Interfaces.Chats;
 using Messenger.Infrastructure.Services.Chats;
 using Messenger.Infrastructure.Persistence;
