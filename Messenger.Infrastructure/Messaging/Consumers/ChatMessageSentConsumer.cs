@@ -133,6 +133,10 @@ namespace Messenger.Infrastructure.Messaging.Consumers
                     }
                 }
 
+                var decryptedText = string.IsNullOrEmpty(msg.MessageText)
+                    ? null
+                    : _encryptionService.TryDecryptSafe(msg.MessageText);
+
                 var finalMessageDto = new MessageDto
                 {
                     MessageId = savedMessage.MessageId,
