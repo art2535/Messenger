@@ -1,185 +1,199 @@
 ﻿using Asp.Versioning;
-using Messenger.API.Responses;
+using Messenger.API.Extensions;
 using Messenger.Core.DTOs.Broadcasts;
 using Messenger.Core.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel;
-using System.Security.Claims;
+using Messenger.Core.Responses;
 
 namespace Messenger.API.Controllers
 {
     /// <summary>
-    /// Контроллер для управления рассылками сообщений
+    /// Контроллер для управления рассылками сообщений.
     /// </summary>
     [Authorize]
     [ApiController]
-    [Route("api/v{version:apiVersion}/[controller]")]
+    [Route("api/v{version:apiVersion}/broadcasts")]
     [ApiVersion("1.0")]
+    [Produces("application/json")]
+    [Consumes("application/json")]
     [Tags("Broadcasts")]
     public class BroadcastsController : ControllerBase
     {
-        private readonly IBroadcastService _service;
+        private readonly IBroadcastService _broadcastService;
         private readonly IUserService _userService;
+        private readonly ILogger<BroadcastsController> _logger;
 
-        public BroadcastsController(IBroadcastService service, IUserService userService)
+        public BroadcastsController(
+            IBroadcastService broadcastService,
+            IUserService userService,
+            ILogger<BroadcastsController> logger)
         {
-            _service = service;
+            _broadcastService = broadcastService;
             _userService = userService;
-        }
-
-        private async Task<Guid> GetCurrentUserId()
-        {
-            var id = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
-
-            if (string.IsNullOrEmpty(id) || !Guid.TryParse(id, out var extrnalId))
-                throw new UnauthorizedAccessException("Не удалось определить пользователя");
-
-            var user = await _userService.GetUserByExternalIdAsync(id);
-
-            return user!.UserId;
+            _logger = logger;
         }
 
         /// <summary>
-        /// Создать новую рассылку
+        /// Создать новую рассылку.
         /// </summary>
         [HttpPost("create")]
         [EndpointName("CreateBroadcast")]
         [EndpointSummary("Создать новую рассылку")]
         [EndpointDescription("Позволяет создать массовую рассылку сообщений пользователям.")]
-        [ProducesResponseType(typeof(BroadcastCreatedResponse), StatusCodes.Status201Created)]
-        [ProducesResponseType(typeof(string), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status201Created)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> CreateBroadcastAsync(
-            [FromBody, Description("Данные для создания рассылки")] CreateBroadcastRequest? request)
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> PostCreateBroadcastAsync(
+            [FromBody, Description("Данные для создания рассылки")] CreateBroadcastRequest? request,
+            CancellationToken ct = default)
         {
             try
             {
                 if (request == null)
-                    return BadRequest("Тело запроса отсутствует");
-
-                var senderId = await GetCurrentUserId();
-                var response = await _service.CreateBroadcastAsync(request, senderId);
-
-                return Created($"/api/broadcasts/{response.BroadcastId}", response);
-            }
-            catch (ArgumentException ex)
-            {
-                return BadRequest(ex.Message);
-            }
-            catch (UnauthorizedAccessException)
-            {
-                return Unauthorized();
-            }
-            catch (Exception)
-            {
-                return StatusCode(500, new ErrorResponse
                 {
-                    IsSuccess = false,
-                    Error = "Внутренняя ошибка при создании рассылки"
-                });
-            }
-        }
+                    return BadRequest(ApiResponse.Failure("Тело запроса отсутствует", "INVALID_REQUEST"));
+                }
 
-        /// <summary>
-        /// Получить статус рассылки
-        /// </summary>
-        [HttpGet("{id}")]
-        [EndpointName("GetBroadcastStatus")]
-        [EndpointSummary("Получить статус рассылки")]
-        [EndpointDescription("Возвращает детальную информацию о рассылке по её ID.")]
-        [ProducesResponseType(typeof(BroadcastSummaryDto), StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status403Forbidden)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> GetBroadcastStatusAsync(
-            [Description("Уникальный идентификатор рассылки (GUID)")] Guid id)
-        {
-            try
-            {
-                var userId = await GetCurrentUserId();
-                var isAdmin = User.IsInRole("Admin");
+                var senderId = await User.GetCurrentUserIdAsync(_userService);
+                var created = await _broadcastService.CreateBroadcastAsync(request, senderId);
 
-                var summary = await _service.GetBroadcastSummaryAsync(id, userId, isAdmin);
-
-                if (summary == null)
-                    return NotFound("Рассылка не найдена");
-
-                return Ok(summary);
+                return Ok(ApiResponse.Success(created));
             }
             catch (UnauthorizedAccessException ex)
             {
-                return Forbid(ex.Message);
+                _logger.LogWarning(ex, "Ошибка авторизации при создании рассылки");
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
-            catch (Exception)
+            catch (InvalidOperationException ex)
             {
-                return StatusCode(500, new ErrorResponse
-                {
-                    IsSuccess = false,
-                    Error = "Ошибка при получении статуса рассылки"
-                });
+                return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка при выполнении POST /broadcasts/create");
+                return StatusCode(StatusCodes.Status500InternalServerError, 
+                    ApiResponse.Failure("Внутренняя ошибка при создании рассылки", "INTERNAL_ERROR"));
             }
         }
 
         /// <summary>
-        /// Отметить рассылку как прочитанную
+        /// Получить статус рассылки.
         /// </summary>
-        [HttpPost("{id}/read")]
-        [EndpointName("MarkBroadcastAsRead")]
-        [EndpointSummary("Отметить рассылку как прочитанную")]
-        [EndpointDescription("Устанавливает статус «Прочитано» для текущего пользователя в конкретной рассылке.")]
-        [ProducesResponseType(typeof(bool), StatusCodes.Status200OK)]
+        [HttpGet("{id:guid}")]
+        [EndpointName("GetBroadcastStatus")]
+        [EndpointSummary("Получить статус рассылки")]
+        [EndpointDescription("Возвращает детальную информацию о рассылке по её ID.")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> MarkAsReadAsync(
-            [Description("Уникальный идентификатор рассылки (GUID)")] Guid id)
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> GetBroadcastStatusAsync(
+            [FromRoute, Description("Уникальный идентификатор рассылки (GUID)")] Guid id,
+            CancellationToken ct = default)
         {
             try
             {
-                var userId = await GetCurrentUserId();
-                var result = await _service.MarkAsReadAsync(id, userId);
-                return Ok(result);
-            }
-            catch (KeyNotFoundException ex)
-            {
-                return NotFound(ex.Message);
-            }
-            catch (Exception)
-            {
-                return StatusCode(500, new ErrorResponse
+                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var isAdmin = User.IsInRole("Admin");
+
+                var summary = await _broadcastService.GetBroadcastSummaryAsync(id, userId, isAdmin);
+
+                if (summary == null)
                 {
-                    IsSuccess = false,
-                    Error = "Ошибка при отметке прочтения"
-                });
+                    return NotFound(ApiResponse.Failure("Рассылка не найдена", "NOT_FOUND"));
+                }
+
+                return Ok(ApiResponse.Success(summary));
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Ошибка доступа при получении статуса рассылки {BroadcastId}", id);
+                return StatusCode(StatusCodes.Status403Forbidden, ApiResponse.Failure(ex.Message, "FORBIDDEN"));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка при выполнении GET /broadcasts/{BroadcastId}", id);
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure("Ошибка при получении статуса рассылки", "INTERNAL_ERROR"));
             }
         }
 
         /// <summary>
-        /// Получить список моих рассылок
+        /// Отметить рассылку как прочитанную.
+        /// </summary>
+        [HttpPost("{id:guid}/read")]
+        [EndpointName("MarkBroadcastAsRead")]
+        [EndpointSummary("Отметить рассылку как прочитанную")]
+        [EndpointDescription("Устанавливает статус «Прочитано» для текущего пользователя в конкретной рассылке.")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> PostMarkAsReadAsync(
+            [FromRoute, Description("Уникальный идентификатор рассылки (GUID)")] Guid id,
+            CancellationToken ct = default)
+        {
+            try
+            {
+                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var result = await _broadcastService.MarkAsReadAsync(id, userId);
+
+                return Ok(ApiResponse.Success(result
+                ));
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Ошибка авторизации при отметке прочтения рассылки {BroadcastId}", id);
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(ApiResponse.Failure(ex.Message, "NOT_FOUND"));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка при выполнении POST /broadcasts/{BroadcastId}/read", id);
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure("Ошибка при отметке прочтения", "INTERNAL_ERROR"));
+            }
+        }
+
+        /// <summary>
+        /// Получить список моих рассылок.
         /// </summary>
         [HttpGet("my")]
         [EndpointName("GetMyBroadcasts")]
         [EndpointSummary("Получить список моих рассылок")]
         [EndpointDescription("Возвращает список рассылок, адресованных текущему пользователю.")]
-        [ProducesResponseType(typeof(IEnumerable<object>), StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> GetMyBroadcastsAsync(
-            [FromQuery, Description("Фильтр: только непрочитанные")] bool unreadOnly = true)
+            [FromQuery, Description("Фильтр: только непрочитанные")] bool unreadOnly = true,
+            CancellationToken ct = default)
         {
             try
             {
-                var userId = await GetCurrentUserId();
-                var broadcasts = await _service.GetMyBroadcastsAsync(userId, unreadOnly);
-                return Ok(broadcasts);
+                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var broadcasts = await _broadcastService.GetMyBroadcastsAsync(userId, unreadOnly);
+
+                return Ok(ApiResponse.Success(broadcasts));
             }
-            catch (Exception)
+            catch (UnauthorizedAccessException ex)
             {
-                return StatusCode(500, new ErrorResponse
-                {
-                    IsSuccess = false,
-                    Error = "Ошибка при получении ваших рассылок"
-                });
+                _logger.LogWarning(ex, "Ошибка авторизации при получении списка рассылок");
+                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка при выполнении GET /broadcasts/my");
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure("Ошибка при получении ваших рассылок", "INTERNAL_ERROR"));
             }
         }
     }

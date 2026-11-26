@@ -46,7 +46,7 @@ namespace Messenger.Infrastructure.Services
             var ciphertext = new byte[plaintextBytes.Length];
             var tag = new byte[16];
 
-            using var aesGcm = new AesGcm(_masterKey);
+            using var aesGcm = new AesGcm(_masterKey, 16);
             aesGcm.Encrypt(nonce, plaintextBytes, ciphertext, tag);
 
             var combined = new byte[12 + 16 + ciphertext.Length];
@@ -85,7 +85,7 @@ namespace Messenger.Infrastructure.Services
 
             try
             {
-                using var aesGcm = new AesGcm(_masterKey);
+                using var aesGcm = new AesGcm(_masterKey, 16);
                 aesGcm.Decrypt(nonce, ciphertext, tag, plaintextBytes);
             }
             catch (CryptographicException ex)

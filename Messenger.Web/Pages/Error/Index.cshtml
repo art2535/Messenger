@@ -1,0 +1,40 @@
+﻿@page "/error"
+@model Messenger.Web.Pages.Error.ErrorModel
+@{
+    ViewData["Title"] = "Ошибка";
+    Layout = "_Layout";
+}
+
+<link rel="stylesheet" href="~/css/error.css" asp-append-version="true" />
+
+<div class="error-page">
+    <div class="error-card">
+        <div class="error-hero">
+            <div class="error-code">!</div>
+            <h1>Что-то пошло не так</h1>
+            <p>При обработке запроса произошла ошибка. Попробуйте ещё раз или вернитесь на главную.</p>
+        </div>
+        <div class="error-body">
+            @if (Model.ShowRequestId)
+            {
+                <div class="error-id">
+                    <strong>Идентификатор запроса:</strong>
+                    <code>@Model.RequestId</code>
+                </div>
+            }
+            <p>
+                Если проблема повторяется, сообщите в службу поддержки университета
+                или обратитесь в <a href="https://guap.ru/c/it/struct/orcs" target="_blank" rel="noopener" style="color:#005aaa;font-weight:600;">УЦР ГУАП</a>.
+            </p>
+            <div class="error-actions">
+                <a href="/" class="btn-guap-primary">На главную</a>
+                <a href="/login" class="btn-guap-secondary">Войти в мессенджер</a>
+            </div>
+            <div class="error-hint">
+                Мессенджер ГУАП при локальной отладке включите окружение
+                <strong>Development</strong> (переменная <code>ASPNETCORE_ENVIRONMENT</code>),
+                чтобы видеть подробности исключения. На рабочем сервере режим разработки включать нельзя.
+            </div>
+        </div>
+    </div>
+</div>

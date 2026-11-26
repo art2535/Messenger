@@ -1,0 +1,82 @@
+@page "/inside/settings/privacy"
+@model Messenger.Web.Pages.Inside.Settings.Privacy.IndexModel
+@{
+    ViewData["Title"] = "Конфиденциальность";
+    ViewData["DisplayName"] = Model.DisplayName;
+    ViewData["AccessToken"] = Model.AccessToken;
+    ViewData["ApiBaseUrl"] = Model.ApiBaseUrl;
+    ViewData["HubUrl"] = Model.HubUrl;
+}
+
+<div class="max-w-4xl mx-auto space-y-5 sm:space-y-6">
+    <h2 class="text-xl sm:text-2xl font-semibold text-gray-800 dark:text-white hidden sm:block">Конфиденциальность</h2>
+
+    <section class="settings-card">
+        <div class="settings-card-header">
+            <div class="settings-icon-wrap bg-teal-50 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400">
+                <i data-feather="eye" class="w-5 h-5"></i>
+            </div>
+            <div class="min-w-0">
+                <h3 class="settings-card-title">Статус и активность</h3>
+                <p class="settings-card-desc">Что видят другие пользователи</p>
+            </div>
+        </div>
+        <div class="settings-row">
+            <div class="settings-row-text">
+                <span class="settings-row-label">Показывать онлайн-статус</span>
+                <span class="settings-row-hint">«В сети» / «Был(а) недавно»</span>
+            </div>
+            <label class="toggle">
+                <input type="checkbox" class="toggle-input pref-toggle" data-pref="privacy.showOnline" checked>
+                <span class="toggle-track"></span>
+            </label>
+        </div>
+        <div class="settings-row border-0">
+            <div class="settings-row-text">
+                <span class="settings-row-label">Индикатор «печатает…»</span>
+                <span class="settings-row-hint">Показывать собеседникам, что вы набираете текст</span>
+            </div>
+            <label class="toggle">
+                <input type="checkbox" class="toggle-input pref-toggle" data-pref="privacy.typing" checked>
+                <span class="toggle-track"></span>
+            </label>
+        </div>
+    </section>
+
+    <section class="settings-card">
+        <div class="settings-card-header">
+            <div class="settings-icon-wrap bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400">
+                <i data-feather="user-check" class="w-5 h-5"></i>
+            </div>
+            <div class="min-w-0">
+                <h3 class="settings-card-title">Прочтения</h3>
+                <p class="settings-card-desc">Отметки о просмотре сообщений</p>
+            </div>
+        </div>
+        <div class="settings-row border-0">
+            <div class="settings-row-text">
+                <span class="settings-row-label">Отправлять «прочитано»</span>
+                <span class="settings-row-hint">Если выключено, вы тоже не увидите чужие отметки (когда API поддержит)</span>
+            </div>
+            <label class="toggle">
+                <input type="checkbox" class="toggle-input pref-toggle" data-pref="privacy.readReceipts" checked>
+                <span class="toggle-track"></span>
+            </label>
+        </div>
+    </section>
+</div>
+
+@section Scripts {
+    <script src="~/js/settings/settings-prefs.js" asp-append-version="true"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            if (typeof feather !== 'undefined') feather.replace();
+            if (typeof initPrefToggles === 'function') initPrefToggles();
+
+            const sessionsListEl = document.getElementById('active-sessions-list');
+            if (sessionsListEl && typeof window.loadSessionsList === 'function') {
+                window.loadSessionsList(sessionsListEl);
+            }
+        });
+    </script>
+}

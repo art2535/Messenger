@@ -200,6 +200,18 @@ namespace Messenger.Infrastructure.Migrations
                     b.Property<string>("Avatar")
                         .HasColumnType("text");
 
+                    b.Property<bool>("CompactList")
+                        .HasColumnType("boolean")
+                        .HasColumnName("Compact_List");
+
+                    b.Property<bool>("IdleLogout")
+                        .HasColumnType("boolean")
+                        .HasColumnName("Idle_Logout");
+
+                    b.Property<bool>("LargeFont")
+                        .HasColumnType("boolean")
+                        .HasColumnName("Large_Font");
+
                     b.Property<bool>("NotifyGroupChats")
                         .HasColumnType("boolean")
                         .HasColumnName("Notify_GroupChats");
@@ -212,9 +224,47 @@ namespace Messenger.Infrastructure.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("Notify_Messages");
 
+                    b.Property<bool>("NotifyPreview")
+                        .HasColumnType("boolean")
+                        .HasColumnName("Notify_Preview");
+
+                    b.Property<bool>("NotifyReactions")
+                        .HasColumnType("boolean")
+                        .HasColumnName("Notify_Reactions");
+
+                    b.Property<bool>("NotifySound")
+                        .HasColumnType("boolean")
+                        .HasColumnName("Notify_Sound");
+
+                    b.Property<bool>("NotifySystem")
+                        .HasColumnType("boolean")
+                        .HasColumnName("Notify_System");
+
                     b.Property<bool>("PushEnabled")
                         .HasColumnType("boolean")
                         .HasColumnName("Push_Enabled");
+
+                    b.Property<bool>("ReadReceipts")
+                        .HasColumnType("boolean")
+                        .HasColumnName("Read_Receipts");
+
+                    b.Property<bool>("ShowOnline")
+                        .HasColumnType("boolean")
+                        .HasColumnName("Show_Online");
+
+                    b.Property<bool>("ShowTyping")
+                        .HasColumnType("boolean")
+                        .HasColumnName("Show_Typing");
+
+                    b.Property<bool>("SuppressOpenChat")
+                        .HasColumnType("boolean")
+                        .HasColumnName("Suppress_Open_Chat");
+
+                    b.Property<string>("Theme")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("Theme");
 
                     b.HasKey("AccountId")
                         .HasName("Account_Settings_pkey");
@@ -373,6 +423,62 @@ namespace Messenger.Infrastructure.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("Chats");
+                });
+
+            modelBuilder.Entity("Messenger.Core.Models.ChatFolder", b =>
+                {
+                    b.Property<Guid>("FolderId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("Folder_ID");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("Created_At");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("Sort_Order");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("User_ID");
+
+                    b.HasKey("FolderId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("ChatFolders", (string)null);
+                });
+
+            modelBuilder.Entity("Messenger.Core.Models.ChatFolderChat", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("Id");
+
+                    b.Property<Guid>("ChatId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("Chat_ID");
+
+                    b.Property<Guid>("FolderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("Folder_ID");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChatId");
+
+                    b.HasIndex("FolderId", "ChatId")
+                        .IsUnique();
+
+                    b.ToTable("ChatFolderChats", (string)null);
                 });
 
             modelBuilder.Entity("Messenger.Core.Models.ChatParticipant", b =>
@@ -579,6 +685,111 @@ namespace Messenger.Infrastructure.Migrations
                     b.ToTable("Messages");
                 });
 
+            modelBuilder.Entity("Messenger.Core.Models.MessageReport", b =>
+                {
+                    b.Property<Guid>("ReportId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("Report_ID");
+
+                    b.Property<string>("AdminNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("Admin_Note");
+
+                    b.Property<Guid>("ChatId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("Chat_ID");
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("Comment");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("Created_At");
+
+                    b.Property<Guid>("MessageId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("Message_ID");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("Reason");
+
+                    b.Property<Guid>("ReporterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("Reporter_ID");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("Reviewed_At");
+
+                    b.Property<Guid?>("ReviewedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("Reviewed_By");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("Status");
+
+                    b.HasKey("ReportId");
+
+                    b.HasIndex("MessageId");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("Message_Reports", (string)null);
+                });
+
+            modelBuilder.Entity("Messenger.Core.Models.ModerationLog", b =>
+                {
+                    b.Property<Guid>("LogId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("Log_ID");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("Action");
+
+                    b.Property<Guid?>("ActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("Actor_ID");
+
+                    b.Property<Guid?>("ChatId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("Chat_ID");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("Created_At");
+
+                    b.Property<string>("Details")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("Details");
+
+                    b.Property<Guid?>("MessageId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("Message_ID");
+
+                    b.Property<Guid?>("TargetUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("Target_User_ID");
+
+                    b.HasKey("LogId");
+
+                    b.ToTable("Moderation_Logs", (string)null);
+                });
+
             modelBuilder.Entity("Messenger.Core.Models.Notification", b =>
                 {
                     b.Property<Guid>("NotificationId")
@@ -743,15 +954,82 @@ namespace Messenger.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Messenger.Core.Models.ScheduledMessage", b =>
+                {
+                    b.Property<Guid>("ScheduledMessageId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("Scheduled_Message_ID");
+
+                    b.Property<string>("AttachmentsJson")
+                        .HasColumnType("text")
+                        .HasColumnName("Attachments_Json");
+
+                    b.Property<Guid>("ChatId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("Chat_ID");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("Created_At");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasColumnType("text")
+                        .HasColumnName("Error_Message");
+
+                    b.Property<bool>("HasAttachments")
+                        .HasColumnType("boolean")
+                        .HasColumnName("Has_Attachments");
+
+                    b.Property<string>("MessageText")
+                        .HasColumnType("text")
+                        .HasColumnName("Message_Text");
+
+                    b.Property<string>("ReplyToMessageId")
+                        .HasColumnType("text")
+                        .HasColumnName("Reply_To_Message_ID");
+
+                    b.Property<Guid?>("ResultMessageId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("Result_Message_ID");
+
+                    b.Property<DateTime>("ScheduledAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("Scheduled_At");
+
+                    b.Property<Guid>("SenderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("Sender_ID");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("Status");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("Updated_At");
+
+                    b.HasKey("ScheduledMessageId")
+                        .HasName("Scheduled_Messages_pkey");
+
+                    b.HasIndex("ChatId")
+                        .HasDatabaseName("IX_Scheduled_Messages_Chat_ID");
+
+                    b.HasIndex("SenderId", "Status")
+                        .HasDatabaseName("IX_Scheduled_Messages_Sender_ID_Status");
+
+                    b.HasIndex("Status", "ScheduledAt")
+                        .HasDatabaseName("IX_Scheduled_Messages_Status_Scheduled_At");
+
+                    b.ToTable("Scheduled_Messages", (string)null);
+                });
+
             modelBuilder.Entity("Messenger.Core.Models.User", b =>
                 {
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid")
                         .HasColumnName("User_ID");
-
-                    b.Property<Guid>("AccountId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("Account_ID");
 
                     b.Property<string>("ExternalId")
                         .HasMaxLength(255)
@@ -782,6 +1060,47 @@ namespace Messenger.Infrastructure.Migrations
                         .HasName("Users_pkey");
 
                     b.ToTable("Users");
+                });
+
+            modelBuilder.Entity("Messenger.Core.Models.UserMute", b =>
+                {
+                    b.Property<Guid>("MuteId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("Mute_ID");
+
+                    b.Property<Guid?>("ChatId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("Chat_ID");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("Created_At");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("Is_Active");
+
+                    b.Property<Guid>("MutedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("Muted_By");
+
+                    b.Property<DateTime>("MutedUntil")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("Muted_Until");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("Reason");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("User_ID");
+
+                    b.HasKey("MuteId");
+
+                    b.ToTable("User_Mutes", (string)null);
                 });
 
             modelBuilder.Entity("Messenger.Core.Models.UserStatus", b =>
@@ -902,6 +1221,36 @@ namespace Messenger.Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("Messenger.Core.Models.ChatFolder", b =>
+                {
+                    b.HasOne("Messenger.Core.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Messenger.Core.Models.ChatFolderChat", b =>
+                {
+                    b.HasOne("Messenger.Core.Models.Chat", "Chat")
+                        .WithMany()
+                        .HasForeignKey("ChatId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Messenger.Core.Models.ChatFolder", "Folder")
+                        .WithMany("Chats")
+                        .HasForeignKey("FolderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Chat");
+
+                    b.Navigation("Folder");
+                });
+
             modelBuilder.Entity("Messenger.Core.Models.ChatParticipant", b =>
                 {
                     b.HasOne("Messenger.Core.Models.Chat", "Chat")
@@ -956,6 +1305,17 @@ namespace Messenger.Infrastructure.Migrations
                     b.Navigation("Sender");
                 });
 
+            modelBuilder.Entity("Messenger.Core.Models.MessageReport", b =>
+                {
+                    b.HasOne("Messenger.Core.Models.Message", "Message")
+                        .WithMany()
+                        .HasForeignKey("MessageId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Message");
+                });
+
             modelBuilder.Entity("Messenger.Core.Models.Notification", b =>
                 {
                     b.HasOne("Messenger.Core.Models.User", "User")
@@ -1001,6 +1361,27 @@ namespace Messenger.Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("Messenger.Core.Models.ScheduledMessage", b =>
+                {
+                    b.HasOne("Messenger.Core.Models.Chat", "Chat")
+                        .WithMany()
+                        .HasForeignKey("ChatId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_scheduled_message_chat");
+
+                    b.HasOne("Messenger.Core.Models.User", "Sender")
+                        .WithMany()
+                        .HasForeignKey("SenderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_scheduled_message_sender");
+
+                    b.Navigation("Chat");
+
+                    b.Navigation("Sender");
+                });
+
             modelBuilder.Entity("Messenger.Core.Models.UserStatus", b =>
                 {
                     b.HasOne("Messenger.Core.Models.User", "User")
@@ -1038,6 +1419,11 @@ namespace Messenger.Infrastructure.Migrations
                     b.Navigation("ChatParticipants");
 
                     b.Navigation("Messages");
+                });
+
+            modelBuilder.Entity("Messenger.Core.Models.ChatFolder", b =>
+                {
+                    b.Navigation("Chats");
                 });
 
             modelBuilder.Entity("Messenger.Core.Models.Message", b =>

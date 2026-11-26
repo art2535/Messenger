@@ -1,20 +1,20 @@
 ﻿using Asp.Versioning;
-using Messenger.API.Responses;
 using Messenger.Core.DTOs.Attachments;
 using Messenger.Core.Interfaces;
 using Messenger.Core.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel;
+using Messenger.Core.Responses;
 
 namespace Messenger.API.Controllers
 {
     /// <summary>
-    /// Контроллер для управления вложениями
+    /// Контроллер для управления вложениями.
     /// </summary>
     [Authorize]
     [ApiController]
-    [Route("api/v{version:apiVersion}/[controller]")]
+    [Route("api/v{version:apiVersion}/attachments")]
     [ApiVersion("1.0")]
     [Produces("application/json")]
     [Consumes("application/json")]
@@ -22,65 +22,66 @@ namespace Messenger.API.Controllers
     public class AttachmentsController : ControllerBase
     {
         private readonly IAttachmentService _attachmentService;
+        private readonly ILogger<AttachmentsController> _logger;
 
-        public AttachmentsController(IAttachmentService attachmentService)
+        public AttachmentsController(
+            IAttachmentService attachmentService,
+            ILogger<AttachmentsController> logger)
         {
             _attachmentService = attachmentService;
+            _logger = logger;
         }
 
         /// <summary>
-        /// Получение списка вложений по идентификатору сообщения
+        /// Получение списка вложений по идентификатору сообщения.
         /// </summary>
-        [HttpGet("{messageId}")]
+        [HttpGet("{messageId:guid}")]
         [EndpointName("GetAttachmentsByMessage")]
         [EndpointSummary("Получение списка вложений по идентификатору сообщения")]
         [EndpointDescription("Возвращает все файлы (вложения), прикреплённые к указанному сообщению. Требуется действительный JWT-токен.")]
-        [ProducesResponseType(typeof(GetAttachmentsSuccessResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> GetAttachmentsByMessageAsync(
-            [Description("Уникальный идентификатор сообщения (GUID)")] Guid messageId,
-            CancellationToken cancellationToken = default)
+            [FromRoute, Description("Уникальный идентификатор сообщения (GUID)")] Guid messageId,
+            CancellationToken ct = default)
         {
             try
             {
-                var attachents = await _attachmentService.GetAttachmentsByMessageIdAsync(messageId, cancellationToken);
+                var attachments = await _attachmentService.GetAttachmentsByMessageIdAsync(messageId, ct);
 
-                return Ok(new GetAttachmentsSuccessResponse
-                {
-                    IsSuccess = true,
-                    Data = attachents
-                });
+                return Ok(ApiResponse.Success(attachments));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return NotFound(ApiResponse.Failure(ex.Message, "NOT_FOUND"));
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new ErrorResponse
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                _logger.LogError(ex, "Ошибка при получении вложений для сообщения {MessageId}", messageId);
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
 
         /// <summary>
-        /// Добавление нового вложения к сообщению
+        /// Добавление нового вложения к сообщению.
         /// </summary>
-        [HttpPost("{messageId}")]
+        [HttpPost("{messageId:guid}")]
         [EndpointName("CreateAttachment")]
         [EndpointSummary("Добавление нового вложения к сообщению")]
         [EndpointDescription("Создаёт запись о новом файле (вложении), прикреплённом к сообщению. " +
             "Требуется передать данные файла в теле запроса. Идентификатор вложения генерируется автоматически. " +
             "Требуется действительный JWT-токен.")]
-        [ProducesResponseType(typeof(CreateAttachmentSuccessResponse), StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> CreateAttachmentAsync(
-            [Description("Уникальный идентификатор сообщения (GUID), к которому добавляется вложение")] Guid messageId,
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> PostCreateAttachmentAsync(
+            [FromRoute, Description("Уникальный идентификатор сообщения (GUID), к которому добавляется вложение")] Guid messageId,
             [FromBody, Description("Данные нового вложения")] CreateAttachmentRequest request,
-            CancellationToken cancellationToken = default)
+            CancellationToken ct = default)
         {
             try
             {
@@ -94,21 +95,22 @@ namespace Messenger.API.Controllers
                     Url = request.Url
                 };
 
-                await _attachmentService.AddAttachmentAsync(attachment, cancellationToken);
+                await _attachmentService.AddAttachmentAsync(attachment, ct);
 
-                return Ok(new CreateAttachmentSuccessResponse
-                {
-                    IsSuccess = true,
-                    Message = "Вложение успешно добавлено"
-                });
+                return Ok(ApiResponse.Success(message: "Вложение успешно добавлено"));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new ErrorResponse
-                {
-                    IsSuccess = false,
-                    Error = ex.Message
-                });
+                _logger.LogError(ex, "Ошибка при добавлении вложения к сообщению {MessageId}", messageId);
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
     }

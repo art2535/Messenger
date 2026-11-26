@@ -9,7 +9,7 @@ async function startSignalR() {
         let freshToken = (typeof token === 'string' && token) ? token : (localStorage.getItem('token') || '');
         if (!freshToken) {
             console.warn("Токен пропал — редирект");
-            window.location.href = "/Authorization/Authorization";
+            window.location.href = "/login";
             return null;
         }
         return freshToken;
@@ -78,36 +78,54 @@ async function startSignalR() {
     });
 
     connection.on("UserOnlineStatusChanged", (data) => {
-        const uid = String(data.userId || data.UserId || '').trim();
+        if (!data) return;
+        const uidRaw = String(data.userId || data.UserId || '').trim();
+        if (!uidRaw) return;
+        const uid = uidRaw.toLowerCase();
         const isOnline = !!(data.isOnline ?? data.IsOnline ?? data.online ?? data.Online);
         let lastActivity = data.lastActivity ?? data.LastActivity ?? data.lastSeen ?? data.LastSeen ?? null;
-        console.log(`[STATUS] ${uid} → ${isOnline ? 'ONLINE' : 'OFFLINE'}`, data);
+        console.log(`[STATUS] ${uidRaw} → ${isOnline ? 'ONLINE' : 'OFFLINE'}`, data);
 
-        const prev = userStatuses.get(uid);
+        // единый ключ в нижнем регистре + дублируем исходный id
+        const prev = userStatuses.get(uid) || userStatuses.get(uidRaw);
         if (!lastActivity && prev?.lastActivity) {
             lastActivity = prev.lastActivity;
         }
 
-        userStatuses.set(uid, {
-            isOnline,
-            lastActivity
-        });
+        const entry = { isOnline, lastActivity };
+        userStatuses.set(uid, entry);
+        userStatuses.set(uidRaw, entry);
+
+        // зелёные точки в списке чатов
+        if (typeof updateAllOnlineIndicators === 'function') {
+            updateAllOnlineIndicators();
+        } else {
+            document.querySelectorAll('.chat-item[data-partner-id]').forEach(item => {
+                const pid = String(item.dataset.partnerId || '').trim().toLowerCase();
+                if (pid !== uid) return;
+                const onlineDot = item.querySelector('.chat-online-dot');
+                if (onlineDot) onlineDot.classList.toggle('hidden', !isOnline);
+            });
+        }
 
         if (currentChatId) {
             updateCurrentChatSubtitle();
         }
 
-        if (document.getElementById('chat-info-modal').classList.contains('show') && currentChatInfo?.type === 'group') {
-            const userIdStr = data.userId.toString().trim();
-            const isOnlineNow = !!data.isOnline;
-
-            const participantEl = document.querySelector(`#participants-list [data-user-id="${userIdStr}"]`);
-            if (participantEl) {
+        // участники в info-модалке группы
+        const infoModal = document.getElementById('chat-info-modal');
+        if (infoModal && infoModal.classList.contains('show')) {
+            document.querySelectorAll('#participants-list [data-user-id]').forEach(participantEl => {
+                const pid = String(participantEl.dataset.userId || '').trim().toLowerCase();
+                if (pid !== uid) return;
                 const onlineDot = participantEl.querySelector('.chat-online-dot');
-                if (onlineDot) {
-                    onlineDot.classList.toggle('hidden', !isOnlineNow);
-                }
-            }
+                if (onlineDot) onlineDot.classList.toggle('hidden', !isOnline);
+            });
+        }
+
+        // открытая карточка профиля
+        if (typeof updateOpenUserProfileStatus === 'function') {
+            updateOpenUserProfileStatus(uidRaw, isOnline, lastActivity);
         }
     });
 
@@ -128,22 +146,68 @@ async function startSignalR() {
             const typingIndicator = document.getElementById('typing-indicator');
             const typingNameEl = document.getElementById('typing-name');
             const subtitle = document.getElementById('chat-subtitle');
+            const isGroupChat = !!(currentChatInfo && (currentChatInfo.type === 'group' || currentChatInfo.Type === 'group'));
 
             if (data.isTyping) {
-                loadUserName(typingUserId).then(name => {
-                    console.log(`[TYPING] Показываем: ${name} печатает...`);
-                    if (typingNameEl) typingNameEl.textContent = name || "Собеседник";
+                if (isGroupChat) {
+                    loadUserName(typingUserId).then(name => {
+                        console.log(`[TYPING] Группа: ${name} печатает...`);
+                        if (typingNameEl) {
+                            typingNameEl.textContent = name || 'Участник';
+                            typingNameEl.classList.remove('hidden');
+                        }
+                        if (typingIndicator) typingIndicator.classList.remove('hidden');
+                        if (subtitle) subtitle.classList.add('hidden');
+                    });
+                } else {
+                    console.log('[TYPING] Личный чат: печатает...');
+                    if (typingNameEl) {
+                        typingNameEl.textContent = '';
+                        typingNameEl.classList.add('hidden');
+                    }
                     if (typingIndicator) typingIndicator.classList.remove('hidden');
                     if (subtitle) subtitle.classList.add('hidden');
-                });
+                }
             } else {
                 if (typingIndicator) typingIndicator.classList.add('hidden');
+                if (typingNameEl) {
+                    typingNameEl.textContent = '';
+                    typingNameEl.classList.remove('hidden');
+                }
                 if (subtitle) subtitle.classList.remove('hidden');
             }
         }
 
         updateTypingInChatList(data.chatId, typingUserId, data.isTyping);
     });
+
+    window.updateTypingInChatList = window.updateTypingInChatList || function updateTypingInChatList(chatId, userId, isTyping) {
+        const item = document.querySelector(`.chat-list-item[data-chat-id="${chatId}"], [data-chat-id="${chatId}"]`);
+        if (!item) return;
+        const row = item.querySelector('.typing-in-list');
+        if (!row) return;
+        const nameEl = row.querySelector('.typing-name');
+        const isGroup = item.dataset.chatType === 'group' || item.classList.contains('is-group')
+            || (item.dataset.isGroup === '1') || (item.dataset.partnerId == null && item.dataset.partnerId !== '');
+
+        const hasPartner = !!(item.dataset.partnerId && String(item.dataset.partnerId).trim());
+        const groupChat = !hasPartner || isGroup;
+
+        if (isTyping) {
+            if (groupChat && nameEl) {
+                loadUserName(userId).then(name => {
+                    nameEl.textContent = (name || 'Участник') + ' ';
+                    row.classList.remove('hidden');
+                });
+            } else {
+                if (nameEl) nameEl.textContent = '';
+                row.classList.remove('hidden');
+            }
+        } else {
+            row.classList.add('hidden');
+            if (nameEl) nameEl.textContent = '';
+        }
+    };
 
     function normId(id) {
         return String(id || '').toLowerCase().replace(/[{}]/g, '').trim();
@@ -714,6 +778,11 @@ async function startSignalR() {
         await connection.start();
         console.log("SignalR успешно подключён");
 
+        if (window.ScheduledMessages) {
+            window.ScheduledMessages.onSignalR(connection);
+            window.ScheduledMessages.reload();
+        }
+
         updateConnectionStatus('Онлайн', 'green');
 
         setTimeout(async () => {
@@ -748,8 +817,15 @@ function updateCurrentChatSubtitle() {
     const onlineDot = document.getElementById('chat-online-indicator');
 
     if (currentChatInfo.type !== 'private') {
-        if (subtitle) subtitle.textContent = `${currentChatInfo.participants?.length || 0} участников`;
+        const count = currentChatInfo.participants?.length || currentChatInfo.participantsCount || 0;
+        if (subtitle) {
+            // корректное склонение
+            let label = count + ' участников';
+            if (count === 1) label = '1 участник';
+            else if (count >= 2 && count <= 4) label = count + ' участника';
+            subtitle.textContent = label;
             if (typeof updateChatSubtitleMarquee === 'function') updateChatSubtitleMarquee();
+        }
         if (onlineDot) onlineDot.classList.add('hidden');
         return;
     }
@@ -759,8 +835,19 @@ function updateCurrentChatSubtitle() {
         return pid !== String(me).toLowerCase().trim();
     });
 
+    // Личный чат без другого участника = «Избранное»
     if (!partner) {
-        console.log("updateCurrentChatSubtitle: собеседник не найден в currentChatInfo");
+        const titleEl = document.getElementById('chat-title');
+        if (titleEl) titleEl.textContent = 'Избранное';
+        if (subtitle) {
+            const count = currentChatInfo.participants?.length || 1;
+            subtitle.textContent = count === 1 ? '1 участник' : (count + ' участников');
+            subtitle.classList.remove('text-green-600', 'font-medium');
+            if (typeof updateChatSubtitleMarquee === 'function') updateChatSubtitleMarquee();
+        }
+        if (onlineDot) onlineDot.classList.add('hidden');
+        currentChatInfo.isSelfChat = true;
+        currentChatInfo.isFavorites = true;
         return;
     }
 
@@ -886,12 +973,14 @@ messageInput.addEventListener('input', () => {
 
     if (hasText && (now - lastTypingSentAt) >= TYPING_THROTTLE_MS) {
         lastTypingSentAt = now;
-        connection.invoke("StartTyping", currentChatId).catch(() => { });
+        if (window.__privacyShowTyping !== false) {
+            connection.invoke("StartTyping", currentChatId).catch(() => { });
+        }
     }
 
     clearTimeout(typingTimeout);
     typingTimeout = setTimeout(() => {
-        if (connection && currentChatId) {
+        if (connection && currentChatId && window.__privacyShowTyping !== false) {
             connection.invoke("StopTyping", currentChatId).catch(() => { });
         }
     }, 1500);

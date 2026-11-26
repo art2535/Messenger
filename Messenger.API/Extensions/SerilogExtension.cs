@@ -57,8 +57,10 @@ public static class SerilogExtension
                     .Enrich.WithEnvironmentName()
                     .Enrich.WithMachineName()
                     .Enrich.WithProperty("Application", applicationName)
-                    .WriteTo.Console(
-                        outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {SourceContext}: {Message:lj}{NewLine}{Exception}")
+                    .Filter.ByExcluding(IsEfSqlLog)
+                    .MinimumLevel.Override("Microsoft.EntityFrameworkCore", LogEventLevel.Warning)
+                    .MinimumLevel.Override("Microsoft.EntityFrameworkCore.Database.Command", LogEventLevel.Warning)
+                    .MinimumLevel.Override("Npgsql", LogEventLevel.Warning)
                     .WriteTo.File(
                         path: Path.Combine(context.HostingEnvironment.ContentRootPath, "logs", $"{applicationName.ToLowerInvariant()}-.log"),
                         rollingInterval: RollingInterval.Day,
@@ -81,7 +83,7 @@ public static class SerilogExtension
                             batchSizeLimit: 50));
                 }
             },
-            writeToProviders: true);
+writeToProviders: true);   // обязательно true
 
             if (!hasDb)
             {

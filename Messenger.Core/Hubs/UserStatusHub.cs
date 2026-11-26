@@ -12,11 +12,14 @@ namespace Messenger.Core.Hubs
     {
         private readonly IUserStatusService _userStatusService;
         private readonly IChatService _chatService;
+        private readonly IAccountSettingsService _accountSettingsService;
 
-        public UserStatusHub(IUserStatusService userStatusService, IChatService chatService)
+        public UserStatusHub(IUserStatusService userStatusService, IChatService chatService,
+            IAccountSettingsService accountSettingsService)
         {
             _userStatusService = userStatusService;
             _chatService = chatService;
+            _accountSettingsService = accountSettingsService;
         }
 
         private async Task SendPresenceToPeersAsync(Guid userId, string method, object payload, CancellationToken ct)
@@ -47,7 +50,17 @@ namespace Messenger.Core.Hubs
             var cancellationToken = Context.GetHttpContext()?.RequestAborted ?? CancellationToken.None;
 
             await _userStatusService.UpdateUserStatusAsync(status, cancellationToken);
-            await SendPresenceToPeersAsync(userId, "UserOnline", userId, cancellationToken);
+
+            var showOnline = true;
+            try
+            {
+                var settings = await _accountSettingsService.GetByUserIdAsync(userId, cancellationToken);
+                showOnline = settings.ShowOnline;
+            }
+            catch { }
+
+            if (showOnline)
+                await SendPresenceToPeersAsync(userId, "UserOnline", userId, cancellationToken);
 
             await base.OnConnectedAsync();
         }
