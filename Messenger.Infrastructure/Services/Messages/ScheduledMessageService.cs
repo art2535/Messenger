@@ -7,7 +7,7 @@ using Messenger.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
-namespace Messenger.Infrastructure.Services;
+namespace Messenger.Infrastructure.Services.ScheduledMessageService.cs;
 
 public class ScheduledMessageService : IScheduledMessageService
 {

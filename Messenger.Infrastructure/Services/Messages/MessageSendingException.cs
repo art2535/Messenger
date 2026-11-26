@@ -1,4 +1,4 @@
-namespace Messenger.Infrastructure.Services
+namespace Messenger.Infrastructure.Services.MessageSendingException.cs
 {
     public enum MessageSendingFailure
     {

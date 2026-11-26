@@ -5,7 +5,7 @@ using Messenger.Core.Models;
 using Messenger.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
-namespace Messenger.Infrastructure.Services
+namespace Messenger.Infrastructure.Services.MessageSearchService.cs
 {
     public sealed class MessageSearchService : IMessageSearchService
     {

@@ -5,7 +5,7 @@ using Messenger.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
-namespace Messenger.Infrastructure.Services
+namespace Messenger.Infrastructure.Services.MessagePaginationService.cs
 {
     public class MessagePaginationService : IMessagePaginationService
     {
