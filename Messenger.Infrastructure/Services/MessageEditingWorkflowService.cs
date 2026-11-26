@@ -1,5 +1,6 @@
 using Messenger.Core.DTOs.Messages;
 using Messenger.Core.Interfaces;
+using Messenger.Core.Services;
 
 namespace Messenger.Infrastructure.Services
 {

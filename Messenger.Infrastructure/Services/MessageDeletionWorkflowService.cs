@@ -35,7 +35,8 @@ namespace Messenger.Infrastructure.Services
             }
 
             var chat = await _chatService.GetChatByIdAsync(chatId, cancellationToken);
-            if (chat == null || !chat.ChatParticipants.Any(participant => participant.UserId == userId))
+            if (chat == null || !chat.ChatParticipants.Any(
+                participant => participant.UserId == userId))
             {
                 return MessageDeletionStatus.Forbidden;
             }

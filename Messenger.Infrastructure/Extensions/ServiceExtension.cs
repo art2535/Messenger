@@ -107,8 +107,10 @@ namespace Messenger.Infrastructure.Extensions
                 services.AddScoped<IMessageEventPublisher, MessageEventPublisher>();
                 services.AddScoped<IMessageSendingService, MessageSendingService>();
                 services.AddScoped<IMessageForwardingService, MessageForwardingService>();
-                services.AddScoped<IMessageEditingWorkflowService, MessageEditingWorkflowService>();
-                services.AddScoped<IMessageDeletionWorkflowService, MessageDeletionWorkflowService>();
+                services.AddScoped<IMessageEditingWorkflowService,
+                    MessageEditingWorkflowService>();
+                services.AddScoped<IMessageDeletionWorkflowService,
+                    MessageDeletionWorkflowService>();
                 services.AddScoped<IMessageRealtimeNotifier, MessageRealtimeNotifier>();
                 services.AddScoped<IAdminService, AdminService>();
                 services.AddScoped<IModerationService, ModerationService>();
