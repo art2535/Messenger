@@ -94,6 +94,7 @@ namespace Messenger.Infrastructure.Extensions
                 services.AddScoped<IMessagePinningService, MessagePinningService>();
                 services.AddScoped<IMessageMutationService, MessageMutationService>();
                 services.AddScoped<IMessageCreationService, MessageCreationService>();
+                services.AddScoped<IMessageReadService, MessageReadService>();
                 services.AddScoped<IMessageSendingService, MessageSendingService>();
                 services.AddScoped<IMessageForwardingService, MessageForwardingService>();
                 services.AddScoped<IMessageRealtimeNotifier, MessageRealtimeNotifier>();
