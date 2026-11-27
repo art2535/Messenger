@@ -420,6 +420,10 @@ namespace Messenger.Realtime.Hubs
 
                 _logger.LogInformation("RequestAndBroadcastUserStatus: отправлен статус для {UserId}", userId);
             }
+            catch (OperationCanceledException) when (Context.ConnectionAborted.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка в RequestAndBroadcastUserStatus для {UserId}", userId);
