@@ -21,8 +21,9 @@ namespace Messenger.Infrastructure.Services
 
         public async Task<string> GenerateJwtTokenAsync(User user, CancellationToken token = default)
         {
-            string? key = Environment.GetEnvironmentVariable("JWT_SECRET_KEY", EnvironmentVariableTarget.User)
-                ?? Environment.GetEnvironmentVariable("JWT_SECRET_KEY", EnvironmentVariableTarget.Machine)
+            // Process-level environment variables work consistently in containers,
+            // Linux services and Windows hosts. Configuration remains the fallback.
+            string? key = Environment.GetEnvironmentVariable("JWT_SECRET_KEY")
                 ?? _configuration["Jwt:Key"];
 
             if (string.IsNullOrEmpty(key))
@@ -30,14 +31,18 @@ namespace Messenger.Infrastructure.Services
                 throw new InvalidOperationException("JWT ключ не найден для создания токена.");
             }
 
+            byte[] keyBytes;
             try
             {
-                var keyBytes = Convert.FromBase64String(key);
+                keyBytes = Convert.FromBase64String(key);
             }
             catch (FormatException)
             {
                 throw new InvalidOperationException("JWT ключ не является корректной Base64 строкой.");
             }
+
+            if (keyBytes.Length < 32)
+                throw new InvalidOperationException("JWT ключ должен содержать не менее 32 байт после декодирования Base64.");
 
             var claims = new List<Claim>
             {
@@ -55,7 +60,7 @@ namespace Messenger.Infrastructure.Services
             }
 
             var creds = new SigningCredentials(
-                new SymmetricSecurityKey(Convert.FromBase64String(key)),
+                new SymmetricSecurityKey(keyBytes),
                 SecurityAlgorithms.HmacSha256);
 
             var jwtToken = new JwtSecurityToken(
