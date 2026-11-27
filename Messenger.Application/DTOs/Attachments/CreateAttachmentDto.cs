@@ -1,0 +1,18 @@
+using System.ComponentModel.DataAnnotations;
+
+namespace Messenger.Core.DTOs.Attachments;
+
+public sealed class CreateAttachmentDto
+{
+    [Required]
+    public string FileName { get; set; } = string.Empty;
+
+    [Required]
+    public string FileType { get; set; } = string.Empty;
+
+    [Required]
+    public int SizeInBytes { get; set; }
+
+    [Required]
+    public string Url { get; set; } = string.Empty;
+}

@@ -1,7 +1,6 @@
 ﻿using Asp.Versioning;
 using Messenger.Core.DTOs.Attachments;
 using Messenger.Core.Interfaces;
-using Messenger.Core.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel;
@@ -85,17 +84,15 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var attachment = new Attachment
+                var attachment = new CreateAttachmentDto
                 {
-                    AttachmentId = Guid.NewGuid(),
-                    MessageId = messageId,
                     FileName = request.FileName,
                     FileType = request.FileType,
                     SizeInBytes = request.SizeInBytes,
                     Url = request.Url
                 };
 
-                await _attachmentService.AddAttachmentAsync(attachment, ct);
+                await _attachmentService.AddAttachmentAsync(messageId, attachment, ct);
 
                 return Ok(ApiResponse.Success(message: "Вложение успешно добавлено"));
             }

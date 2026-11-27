@@ -1,10 +1,10 @@
 using MassTransit;
 using Messenger.Core.DTOs.Messages;
+using Messenger.Core.DTOs.Attachments;
 using Messenger.Core.Enums;
 using Messenger.Core.Hubs;
 using Messenger.Core.Interfaces;
 using Messenger.Core.Messages;
-using Messenger.Core.Models;
 using Microsoft.AspNetCore.SignalR;
 
 namespace Messenger.API.Consumers
@@ -53,16 +53,14 @@ namespace Messenger.API.Consumers
                 {
                     foreach (var attInfo in msg.Attachments)
                     {
-                        var attachment = new Attachment
+                        var attachment = new CreateAttachmentDto
                         {
-                            AttachmentId = attInfo.AttachmentId,
-                            MessageId = savedMessage.MessageId,
                             FileName = attInfo.FileName,
                             FileType = attInfo.FileType,
                             SizeInBytes = (int)attInfo.SizeInBytes,
                             Url = attInfo.Url
                         };
-                        await _attachmentService.AddAttachmentAsync(attachment, context.CancellationToken);
+                        await _attachmentService.AddAttachmentAsync(savedMessage.MessageId, attachment, context.CancellationToken);
                     }
                 }
 
