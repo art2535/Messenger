@@ -38,9 +38,9 @@ public static class ApiServiceCollectionExtensions
         builder.Services.AddRabbitMQ(builder.Configuration);
         builder.Services.AddHttpClient();
 
-        RegisterHostedServices(builder.Services, builder.Configuration);
+        RegisterHostedServices(builder.Services);
         ConfigureAuthenticationAndSecurity(builder);
-        ConfigureHealthAndMetrics(builder.Services);
+        RegisterBackgroundMaintenance(builder.Services, builder.Configuration);
         ConfigureCors(builder.Services);
         ConfigureOpenTelemetry(builder.Services);
 
@@ -81,12 +81,17 @@ public static class ApiServiceCollectionExtensions
         });
     }
 
-    private static void RegisterHostedServices(IServiceCollection services, IConfiguration configuration)
+    private static void RegisterHostedServices(IServiceCollection services)
     {
         services.AddHostedService<ScheduledMessageDispatcherService>();
         services.AddHostedService<UploadOrphanCleanupService>();
+    }
+
+    private static void RegisterBackgroundMaintenance(IServiceCollection services, IConfiguration configuration)
+    {
         services.AddSessionCleanup(configuration);
         services.AddLogRetention(configuration);
+        services.AddMessengerHealthChecks();
         services.AddRedisMetrics();
     }
 
@@ -97,11 +102,6 @@ public static class ApiServiceCollectionExtensions
             !builder.Environment.IsDevelopment());
 
         builder.Services.AddMessengerRateLimiting();
-    }
-
-    private static void ConfigureHealthAndMetrics(IServiceCollection services)
-    {
-        services.AddMessengerHealthChecks();
     }
 
     private static void ConfigureCors(IServiceCollection services)
