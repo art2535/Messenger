@@ -1,5 +1,5 @@
 using Messenger.Application.DTOs.Attachments;
-using Messenger.Core.DTOs.Messages;
+using Messenger.Application.DTOs.Messages;
 
 namespace Messenger.Application.Interfaces;
 

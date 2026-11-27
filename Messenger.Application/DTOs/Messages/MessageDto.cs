@@ -1,4 +1,3 @@
-using Messenger.Core.DTOs.Messages;
 namespace Messenger.Application.DTOs.Messages
 {
     public class MessageDto

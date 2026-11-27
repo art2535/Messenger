@@ -1,4 +1,4 @@
-namespace Messenger.Core.DTOs.Messages
+namespace Messenger.Application.DTOs.Messages
 {
     public class AttachmentDto
     {

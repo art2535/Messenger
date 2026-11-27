@@ -1,6 +1,5 @@
 using System.ComponentModel.DataAnnotations;
 using Messenger.Application.Messages;
-using Messenger.Core.DTOs.Messages;
 
 namespace Messenger.Application.DTOs.Messages;
 
