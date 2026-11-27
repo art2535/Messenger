@@ -1,5 +1,4 @@
 using Messenger.API.Hubs;
-using Messenger.API.Services;
 using Messenger.Infrastructure.Data;
 using Messenger.Realtime.Hubs;
 using Microsoft.EntityFrameworkCore;
@@ -95,7 +94,7 @@ public static class ApiApplicationBuilderExtensions
     /// <summary>
     /// Публикует HTTP, health, metrics, Scalar и SignalR endpoint'ы.
     /// </summary>
-    public static WebApplication MapMessengerApiEndpoints(this WebApplication app)
+    public static WebApplication MapMessengerDiagnosticsEndpoints(this WebApplication app)
     {
         if (app.Environment.IsDevelopment())
         {
@@ -104,6 +103,11 @@ public static class ApiApplicationBuilderExtensions
 
         app.MapMessengerHealthChecks();
         app.MapPrometheusScrapingEndpoint("/metrics");
+        return app;
+    }
+
+    public static WebApplication MapMessengerApiEndpoints(this WebApplication app)
+    {
         app.MapControllers().RequireRateLimiting("api");
 
         var apiVersion = app.Configuration["URL:API:Version"] ?? "1.0";
