@@ -134,7 +134,10 @@ public class ScheduledMessageService : IScheduledMessageService
     public async Task<bool> CancelAsync(Guid scheduledMessageId, Guid userId, CancellationToken ct = default)
     {
         var entity = await _context.ScheduledMessages
-            .FirstOrDefaultAsync(x => x.ScheduledMessageId == scheduledMessageId, ct);
+            .AsNoTracking()
+            .Where(x => x.ScheduledMessageId == scheduledMessageId)
+            .Select(x => new { x.SenderId, x.Status })
+            .FirstOrDefaultAsync(ct);
 
         if (entity == null)
             return false;
@@ -145,34 +148,38 @@ public class ScheduledMessageService : IScheduledMessageService
         if (entity.Status != ScheduledMessageStatus.Pending)
             return false;
 
-        entity.Status = ScheduledMessageStatus.Cancelled;
-        entity.UpdatedAt = DateTime.UtcNow;
-        await _context.SaveChangesAsync(ct);
-        return true;
+        var updated = await _context.ScheduledMessages
+            .Where(x => x.ScheduledMessageId == scheduledMessageId
+                && x.SenderId == userId
+                && x.Status == ScheduledMessageStatus.Pending)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(x => x.Status, ScheduledMessageStatus.Cancelled)
+                .SetProperty(x => x.UpdatedAt, DateTime.UtcNow), ct);
+
+        return updated > 0;
     }
 
     public async Task MarkSentAsync(Guid scheduledMessageId, Guid resultMessageId, CancellationToken ct = default)
     {
-        var entity = await _context.ScheduledMessages
-            .FirstOrDefaultAsync(x => x.ScheduledMessageId == scheduledMessageId, ct);
-        if (entity == null) return;
-
-        entity.Status = ScheduledMessageStatus.Sent;
-        entity.ResultMessageId = resultMessageId;
-        entity.UpdatedAt = DateTime.UtcNow;
-        await _context.SaveChangesAsync(ct);
+        await _context.ScheduledMessages
+            .Where(x => x.ScheduledMessageId == scheduledMessageId
+                && x.Status == ScheduledMessageStatus.Pending)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(x => x.Status, ScheduledMessageStatus.Sent)
+                .SetProperty(x => x.ResultMessageId, resultMessageId)
+                .SetProperty(x => x.UpdatedAt, DateTime.UtcNow), ct);
     }
 
     public async Task MarkFailedAsync(Guid scheduledMessageId, string error, CancellationToken ct = default)
     {
-        var entity = await _context.ScheduledMessages
-            .FirstOrDefaultAsync(x => x.ScheduledMessageId == scheduledMessageId, ct);
-        if (entity == null) return;
-
-        entity.Status = ScheduledMessageStatus.Failed;
-        entity.ErrorMessage = error?.Length > 500 ? error[..500] : error;
-        entity.UpdatedAt = DateTime.UtcNow;
-        await _context.SaveChangesAsync(ct);
+        var errorMessage = error?.Length > 500 ? error[..500] : error;
+        await _context.ScheduledMessages
+            .Where(x => x.ScheduledMessageId == scheduledMessageId
+                && x.Status == ScheduledMessageStatus.Pending)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(x => x.Status, ScheduledMessageStatus.Failed)
+                .SetProperty(x => x.ErrorMessage, errorMessage)
+                .SetProperty(x => x.UpdatedAt, DateTime.UtcNow), ct);
     }
 
     private async Task<ScheduledMessageDto?> GetScheduledMessageDtoAsync(Guid id, CancellationToken ct)
