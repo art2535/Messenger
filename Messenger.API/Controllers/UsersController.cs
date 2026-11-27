@@ -26,21 +26,27 @@ namespace Messenger.API.Controllers
     public class UsersController : ControllerBase
     {
         private readonly IUserService _userService;
+        private readonly IAdminService _adminService;
         private readonly IChatService _chatService;
         private readonly IHubContext<ChatHub> _hubContext;
         private readonly ILogger<UsersController> _logger;
 
         public UsersController(
             IUserService userService,
+            IAdminService adminService,
             IChatService chatService,
             IHubContext<ChatHub> hubContext,
             ILogger<UsersController> logger)
         {
             _userService = userService;
+            _adminService = adminService;
             _chatService = chatService;
             _hubContext = hubContext;
             _logger = logger;
         }
+
+        private IActionResult ForbiddenResult(string message) =>
+            StatusCode(StatusCodes.Status403Forbidden, ApiResponse.Failure(message, "FORBIDDEN"));
 
         private async Task SendProfileToPeersAsync(Guid userId, string method, object payload, CancellationToken ct)
         {
@@ -73,6 +79,17 @@ namespace Messenger.API.Controllers
         {
             try
             {
+                var currentExternalId = User.GetExternalId();
+                if (!string.Equals(currentExternalId, externalId, StringComparison.Ordinal))
+                {
+                    var currentUser = await _userService.GetUserByExternalIdAsync(currentExternalId, ct);
+                    if (currentUser == null ||
+                        !await _adminService.IsSystemAdminAsync(currentUser.UserId, ct))
+                    {
+                        return ForbiddenResult("Недостаточно прав для просмотра другого пользователя.");
+                    }
+                }
+
                 var user = await _userService.GetUserByExternalIdAsync(externalId, ct);
 
                 return Ok(ApiResponse.Success(user));
@@ -147,6 +164,10 @@ namespace Messenger.API.Controllers
         {
             try
             {
+                var currentUser = await User.GetCurrentUserAsync(_userService, ct);
+                if (!await _adminService.IsSystemAdminAsync(currentUser.UserId, ct))
+                    return ForbiddenResult("Требуются права администратора.");
+
                 var users = await _userService.GetAllUsersAsync(ct);
 
                 return Ok(ApiResponse.Success(users));
@@ -410,6 +431,8 @@ namespace Messenger.API.Controllers
             try
             {
                 var user = await User.GetCurrentUserAsync(_userService, ct);
+                if (!await _adminService.IsSystemAdminAsync(user.UserId, ct))
+                    return ForbiddenResult("Требуются права администратора.");
 
                 await _userService.AssignRoleAsync(user.UserId, roleId, ct);
 
