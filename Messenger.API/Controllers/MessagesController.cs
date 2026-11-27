@@ -3,6 +3,7 @@ using Messenger.API.Extensions;
 using MassTransit;
 using Messenger.Core.DTOs.Messages;
 using Messenger.Application.DTOs.Messages;
+using Messenger.Application.DTOs.Chats;
 using Messenger.Core.Enums;
 using Messenger.Realtime.Hubs;
 using Messenger.Application.Interfaces;
@@ -394,7 +395,7 @@ namespace Messenger.API.Controllers
                     sourceMessages.Add((msg, plain, atts));
                 }
 
-                var targetChats = new List<Chat>();
+                var targetChats = new List<ChatDto>();
                 foreach (var targetChatId in request.TargetChatIds.Distinct())
                 {
                     var chat = await _chatService.GetChatByIdAsync(targetChatId, ct);
@@ -944,7 +945,7 @@ namespace Messenger.API.Controllers
 
                 var bulkChat = await _chatService.GetChatByIdAsync(chatId, ct);
                 var participants = bulkChat?.Participants?.ToList()
-                    ?? new List<ChatParticipant>();
+                    ?? new List<ChatParticipantDto>();
 
                 foreach (var mid in allowed)
                 {
