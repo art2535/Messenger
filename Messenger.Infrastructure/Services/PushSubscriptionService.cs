@@ -277,12 +277,19 @@ namespace Messenger.Infrastructure.Services
                     body = "Прикрепил файл";
                 }
 
-                var chat = await _chatService.GetChatByIdAsync(chatId, cancellationToken);
-                if (chat == null) 
+                // Не используем внутренние overloads без actor authorization:
+                // даже Infrastructure-сервис должен проверять членство отправителя.
+                var chat = await _chatService.GetChatByIdAsync(chatId, senderId, cancellationToken);
+                if (chat == null)
                     return;
 
-                bool isGroupChat = chat.Type?.ToLower() == "group";
-                var participants = await _chatService.GetChatParticipantsAsync(chatId, cancellationToken);
+                bool isGroupChat = string.Equals(chat.Type, "group", StringComparison.OrdinalIgnoreCase);
+                var participants = (await _chatService.GetChatParticipantsAsync(chatId, senderId, cancellationToken)).ToList();
+                var sender = participants.FirstOrDefault(participant => participant.UserId == senderId)
+                    ?? throw new UnauthorizedAccessException("Отправитель не является участником чата");
+                senderName = $"{sender.FirstName} {sender.LastName}".Trim();
+                if (string.IsNullOrWhiteSpace(senderName))
+                    senderName = "Пользователь";
 
                 foreach (var participant in participants.Where(p => p.UserId != senderId))
                 {
