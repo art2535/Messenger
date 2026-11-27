@@ -64,3 +64,12 @@
 ## Подэтап 2.7.15 — реакции
 
 `IReactionService` перенесён в `Messenger.Application.Interfaces`. Добавлены `CreateReactionDto` и `ReactionDto` в `Messenger.Application.DTOs.Reactions`. Контракт не содержит EF-сущность `Reaction`; API получает и отправляет DTO.
+
+
+## Подэтап 2.7.16 — статусы пользователей
+
+`IUserStatusService` физически перенесён в `Messenger.Application.Interfaces`. Добавлены `UpdateUserStatusDto` и `UserStatusDto` в `Messenger.Application.DTOs.UserStatuses`. Контракт больше не принимает и не возвращает EF-сущность `UserStatus`: обновление выполняется по `userId` и признаку `online`, чтение возвращает DTO, а отдельная команда `UpdateActivityAsync` обновляет время активности. Infrastructure выполняет projection из EF-сущности и создаёт `UserStatus` только внутри persistence-реализации. API controller и SignalR hub используют только Application-контракт.
+
+## Подэтап 2.7.17 — push-подписки
+
+`IPushSubscriptionService` физически перенесён в `Messenger.Application.Interfaces`. Добавлены `CreatePushSubscriptionDto`, `UpdatePushSubscriptionDto`, `PushSubscriptionDto`, `PushSettingsDto` и `UpdatePushSettingsDto` в `Messenger.Application.DTOs.Push`. Контракт больше не принимает и не возвращает EF-сущности `PushSubscription` и `AccountSetting`: идентификатор пользователя и прикладные DTO передаются отдельно. Infrastructure создаёт, изменяет и проецирует EF-сущности внутри `PushSubscriptionService`. `PushController` больше не создаёт `PushSubscription` и не читает `AccountSetting` напрямую.

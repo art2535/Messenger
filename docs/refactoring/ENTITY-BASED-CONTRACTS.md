@@ -79,3 +79,12 @@
 ## Результат подэтапа 2.7.15 — IReactionService
 
 `IReactionService` отвязан от EF-модели `Reaction`. `AddReactionAsync` принимает идентификаторы и тип реакции и возвращает `ReactionDto`; `GetReactionsByMessageIdAsync` возвращает `IEnumerable<ReactionDto>`. API больше не создаёт EF-сущность `Reaction`. Mapping, проверка существования сообщения и получение имени пользователя выполняются в Infrastructure.
+
+
+## Результат подэтапа 2.7.16 — IUserStatusService
+
+`IUserStatusService` физически перенесён в `Messenger.Application.Interfaces` и больше не принимает/возвращает EF-сущность `UserStatus`. Контракт использует `UserStatusDto` и `UpdateUserStatusDto`; `UpdateUserStatusAsync` работает с `userId` и `online`, а `UpdateActivityAsync` обновляет время активности без передачи entity. `UserStatusService` Infrastructure проецирует EF-модель в DTO и создаёт/изменяет `UserStatus` только внутри persistence-слоя. API controller и `UserStatusHub` не создают EF-сущности.
+
+## Результат подэтапа 2.7.17 — IPushSubscriptionService
+
+`IPushSubscriptionService` отвязан от EF-моделей `PushSubscription` и `AccountSetting`. Создание подписки принимает `userId` и `CreatePushSubscriptionDto`, настройки используют `PushSettingsDto`/`UpdatePushSettingsDto`, а обновление подписки — `UpdatePushSubscriptionDto`. `PushSubscriptionService` Infrastructure выполняет mapping и все операции EF внутри persistence-слоя. `PushController` больше не создаёт EF-сущность подписки и не возвращает `AccountSetting`.

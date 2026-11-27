@@ -110,3 +110,12 @@ Fluent-конфигурации всех сущностей вынесены в 
 ### 2.7.15. Контракт IReactionService
 
 `IReactionService` и request DTO реакций перенесены из Core в Application. EF-сущность `Reaction` остаётся persistence-моделью Core, но больше не используется публичным контрактом сервиса.
+
+
+### 2.7.16. Контракт IUserStatusService
+
+`IUserStatusService` физически перенесён из Core в `Messenger.Application.Interfaces`. Вместо EF-сущности `UserStatus` контракт использует `UserStatusDto` и `UpdateUserStatusDto` из `Messenger.Application.DTOs.UserStatuses`. Обновление статуса выполняется по идентификатору пользователя и признаку online, а для обновления времени активности добавлена отдельная операция `UpdateActivityAsync`. EF-сущность `UserStatus` остаётся в Core и используется только внутри `UserStatusService` Infrastructure.
+
+### 2.7.17. Контракт IPushSubscriptionService
+
+`IPushSubscriptionService` физически перенесён из Core в `Messenger.Application.Interfaces`. DTO push-подписок и настроек находятся в `Messenger.Application.DTOs.Push`. Контракт больше не принимает и не возвращает `PushSubscription` или `AccountSetting`; создание подписки использует `userId` и `CreatePushSubscriptionDto`, чтение настроек возвращает `PushSettingsDto`, а обновление подписки использует `UpdatePushSubscriptionDto`. EF-сущности создаются, изменяются и проецируются только внутри Infrastructure. `PushController` использует Application DTO и не создаёт persistence-модели.
