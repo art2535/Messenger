@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 using System.Security.Claims;
 
-namespace Messenger.Core.Hubs
+namespace Messenger.API.Hubs
 {
     [Authorize]
     public class ChatHub : Hub

@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using System.Security.Claims;
 
-namespace Messenger.Core.Hubs
+namespace Messenger.API.Hubs
 {
     [Authorize]
     public class NotificationHub : Hub
