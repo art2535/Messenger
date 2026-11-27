@@ -8,24 +8,26 @@ public sealed class BroadcastConfiguration : IEntityTypeConfiguration<Broadcast>
 {
     public void Configure(EntityTypeBuilder<Broadcast> builder)
     {
-        builder.HasKey(e => e.BroadcastId).HasName("Broadcasts_pkey");
+        builder.ToTable("Broadcasts");
 
+        builder.HasKey(e => e.BroadcastId).HasName("Broadcasts_pkey");
         builder.Property(e => e.BroadcastId)
             .HasColumnName("Broadcast_ID")
             .HasDefaultValueSql("gen_random_uuid()");
-
+        builder.Property(e => e.Title).HasColumnName("Title").HasMaxLength(200).IsRequired();
+        builder.Property(e => e.MessageText).HasColumnName("Message_Text").IsRequired();
+        builder.Property(e => e.SenderId).HasColumnName("Sender_ID");
         builder.Property(e => e.CreatedAt)
             .HasColumnName("Created_At")
-            .HasDefaultValueSql("now()")
-            .HasColumnType("timestamp with time zone");
-
-        builder.Property(e => e.SenderId).HasColumnName("Sender_ID");
+            .HasColumnType("timestamp with time zone")
+            .HasDefaultValueSql("now()");
         builder.Property(e => e.TotalRecipients).HasColumnName("Total_Recipients");
 
         builder.HasOne(d => d.Sender)
             .WithMany(p => p.BroadcastsCreated)
             .HasForeignKey(d => d.SenderId)
             .OnDelete(DeleteBehavior.SetNull)
+            .IsRequired()
             .HasConstraintName("fk_broadcast_sender");
     }
 }

@@ -9,12 +9,15 @@ public sealed class ModerationLogConfiguration : IEntityTypeConfiguration<Modera
     public void Configure(EntityTypeBuilder<ModerationLog> builder)
     {
         builder.ToTable("Moderation_Logs");
+
         builder.HasKey(e => e.LogId);
-        builder.Property(e => e.LogId).HasColumnName("Log_ID");
+        builder.Property(e => e.LogId).HasColumnName("Log_ID").ValueGeneratedOnAdd();
         builder.Property(e => e.ActorId).HasColumnName("Actor_ID");
         builder.Property(e => e.TargetUserId).HasColumnName("Target_User_ID");
         builder.Property(e => e.ChatId).HasColumnName("Chat_ID");
         builder.Property(e => e.MessageId).HasColumnName("Message_ID");
-        builder.Property(e => e.CreatedAt).HasColumnName("Created_At");
+        builder.Property(e => e.Action).HasColumnName("Action").HasMaxLength(64).IsRequired();
+        builder.Property(e => e.Details).HasColumnName("Details").HasMaxLength(2000);
+        builder.Property(e => e.CreatedAt).HasColumnName("Created_At").HasColumnType("timestamp with time zone");
     }
 }
