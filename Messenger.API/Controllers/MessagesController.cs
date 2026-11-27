@@ -7,7 +7,6 @@ using Messenger.Application.DTOs.Chats;
 using Messenger.Core.Enums;
 using Messenger.Realtime.Hubs;
 using Messenger.Application.Interfaces;
-using Messenger.Core.Messages;
 using Messenger.Application.Messages;
 using Messenger.Core.Models;
 using Microsoft.AspNetCore.Authorization;
