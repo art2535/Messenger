@@ -66,6 +66,10 @@ namespace Messenger.API.Controllers
                 _logger.LogWarning(ex, "Ошибка авторизации при получении статуса пользователя");
                 return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при получении статуса пользователя");
@@ -100,6 +104,10 @@ namespace Messenger.API.Controllers
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при обновлении статуса пользователя");
                 return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
