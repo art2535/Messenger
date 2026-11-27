@@ -7,7 +7,6 @@ using Messenger.Core.Enums;
 using Messenger.Core.Hubs;
 using Messenger.Core.Interfaces;
 using Messenger.Application.Interfaces;
-using Messenger.Application.Interfaces;
 using Messenger.Core.Messages;
 using Messenger.Application.Messages;
 using Microsoft.AspNetCore.SignalR;
@@ -109,7 +108,7 @@ namespace Messenger.API.Consumers
                         }, context.CancellationToken);
 
                     var chat = await _chatService.GetChatByIdAsync(msg.ChatId, context.CancellationToken);
-                    if (chat?.ChatParticipants != null)
+                    if (chat?.Participants != null)
                     {
                         foreach (var participant in chat.Participants)
                         {
