@@ -14,7 +14,7 @@ public static class ApiServiceCollectionExtensions
     internal const string WebCorsPolicy = "WebClient";
 
     /// <summary>
-    /// Регистрирует все сервисы, необходимые Messenger.API.
+    /// Настраивает Serilog, Serilog UI и консольный provider для API.
     /// </summary>
     public static WebApplicationBuilder AddMessengerApiLogging(this WebApplicationBuilder builder)
     {
@@ -22,6 +22,9 @@ public static class ApiServiceCollectionExtensions
         return builder;
     }
 
+    /// <summary>
+    /// Регистрирует прикладные, инфраструктурные и HTTP-сервисы API.
+    /// </summary>
     public static WebApplicationBuilder AddMessengerApiServices(this WebApplicationBuilder builder)
     {
         ConfigureJson(builder.Services);
