@@ -5,6 +5,7 @@ using Messenger.Core.Models;
 using Messenger.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Npgsql;
 
 namespace Messenger.Infrastructure.Services
 {
@@ -240,8 +241,14 @@ namespace Messenger.Infrastructure.Services
                 await _context.ChatParticipants.AddAsync(participant, token);
                 await _context.SaveChangesAsync(token);
             }
-            catch (DbUpdateException ex) when (ex.InnerException?.Message.Contains("duplicate key") == true)
+            catch (DbUpdateException ex) when (
+                ex.InnerException is PostgresException
+                {
+                    SqlState: PostgresErrorCodes.UniqueViolation
+                })
             {
+                // Участник уже добавлен параллельным запросом.
+                _context.Entry(participant).State = EntityState.Detached;
                 return;
             }
 

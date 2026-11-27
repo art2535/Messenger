@@ -5,6 +5,7 @@ using Messenger.Core.Models;
 using Messenger.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Npgsql;
 
 namespace Messenger.Infrastructure.Services
 {
@@ -38,7 +39,22 @@ namespace Messenger.Infrastructure.Services
             {
                 var entry = new Dictionary<string, object> { ["UserId"] = userId, ["RoleId"] = roleId };
                 _context.Set<Dictionary<string, object>>("UserRole").Add(entry);
-                await _context.SaveChangesAsync(token);
+                try
+                {
+                    await _context.SaveChangesAsync(token);
+                }
+                catch (DbUpdateException ex) when (
+                    ex.InnerException is PostgresException
+                    {
+                        SqlState: PostgresErrorCodes.UniqueViolation
+                    })
+                {
+                    // Связь уже могла быть добавлена параллельным запросом.
+                    var trackedEntry = _context.ChangeTracker.Entries()
+                        .FirstOrDefault(item => ReferenceEquals(item.Entity, entry));
+                    if (trackedEntry is not null)
+                        trackedEntry.State = EntityState.Detached;
+                }
             }
         }
 
@@ -82,6 +98,12 @@ namespace Messenger.Infrastructure.Services
 
         public async Task<string> UploadAvatarAsync(Guid userId, IUploadedFile file, CancellationToken token = default)
         {
+
+            var fileExtension = Path.GetExtension(file.FileName).ToLowerInvariant();
+            var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
+            if (!allowedExtensions.Contains(fileExtension))
+                throw new ArgumentException("Неподдерживаемый формат изображения");
+
             var user = await _context.Users
                 .Include(u => u.Account)
                 .FirstOrDefaultAsync(u => u.UserId == userId, token);
@@ -110,11 +132,6 @@ namespace Messenger.Infrastructure.Services
                     File.Delete(oldFilePath);
                 }
             }
-
-            var fileExtension = Path.GetExtension(file.FileName).ToLowerInvariant();
-            var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
-            if (!allowedExtensions.Contains(fileExtension))
-                throw new ArgumentException("Неподдерживаемый формат изображения");
 
             var fileName = $"{userId}{fileExtension}";
             var filePath = Path.Combine(uploadsFolder, fileName);
