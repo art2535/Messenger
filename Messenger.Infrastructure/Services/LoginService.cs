@@ -1,5 +1,5 @@
-using Messenger.Core.Interfaces;
 using Messenger.Application.Interfaces;
+using Messenger.Application.DTOs.Logins;
 using Messenger.Core.Models;
 using Messenger.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -80,23 +80,55 @@ namespace Messenger.Infrastructure.Services
             return login?.Active;
         }
 
-        public async Task AddLoginAsync(Login login, CancellationToken cancellationToken = default)
+        public async Task AddLoginAsync(CreateLoginDto login, CancellationToken cancellationToken = default)
         {
-            await _context.Logins.AddAsync(login, cancellationToken);
+            ArgumentNullException.ThrowIfNull(login);
+
+            var entity = new Login
+            {
+                LoginId = login.LoginId,
+                UserId = login.UserId,
+                Token = login.TokenHash,
+                IpAddress = login.IpAddress,
+                LoginTime = login.LoginTime,
+                Active = login.Active
+            };
+
+            await _context.Logins.AddAsync(entity, cancellationToken);
             await _context.SaveChangesAsync(cancellationToken);
         }
 
-        public async Task<IEnumerable<Login>> GetLoginsByUserIdAsync(Guid userId, CancellationToken cancellationToken = default)
+        public async Task<IEnumerable<LoginDto>> GetLoginsByUserIdAsync(Guid userId, CancellationToken cancellationToken = default)
         {
             return await _context.Logins
+                .AsNoTracking()
                 .Where(l => l.UserId == userId)
+                .Select(l => new LoginDto
+                {
+                    LoginId = l.LoginId,
+                    UserId = l.UserId,
+                    IpAddress = l.IpAddress,
+                    LoginTime = l.LoginTime,
+                    LogoutTime = l.LogoutTime,
+                    Active = l.Active
+                })
                 .ToListAsync(cancellationToken);
         }
 
-        public async Task UpdateLoginAsync(Login login, CancellationToken cancellationToken = default)
+        public async Task<bool> CloseLoginAsync(Guid userId, Guid loginId, CancellationToken cancellationToken = default)
         {
-            _context.Logins.Update(login);
+            var login = await _context.Logins
+                .FirstOrDefaultAsync(l => l.LoginId == loginId && l.UserId == userId && l.Active, cancellationToken);
+
+            if (login == null)
+                return false;
+
+            login.Active = false;
+            login.Token = string.Empty;
+            login.LogoutTime = UtcDateTime.Now;
+
             await _context.SaveChangesAsync(cancellationToken);
+            return true;
         }
 
         public async Task<bool> RevokeLoginAsync(Guid userId, Guid loginId, CancellationToken cancellationToken = default)

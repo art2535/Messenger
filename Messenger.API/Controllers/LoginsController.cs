@@ -1,6 +1,7 @@
 ﻿using Asp.Versioning;
 using Messenger.API.Extensions;
 using Messenger.Core.DTOs.Logins;
+using Messenger.Application.DTOs.Logins;
 using Messenger.Core.Interfaces;
 using Messenger.Application.Interfaces;
 using Messenger.Core.Models;
@@ -136,11 +137,12 @@ namespace Messenger.API.Controllers
 
                 var tokenHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(rawToken)));
 
-                var login = new Login
+                var loginId = Guid.NewGuid();
+                var login = new CreateLoginDto
                 {
-                    LoginId = Guid.NewGuid(),
+                    LoginId = loginId,
                     UserId = userId,
-                    Token = tokenHash,
+                    TokenHash = tokenHash,
                     IpAddress = request.IpAddress,
                     LoginTime = UtcDateTime.Now,
                     Active = true
@@ -148,7 +150,7 @@ namespace Messenger.API.Controllers
 
                 await _loginService.AddLoginAsync(login, ct);
 
-                return Ok(ApiResponse.Success(new { loginId = login.LoginId, tokenHash }, "Вход успешно добавлен"));
+                return Ok(ApiResponse.Success(new { loginId, tokenHash }, "Вход успешно добавлен"));
             }
             catch (UnauthorizedAccessException ex)
             {
@@ -192,11 +194,7 @@ namespace Messenger.API.Controllers
                 var userLogout = logins.FirstOrDefault(l => l.UserId == userId && l.Active == true);
                 if (userLogout != null)
                 {
-                    userLogout.Token = string.Empty;
-                    userLogout.Active = false;
-                    userLogout.LogoutTime = UtcDateTime.Now;
-
-                    await _loginService.UpdateLoginAsync(userLogout, ct);
+                    await _loginService.CloseLoginAsync(userId, userLogout.LoginId, ct);
                 }
 
                 return Ok(ApiResponse.Success(message: "Выход успешно обновлен"));
