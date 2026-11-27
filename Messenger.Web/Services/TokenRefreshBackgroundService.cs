@@ -66,10 +66,12 @@ namespace Messenger.Web.Services
                 }
                 else if (DateTime.UtcNow - entry.LastSeenUtc > idleLimit)
                 {
-                    _store.Remove(entry.Key);
-                    _logger.LogInformation("[TokenRefresh] Сессия {Key} удалена из хранилища: нет запросов более {Minutes} мин",
-                        entry.Key, _options.IdleTimeoutMinutes);
-                    needsDbExpiration = true;
+                    if (_store.RemoveIfCurrent(entry.Key, entry))
+                    {
+                        _logger.LogInformation("[TokenRefresh] Сессия {Key} удалена из хранилища: нет запросов более {Minutes} мин",
+                            entry.Key, _options.IdleTimeoutMinutes);
+                        needsDbExpiration = true;
+                    }
                 }
                 else
                 {

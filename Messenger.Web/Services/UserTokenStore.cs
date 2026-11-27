@@ -25,9 +25,12 @@ namespace Messenger.Web.Services
                 return;
             }
 
-            ((ICollection<KeyValuePair<string, TokenEntry>>)_entries)
-                .Remove(new KeyValuePair<string, TokenEntry>(key, expectedEntry));
+            RemoveIfCurrent(key, expectedEntry);
         }
+
+        public bool RemoveIfCurrent(string key, TokenEntry expectedEntry)
+            => ((ICollection<KeyValuePair<string, TokenEntry>>)_entries)
+                .Remove(new KeyValuePair<string, TokenEntry>(key, expectedEntry));
 
         public IReadOnlyList<TokenEntry> RevokeSession(string? key, string? accessToken, string? refreshToken)
         {
