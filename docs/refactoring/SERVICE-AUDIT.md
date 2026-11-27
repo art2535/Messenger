@@ -10,7 +10,7 @@
 
 ## Проверенная ревизия
 
-- Последнее обновление аудита: CancellationToken доведён через получение текущего пользователя в HTTP-контроллерах до IUserService; проверены Application-контракты и вызовы контроллеров.
+- Последнее обновление аудита: проверены основные внутренние consumers/background/realtime callers, отмена доведена до ChatHub и Redis metrics; Program.cs разделён на API composition extensions. Предыдущие подэтапы API cancellation и Application contracts сохранены.
 - Основная область: `Messenger.Infrastructure/Services`, `Messenger.Application/Services`, `Messenger.Application/Interfaces`, `Messenger.API/Services`, `Messenger.Web/Services`, `Messenger.Realtime/Services`.
 - Проверка локальной сборкой в этой среде недоступна: .NET SDK/runtime отсутствует.
 
