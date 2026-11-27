@@ -7,10 +7,6 @@ namespace Messenger.Infrastructure.Data;
 
 public partial class GuapMessengerContext : DbContext
 {
-    public GuapMessengerContext()
-    {
-    }
-
     public GuapMessengerContext(DbContextOptions<GuapMessengerContext> options)
         : base(options)
     {
@@ -37,10 +33,6 @@ public partial class GuapMessengerContext : DbContext
     public virtual DbSet<UserMute> UserMutes { get; set; }
     public virtual DbSet<ModerationLog> ModerationLogs { get; set; }
     public virtual DbSet<Core.Models.ScheduledMessage> ScheduledMessages { get; set; }
-
-    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-    {
-    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

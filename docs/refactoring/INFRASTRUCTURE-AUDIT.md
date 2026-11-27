@@ -2,7 +2,7 @@
 
 ## Проверенная ревизия
 
-Аудит выполнен по ветке `refactor/architecture`, HEAD `92e5052babf3dd69f8aecead0f41823c74b2bb34`.
+Аудит обновлён по ветке `refactor/architecture`; актуальные изменения DbContext и design-time factory зафиксированы отдельным коммитом.
 
 Проверены:
 - `Messenger.Infrastructure.csproj` и прямые ссылки на Core/Application;
@@ -50,13 +50,15 @@
 
 ### Исправлено: design-time конфигурация DbContext
 
-`GuapMessengerContextFactory` обновлена: каталог API-проекта ищется вверх от текущего рабочего каталога и `AppContext.BaseDirectory`, поэтому запуск из solution root, каталога Infrastructure или API не зависит от фиксированного `../Messenger.API`. Конфигурация загружает необязательные `appsettings.json` и `appsettings.{Environment}.json`, затем переменные окружения (включая `ConnectionStrings__DefaultConnection`). Окружение берётся из `DOTNET_ENVIRONMENT` / `ASPNETCORE_ENVIRONMENT`, по умолчанию — Development. Отсутствующая строка подключения приводит к понятной ошибке без вывода секрета.
+`GuapMessengerContextFactory` ищет каталог API вверх от текущего рабочего каталога и `AppContext.BaseDirectory`. JSON-конфигурация API необязательна: если проект или appsettings отсутствуют, factory всё равно может создать контекст при наличии `ConnectionStrings__DefaultConnection`. Переменные окружения имеют наивысший приоритет. Окружение берётся из `DOTNET_ENVIRONMENT` / `ASPNETCORE_ENVIRONMENT`, по умолчанию — Development. Отсутствующая строка подключения приводит к понятной ошибке без вывода секрета.
 
 В текущем `.gitlab-ci.yml` миграции не запускаются: pipeline выполняет architecture guard, а deploy использует Docker Compose. Design-time factory и команды `dotnet ef` в CI пока не проверены запуском.
 
-### Низкий приоритет: лишняя поверхность DbContext
+### Исправлено: минимальная поверхность DbContext
 
-У `GuapMessengerContext` есть публичный parameterless constructor и пустой `OnConfiguring`. Контекст штатно получает `DbContextOptions` через DI, а для design-time существует отдельная factory. Проверить, нужен ли parameterless constructor каким-либо tooling/тестам; если нет — удалить его в отдельном безопасном изменении. Пустой `OnConfiguring` можно удалить без изменения конфигурации, но это следует объединить с проверкой design-time сценариев.
+- Удалён публичный parameterless constructor: все штатные runtime-регистрации используют `AddDbContext` с `DbContextOptions`, а EF design-time использует `GuapMessengerContextFactory`, которая также передаёт options.
+- Удалён пустой `OnConfiguring`, не добавлявший конфигурации.
+- `GuapMessengerContext` теперь создаётся только с явно заданными `DbContextOptions`, что не позволяет случайно получить контекст без провайдера.
 
 ### Удалены неиспользуемые Identity NuGet dependencies
 
@@ -81,7 +83,7 @@
 ## Следующие подэтапы
 
 1. Провести полный usage audit NuGet dependencies, удалить только доказанно неиспользуемые пакеты.
-2. Проверить design-time factory командами `dotnet ef` из solution root и каталога Infrastructure; добавить проверку в CI при наличии SDK и безопасной тестовой БД.
+2. Проверить design-time factory командами `dotnet ef` из solution root и каталога Infrastructure, включая запуск только с `ConnectionStrings__DefaultConnection`; добавить проверку в CI при наличии SDK и безопасной тестовой БД.
 3. Разобрать крупные EF-сервисы по use cases и запросам; выделять специализированные persistence contracts только там, где это снижает связанность.
 4. Добавить integration tests для EF mappings, FK delete behavior, транзакций и критичных конкурентных сценариев.
 
