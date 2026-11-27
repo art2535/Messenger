@@ -1,6 +1,6 @@
 using Azure.Core;
-using Messenger.Core.DTOs.Auth;
-using Messenger.Core.DTOs.Logins;
+using Messenger.Application.DTOs.Auth;
+using Messenger.Application.DTOs.Logins;
 using Messenger.Application.DTOs.UserStatuses;
 using Messenger.Realtime.Hubs;
 using Messenger.Web.Helpers;

@@ -1,4 +1,4 @@
-using Messenger.Core.DTOs.Moderation;
+using Messenger.Application.DTOs.Moderation;
 
 namespace Messenger.Application.Interfaces
 {

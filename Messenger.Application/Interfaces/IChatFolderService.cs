@@ -1,4 +1,4 @@
-using Messenger.Core.DTOs.ChatFolders;
+using Messenger.Application.DTOs.ChatFolders;
 
 namespace Messenger.Application.Interfaces
 {

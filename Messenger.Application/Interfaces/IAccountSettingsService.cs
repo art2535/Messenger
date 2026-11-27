@@ -1,4 +1,4 @@
-using Messenger.Core.DTOs.AccountSettings;
+using Messenger.Application.DTOs.AccountSettings;
 
 namespace Messenger.Application.Interfaces
 {

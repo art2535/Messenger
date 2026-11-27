@@ -1,3 +1,4 @@
+using Messenger.Application.DTOs.Auth;
 using Messenger.Application.DTOs.Responses;
 ﻿using Asp.Versioning;
 using Messenger.Application.Interfaces;

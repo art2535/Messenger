@@ -1,4 +1,4 @@
-using Messenger.Core.DTOs.Admin;
+using Messenger.Application.DTOs.Admin;
 using Messenger.Application.Interfaces;
 using Messenger.Core.Models;
 using Messenger.Infrastructure.Data;

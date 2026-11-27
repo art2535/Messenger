@@ -1,4 +1,4 @@
-using Messenger.Core.DTOs.ChatFolders;
+using Messenger.Application.DTOs.ChatFolders;
 using Messenger.Application.Interfaces;
 using Messenger.Core.Models;
 using Messenger.Infrastructure.Data;

@@ -1,4 +1,4 @@
-using Messenger.Core.DTOs.AccountSettings;
+using Messenger.Application.DTOs.AccountSettings;
 using Messenger.Application.Interfaces;
 using Messenger.Core.Models;
 using Messenger.Infrastructure.Data;

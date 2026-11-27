@@ -1,7 +1,7 @@
 using MassTransit;
-using Messenger.Core.DTOs.Messages;
 using Messenger.Application.DTOs.Messages;
-using Messenger.Core.DTOs.Attachments;
+using Messenger.Application.DTOs.Messages;
+using Messenger.Application.DTOs.Attachments;
 using Messenger.Application.DTOs.Attachments;
 using Messenger.Core.Enums;
 using Messenger.Realtime.Hubs;

@@ -1,4 +1,4 @@
-﻿using Messenger.Core.DTOs.Broadcasts;
+﻿using Messenger.Application.DTOs.Broadcasts;
 using Messenger.Application.Interfaces;
 using Messenger.Core.Models;
 using Messenger.Infrastructure.Data;

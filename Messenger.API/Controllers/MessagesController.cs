@@ -1,7 +1,6 @@
 using Asp.Versioning;
 using Messenger.API.Extensions;
 using MassTransit;
-using Messenger.Core.DTOs.Messages;
 using Messenger.Application.DTOs.Messages;
 using Messenger.Application.DTOs.Chats;
 using Messenger.Core.Enums;

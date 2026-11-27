@@ -1,4 +1,4 @@
-﻿using Messenger.Core.DTOs.Broadcasts;
+﻿using Messenger.Application.DTOs.Broadcasts;
 
 namespace Messenger.Application.Interfaces
 {
