@@ -1,4 +1,3 @@
-using Messenger.Core.Interfaces;
 using Messenger.Core.Metrics;
 using Messenger.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
