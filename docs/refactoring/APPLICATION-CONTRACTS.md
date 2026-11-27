@@ -32,3 +32,7 @@
 `ChatMessageSent` физически перенесено из Core в `Messenger.Application/Messages`. Его CLR namespace `Messenger.Core.Messages` намеренно сохранён: MassTransit использует идентификатор типа сообщения, производный от namespace и имени CLR-типа. Сохранение namespace позволяет не менять message URN и не создавать несовместимость для уже опубликованных сообщений в RabbitMQ. Контракт по-прежнему использует `AttachmentInfo` из Core; перенос этого типа отдельно невозможен до отвязки `IScheduledMessageService` от Core, поскольку сам интерфейс находится в Core.
 
 Событие публикуется через `IPublishEndpoint` с включённым EF Core Bus Outbox и обрабатывается `ChatMessageSentConsumer`. Перенос не меняет поля, сериализацию, consumer, endpoint, retry policy или порядок публикации.
+
+## Подэтап 2.7.11 — контракт запланированных сообщений
+
+`IScheduledMessageService` физически перенесён в Application (namespace `Messenger.Core.Interfaces` временно сохранён для совместимости). Методы создания, чтения и обновления возвращают `ScheduledMessageDto`, а не EF-сущность. Для фоновой отправки введён `ScheduledMessageDispatchDto`, который содержит зашифрованный текст и нейтральный список `AttachmentInfo`; он не используется как HTTP-ответ. Преобразование EF-сущности, расшифровка текста и чтение JSON вложений выполняются внутри Infrastructure. `AttachmentInfo` и `ScheduledMessageDtos.cs` физически перенесены в Application с сохранением прежних namespace.

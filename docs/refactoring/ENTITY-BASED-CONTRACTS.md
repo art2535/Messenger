@@ -17,7 +17,7 @@
 | `INotificationService` | `Notification` | DTO уведомления и команды чтения |
 | `IPushSubscriptionService` | `AccountSetting`, `PushSubscription` | DTO настроек и подписки |
 | `IReactionService` | `Reaction` | DTO реакции и команды |
-| `IScheduledMessageService` | `ScheduledMessage`, `AttachmentInfo` | DTO и команды расписания, отделённые от EF-сущности |
+| `IScheduledMessageService` (Application) | `ScheduledMessageDto`, `ScheduledMessageDispatchDto`, `AttachmentInfo` | Контракт отвязан от EF-сущности; EF mapping остаётся в Infrastructure |
 | `IUserService` (Application) | `UserDto`, `RoleDto` | Контракт отвязан от EF-моделей |
 | `IUserStatusService` | `UserStatus` | DTO статуса и команды обновления |
 
@@ -45,3 +45,8 @@
 ## Результат подэтапа 2.7.10 — ChatMessageSent
 
 `ChatMessageSent` перенесено физически в `Messenger.Application/Messages`, при этом namespace `Messenger.Core.Messages` сохранён для совместимости MassTransit. Событие используется API-контроллером, фоновым диспетчером запланированных сообщений, `MessageService` и `ChatMessageSentConsumer`. `AttachmentInfo` оставлен в Core: он также входит в контракт `IScheduledMessageService`, который ещё не отвязан от EF-модели `ScheduledMessage`; Application не может быть ссылкой для Core.
+
+
+## Результат подэтапа 2.7.11 — IScheduledMessageService
+
+`IScheduledMessageService` физически перенесён в Application и отвязан от EF-сущности `ScheduledMessage`. Пользовательские методы чтения возвращают `ScheduledMessageDto`; фоновый диспетчер получает отдельный `ScheduledMessageDispatchDto` с зашифрованным текстом и исходными данными вложений. `CreateAsync` и `UpdateAsync` возвращают DTO, публичный `ToDto(ScheduledMessage)` удалён. API больше не читает EF-свойства и не расшифровывает данные самостоятельно. `AttachmentInfo` и DTO расписания физически перенесены в Application с сохранением прежних namespace.
