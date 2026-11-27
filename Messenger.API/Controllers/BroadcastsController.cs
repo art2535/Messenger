@@ -23,15 +23,18 @@ namespace Messenger.API.Controllers
     {
         private readonly IBroadcastService _broadcastService;
         private readonly IUserService _userService;
+        private readonly IAdminService _adminService;
         private readonly ILogger<BroadcastsController> _logger;
 
         public BroadcastsController(
             IBroadcastService broadcastService,
             IUserService userService,
+            IAdminService adminService,
             ILogger<BroadcastsController> logger)
         {
             _broadcastService = broadcastService;
             _userService = userService;
+            _adminService = adminService;
             _logger = logger;
         }
 
@@ -45,6 +48,7 @@ namespace Messenger.API.Controllers
         [ProducesResponseType(StatusCodes.Status201Created)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> PostCreateBroadcastAsync(
             [FromBody, Description("Данные для создания рассылки")] CreateBroadcastRequest? request,
@@ -58,6 +62,12 @@ namespace Messenger.API.Controllers
                 }
 
                 var senderId = await User.GetCurrentUserIdAsync(_userService, ct);
+                if (!await _adminService.IsSystemAdminAsync(senderId, ct))
+                {
+                    return StatusCode(StatusCodes.Status403Forbidden,
+                        ApiResponse.Failure("Создавать массовые рассылки могут только администраторы", "FORBIDDEN"));
+                }
+
                 var created = await _broadcastService.CreateBroadcastAsync(request, senderId, ct);
 
                 return Ok(ApiResponse.Success(created));
@@ -106,7 +116,7 @@ namespace Messenger.API.Controllers
             try
             {
                 var userId = await User.GetCurrentUserIdAsync(_userService, ct);
-                var isAdmin = User.IsInRole("Admin");
+                var isAdmin = await _adminService.IsSystemAdminAsync(userId, ct);
 
                 var summary = await _broadcastService.GetBroadcastSummaryAsync(id, userId, isAdmin, ct);
 
