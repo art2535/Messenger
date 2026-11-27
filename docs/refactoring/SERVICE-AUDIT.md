@@ -10,7 +10,7 @@
 
 ## Проверенная ревизия
 
-- Последнее обновление аудита: безопасная загрузка, пересылка и удаление файловых вложений; проверка доступа к метаданным вложений.
+- Последнее обновление аудита: остановка фоновых служб при shutdown и финальная проверка cancellation/retry-поведения фоновых циклов.
 - Основная область: `Messenger.Infrastructure/Services`, `Messenger.Application/Services`, `Messenger.Application/Interfaces`, `Messenger.API/Services`, `Messenger.Web/Services`, `Messenger.Realtime/Services`.
 - Проверка локальной сборкой в этой среде недоступна: .NET SDK/runtime отсутствует.
 
@@ -28,7 +28,7 @@
 | Модерация и администрирование | `ModerationService`, `AdminService` | Частично проверены; продолжить проверку атомарности операций и обработки ошибок |
 | Статусы и realtime | `UserStatusService`, `RedisUserPresenceTracker`, rate limiter | Presence хранится в Redis lease; cleanup проверяет активные подключения и восстанавливает Online при гонке повторного подключения |
 | Кэш и шифрование | `RedisCacheService`, `RedisDistributedLock`, `AesGcmEncryptionService`, `CacheMetrics` | Частично проверены; отмена ожидания распределённой блокировки исправлена |
-| Фоновые задачи API | `LogRetentionService`, `RedisMetricsCollectorService`, `SessionCleanupBackgroundService`, `PresenceHeartbeatBackgroundService` | Presence cleanup согласован; требуется проверка сборкой и интеграционными сценариями |
+| Фоновые задачи API | `LogRetentionService`, `RedisMetricsCollectorService`, `SessionCleanupBackgroundService`, `PresenceHeartbeatBackgroundService` | Cancellation при shutdown проверена; startup-delay не маскирует остановку; требуется проверка сборкой и интеграционными сценариями |
 
 Таблица отражает охват и найденные направления, а не заявление о завершённой построчной проверке каждого метода.
 
@@ -177,3 +177,16 @@ MessagesController и ChatsController передают текущий userId в 
 RedisCacheService связывает ожидание Redis-команд с CancellationToken через WaitAsync, поэтому отменённая HTTP/background operation не зависает до завершения Redis-команды. Ошибки Redis по-прежнему деградируют в cache miss/no-op, а отмена пробрасывается.
 
 Realtime rate limiter теперь принимает CancellationToken. HTTP отправка сообщений и SignalR typing/send-permit передают отмену запроса/соединения вместо ожидания queued permit после disconnect/cancel.
+
+
+### 11. Остановка фоновых служб и cancellation
+
+Проверены `PresenceHeartbeatBackgroundService`, `SessionCleanupBackgroundService`, `ScheduledMessageDispatcherService`, `UploadOrphanCleanupService`, `RedisMetricsCollectorService`, `LogRetentionService` и `TokenRefreshBackgroundService`.
+
+Во всех циклах отмена отделена от обычной ошибки и не должна превращаться в retry/error log. Для `SessionCleanupBackgroundService` и `RedisMetricsCollectorService` дополнительно обработана отмена стартовой задержки до первого рабочего тика: shutdown в этот момент теперь завершается штатно через `return`, без выхода из `ExecuteAsync` по необработанному `OperationCanceledException`.
+
+`ScheduledMessageDispatcherService` и `UploadOrphanCleanupService` уже имели корректную обработку startup-delay. `PresenceHeartbeatBackgroundService` выполняет startup delay непосредственно внутри `try/catch` с фильтром shutdown cancellation. `LogRetentionService` использует `PeriodicTimer` и отдельную обработку отмены. `TokenRefreshBackgroundService` также фильтрует shutdown cancellation на уровне timer loop и отдельных операций.
+
+Обычные ошибки фоновых операций остаются recoverable: текущий тик логирует ошибку и цикл продолжает работу. Для файловой уборки уже предусмотрена более длинная задержка после ошибки (`10 минут` вместо штатных `6 часов`). Остальные службы используют штатный фиксированный интервал; отдельный глобальный exponential backoff не вводился, поскольку для cleanup/metrics/heartbeat фиксированные интервалы предсказуемее и уже ограничивают частоту повторов.
+
+Отдельно подтверждено, что consumer `ChatMessageSentConsumer` не подавляет `OperationCanceledException`: отмена передаётся MassTransit, а transient-ошибки push пробрасываются для broker retry.
