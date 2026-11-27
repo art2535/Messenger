@@ -220,6 +220,8 @@ Realtime rate limiter теперь принимает CancellationToken. HTTP о
 - `UploadOrphanCleanupService` передаёт токен в EF-запросы и ADO.NET open/read.
 - `LogRetentionService` передаёт токен в SQL delete и задержки; отмена не превращается в обычную ошибку cleanup.
 - `RedisMetricsCollectorService`: Redis `PingAsync` и `InfoAsync` не имеют CancellationToken overload, поэтому ожидание теперь ограничено через `WaitAsync(ct)`.
+- `RedisDistributedLock`: ожидание `StringSetAsync` ограничено через `WaitAsync(ct)`. Если отмена приходит во время уже отправленной Redis-команды, фоновая компенсация дожидается результата и освобождает lock только при совпадении owner token; при сбое ключ ограничен TTL.
+- `RedisUserPresenceTracker`: Redis Lua-команды connect/disconnect/has-connections/heartbeat теперь ожидаются через `WaitAsync(cancellationToken)`. Для отменённого connect добавлена компенсация: после завершения исходной команды удаляется только соответствующий connectionId, чтобы поздно завершившийся Redis write не оставил лишний Presence lease.
 
 В `ChatHub` исправлены пропуски передачи `Context.ConnectionAborted`: получение пользователя, настройки, статусы, Presence connect, rate limiter, SignalR group membership и отправки событий теперь учитывают жизненный цикл соединения. Best-effort чтение настроек отдельно пробрасывает отмену, а не скрывает её общим пустым catch.
 
