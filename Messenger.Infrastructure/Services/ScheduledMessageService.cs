@@ -1,7 +1,10 @@
 using System.Text.Json;
 using Messenger.Core.DTOs.Messages;
+using Messenger.Application.DTOs.Messages;
 using Messenger.Core.Interfaces;
+using Messenger.Application.Interfaces;
 using Messenger.Core.Messages;
+using Messenger.Application.Messages;
 using Messenger.Core.Models;
 using Messenger.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;

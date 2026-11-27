@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Messenger.Core.Interfaces;
+using Messenger.Application.Interfaces;
 using Microsoft.Extensions.Logging;
 using StackExchange.Redis;
 

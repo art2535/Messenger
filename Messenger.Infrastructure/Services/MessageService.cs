@@ -1,13 +1,16 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Messenger.Core.DTOs;
+using Messenger.Application.DTOs;
 using Messenger.Application.Files;
 using Messenger.Core.DTOs.Messages;
+using Messenger.Application.DTOs.Messages;
 using Messenger.Core.Interfaces;
+using Messenger.Application.Interfaces;
 using Messenger.Core.Models;
 using MassTransit;
 using Messenger.Core.Messages;
+using Messenger.Application.Messages;
 using Messenger.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
