@@ -14,19 +14,22 @@ namespace Messenger.API.Hubs
         private readonly IUserService _userService;
         private readonly IUserPresenceTracker _presenceTracker;
         private readonly IAccountSettingsService _accountSettingsService;
+        private readonly ILogger<UserStatusHub> _logger;
 
         public UserStatusHub(
             IUserStatusService userStatusService,
             IChatService chatService,
             IUserService userService,
             IUserPresenceTracker presenceTracker,
-            IAccountSettingsService accountSettingsService)
+            IAccountSettingsService accountSettingsService,
+            ILogger<UserStatusHub> logger)
         {
             _userStatusService = userStatusService;
             _chatService = chatService;
             _userService = userService;
             _presenceTracker = presenceTracker;
             _accountSettingsService = accountSettingsService;
+            _logger = logger;
         }
 
         private async Task SendPresenceToPeersAsync(Guid userId, string method, object payload, CancellationToken cancellationToken)
@@ -102,29 +105,38 @@ namespace Messenger.API.Hubs
         {
             if (Context.Items.TryGetValue("PresenceUserId", out var value) && value is Guid userId)
             {
-                if (Context.Items.TryGetValue("PresenceTracked", out var tracked) && tracked is true)
+                try
                 {
-                    var becameOffline = await _presenceTracker.DisconnectAsync(
-                        userId,
-                        Context.ConnectionId);
-
-                    if (becameOffline)
+                    if (Context.Items.TryGetValue("PresenceTracked", out var tracked) && tracked is true)
                     {
-                        await _userStatusService.UpdateUserStatusAsync(userId, false);
+                        var becameOffline = await _presenceTracker.DisconnectAsync(
+                            userId,
+                            Context.ConnectionId);
 
-                        await SendPresenceToPeersAsync(
-                            userId,
-                            "UserOffline",
-                            userId,
-                            CancellationToken.None);
+                        if (becameOffline)
+                        {
+                            await _userStatusService.UpdateUserStatusAsync(userId, false);
+
+                            await SendPresenceToPeersAsync(
+                                userId,
+                                "UserOffline",
+                                userId,
+                                CancellationToken.None);
+                        }
                     }
                 }
-
-                if (Context.Items.TryGetValue("PresenceMetricTracked", out var metricTracked) && metricTracked is true)
+                catch (Exception ex)
                 {
-                    MessengerMetrics.SignalRActiveConnections.Add(
-                        -1,
-                        new KeyValuePair<string, object?>("hub", "userstatus"));
+                    _logger.LogError(ex, "Ошибка при завершении presence-соединения {ConnectionId}", Context.ConnectionId);
+                }
+                finally
+                {
+                    if (Context.Items.TryGetValue("PresenceMetricTracked", out var metricTracked) && metricTracked is true)
+                    {
+                        MessengerMetrics.SignalRActiveConnections.Add(
+                            -1,
+                            new KeyValuePair<string, object?>("hub", "userstatus"));
+                    }
                 }
             }
 
