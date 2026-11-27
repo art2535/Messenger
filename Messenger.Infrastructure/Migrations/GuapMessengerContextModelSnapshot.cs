@@ -811,6 +811,11 @@ namespace Messenger.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("Read_At");
 
+                    b.Property<string>("DeduplicationKey")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("Deduplication_Key");
+
                     b.Property<string>("Text")
                         .IsRequired()
                         .HasColumnType("text");
@@ -821,6 +826,11 @@ namespace Messenger.Infrastructure.Migrations
 
                     b.HasKey("NotificationId")
                         .HasName("Notifications_pkey");
+
+                    b.HasIndex("DeduplicationKey")
+                        .IsUnique()
+                        .HasFilter("\"Deduplication_Key\" IS NOT NULL")
+                        .HasDatabaseName("IX_Notifications_Deduplication_Key");
 
                     b.HasIndex("UserId", "Read")
                         .HasDatabaseName("IX_Notifications_UserId_Read");

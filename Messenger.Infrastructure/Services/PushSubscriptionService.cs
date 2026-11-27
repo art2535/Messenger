@@ -182,7 +182,8 @@ namespace Messenger.Infrastructure.Services
         }
 
         public async Task SendPushToOfflineUsersAsync(Guid chatId, Guid senderId, string senderName,
-            string? messageText, bool hasAttachments, bool isMention = false, CancellationToken cancellationToken = default)
+            string? messageText, bool hasAttachments, bool isMention = false, CancellationToken cancellationToken = default,
+            Guid? messageId = null)
         {
             try
             {
@@ -274,8 +275,14 @@ namespace Messenger.Infrastructure.Services
                                 : $"{pushTitle}: {body}")
                             : pushTitle;
 
-                        var notificationId = await _notificationService.CreateNotificationAsync(
-                            participant.UserId, notificationText, cancellationToken);
+                        var notificationId = messageId.HasValue
+                            ? await _notificationService.CreateNotificationAsync(
+                                participant.UserId,
+                                notificationText,
+                                $"chat-message:{messageId.Value:N}:recipient:{participant.UserId:N}",
+                                cancellationToken)
+                            : await _notificationService.CreateNotificationAsync(
+                                participant.UserId, notificationText, cancellationToken);
 
                         var subscriptions = await _context.PushSubscriptions
                             .Where(s => s.UserId == participant.UserId)
@@ -339,7 +346,8 @@ namespace Messenger.Infrastructure.Services
                             }
                             catch (Exception ex)
                             {
-                                _logger.LogWarning(ex, "Ошибка отправки push пользователю {UserId}", participant.UserId);
+                                _logger.LogWarning(ex, "Временная ошибка отправки push пользователю {UserId}; событие будет повторено", participant.UserId);
+                                throw;
                             }
                         }
                     }
@@ -349,7 +357,8 @@ namespace Messenger.Infrastructure.Services
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogWarning(ex, "Ошибка при создании уведомления или отправке push для пользователя {UserId}", participant.UserId);
+                        _logger.LogWarning(ex, "Ошибка при создании уведомления или отправке push для пользователя {UserId}; событие будет повторено", participant.UserId);
+                        throw;
                     }
                 }
             }
@@ -360,6 +369,7 @@ namespace Messenger.Infrastructure.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Общая ошибка при отправке push для чата {ChatId}", chatId);
+                throw;
             }
         }
     }

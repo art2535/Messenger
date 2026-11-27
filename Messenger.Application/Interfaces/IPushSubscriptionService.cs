@@ -41,5 +41,6 @@ public interface IPushSubscriptionService
         string? messageText,
         bool hasAttachments,
         bool isMention = false,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        Guid? messageId = null);
 }

@@ -142,7 +142,10 @@ namespace Messenger.API.Consumers
                 }
                 catch (Exception pushEx)
                 {
-                    _logger.LogWarning(pushEx, "Не удалось отправить push для чата {ChatId}", msg.ChatId);
+                    _logger.LogWarning(pushEx,
+                        "Не удалось отправить push для чата {ChatId}; событие будет повторено брокером",
+                        msg.ChatId);
+                    throw;
                 }
 
                 _logger.LogInformation("Сообщение {MessageId} полностью обработано и доставлено", msg.MessageId);

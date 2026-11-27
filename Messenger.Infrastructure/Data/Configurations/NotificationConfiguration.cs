@@ -16,6 +16,9 @@ public sealed class NotificationConfiguration : IEntityTypeConfiguration<Notific
             .ValueGeneratedNever();
         builder.Property(e => e.UserId).HasColumnName("User_ID");
         builder.Property(e => e.Text).IsRequired();
+        builder.Property(e => e.DeduplicationKey)
+            .HasMaxLength(256)
+            .HasColumnName("Deduplication_Key");
         builder.Property(e => e.CreationDate)
             .HasColumnName("Creation_Date")
             .HasColumnType("timestamp with time zone")
@@ -24,6 +27,11 @@ public sealed class NotificationConfiguration : IEntityTypeConfiguration<Notific
         builder.Property(e => e.ReadAt)
             .HasColumnName("Read_At")
             .HasColumnType("timestamp with time zone");
+
+        builder.HasIndex(e => e.DeduplicationKey)
+            .IsUnique()
+            .HasFilter("\"Deduplication_Key\" IS NOT NULL")
+            .HasDatabaseName("IX_Notifications_Deduplication_Key");
 
         builder.HasIndex(e => new { e.UserId, e.Read })
             .HasDatabaseName("IX_Notifications_UserId_Read");

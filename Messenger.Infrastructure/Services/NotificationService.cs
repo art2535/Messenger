@@ -22,15 +22,70 @@ namespace Messenger.Infrastructure.Services
             _logger = logger;
         }
 
-        public async Task<Guid> CreateNotificationAsync(Guid userId, string text, CancellationToken token = default)
+        public Task<Guid> CreateNotificationAsync(Guid userId, string text, CancellationToken token = default)
+            => CreateNotificationCoreAsync(userId, text, null, token);
+
+        public Task<Guid> CreateNotificationAsync(
+            Guid userId,
+            string text,
+            string deduplicationKey,
+            CancellationToken token = default)
         {
-            string encryptedText = _encryptionService.Encrypt(text);
+            if (string.IsNullOrWhiteSpace(deduplicationKey))
+                throw new ArgumentException("Ключ идемпотентности не может быть пустым.", nameof(deduplicationKey));
+
+            if (deduplicationKey.Length > 256)
+                throw new ArgumentOutOfRangeException(nameof(deduplicationKey), "Ключ идемпотентности не может превышать 256 символов.");
+
+            return CreateNotificationCoreAsync(userId, text, deduplicationKey, token);
+        }
+
+        private async Task<Guid> CreateNotificationCoreAsync(
+            Guid userId,
+            string text,
+            string? deduplicationKey,
+            CancellationToken token)
+        {
+            if (deduplicationKey != null)
+            {
+                await using var transaction = await _context.Database.BeginTransactionAsync(token);
+                await _context.Database.ExecuteSqlInterpolatedAsync(
+                    $"SELECT pg_advisory_xact_lock(hashtextextended({deduplicationKey}, 0))",
+                    token);
+
+                var existingId = await _context.Notifications
+                    .AsNoTracking()
+                    .Where(n => n.DeduplicationKey == deduplicationKey)
+                    .Select(n => (Guid?)n.NotificationId)
+                    .FirstOrDefaultAsync(token);
+
+                if (existingId.HasValue)
+                {
+                    await transaction.CommitAsync(token);
+                    return existingId.Value;
+                }
+
+                var idempotentNotification = new Notification
+                {
+                    NotificationId = Guid.NewGuid(),
+                    UserId = userId,
+                    Text = _encryptionService.Encrypt(text),
+                    DeduplicationKey = deduplicationKey,
+                    CreationDate = UtcDateTime.Now,
+                    Read = false
+                };
+
+                await _context.Notifications.AddAsync(idempotentNotification, token);
+                await _context.SaveChangesAsync(token);
+                await transaction.CommitAsync(token);
+                return idempotentNotification.NotificationId;
+            }
 
             var notification = new Notification
             {
                 NotificationId = Guid.NewGuid(),
                 UserId = userId,
-                Text = encryptedText,
+                Text = _encryptionService.Encrypt(text),
                 CreationDate = UtcDateTime.Now,
                 Read = false
             };
