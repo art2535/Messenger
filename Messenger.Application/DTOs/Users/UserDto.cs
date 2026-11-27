@@ -1,6 +1,7 @@
+using Messenger.Core.DTOs.Users;
 using System.Text.Json.Serialization;
 
-namespace Messenger.Core.DTOs.Users;
+namespace Messenger.Application.DTOs.Users;
 
 /// <summary>
 /// Прикладное представление пользователя без EF-навигаций.

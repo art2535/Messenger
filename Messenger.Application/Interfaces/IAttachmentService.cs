@@ -1,7 +1,7 @@
-using Messenger.Core.DTOs.Attachments;
+using Messenger.Application.DTOs.Attachments;
 using Messenger.Core.DTOs.Messages;
 
-namespace Messenger.Core.Interfaces;
+namespace Messenger.Application.Interfaces;
 
 public interface IAttachmentService
 {

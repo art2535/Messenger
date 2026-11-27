@@ -1,6 +1,6 @@
 using Messenger.Core.DTOs.Admin;
 
-namespace Messenger.Core.Interfaces
+namespace Messenger.Application.Interfaces
 {
     public interface IAdminService
     {
