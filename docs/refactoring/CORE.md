@@ -51,22 +51,22 @@
 
 ## Что осталось
 
-1. Продолжить вынос Fluent-конфигураций для остальных сущностей, затем спроектировать persistence entities в Infrastructure.
-2. Перевести Infrastructure repositories/services на persistence entities.
+1. Провести полный аудит оставшихся EF-аннотаций и связей моделей, спроектировать границу Domain/Persistence и правила преобразования между ними.
+2. Создать persistence entities в Infrastructure и постепенно перевести repositories/services на них.
 3. Перевести API/Web и Application contracts с прежних EF-моделей на чистые domain/DTO типы.
-4. После перевода потребителей удалить EF и JSON атрибуты из Core.
+4. После перевода всех потребителей удалить EF- и JSON-аннотации, а также EF-навигации из Core.
 5. Перенести DTO и сервисные интерфейсы в Application, не создавая зависимости Core → Application.
-6. Добавить архитектурную проверку, запрещающую EF Core/ASP.NET references и namespaces в Core.
+6. Усилить архитектурную проверку: запретить EF Core/ASP.NET references и namespaces в Core.
 
 ## Важные ограничения
 
 - Нельзя удалять `JsonIgnore` до замены сериализации на DTO: это может раскрыть навигационные графы и изменить API payload.
 - Нельзя менять EF-аннотации до полного переноса соответствующего mapping в Fluent API.
-- Нельзя генерировать новую миграцию только на основании этого изменения: текущий перенос Log mapping должен сохранять модель БД, но сравнение snapshot/model и проверка миграций требуют .NET SDK.
+- Нельзя генерировать новую миграцию только на основании выноса конфигураций: перенос существующего Fluent API не должен менять модель БД, но сравнение snapshot/model и проверка миграций требуют .NET SDK.
 
 ## Проверки
 
-Проверено чтением актуальных файлов из GitHub: конфигурации Log, ChatFolder, ChatFolderChat, MessageReport, UserMute, ModerationLog, Chat, ChatParticipant, Message, Notification, Reaction и User вынесены в Infrastructure; соответствующие inline-блоки удалены из контекста; `ApplyConfigurationsFromAssembly` присутствует. Проверка эквивалентности EF model snapshot, `dotnet build` и `dotnet test` не запускались.
+Проверено чтением актуальных файлов из GitHub: все оставшиеся inline-конфигурации из `GuapMessengerContext` вынесены в Infrastructure, включая девять конфигураций этапа 2.6; все ранее вынесенные конфигурации остаются в каталоге `Configurations`; `OnModelCreating` вызывает `ApplyConfigurationsFromAssembly`. Проверка эквивалентности EF model snapshot, `dotnet build` и `dotnet test` не запускались.
 
 ### 2.5. Вынос конфигураций основных сущностей
 
