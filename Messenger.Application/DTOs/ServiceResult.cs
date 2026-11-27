@@ -1,6 +1,6 @@
 using Messenger.Core.Responses;
 
-namespace Messenger.Core.DTOs
+namespace Messenger.Application.DTOs
 {
     /// <summary>
     /// Результат выполнения операции сервиса. Использует общий формат ApiResponse.

@@ -1,4 +1,4 @@
-namespace Messenger.Core.DTOs.Users;
+namespace Messenger.Application.DTOs.Users;
 
 /// <summary>
 /// Прикладное представление роли без EF-навигаций.

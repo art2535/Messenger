@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace Messenger.Core.DTOs.Attachments;
+namespace Messenger.Application.DTOs.Attachments;
 
 public sealed class CreateAttachmentDto
 {

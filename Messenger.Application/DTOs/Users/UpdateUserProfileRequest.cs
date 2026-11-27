@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace Messenger.Core.DTOs.Users
+namespace Messenger.Application.DTOs.Users
 {
     public class UpdateUserProfileRequest
     {

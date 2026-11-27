@@ -1,7 +1,8 @@
 using System.ComponentModel.DataAnnotations;
-using Messenger.Core.Messages;
+using Messenger.Application.Messages;
+using Messenger.Core.DTOs.Messages;
 
-namespace Messenger.Core.DTOs.Messages;
+namespace Messenger.Application.DTOs.Messages;
 
 public class ScheduleMessageRequest
 {
