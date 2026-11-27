@@ -1,30 +1,10 @@
-# Архитектурный baseline и целевой граф
+# Архитектурный baseline и текущее состояние рефакторинга
 
-## Текущее состояние на начало этапа 1
+## Исходное состояние
 
-До начала изменений:
+Baseline зафиксирован на commit `6524a3a322c8a745fb94f800a6dd0afc205d9c33`. Подробная статистика и исходные зависимости — в [BASELINE.md](BASELINE.md).
 
-- Infrastructure → Core
-- API → Core + Infrastructure
-- Web → Core
-- AppHost — Aspire host; отдельные ProjectReference в его csproj отсутствуют.
-
-## Состояние после этапа 1.3
-
-```text
-                 Messenger.Core
-                   ↑         ↑
-                   |         |
-          Messenger.Application
-                   ↑
-             ┌─────┴─────┐
-             |           |
-     Infrastructure      API
-             ↑           |
-             └───────────┘
-
-          Web → Core
-```
+## Состояние после этапа 1
 
 Фактические прямые ProjectReference:
 
@@ -37,7 +17,7 @@
 | Messenger.Web | Messenger.Core |
 | Messenger.AppHost | нет |
 
-API получает типы Core транзитивно через Infrastructure. Прямую ссылку API → Core удалили, чтобы зафиксировать зависимость transport-слоя от Application и Infrastructure.
+API получает типы Core транзитивно через Infrastructure.
 
 ## Правила направления зависимостей
 
@@ -48,20 +28,27 @@ API получает типы Core транзитивно через Infrastruct
 - Web ссылается только на Core.
 - AppHost остаётся точкой композиции Aspire и не содержит бизнес-логики.
 
-## Автоматическая проверка
+Автоматическая проверка прямых ссылок: `python3 scripts/check-architecture.py`. Она также запускается в GitLab CI, но не заменяет сборку и тесты.
 
-Скрипт `scripts/check-architecture.py` проверяет точный набор прямых ProjectReference:
+## Прогресс этапа 2 — очистка Core
 
-```bash
-python3 scripts/check-architecture.py
-```
+Выполнено в commit `eece268b9388f26b99531ffce2fd959b8c3c7155`:
 
-Проверка добавлена отдельным job `validate-architecture` в GitLab CI и запускается для branch/MR pipeline.
+- три SignalR Hub перенесены из `Messenger.Core/Hubs` в `Messenger.API/Hubs`;
+- namespace Hub-классов изменён на `Messenger.API.Hubs`;
+- регистрация Hub в `Messenger.API/Program.cs` обновлена;
+- из `Messenger.Core.csproj` удалены прямые PackageReference на JwtBearer и EntityFrameworkCore.
 
-## Что пока не переносилось
+Что ещё не выполнено:
 
-Контракты сервисов и DTO пока остаются в Core. Это намеренно: в Core всё ещё находятся SignalR hubs, которые используют часть этих интерфейсов. Их перенос без предварительного отделения transport-адаптеров создал бы обратную зависимость Core → Application. Перенос контрактов будет выполняться после подготовки Core в следующем архитектурном шаге.
+- DTO всё ещё находятся в Core;
+- сервисные интерфейсы всё ещё находятся в Core;
+- модели всё ещё совмещают доменные данные, EF mapping attributes и JSON serialization attributes;
+- DataAnnotations/EF navigation attributes и JSON attributes ещё не очищены;
+- перенос EF entities и конфигураций в Infrastructure ещё впереди.
 
-## Ограничения проверки
+Подробный аудит и последовательность следующих подэтапов: [CORE.md](CORE.md).
 
-На данном этапе проверяется граф прямых ссылок проектов. Проверка не заменяет `dotnet build`, тесты и запуск приложения. Их необходимо выполнить в среде с .NET 10 SDK и зависимостями проекта.
+## Ограничения проверок
+
+GitHub-изменения проверены чтением файлов и Git tree. `dotnet build`, `dotnet test`, запуск Aspire и production Compose не выполнялись: в этой среде нет локального .NET/Docker runtime.
