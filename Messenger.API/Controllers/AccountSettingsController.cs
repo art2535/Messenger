@@ -49,7 +49,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var userId = await User.GetCurrentUserIdAsync(_userService, ct);
                 var settings = await _accountSettingsService.GetByUserIdAsync(userId, ct);
 
                 return Ok(ApiResponse.Success(settings, "Настройки аккаунта получены"));
@@ -84,7 +84,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var userId = await User.GetCurrentUserIdAsync(_userService, ct);
                 var settings = await _accountSettingsService.UpdateAsync(userId, request, ct);
 
                 return Ok(ApiResponse.Success(settings, "Настройки аккаунта обновлены"));
