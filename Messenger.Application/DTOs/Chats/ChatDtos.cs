@@ -15,6 +15,8 @@ public sealed class CreateChatDto
 
 public sealed class UpdateChatDto
 {
+    public Guid ChatId { get; init; }
+
     [Required]
     public string Name { get; init; } = string.Empty;
 }

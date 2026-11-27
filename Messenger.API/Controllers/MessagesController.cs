@@ -183,7 +183,7 @@ namespace Messenger.API.Controllers
                     return NotFound(ApiResponse.Failure("Чат не найден", "NOT_FOUND"));
                 }
 
-                if (!chat.ChatParticipants.Any(p => p.UserId == user.UserId))
+                if (!chat.Participants.Any(p => p.UserId == user.UserId))
                 {
                     return StatusCode(StatusCodes.Status403Forbidden, ApiResponse.Failure("Вы не являетесь участником этого чата", "FORBIDDEN"));
                 }

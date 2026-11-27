@@ -111,7 +111,7 @@ namespace Messenger.API.Consumers
                     var chat = await _chatService.GetChatByIdAsync(msg.ChatId, context.CancellationToken);
                     if (chat?.ChatParticipants != null)
                     {
-                        foreach (var participant in chat.ChatParticipants)
+                        foreach (var participant in chat.Participants)
                         {
                             var userGroup = $"User_{participant.UserId}";
                             await _hubContext.Clients.Group(userGroup)

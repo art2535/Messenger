@@ -1,6 +1,5 @@
 using Messenger.Application.DTOs.Chats;
 using Messenger.Application.Interfaces;
-using Messenger.Application.Interfaces;
 using Messenger.Core.Models;
 using Messenger.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -108,7 +107,7 @@ namespace Messenger.Infrastructure.Services
             if (chats.Count == 0)
             {
                 await _cache.SetAsync(cacheKey, new List<ChatListItemDto>(), ChatsListTtl, token);
-                return new List<object>();
+                return new List<ChatListItemDto>();
             }
 
             var chatIds = chats.Select(c => c.ChatId).ToList();

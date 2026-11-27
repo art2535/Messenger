@@ -321,7 +321,7 @@ namespace Messenger.API.Controllers
                     }, ct);
 
                 var updatedChat = await _chatService.GetChatByIdAsync(chatId, ct);
-                var updatedCount = updatedChat?.ChatParticipants?.Count ?? 0;
+                var updatedCount = updatedChat?.Participants?.Count ?? 0;
 
                 await _hubContext.Clients.Group(chatId.ToString())
                     .SendAsync("ParticipantCountChanged", new
@@ -396,8 +396,6 @@ namespace Messenger.API.Controllers
                 {
                     return NotFound(ApiResponse.Failure("Чат не найден", "NOT_FOUND"));
                 }
-
-                chat.Name = request.Name;
 
                 await _chatService.UpdateChatAsync(new UpdateChatDto { ChatId = chatId, Name = request.Name }, ct);
 
