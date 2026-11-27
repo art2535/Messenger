@@ -3,6 +3,7 @@ using Messenger.Application.DTOs.Reactions;
 using Messenger.Core.Models;
 using Messenger.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace Messenger.Infrastructure.Services
 {
@@ -36,6 +37,7 @@ namespace Messenger.Infrastructure.Services
             {
                 existing.ReactionType = reactionType;
                 reaction = existing;
+                await _context.SaveChangesAsync(cancellationToken);
             }
             else
             {
@@ -48,9 +50,33 @@ namespace Messenger.Infrastructure.Services
                 };
 
                 await _context.Reactions.AddAsync(reaction, cancellationToken);
-            }
 
-            await _context.SaveChangesAsync(cancellationToken);
+                try
+                {
+                    await _context.SaveChangesAsync(cancellationToken);
+                }
+                catch (DbUpdateException ex) when (
+                    ex.InnerException is PostgresException
+                    {
+                        SqlState: PostgresErrorCodes.UniqueViolation
+                    })
+                {
+                    // Другой запрос мог добавить реакцию после нашей проверки.
+                    // Уникальный индекс сохраняет инвариант, а повторный запрос
+                    // превращает конкурентную вставку в обновление существующей реакции.
+                    _context.Entry(reaction).State = EntityState.Detached;
+
+                    var concurrentReaction = await _context.Reactions.FirstOrDefaultAsync(
+                        r => r.MessageId == messageId && r.UserId == userId,
+                        cancellationToken);
+                    if (concurrentReaction is null)
+                        throw;
+
+                    reaction = concurrentReaction;
+                    reaction.ReactionType = reactionType;
+                    await _context.SaveChangesAsync(cancellationToken);
+                }
+            }
 
             var userName = await _context.Users
                 .AsNoTracking()
