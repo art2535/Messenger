@@ -57,7 +57,7 @@ namespace Messenger.API.Controllers
                     return BadRequest(ApiResponse.Failure("Тело запроса отсутствует", "INVALID_REQUEST"));
                 }
 
-                var senderId = await User.GetCurrentUserIdAsync(_userService);
+                var senderId = await User.GetCurrentUserIdAsync(_userService, ct);
                 var created = await _broadcastService.CreateBroadcastAsync(request, senderId, ct);
 
                 return Ok(ApiResponse.Success(created));
@@ -105,7 +105,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var userId = await User.GetCurrentUserIdAsync(_userService, ct);
                 var isAdmin = User.IsInRole("Admin");
 
                 var summary = await _broadcastService.GetBroadcastSummaryAsync(id, userId, isAdmin, ct);
@@ -150,7 +150,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var userId = await User.GetCurrentUserIdAsync(_userService, ct);
                 var result = await _broadcastService.MarkAsReadAsync(id, userId, ct);
 
                 return Ok(ApiResponse.Success(result
@@ -192,7 +192,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var userId = await User.GetCurrentUserIdAsync(_userService, ct);
                 var broadcasts = await _broadcastService.GetMyBroadcastsAsync(userId, unreadOnly, ct);
 
                 return Ok(ApiResponse.Success(broadcasts));
