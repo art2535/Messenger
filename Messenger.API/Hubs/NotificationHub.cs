@@ -19,13 +19,12 @@ namespace Messenger.API.Hubs
         public override async Task OnConnectedAsync()
         {
             var userId = await ResolveCurrentUserIdAsync(Context.ConnectionAborted);
-            Context.Items["NotificationUserId"] = userId;
-
             await Groups.AddToGroupAsync(
                 Context.ConnectionId,
                 $"Notifications_{userId}",
                 Context.ConnectionAborted);
 
+            Context.Items["NotificationUserId"] = userId;
             MessengerMetrics.SignalRActiveConnections.Add(
                 1,
                 new KeyValuePair<string, object?>("hub", "notification"));

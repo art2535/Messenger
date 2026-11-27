@@ -50,10 +50,16 @@ namespace Messenger.API.Hubs
                 $"User_{userId}",
                 Context.ConnectionAborted);
 
+            MessengerMetrics.SignalRActiveConnections.Add(
+                1,
+                new KeyValuePair<string, object?>("hub", "userstatus"));
+            Context.Items["PresenceMetricTracked"] = true;
+
             var becameOnline = await _presenceTracker.ConnectAsync(
                 userId,
                 Context.ConnectionId,
                 Context.ConnectionAborted);
+            Context.Items["PresenceTracked"] = true;
 
             if (becameOnline)
             {
@@ -89,10 +95,6 @@ namespace Messenger.API.Hubs
                 }
             }
 
-            MessengerMetrics.SignalRActiveConnections.Add(
-                1,
-                new KeyValuePair<string, object?>("hub", "userstatus"));
-
             await base.OnConnectedAsync();
         }
 
@@ -100,24 +102,30 @@ namespace Messenger.API.Hubs
         {
             if (Context.Items.TryGetValue("PresenceUserId", out var value) && value is Guid userId)
             {
-                var becameOffline = await _presenceTracker.DisconnectAsync(
-                    userId,
-                    Context.ConnectionId);
-
-                if (becameOffline)
+                if (Context.Items.TryGetValue("PresenceTracked", out var tracked) && tracked is true)
                 {
-                    await _userStatusService.UpdateUserStatusAsync(userId, false);
+                    var becameOffline = await _presenceTracker.DisconnectAsync(
+                        userId,
+                        Context.ConnectionId);
 
-                    await SendPresenceToPeersAsync(
-                        userId,
-                        "UserOffline",
-                        userId,
-                        CancellationToken.None);
+                    if (becameOffline)
+                    {
+                        await _userStatusService.UpdateUserStatusAsync(userId, false);
+
+                        await SendPresenceToPeersAsync(
+                            userId,
+                            "UserOffline",
+                            userId,
+                            CancellationToken.None);
+                    }
                 }
 
-                MessengerMetrics.SignalRActiveConnections.Add(
-                    -1,
-                    new KeyValuePair<string, object?>("hub", "userstatus"));
+                if (Context.Items.TryGetValue("PresenceMetricTracked", out var metricTracked) && metricTracked is true)
+                {
+                    MessengerMetrics.SignalRActiveConnections.Add(
+                        -1,
+                        new KeyValuePair<string, object?>("hub", "userstatus"));
+                }
             }
 
             if (exception != null)
