@@ -6,6 +6,7 @@ using Messenger.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Npgsql;
 using System.Text.Json;
 using WebPush;
 using PushSubscriptionEntity = Messenger.Infrastructure.Persistence.Entities.PushSubscription;
@@ -96,16 +97,28 @@ namespace Messenger.Infrastructure.Services
 
             if (settings == null)
             {
-                _context.AccountSettings.Add(new AccountSetting
+                settings = new AccountSetting
                 {
                     AccountId = userId,
                     PushEnabled = true,
                     NotifyMessages = true,
                     NotifyGroupChats = true,
                     NotifyMentions = true
-                });
-                await _context.SaveChangesAsync(token);
-                return;
+                };
+                _context.AccountSettings.Add(settings);
+                try
+                {
+                    await _context.SaveChangesAsync(token);
+                    return;
+                }
+                catch (DbUpdateException ex) when (ex.InnerException is PostgresException
+                    { SqlState: PostgresErrorCodes.UniqueViolation })
+                {
+                    _context.Entry(settings).State = EntityState.Detached;
+                    settings = await _context.AccountSettings
+                        .FirstOrDefaultAsync(s => s.AccountId == userId, token)
+                        ?? throw;
+                }
             }
 
             if (!settings.PushEnabled)
@@ -158,40 +171,53 @@ namespace Messenger.Infrastructure.Services
 
         public async Task SavePushSettingsAsync(Guid userId, UpdatePushSettingsDto request, CancellationToken token = default)
         {
+            ArgumentNullException.ThrowIfNull(request);
+
             var settings = await _context.AccountSettings
                 .FirstOrDefaultAsync(s => s.AccountId == userId, token);
-            if (settings == null)
-            {
-                settings = new AccountSetting
-                {
-                    AccountId = userId,
-                    PushEnabled = request.PushEnabled,
-                    NotifyMessages = request.NotifyMessages,
-                    NotifyGroupChats = request.NotifyGroupChats,
-                    NotifyMentions = request.NotifyMentions
-                };
+            var isNew = settings == null;
+            settings ??= new AccountSetting { AccountId = userId };
+
+            settings.PushEnabled = request.PushEnabled;
+            settings.NotifyMessages = request.NotifyMessages;
+            settings.NotifyGroupChats = request.NotifyGroupChats;
+            settings.NotifyMentions = request.NotifyMentions;
+
+            if (isNew)
                 _context.AccountSettings.Add(settings);
-            }
-            else
+
+            await using var transaction = await _context.Database.BeginTransactionAsync(token);
+            try
             {
+                await _context.SaveChangesAsync(token);
+                if (!request.PushEnabled)
+                {
+                    await _context.PushSubscriptions
+                        .Where(s => s.UserId == userId)
+                        .ExecuteDeleteAsync(token);
+                    _logger.LogInformation("Все push-подписки удалены для пользователя {UserId}", userId);
+                }
+                await transaction.CommitAsync(token);
+            }
+            catch (DbUpdateException ex) when (isNew && ex.InnerException is PostgresException
+                { SqlState: PostgresErrorCodes.UniqueViolation })
+            {
+                await transaction.RollbackAsync(token);
+                _context.Entry(settings).State = EntityState.Detached;
+                settings = await _context.AccountSettings
+                    .FirstOrDefaultAsync(s => s.AccountId == userId, token)
+                    ?? throw;
+
                 settings.PushEnabled = request.PushEnabled;
                 settings.NotifyMessages = request.NotifyMessages;
                 settings.NotifyGroupChats = request.NotifyGroupChats;
                 settings.NotifyMentions = request.NotifyMentions;
+                await using var retryTransaction = await _context.Database.BeginTransactionAsync(token);
+                await _context.SaveChangesAsync(token);
+                if (!request.PushEnabled)
+                    await _context.PushSubscriptions.Where(s => s.UserId == userId).ExecuteDeleteAsync(token);
+                await retryTransaction.CommitAsync(token);
             }
-            await using var transaction = await _context.Database.BeginTransactionAsync(token);
-            await _context.SaveChangesAsync(token);
-
-            if (!request.PushEnabled)
-            {
-                await _context.PushSubscriptions
-                    .Where(s => s.UserId == userId)
-                    .ExecuteDeleteAsync(token);
-
-                _logger.LogInformation("Все push-подписки удалены для пользователя {UserId}", userId);
-            }
-
-            await transaction.CommitAsync(token);
         }
 
         public async Task SendPushToOfflineUsersAsync(Guid chatId, Guid senderId, string senderName,
