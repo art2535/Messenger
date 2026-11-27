@@ -30,7 +30,7 @@ public sealed class PostgreSqlFixture : IAsyncLifetime
     public async Task DisposeAsync() => await _postgres.DisposeAsync();
 }
 
-[CollectionDefinition(Name)]
+[CollectionDefinition("PostgreSQL integration")]
 public sealed class PostgreSqlCollection : ICollectionFixture<PostgreSqlFixture>
 {
     public const string Name = "PostgreSQL integration";
