@@ -11,10 +11,10 @@ public interface IScheduledMessageService
     Task<ScheduledMessageDispatchDto?> GetByIdAsync(Guid scheduledMessageId, CancellationToken ct = default);
     Task<List<ScheduledMessageDto>> GetPendingByUserAsync(Guid userId, CancellationToken ct = default);
     Task<List<ScheduledMessageDto>> GetPendingByChatAsync(Guid chatId, Guid userId, CancellationToken ct = default);
-    Task<List<ScheduledMessageDispatchDto>> GetDueAsync(DateTime nowUtc, int limit = 50, CancellationToken ct = default);
+    Task<List<(ScheduledMessageDispatchDto Message, Guid ResultMessageId)>> DispatchDueAsync(
+        Func<ScheduledMessageDispatchDto, CancellationToken, Task<Guid>> publishAsync,
+        DateTime nowUtc, int limit = 50, CancellationToken ct = default);
     Task<ScheduledMessageDto?> UpdateAsync(Guid scheduledMessageId, Guid userId, string? encryptedText,
         DateTime? scheduledAtUtc, CancellationToken ct = default);
     Task<bool> CancelAsync(Guid scheduledMessageId, Guid userId, CancellationToken ct = default);
-    Task MarkSentAsync(Guid scheduledMessageId, Guid resultMessageId, CancellationToken ct = default);
-    Task MarkFailedAsync(Guid scheduledMessageId, string error, CancellationToken ct = default);
 }

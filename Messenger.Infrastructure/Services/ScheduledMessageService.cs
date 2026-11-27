@@ -86,13 +86,56 @@ public class ScheduledMessageService : IScheduledMessageService
         return entities.Select(MapToDto).ToList();
     }
 
-    public async Task<List<ScheduledMessageDispatchDto>> GetDueAsync(DateTime nowUtc, int limit = 50, CancellationToken ct = default)
+    /// <summary>
+    /// Атомарно выбирает готовые сообщения и фиксирует их публикацию через MassTransit Bus Outbox.
+    /// </summary>
+    public async Task<List<(ScheduledMessageDispatchDto Message, Guid ResultMessageId)>> DispatchDueAsync(
+        Func<ScheduledMessageDispatchDto, CancellationToken, Task<Guid>> publishAsync,
+        DateTime nowUtc, int limit = 50, CancellationToken ct = default)
     {
-        var horizon = nowUtc.AddSeconds(2);
-        var entities = await _context.ScheduledMessages.AsNoTracking()
-            .Where(x => x.Status == ScheduledMessageStatus.Pending && x.ScheduledAt <= horizon)
-            .OrderBy(x => x.ScheduledAt).Take(limit).ToListAsync(ct);
-        return entities.Select(MapToDispatchDto).ToList();
+        ArgumentNullException.ThrowIfNull(publishAsync);
+        if (limit <= 0)
+            return new List<(ScheduledMessageDispatchDto, Guid)>();
+
+        var dispatched = new List<(ScheduledMessageDispatchDto Message, Guid ResultMessageId)>();
+        var horizon = DateTime.SpecifyKind(nowUtc.AddSeconds(2), DateTimeKind.Utc);
+
+        for (var i = 0; i < limit; i++)
+        {
+            await using var transaction = await _context.Database.BeginTransactionAsync(ct);
+            var entity = await _context.ScheduledMessages
+                .FromSqlInterpolated($"""
+                    SELECT *
+                    FROM "Scheduled_Messages"
+                    WHERE "Status" = {ScheduledMessageStatus.Pending}
+                      AND "Scheduled_At" <= {horizon}
+                    ORDER BY "Scheduled_At"
+                    LIMIT 1
+                    FOR UPDATE SKIP LOCKED
+                    """)
+                .FirstOrDefaultAsync(ct);
+
+            if (entity == null)
+            {
+                await transaction.CommitAsync(ct);
+                break;
+            }
+
+            var dispatchMessage = MapToDispatchDto(entity);
+            var resultMessageId = await publishAsync(dispatchMessage, ct);
+
+            entity.Status = ScheduledMessageStatus.Sent;
+            entity.ResultMessageId = resultMessageId;
+            entity.ErrorMessage = null;
+            entity.UpdatedAt = DateTime.UtcNow;
+
+            // Bus Outbox и ScheduledMessage используют один scoped DbContext и одну транзакцию.
+            await _context.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+            dispatched.Add((dispatchMessage, resultMessageId));
+        }
+
+        return dispatched;
     }
 
     public async Task<ScheduledMessageDto?> UpdateAsync(
@@ -102,32 +145,40 @@ public class ScheduledMessageService : IScheduledMessageService
         DateTime? scheduledAtUtc,
         CancellationToken ct = default)
     {
-        var entity = await _context.ScheduledMessages
-            .FirstOrDefaultAsync(x => x.ScheduledMessageId == scheduledMessageId, ct);
+        var existing = await _context.ScheduledMessages.AsNoTracking()
+            .Where(x => x.ScheduledMessageId == scheduledMessageId)
+            .Select(x => new { x.SenderId, x.Status })
+            .FirstOrDefaultAsync(ct);
 
-        if (entity == null)
+        if (existing == null)
             return null;
-
-        if (entity.SenderId != userId)
+        if (existing.SenderId != userId)
             throw new UnauthorizedAccessException("Можно редактировать только свои запланированные сообщения");
-
-        if (entity.Status != ScheduledMessageStatus.Pending)
+        if (existing.Status != ScheduledMessageStatus.Pending)
             throw new InvalidOperationException("Можно редактировать только ожидающие отправки сообщения");
 
-        if (encryptedText != null)
-            entity.MessageText = encryptedText;
-
+        DateTime? scheduledAt = null;
         if (scheduledAtUtc.HasValue)
         {
-            var at = DateTime.SpecifyKind(scheduledAtUtc.Value, DateTimeKind.Utc);
-            if (at <= DateTime.UtcNow.AddSeconds(30))
+            scheduledAt = DateTime.SpecifyKind(scheduledAtUtc.Value, DateTimeKind.Utc);
+            if (scheduledAt <= DateTime.UtcNow.AddSeconds(30))
                 throw new ArgumentException("Время отправки должно быть хотя бы на 30 секунд в будущем");
-            entity.ScheduledAt = at;
         }
 
-        entity.UpdatedAt = DateTime.UtcNow;
-        await _context.SaveChangesAsync(ct);
-        return await GetScheduledMessageDtoAsync(entity.ScheduledMessageId, ct);
+        // Условный UPDATE не перезапишет запись, если диспетчер уже перевёл её в Sent.
+        var updated = await _context.ScheduledMessages
+            .Where(x => x.ScheduledMessageId == scheduledMessageId
+                && x.SenderId == userId
+                && x.Status == ScheduledMessageStatus.Pending)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(x => x.MessageText, encryptedText ?? x.MessageText)
+                .SetProperty(x => x.ScheduledAt, scheduledAt ?? x.ScheduledAt)
+                .SetProperty(x => x.UpdatedAt, DateTime.UtcNow), ct);
+
+        if (updated == 0)
+            throw new InvalidOperationException("Можно редактировать только ожидающие отправки сообщения");
+
+        return await GetScheduledMessageDtoAsync(scheduledMessageId, ct);
     }
 
     public async Task<bool> CancelAsync(Guid scheduledMessageId, Guid userId, CancellationToken ct = default)
@@ -156,29 +207,6 @@ public class ScheduledMessageService : IScheduledMessageService
                 .SetProperty(x => x.UpdatedAt, DateTime.UtcNow), ct);
 
         return updated > 0;
-    }
-
-    public async Task MarkSentAsync(Guid scheduledMessageId, Guid resultMessageId, CancellationToken ct = default)
-    {
-        await _context.ScheduledMessages
-            .Where(x => x.ScheduledMessageId == scheduledMessageId
-                && x.Status == ScheduledMessageStatus.Pending)
-            .ExecuteUpdateAsync(setters => setters
-                .SetProperty(x => x.Status, ScheduledMessageStatus.Sent)
-                .SetProperty(x => x.ResultMessageId, resultMessageId)
-                .SetProperty(x => x.UpdatedAt, DateTime.UtcNow), ct);
-    }
-
-    public async Task MarkFailedAsync(Guid scheduledMessageId, string error, CancellationToken ct = default)
-    {
-        var errorMessage = error?.Length > 500 ? error[..500] : error;
-        await _context.ScheduledMessages
-            .Where(x => x.ScheduledMessageId == scheduledMessageId
-                && x.Status == ScheduledMessageStatus.Pending)
-            .ExecuteUpdateAsync(setters => setters
-                .SetProperty(x => x.Status, ScheduledMessageStatus.Failed)
-                .SetProperty(x => x.ErrorMessage, errorMessage)
-                .SetProperty(x => x.UpdatedAt, DateTime.UtcNow), ct);
     }
 
     private async Task<ScheduledMessageDto?> GetScheduledMessageDtoAsync(Guid id, CancellationToken ct)

@@ -10,7 +10,7 @@
 
 ## Проверенная ревизия
 
-- Последнее обновление Presence и cleanup: коммит будет указан после публикации изменений.
+- Последнее обновление аудита: transactional outbox для планировщика отложенных сообщений; изменения зафиксированы в текущей ревизии ветки.
 - Основная область: `Messenger.Infrastructure/Services`, `Messenger.Application/Services`, `Messenger.Application/Interfaces`, `Messenger.API/Services`, `Messenger.Web/Services`, `Messenger.Realtime/Services`.
 - Проверка локальной сборкой в этой среде недоступна: .NET SDK/runtime отсутствует.
 
@@ -18,10 +18,10 @@
 
 | Область | Компоненты | Состояние аудита |
 |---|---|---|
-| Пользователи и настройки | `UserService`, `AccountSettingsService` | Частично проверены; гонка создания настроек и безопасный порядок замены/удаления аватаров исправлены; уникальность ExternalId остаётся открытой |
+| Пользователи и настройки | `UserService`, `AccountSettingsService` | Частично проверены; гонка создания настроек, безопасная замена/удаление аватаров и конкурентная регистрация по ExternalId исправлены |
 | Аутентификация и сессии | `LoginService`, `JwtService`, `TokenRefresher`, `UserTokenStore`, `TokenRefreshBackgroundService` | Частично проверены; login-session отделена от realtime presence |
 | Чаты и папки | `ChatService`, `ChatFolderService` | Частично проверены; конкурентное добавление участника и чата в папку обработано |
-| Сообщения | `MessageService`, `ScheduledMessageService`, `ScheduledMessageDispatcherService` | Частично проверены; идемпотентность планировщика остаётся открытой |
+| Сообщения | `MessageService`, `ScheduledMessageService`, `ScheduledMessageDispatcherService` | Планировщик использует PostgreSQL row lock и transactional Bus Outbox; consumer side effects требуют отдельного аудита |
 | Реакции и вложения | `ReactionService`, `AttachmentService` | Частично проверены; конкурентное добавление реакции обработано, файловые сценарии требуют отдельного прохода |
 | Уведомления | `NotificationService`, `PushSubscriptionService` | Частично проверены; отмена и повторное шифрование push-текста исправлены |
 | Рассылки | `BroadcastService`, `EfBroadcastRepository`, `BroadcastsController` | Контракты, реализация и HTTP-вызовы передают CancellationToken; проверка сборкой ещё не выполнена |
@@ -58,6 +58,7 @@ Idle cleanup по-прежнему учитывает пользовательс
 | `UserService.AssignRoleAsync` | Обработана конкурентная вставка связи User-Role |
 | `ChatService.AddParticipantToChatAsync` | Обработка UniqueViolation переведена на проверку SQLSTATE PostgreSQL; failed entity отсоединяется от ChangeTracker |
 | SignalR Presence | Добавлен распределённый учёт соединений с lease, heartbeat и проверкой активных подключений |
+| Планировщик отложенных сообщений | PostgreSQL `FOR UPDATE SKIP LOCKED` и MassTransit transactional Bus Outbox атомарно фиксируют статус `Sent` и событие публикации |
 | Session cleanup | Активные Presence-подключения исключены из idle cleanup; добавлена повторная проверка перед закрытием login-сессий |
 
 ## Открытые дефекты и следующие действия
@@ -69,11 +70,17 @@ Idle cleanup по-прежнему учитывает пользовательс
 Регистрация отклоняет null/whitespace, обрезает пробелы по краям и ограничивает длину 255 символами. При нарушении именно индекса External_ID проигравшая конкурентная регистрация отсоединяет только свой добавленный граф и загружает уже созданного пользователя. Другие нарушения уникальности не маскируются. `GetUserByExternalIdAsync` теперь загружает роли вместе с пользователем.
 
 Перед применением миграции на реальной БД необходимо выполнить backup и проверить её SQL на staging: если есть дубликаты, миграция намеренно остановится; их требуется разрешить вручную, сохранив связи и историю.
-### 2. Планировщик сообщений: повторная публикация
+### 2. Планировщик сообщений: атомарный захват и transactional outbox
 
-Текущая последовательность «получить Pending → опубликовать → отметить Sent» не является атомарной. Параллельные диспетчеры могут опубликовать одно сообщение дважды; падение после публикации, но до отметки Sent, также приводит к повтору.
+Исправлено в текущей ветке. `ScheduledMessageDispatcherService` больше не использует единственную Redis-блокировку на весь планировщик и не выполняет раздельные операции «прочитать Pending → опубликовать → отметить Sent».
 
-Нужен отдельный дизайн claim/lease или transactional outbox с идемпотентным ключом. Нельзя считать простую блокировку процесса достаточной для нескольких экземпляров приложения.
+`ScheduledMessageService.DispatchDueAsync` выбирает по одной готовой записи через PostgreSQL `FOR UPDATE SKIP LOCKED` внутри транзакции. Разные экземпляры API не могут одновременно захватить одну строку: второй экземпляр пропускает уже заблокированную запись и выбирает следующую. В той же scoped-области `IPublishEndpoint` работает через уже настроенный MassTransit Entity Framework Bus Outbox (`UseBusOutbox`). Событие `ChatMessageSent` и переход `ScheduledMessage` в `Sent` сохраняются одним `SaveChanges` и фиксируются одним commit.
+
+Падение до commit откатывает и изменение статуса, и outbox-запись; после commit событие остаётся в outbox и будет доставлено MassTransit независимо от перезапуска API. Это устраняет окно между публикацией в брокер и отметкой `Sent` на стороне планировщика. Доставка из outbox в RabbitMQ и обработка consumer остаются at-least-once; побочные эффекты consumer (SignalR/push) требуют отдельной идемпотентности и не становятся exactly-once автоматически.
+
+Редактирование также переведено на условный SQL UPDATE с `Status = Pending`, поэтому конкурентное изменение не может перезаписать уже отправленную запись. Отмена уже использует такой же условный UPDATE. Новые поля и миграция не нужны: MassTransit outbox и его таблицы уже зарегистрированы в `GuapMessengerContext` и миграционной модели.
+
+Нужно подтвердить интеграционными тестами на PostgreSQL два параллельных диспетчера, rollback между публикацией в Bus Outbox и commit, восстановление после рестарта и гонки редактирования/отмены.
 
 ### 3. Остальные обязательные направления
 
