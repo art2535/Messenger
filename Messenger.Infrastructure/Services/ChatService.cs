@@ -222,69 +222,83 @@ namespace Messenger.Infrastructure.Services
             return chats.Select(MapChat);
         }
 
-        public async Task AddParticipantToChatAsync(Guid chatId, Guid userId, string role, CancellationToken token = default)
+        public async Task AddParticipantToChatAsync(Guid chatId, Guid actorId, Guid userId, string role, CancellationToken token = default)
         {
-            var existing = await _context.ChatParticipants.FirstOrDefaultAsync(part => part.ChatId == chatId && part.UserId == userId, token);
+            await using var transaction = await _context.Database.BeginTransactionAsync(token);
+            var actor = await _context.ChatParticipants.AsNoTracking().FirstOrDefaultAsync(p => p.ChatId == chatId && p.UserId == actorId, token);
+            if (actor == null || !IsAdministratorRole(actor.Role))
+                throw new UnauthorizedAccessException("Недостаточно прав для добавления участника");
+            if (!IsRegularParticipantRole(role))
+                throw new InvalidOperationException("Через этот метод можно назначить только роль участника");
+
+            var existing = await _context.ChatParticipants.FirstOrDefaultAsync(p => p.ChatId == chatId && p.UserId == userId, token);
             if (existing != null)
-                return;
-
-            var participant = new ChatParticipant
             {
-                ChatId = chatId,
-                UserId = userId,
-                Role = role,
-                JoinDate = UtcDateTime.Now
-            };
+                await transaction.CommitAsync(token);
+                return;
+            }
 
+            var participant = new ChatParticipant { ChatId = chatId, UserId = userId, Role = "участник", JoinDate = UtcDateTime.Now };
             try
             {
                 await _context.ChatParticipants.AddAsync(participant, token);
                 await _context.SaveChangesAsync(token);
+                await transaction.CommitAsync(token);
             }
-            catch (DbUpdateException ex) when (
-                ex.InnerException is PostgresException
-                {
-                    SqlState: PostgresErrorCodes.UniqueViolation
-                })
+            catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
             {
-                // Участник уже добавлен параллельным запросом.
                 _context.Entry(participant).State = EntityState.Detached;
+                await transaction.RollbackAsync(token);
                 return;
             }
 
-            await InvalidateChatsCacheForParticipantsAsync(chatId, token);
+            await InvalidateChatsCacheForParticipantsBestEffortAsync(chatId, token);
         }
 
-        public async Task DeleteParticipantFromChatAsync(Guid chatId, Guid userId, CancellationToken token = default)
+        public async Task DeleteParticipantFromChatAsync(Guid chatId, Guid actorId, Guid userId, CancellationToken token = default)
         {
-            var deleteParticipant = await _context.ChatParticipants.FirstOrDefaultAsync(part => part.ChatId == chatId && part.UserId == userId, token);
+            await using var transaction = await _context.Database.BeginTransactionAsync(token);
+            var actor = await _context.ChatParticipants.AsNoTracking().FirstOrDefaultAsync(p => p.ChatId == chatId && p.UserId == actorId, token);
+            var target = await _context.ChatParticipants.FirstOrDefaultAsync(p => p.ChatId == chatId && p.UserId == userId, token);
 
-            if (deleteParticipant != null)
-            {
-                _context.ChatParticipants.Remove(deleteParticipant);
-                await _context.SaveChangesAsync(token);
-            }
+            if (actor == null)
+                throw new UnauthorizedAccessException("Вы не участник этого чата");
+            if (!IsAdministratorRole(actor.Role))
+                throw new UnauthorizedAccessException("Недостаточно прав для удаления участника");
+            if (target == null)
+                return;
+            if (userId == actorId)
+                throw new InvalidOperationException("Нельзя удалить самого себя из чата этим методом");
+            if (IsAdministratorRole(target.Role))
+                throw new UnauthorizedAccessException("Нельзя удалить владельца или администратора чата");
 
-            await _cache.RemoveAsync(UserChatsCacheKey(userId), token);
-            await InvalidateChatsCacheForParticipantsAsync(chatId, token);
+            _context.ChatParticipants.Remove(target);
+            await _context.SaveChangesAsync(token);
+            await transaction.CommitAsync(token);
+            await InvalidateUserChatsCacheBestEffortAsync(userId, token);
+            await InvalidateChatsCacheForParticipantsBestEffortAsync(chatId, token);
         }
 
-        public async Task DeleteChatAsync(Guid chatId, CancellationToken token = default)
+        public async Task DeleteChatAsync(Guid chatId, Guid actorId, CancellationToken token = default)
         {
-            var participantIds = await _context.ChatParticipants
-                .Where(p => p.ChatId == chatId)
-                .Select(p => p.UserId)
-                .ToListAsync(token);
-
+            await using var transaction = await _context.Database.BeginTransactionAsync(token);
             var chat = await _context.Chats.FirstOrDefaultAsync(c => c.ChatId == chatId, token);
-            if (chat == null)
-                return;
+            if (chat == null) return;
 
+            var actor = await _context.ChatParticipants.AsNoTracking().FirstOrDefaultAsync(p => p.ChatId == chatId && p.UserId == actorId, token);
+            if (actor == null || !IsOwnerRole(actor.Role) || actor.UserId != chat.UserId)
+                throw new UnauthorizedAccessException("Только владелец может удалить чат");
+
+            var participantIds = await _context.ChatParticipants.Where(p => p.ChatId == chatId).Select(p => p.UserId).ToListAsync(token);
             _context.Chats.Remove(chat);
             await _context.SaveChangesAsync(token);
+            await transaction.CommitAsync(token);
 
-            var keys = participantIds.Select(UserChatsCacheKey);
-            await _cache.RemoveAsync(keys, token);
+            try { await _cache.RemoveAsync(participantIds.Select(UserChatsCacheKey), token); }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogWarning(ex, "Чат {ChatId} удалён, но кеш списков чатов не удалось инвалидировать", chatId);
+            }
         }
 
         public async Task<ChatDto?> GetChatByIdAsync(Guid chatId, CancellationToken token = default)
@@ -312,16 +326,52 @@ namespace Messenger.Infrastructure.Services
             return participants.Select(MapParticipant);
         }
 
-        public async Task UpdateChatAsync(UpdateChatDto chat, CancellationToken token = default)
+        public async Task UpdateChatAsync(UpdateChatDto chat, Guid actorId, CancellationToken token = default)
         {
+            await using var transaction = await _context.Database.BeginTransactionAsync(token);
             var entity = await _context.Chats.FirstOrDefaultAsync(c => c.ChatId == chat.ChatId, token);
-            if (entity == null)
-                return;
+            if (entity == null) return;
+            if (!string.Equals(entity.Type, "group", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Переименовывать можно только групповые чаты");
+
+            var actor = await _context.ChatParticipants.AsNoTracking().FirstOrDefaultAsync(p => p.ChatId == chat.ChatId && p.UserId == actorId, token);
+            if (actor == null || !IsAdministratorRole(actor.Role))
+                throw new UnauthorizedAccessException("Недостаточно прав для изменения чата");
 
             entity.Name = chat.Name;
             await _context.SaveChangesAsync(token);
-            await InvalidateChatsCacheForParticipantsAsync(chat.ChatId, token);
+            await transaction.CommitAsync(token);
+            await InvalidateChatsCacheForParticipantsBestEffortAsync(chat.ChatId, token);
         }
+
+        private async Task InvalidateChatsCacheForParticipantsBestEffortAsync(Guid chatId, CancellationToken token)
+        {
+            try { await InvalidateChatsCacheForParticipantsAsync(chatId, token); }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogWarning(ex, "Операция с чатом завершена, но кеш участников не удалось инвалидировать chatId={ChatId}", chatId);
+            }
+        }
+
+        private async Task InvalidateUserChatsCacheBestEffortAsync(Guid userId, CancellationToken token)
+        {
+            try { await _cache.RemoveAsync(UserChatsCacheKey(userId), token); }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogWarning(ex, "Операция с участником завершена, но кеш пользователя не удалось инвалидировать userId={UserId}", userId);
+            }
+        }
+
+        private static string NormalizeRole(string? role) =>
+            string.IsNullOrWhiteSpace(role) ? "участник" : role.Trim().ToLowerInvariant();
+
+        private static bool IsOwnerRole(string? role) => NormalizeRole(role) is "владелец" or "owner";
+
+        private static bool IsAdministratorRole(string? role) =>
+            IsOwnerRole(role) || NormalizeRole(role) is "admin" or "админ" or "administrator" or "модератор" or "moderator";
+
+        private static bool IsRegularParticipantRole(string? role) =>
+            NormalizeRole(role) is "участник" or "member";
 
         public async Task InvalidateChatsCacheForParticipantsAsync(Guid chatId, CancellationToken token = default)
         {

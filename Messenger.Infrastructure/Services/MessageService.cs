@@ -49,6 +49,24 @@ namespace Messenger.Infrastructure.Services
         private static string LatestMessagesCacheKey(Guid chatId, int limit)
             => $"chat:{chatId:N}:messages:latest:{limit}";
 
+        private async Task InvalidateMessageCachesBestEffortAsync(Guid chatId, CancellationToken token)
+        {
+            try { await InvalidateMessageCachesAsync(chatId, token); }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogWarning(ex, "Операция с сообщением завершена, но кеш сообщений не удалось инвалидировать chatId={ChatId}", chatId);
+            }
+        }
+
+        private async Task InvalidateUserChatsCacheBestEffortAsync(Guid chatId, CancellationToken token)
+        {
+            try { await InvalidateUserChatsCacheAsync(chatId, token); }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogWarning(ex, "Операция с сообщением завершена, но кеш списка чатов не удалось инвалидировать chatId={ChatId}", chatId);
+            }
+        }
+
         public async Task InvalidateMessageCachesAsync(Guid chatId, CancellationToken token = default)
         {
             var keys = new[] { 1, 20, 30, 50, 100, 200 }
@@ -154,6 +172,11 @@ namespace Messenger.Infrastructure.Services
         {
            var now = UtcDateTime.Now;
 
+            var isParticipant = await _context.ChatParticipants.AsNoTracking()
+                .AnyAsync(p => p.ChatId == chatId && p.UserId == readerId, ct);
+            if (!isParticipant)
+                throw new UnauthorizedAccessException("Вы не участник этого чата");
+
             var updated = await _context.Messages
                 .Where(m => m.ChatId == chatId
                          && m.SenderId != readerId
@@ -232,26 +255,49 @@ namespace Messenger.Infrastructure.Services
             return message == null ? null : MapToDto(message, _encryptionService.TryDecryptSafe(message.MessageText));
         }
 
-        public async Task DeleteMessageAsync(Guid messageId, CancellationToken token = default)
+        public async Task DeleteMessageAsync(Guid messageId, Guid actorId, CancellationToken token = default)
         {
-            var deletedMessage = await _context.Messages.FindAsync(new object[] { messageId }, token);
-            if (deletedMessage != null)
-            {
-                var chatId = deletedMessage.ChatId;
-                _context.Messages.Remove(deletedMessage);
-                await _context.SaveChangesAsync(token);
-                await InvalidateMessageCachesAsync(chatId, token);
-                await InvalidateUserChatsCacheAsync(chatId, token);
-            }
+            await using var transaction = await _context.Database.BeginTransactionAsync(token);
+            var message = await _context.Messages.FirstOrDefaultAsync(m => m.MessageId == messageId, token);
+            if (message == null)
+                return;
+
+            var isParticipant = await _context.ChatParticipants.AsNoTracking()
+                .AnyAsync(p => p.ChatId == message.ChatId && p.UserId == actorId, token);
+            if (!isParticipant)
+                throw new UnauthorizedAccessException("Вы не участник этого чата");
+            if (message.SenderId != actorId)
+                throw new UnauthorizedAccessException("Удалять сообщение может только его отправитель");
+
+            var chatId = message.ChatId;
+            _context.Messages.Remove(message);
+            await _context.SaveChangesAsync(token);
+            await transaction.CommitAsync(token);
+
+            await InvalidateMessageCachesBestEffortAsync(chatId, token);
+            await InvalidateUserChatsCacheBestEffortAsync(chatId, token);
         }
 
-        public async Task UpdateMessageContentAsync(Guid messageId, string encryptedContent, CancellationToken token = default)
+        public async Task UpdateMessageContentAsync(Guid messageId, Guid actorId, string encryptedContent, CancellationToken token = default)
         {
+            await using var transaction = await _context.Database.BeginTransactionAsync(token);
             var message = await _context.Messages.FirstOrDefaultAsync(m => m.MessageId == messageId, token);
-            if (message == null) throw new KeyNotFoundException($"Сообщение {messageId} не найдено");
+            if (message == null)
+                throw new KeyNotFoundException($"Сообщение {messageId} не найдено");
+
+            var isParticipant = await _context.ChatParticipants.AsNoTracking()
+                .AnyAsync(p => p.ChatId == message.ChatId && p.UserId == actorId, token);
+            if (!isParticipant)
+                throw new UnauthorizedAccessException("Вы не участник этого чата");
+            if (message.SenderId != actorId)
+                throw new UnauthorizedAccessException("Редактировать сообщение может только его отправитель");
+
+            var chatId = message.ChatId;
             message.MessageText = encryptedContent;
             await _context.SaveChangesAsync(token);
-            await InvalidateMessageCachesAsync(message.ChatId, token);
+            await transaction.CommitAsync(token);
+
+            await InvalidateMessageCachesBestEffortAsync(chatId, token);
         }
 
         public async Task UpdateDeliveryStatusAsync(Guid messageId, MessageDeliveryStatus status, CancellationToken token = default)
@@ -508,27 +554,32 @@ namespace Messenger.Infrastructure.Services
             return sb.ToString();
         }
 
-        public async Task<int> DeleteMessagesAsync(IEnumerable<Guid> messageIds, CancellationToken token = default)
+        public async Task<int> DeleteMessagesAsync(IEnumerable<Guid> messageIds, Guid chatId, Guid actorId, CancellationToken token = default)
         {
             var ids = messageIds?.Distinct().ToList() ?? new List<Guid>();
-            if (ids.Count == 0) 
+            if (ids.Count == 0)
                 return 0;
+
+            await using var transaction = await _context.Database.BeginTransactionAsync(token);
+            var isParticipant = await _context.ChatParticipants.AsNoTracking()
+                .AnyAsync(p => p.ChatId == chatId && p.UserId == actorId, token);
+            if (!isParticipant)
+                throw new UnauthorizedAccessException("Вы не участник этого чата");
 
             var messages = await _context.Messages
-                .Where(m => ids.Contains(m.MessageId))
+                .Where(m => ids.Contains(m.MessageId) && m.ChatId == chatId)
                 .ToListAsync(token);
+            if (messages.Count != ids.Count)
+                throw new KeyNotFoundException("Одно или несколько сообщений не найдены в указанном чате");
+            if (messages.Any(m => m.SenderId != actorId))
+                throw new UnauthorizedAccessException("Удалять можно только свои сообщения");
 
-            if (messages.Count == 0) 
-                return 0;
-
-            var chatIds = messages.Select(m => m.ChatId).Distinct().ToList();
             _context.Messages.RemoveRange(messages);
             await _context.SaveChangesAsync(token);
-            foreach (var chatId in chatIds)
-            {
-                await InvalidateMessageCachesAsync(chatId, token);
-                await InvalidateUserChatsCacheAsync(chatId, token);
-            }
+            await transaction.CommitAsync(token);
+
+            await InvalidateMessageCachesBestEffortAsync(chatId, token);
+            await InvalidateUserChatsCacheBestEffortAsync(chatId, token);
             return messages.Count;
         }
 

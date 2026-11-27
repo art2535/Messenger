@@ -1007,7 +1007,7 @@ namespace Messenger.API.Controllers
                 }
 
                 var encryptedContent = _encryptionService.Encrypt(request.MessageText);
-                await _messageService.UpdateMessageContentAsync(messageId, encryptedContent, ct);
+                await _messageService.UpdateMessageContentAsync(messageId, userId, encryptedContent, ct);
 
                 var updatedDto = new MessageDto
                 {
@@ -1073,7 +1073,7 @@ namespace Messenger.API.Controllers
                 if (message.SenderId != userId)
                     return Forbid();
 
-                await _messageService.DeleteMessageAsync(messageId, ct);
+                await _messageService.DeleteMessageAsync(messageId, userId, ct);
                 DeleteStoredAttachmentFiles(message.Attachments);
 
                 var deletedPayload = new
@@ -1166,7 +1166,7 @@ namespace Messenger.API.Controllers
                     return NotFound(ApiResponse.Failure("Сообщения не найдены", "NOT_FOUND"));
                 }
 
-                var deleted = await _messageService.DeleteMessagesAsync(allowed, ct);
+                var deleted = await _messageService.DeleteMessagesAsync(allowed, chatId, userId, ct);
                 if (deleted > 0)
                     DeleteStoredAttachmentFiles(attachmentsToDelete);
 

@@ -207,7 +207,7 @@ namespace Messenger.API.Controllers
                     if (participantId == currentUserId)
                         continue;
 
-                    await _chatService.AddParticipantToChatAsync(chat.ChatId, participantId, "участник", ct);
+                    await _chatService.AddParticipantToChatAsync(chat.ChatId, currentUserId, participantId, "участник", ct);
                 }
 
                 string displayName = request.Type == "group"
@@ -309,7 +309,7 @@ namespace Messenger.API.Controllers
                 if (addedUser == null)
                     return NotFound(ApiResponse.Failure("Пользователь не найден", "NOT_FOUND"));
 
-                await _chatService.AddParticipantToChatAsync(chatId, userId, "участник", ct);
+                await _chatService.AddParticipantToChatAsync(chatId, currentUserId, userId, "участник", ct);
                 if (addedUser == null)
                 {
                     return NotFound(ApiResponse.Failure("Пользователь не найден", "NOT_FOUND"));
@@ -416,7 +416,7 @@ namespace Messenger.API.Controllers
                         "Переименовывать можно только групповые чаты",
                         "INVALID_CHAT_TYPE"));
 
-                await _chatService.UpdateChatAsync(new UpdateChatDto { ChatId = chatId, Name = request.Name }, ct);
+                await _chatService.UpdateChatAsync(new UpdateChatDto { ChatId = chatId, Name = request.Name }, currentUserId, ct);
 
                 await _hubContext.Clients.Group(chatId.ToString()).SendAsync("ChatUpdated", new
                 {
@@ -467,7 +467,7 @@ namespace Messenger.API.Controllers
                 if (actor == null || !IsChatOwner(actor.Role))
                     return Forbid();
 
-                await _chatService.DeleteChatAsync(chatId, ct);
+                await _chatService.DeleteChatAsync(chatId, currentUserId, ct);
 
                 await _hubContext.Clients.Group(chatId.ToString()).SendAsync("ChatDeleted", chatId, ct);
 
@@ -552,7 +552,7 @@ namespace Messenger.API.Controllers
                     });
                 }
 
-                await _chatService.DeleteParticipantFromChatAsync(chatId, userId, ct);
+                await _chatService.DeleteParticipantFromChatAsync(chatId, currentUserId, userId, ct);
 
                 await _hubContext.Clients.Group(chatId.ToString().ToLowerInvariant())
                     .SendAsync("ParticipantRemoved", new
