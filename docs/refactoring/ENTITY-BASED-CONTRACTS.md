@@ -67,3 +67,5 @@
 ## Результат подэтапа 2.7.13 — ILoginService
 
 `ILoginService` перенесён в Application и отвязан от EF-сущности `Login`. Добавление принимает `CreateLoginDto`, чтение возвращает `LoginDto`, завершение сессии выполняется командой `CloseLoginAsync`. DTO чтения не раскрывает токен/хеш. Все EF-операции и mapping остаются в `LoginService` Infrastructure. `LoginsController` использует только DTO и идентификаторы.
+
+`AttachmentDto` также перенесён в `Messenger.Application.DTOs.Messages`; публичные контракты вложений и сообщений больше не зависят от DTO вложения, расположенного в Core.

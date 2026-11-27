@@ -98,3 +98,5 @@ Fluent-конфигурации всех сущностей вынесены в 
 ### 2.7.13. Контракт ILoginService
 
 `ILoginService` и DTO сессий перенесены в Application. Публичный контракт больше не принимает и не возвращает EF-сущность `Login`; чтение отдаёт безопасный `LoginDto` без токена/хеша. Сущность и её изменения остаются внутри Infrastructure.
+
+`AttachmentDto` перемещён в `Messenger.Application.DTOs.Messages`; Core больше не содержит DTO вложения, используемый контрактами Application.

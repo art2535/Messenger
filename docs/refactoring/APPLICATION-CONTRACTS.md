@@ -52,3 +52,5 @@
 ## Подэтап 2.7.13 — контракт сессий входа
 
 `ILoginService` перенесён в `Messenger.Application.Interfaces`. Методы добавления и чтения используют `CreateLoginDto` и `LoginDto`; обновление активной сессии заменено на команду `CloseLoginAsync(userId, loginId)`. `LoginDto` не содержит токен или его хеш. Infrastructure создаёт и обновляет EF-сущность `Login` и отображает её в DTO. `LoginsController` больше не создаёт и не изменяет EF-сущности напрямую.
+
+Дополнительно `AttachmentDto` перенесён из Core в `Messenger.Application/DTOs/Messages`; `IAttachmentService`, `MessageDto` и DTO запланированных сообщений теперь используют прикладной DTO вложения без ссылки на Core DTO.
