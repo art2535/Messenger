@@ -247,10 +247,11 @@ namespace Messenger.Infrastructure.Services
                 }
             };
 
-            await _context.Users.AddAsync(user);
-            await _context.SaveChangesAsync();
+            user.Roles = await GetRolesFromTokenAsync(tokenRoles);
 
-            await AssignRolesFromTokenAsync(userId, tokenRoles);
+            // Пользователь, настройки, статус и связи с ролями создаются одним сохранением.
+            _context.Users.Add(user);
+            await _context.SaveChangesAsync();
 
             return MapToDto(user);
         }
@@ -276,36 +277,25 @@ namespace Messenger.Infrastructure.Services
             }).ToList() ?? new List<RoleDto>()
         };
 
-        private async Task AssignRolesFromTokenAsync(Guid userId, IEnumerable<string>? tokenRoles)
+        private async Task<List<Role>> GetRolesFromTokenAsync(IEnumerable<string>? tokenRoles)
         {
-            var rolesToAssign = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var roleNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             if (tokenRoles != null)
             {
                 foreach (var tokenRole in tokenRoles)
                 {
                     if (RoleDisplayNames.TryGetValue(tokenRole, out var displayName))
-                    {
-                        rolesToAssign.Add(displayName);
-                    }
+                        roleNames.Add(displayName);
                 }
             }
 
-            if (rolesToAssign.Count == 0)
-            {
-                rolesToAssign.Add("Пользователь");
-            }
+            if (roleNames.Count == 0)
+                roleNames.Add("Пользователь");
 
-            foreach (var roleName in rolesToAssign)
-            {
-                var role = await _context.Roles
-                    .FirstOrDefaultAsync(r => r.Name == roleName);
-
-                if (role != null)
-                {
-                    await AssignRoleAsync(userId, role.RoleId);
-                }
-            }
+            return await _context.Roles
+                .Where(role => roleNames.Contains(role.Name))
+                .ToListAsync();
         }
     }
 }
