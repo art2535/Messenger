@@ -13,7 +13,8 @@ Baseline зафиксирован на commit `6524a3a322c8a745fb94f800a6dd0afc2
 | Messenger.Core | нет |
 | Messenger.Application | Messenger.Core |
 | Messenger.Infrastructure | Messenger.Core, Messenger.Application |
-| Messenger.API | Messenger.Application, Messenger.Infrastructure |
+| Messenger.Realtime | Messenger.Application |
+| Messenger.API | Messenger.Application, Messenger.Infrastructure, Messenger.Realtime |
 | Messenger.Web | Messenger.Core, Messenger.Application |
 | Messenger.AppHost | нет |
 
@@ -24,7 +25,8 @@ API получает типы Core транзитивно через Infrastruct
 - Core не ссылается на Application, Infrastructure, API или Web.
 - Application ссылается только на Core.
 - Infrastructure ссылается на Application и Core.
-- API ссылается на Application и Infrastructure.
+- Realtime ссылается только на Application; ASP.NET Core подключается как shared framework, а не как проектная зависимость.
+- API ссылается на Application, Infrastructure и Realtime.
 - Web может ссылаться на Application и Core; бизнес-логика и persistence остаются вне Web.
 - AppHost остаётся точкой композиции Aspire и не содержит бизнес-логики.
 
@@ -72,3 +74,24 @@ GitHub-изменения проверены чтением файлов и Git 
 3. Порядок регистрации сервисов и middleware подтверждён сравнением с исходной конфигурацией.
 4. Выполнены `dotnet build`, тесты и smoke-проверка запуска API в Development и Production.
 5. Конфигурация проверена на отсутствие дублирующихся/неиспользуемых регистраций.
+
+
+## Подэтап backend: аудит DI и проверка границ проектов
+
+Проверена конфигурация регистраций Messenger.API после выделения composition root:
+
+- прикладные сервисы и инфраструктурные реализации регистрируются через AddServices и профильные extension-методы;
+- Redis-зависимые реализации кеша и distributed lock выбираются с учётом наличия Redis connection string;
+- Redis metrics hosted service добавляется только при зарегистрированном IConnectionMultiplexer;
+- health checks включают Redis check только при наличии Redis multiplexer;
+- hosted services scheduled messages, upload cleanup, session cleanup, presence heartbeat и log retention подключаются через отдельные методы регистрации;
+- отдельной повторной регистрации перечисленных hosted services в ApiServiceCollectionExtensions не обнаружено.
+
+В PostgreSQLExtension.EnsurePoolSettings удалён пустой условный блок, который не выполнял действий и не влиял на итоговые параметры пула.
+
+Автоматический архитектурный guard расширен проектами Messenger.Realtime и Messenger.AppHost. Теперь проверяются все шесть проектных границ, включая API → Realtime и отсутствие проектных ссылок у AppHost. Проверка контролирует только прямые ProjectReference и не анализирует namespace/type-level зависимости или NuGet package references.
+
+Ограничения этапа:
+- DI-проверка основана на статическом чтении регистраций; runtime validation контейнера и integration tests не запускались.
+- dotnet build/dotnet test не выполнялись в среде без .NET SDK.
+- Проверка границ по .csproj не заменяет отдельный аудит EF Core/ASP.NET Core типов в исходниках Core и Application.
