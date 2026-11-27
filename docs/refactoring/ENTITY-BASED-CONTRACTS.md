@@ -69,3 +69,8 @@
 `ILoginService` перенесён в Application и отвязан от EF-сущности `Login`. Добавление принимает `CreateLoginDto`, чтение возвращает `LoginDto`, завершение сессии выполняется командой `CloseLoginAsync`. DTO чтения не раскрывает токен/хеш. Все EF-операции и mapping остаются в `LoginService` Infrastructure. `LoginsController` использует только DTO и идентификаторы.
 
 `AttachmentDto` также перенесён в `Messenger.Application.DTOs.Messages`; публичные контракты вложений и сообщений больше не зависят от DTO вложения, расположенного в Core.
+
+
+## Результат подэтапа 2.7.14 — INotificationService
+
+`INotificationService` отвязан от EF-модели `Notification`. `GetNotificationsAsync` и `GetNotificationAsync` возвращают `NotificationDto`; создание сохраняет существующий результат `Guid`, а `MarkAsReadAsync` работает по идентификатору. Mapping и работа с зашифрованным полем `Text` остаются в `NotificationService` Infrastructure. SignalR `NotificationHub` также публикует DTO, а не EF-сущность.

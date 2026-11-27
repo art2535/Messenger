@@ -54,3 +54,8 @@
 `ILoginService` перенесён в `Messenger.Application.Interfaces`. Методы добавления и чтения используют `CreateLoginDto` и `LoginDto`; обновление активной сессии заменено на команду `CloseLoginAsync(userId, loginId)`. `LoginDto` не содержит токен или его хеш. Infrastructure создаёт и обновляет EF-сущность `Login` и отображает её в DTO. `LoginsController` больше не создаёт и не изменяет EF-сущности напрямую.
 
 Дополнительно `AttachmentDto` перенесён из Core в `Messenger.Application/DTOs/Messages`; `IAttachmentService`, `MessageDto` и DTO запланированных сообщений теперь используют прикладной DTO вложения без ссылки на Core DTO.
+
+
+## Подэтап 2.7.14 — уведомления
+
+`INotificationService` перенесён в `Messenger.Application.Interfaces`. Публичный контракт больше не использует EF-сущность `Notification`: чтение возвращает `NotificationDto`, а создание и отметка прочтения работают через прикладные аргументы. `CreateNotificationDto` и `NotificationDto` находятся в `Messenger.Application.DTOs.Notifications`. Infrastructure выполняет mapping между `Notification` и DTO, включая безопасную расшифровку текста. `NotificationsController` и `NotificationHub` больше не передают EF-сущность наружу.

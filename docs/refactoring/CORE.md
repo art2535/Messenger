@@ -100,3 +100,8 @@ Fluent-конфигурации всех сущностей вынесены в 
 `ILoginService` и DTO сессий перенесены в Application. Публичный контракт больше не принимает и не возвращает EF-сущность `Login`; чтение отдаёт безопасный `LoginDto` без токена/хеша. Сущность и её изменения остаются внутри Infrastructure.
 
 `AttachmentDto` перемещён в `Messenger.Application.DTOs.Messages`; Core больше не содержит DTO вложения, используемый контрактами Application.
+
+
+### 2.7.14. Контракт INotificationService
+
+`INotificationService` и DTO уведомлений перенесены в Application. Core больше не содержит интерфейс сервиса уведомлений или request DTO его API-контракта. EF-сущность `Notification` остаётся persistence-моделью Core, но не выходит через Application-контракт.
