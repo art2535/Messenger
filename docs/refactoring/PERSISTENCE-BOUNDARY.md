@@ -4,7 +4,7 @@
 
 ## 1. Текущее состояние
 
-- В `Messenger.Core/Models` — 23 файла моделей и вспомогательных типов; из них 21 тип зарегистрирован в `GuapMessengerContext` через `DbSet`. `MessageDeliveryStatus` и `UtcDateTime` — не отдельные EF-сущности.
+- В `Messenger.Core/Models` — 21 файл модели/вспомогательного типа; 20 типов зарегистрированы в `GuapMessengerContext` через `DbSet`. `UtcDateTime` — helper, а не EF-сущность. Техническая модель `Log` уже вынесена в `Messenger.Infrastructure/Persistence/Entities`.
 - `GuapMessengerContext` находится в Infrastructure, но EF строит модель непосредственно на CLR-типах `Messenger.Core.Models.*`.
 - Все Fluent-конфигурации вынесены в `Messenger.Infrastructure/Data/Configurations`; `OnModelCreating` оставлен для PostgreSQL extension, MassTransit Inbox/Outbox и сканирования конфигураций.
 - `GuapMessengerContextModelSnapshot.cs` также описывает сущности под именами `Messenger.Core.Models.*`. Следовательно, замена CLR-типов на Infrastructure-типы затронет не только контекст, но и snapshot/историю миграций.
@@ -19,7 +19,7 @@
 | Основные предметные понятия | `User`, `Role`, `Chat`, `ChatParticipant`, `Message`, `Attachment`, `Reaction` | Оставить в Domain как независимые от EF модели. Связи выражать идентификаторами и методами/операциями предметной области; EF-навигации не переносить в Domain автоматически. |
 | Предметные функции вокруг аккаунта и общения | `AccountSetting`, `Notification`, `UserStatus`, `Broadcast`, `BroadcastRecipient`, `ChatFolder`, `ChatFolderChat`, `ScheduledMessage` | Оставить в Domain после уточнения инвариантов. Не копировать механически: определить, какие типы являются агрегатами, дочерними сущностями или настройками. |
 | Модерация | `MessageReport`, `UserMute`, `ModerationLog` | Разделить предметные данные и технические поля хранения; связи с User/Message в Domain — через ID, если они не нужны как агрегатные объекты. |
-| Инфраструктурные данные | `Log`, `Login`, `PushSubscription` | Перенести в Infrastructure как persistence модели. Публичные/прикладные контракты должны возвращать DTO или результат операции, а не EF-сущность. |
+| Инфраструктурные данные | `Log`, `Login`, `PushSubscription` | `Log` перенесён в Infrastructure. `Login` и `PushSubscription` остаются Core persistence-моделями до отдельного переноса; их прикладные контракты уже используют DTO. |
 | Вспомогательные типы | `MessageDeliveryStatus`, `UtcDateTime` | Enum оставить в Domain, если статус является частью языка сообщений. `UtcDateTime` оценить отдельно: это helper времени, а не persistence entity. |
 
 Группировка предварительная. Перед переносом конкретного типа нужно проверить все его вызовы и JSON-контракты; таблица не является разрешением на массовое копирование классов.
@@ -34,17 +34,9 @@
 
 ### 3.2. Сервисные контракты возвращают persistence-модели
 
-Проверенные контракты:
-- `IUserService`: `User`, `Role`;
-- `IChatService`: `Chat`, `ChatParticipant`;
-- `IMessageService`: `Message` и `ServiceResult<Message>`;
-- `IAttachmentService`: `Attachment`;
-- `ILoginService`: `Login`;
-- `INotificationService`: `Notification`;
-- `IReactionService`: `Reaction`;
-- `IScheduledMessageService`: `ScheduledMessage`.
+Выполнены миграции контрактов `IUserService`, `IChatService`, `IMessageService`, `IAttachmentService`, `ILoginService`, `INotificationService`, `IReactionService`, `IScheduledMessageService`, `IUserStatusService` и `IPushSubscriptionService` в Application. Эти интерфейсы используют DTO и прикладные команды вместо EF-сущностей. Текущий аудит всех `Messenger.Application/Interfaces` не выявил прямых ссылок на `Messenger.Core.Models` или ASP.NET `IFormFile`.
 
-Это основная граница миграции: пока интерфейсы возвращают EF-типы, контроллеры, хабы и фоновые сервисы транзитивно зависят от persistence-модели. Одновременно некоторые сервисы принимают Core entity в качестве команды на запись (например, `AddReactionAsync(Reaction)`, `UpdateMessageAsync(Message)`).
+Основная оставшаяся граница теперь находится между Infrastructure и Core-моделями, используемыми как EF-типы в `DbContext`, а также в отдельных прямых потребителях Core-моделей в API/Web. Необходимо продолжить перенос persistence entities и постепенно переводить оставшиеся потребители на Application DTO.
 
 ### 3.3. Infrastructure работает непосредственно с Core-моделями
 
@@ -104,7 +96,7 @@ Messenger.Web
 - Не менять схему БД и не создавать миграцию «на перенос типов».
 
 ### 2.7.2. Начать с изолированных сущностей
-Рекомендуемый первый срез — `Log`, затем `Login` и `PushSubscription`: они имеют сравнительно узкие связи с остальной предметной моделью. До фактического переноса проверить consumers и внешние контракты для каждого типа.
+Первый срез — `Log` — выполнен в подэтапе 2.7.19. Следующие кандидаты — `Login` и `PushSubscription`: их сервисные контракты уже отвязаны от EF-моделей, но сами классы ещё находятся в Core и имеют связи с `User`. До переноса каждого типа нужно проверить навигации, конфигурации, snapshot и все места создания/чтения.
 
 ### 2.7.3. Перевести контракты на Application
 - Интерфейсы, которые возвращают/принимают Core EF entities, заменить на DTO, domain objects или специализированные command/result contracts.
@@ -156,3 +148,8 @@ Messenger.Web
 ## Подэтап 2.7.19 — перенос Log в Infrastructure
 
 `Log` не является предметной сущностью: это техническая модель таблицы Serilog в схеме `logging`. Она не используется сервисными контрактами и не имеет связей с другими сущностями. Тип физически перенесён из `Messenger.Core.Models` в `Messenger.Infrastructure.Persistence.Entities`. Конфигурация `LogConfiguration` и `DbSet<Log>` теперь ссылаются на Infrastructure-тип. Сохранены имя таблицы/схемы, колонки, типы, ограничения длины, PK, default `gen_random_uuid()` и три индекса. Текущий Model Snapshot обновлён на новый CLR type; исторические миграции не переписывались. Serilog sink и пакетная очистка логов продолжают работать с теми же таблицей и колонками.
+
+
+## Актуализация после подэтапа 2.7.19
+
+Изолированная техническая модель `Log` перенесена в Infrastructure. В Core осталось 21 файл в `Models`, из которых 20 типов являются EF entities и один (`UtcDateTime`) — вспомогательный тип. Все проверенные прикладные интерфейсы находятся в Application и используют DTO/команды; следующий безопасный срез persistence migration — `Login` или `PushSubscription`, после отдельного аудита навигаций `User` и текущего snapshot.

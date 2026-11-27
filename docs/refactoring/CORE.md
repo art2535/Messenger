@@ -4,7 +4,7 @@
 
 ## Состав Core и выявленные связи
 
-В `Messenger.Core/Models` находятся 23 модели. В большинстве одновременно присутствуют:
+В `Messenger.Core/Models` сейчас находятся 21 файл модели/вспомогательного типа; 20 типов участвуют в EF-модели, а `UtcDateTime` является helper. Модель `Log` уже вынесена в Infrastructure. В большинстве оставшихся EF-моделей одновременно присутствуют:
 - свойства предметной области;
 - EF-аннотации (`Key`, `Column`, `ForeignKey`, `InverseProperty`, `Table`);
 - навигационные свойства EF;
@@ -46,9 +46,9 @@ Fluent-конфигурации всех сущностей вынесены в 
 
 ## Что осталось
 
-1. Перенести оставшиеся сервисные контракты из Core в Application после замены EF-сущностей на прикладные DTO; загрузка файлов уже отвязана от ASP.NET через `IUploadedFile`.
-2. Создать persistence entities в Infrastructure и постепенно перевести DbContext и реализации сервисов на них.
-3. Продолжить перевод API/Web и SignalR с EF-моделей на DTO/Application contracts; `IUserService` уже возвращает `UserDto`/`RoleDto`.
+1. Перенос сервисных контрактов в Application на DTO завершён для всех текущих сервисных интерфейсов.
+2. Создавать persistence entities в Infrastructure и постепенно переводить DbContext/конфигурации; первый тип `Log` уже перенесён, далее — `Login` и `PushSubscription` после проверки связей с `User`.
+3. Продолжить перевод API/Web и SignalR с оставшихся Core/EF-моделей на DTO/Application contracts.
 4. После перевода всех потребителей удалить EF- и JSON-аннотации, а также EF-навигации из Core.
 5. Удалить временные EF Core и ASP.NET framework references из Core.
 6. Усилить архитектурную проверку: запретить EF Core/ASP.NET references и namespaces в Core.
@@ -129,3 +129,8 @@ Fluent-конфигурации всех сущностей вынесены в 
 ### 2.7.19. Перенос технической модели Log
 
 Модель `Log` физически перенесена из Core в `Messenger.Infrastructure/Persistence/Entities`, поскольку она описывает техническое хранилище Serilog и не относится к предметной области. `GuapMessengerContext`, `LogConfiguration` и актуальный EF Model Snapshot используют Infrastructure CLR-тип. Схема `logging.Logs`, набор колонок, PK, default и индексы сохранены. Исторические миграции оставлены неизменными. Остальные EF-модели пока остаются в Core и будут переноситься отдельными срезами после аудита их связей и потребителей.
+
+
+### 2.7.19. Перенос Log в Infrastructure
+
+Техническая модель `Log` перенесена в `Messenger.Infrastructure.Persistence.Entities`. Она не имеет предметных связей и не используется сервисными контрактами. DbContext, Fluent-конфигурация и актуальный Model Snapshot переведены на новый CLR-тип. Таблица `logging.Logs`, колонки, ограничения, PK и индексы сохранены; исторические миграции не менялись.
