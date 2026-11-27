@@ -8,7 +8,7 @@
 - `GuapMessengerContext` находится в Infrastructure, но EF строит модель непосредственно на CLR-типах `Messenger.Core.Models.*`.
 - Все Fluent-конфигурации вынесены в `Messenger.Infrastructure/Data/Configurations`; `OnModelCreating` оставлен для PostgreSQL extension, MassTransit Inbox/Outbox и сканирования конфигураций.
 - `GuapMessengerContextModelSnapshot.cs` также описывает сущности под именами `Messenger.Core.Models.*`. Следовательно, замена CLR-типов на Infrastructure-типы затронет не только контекст, но и snapshot/историю миграций.
-- `Messenger.Application` пока содержит только csproj и ссылку на Core; прикладные контракты и use cases ещё не перенесены.
+- `Messenger.Application` уже содержит прикладные DTO и все текущие сервисные интерфейсы; use cases/handlers и специализированные repository ports ещё не выделены.
 - `Messenger.Web` ссылается непосредственно на Core. Удаление или переименование Core-моделей без предварительной замены Web-контрактов приведёт к каскадным изменениям в Razor PageModel и UI.
 - `Messenger.API` ссылается на Application и Infrastructure. Контроллеры сейчас используют Core DTO, интерфейсы и модели.
 
@@ -40,7 +40,7 @@
 
 ### 3.3. Infrastructure работает непосредственно с Core-моделями
 
-Проверенные реализации `UserService`, `ChatService`, `MessageService`, `LoginService`, `NotificationService` и `ReactionService` используют `DbSet<Core.Models.*>`, EF Include/ThenInclude, tracking, ExecuteUpdate и навигационные свойства. `ScheduledMessageService` возвращает `ScheduledMessage` и использует навигации `Chat` / `Sender` для DTO.
+Реализации `UserService`, `ChatService`, `MessageService`, `LoginService`, `NotificationService`, `ReactionService` и другие сервисы по-прежнему используют Core-модели через `DbSet<Core.Models.*>`, EF Include/ThenInclude, tracking, ExecuteUpdate и навигационные свойства. `ScheduledMessageService` уже возвращает Application DTO, но пока читает Core `ScheduledMessage` и использует навигации `Chat` / `Sender` внутри Infrastructure.
 
 Это означает, что безопасный переход требует одновременно:
 1. новых persistence типов;
@@ -50,7 +50,7 @@
 
 ### 3.4. API и Web используют модели как контракты
 
-Контроллеры возвращают результаты сервисов напрямую через `ApiResponse.Success(...)`, читают navigation properties и строят SignalR payload на основе моделей. В частности, UsersController читает `User.Account`, а ScheduledMessagesController — `Chat.ChatParticipants`, `ScheduledMessage.Chat` и `ScheduledMessage.Sender`.
+В исходном состоянии контроллеры возвращали модели напрямую и читали navigation properties. В ходе подэтапов 2.7.8–2.7.18 большинство API-контрактов и SignalR payload уже переведены на Application DTO. Оставшиеся прямые обращения к Core-моделям нужно выявлять по конкретным потребителям, прежде всего в Web/Razor PageModel и отдельных API flows.
 
 Нельзя удалять навигации или `JsonIgnore` до замены таких мест на DTO/projection. Иначе изменится форма JSON либо появятся циклические/избыточные графы.
 

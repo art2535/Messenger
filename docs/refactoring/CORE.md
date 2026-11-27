@@ -126,11 +126,6 @@ Fluent-конфигурации всех сущностей вынесены в 
 Контракт `IChatService` больше не находится в Core и не зависит от EF-моделей `Chat`/`ChatParticipant`. Core-модели продолжают использоваться как persistence-модели внутри Infrastructure, но наружу из `ChatService` выходят только DTO Application.
 
 
-### 2.7.19. Перенос технической модели Log
-
-Модель `Log` физически перенесена из Core в `Messenger.Infrastructure/Persistence/Entities`, поскольку она описывает техническое хранилище Serilog и не относится к предметной области. `GuapMessengerContext`, `LogConfiguration` и актуальный EF Model Snapshot используют Infrastructure CLR-тип. Схема `logging.Logs`, набор колонок, PK, default и индексы сохранены. Исторические миграции оставлены неизменными. Остальные EF-модели пока остаются в Core и будут переноситься отдельными срезами после аудита их связей и потребителей.
-
-
 ### 2.7.19. Перенос Log в Infrastructure
 
 Техническая модель `Log` перенесена в `Messenger.Infrastructure.Persistence.Entities`. Она не имеет предметных связей и не используется сервисными контрактами. DbContext, Fluent-конфигурация и актуальный Model Snapshot переведены на новый CLR-тип. Таблица `logging.Logs`, колонки, ограничения, PK и индексы сохранены; исторические миграции не менялись.
