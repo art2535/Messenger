@@ -66,7 +66,7 @@ namespace Messenger.API.Controllers
                     return BadRequest(ApiResponse.Failure("Некорректные данные подписки", "INVALID_REQUEST"));
                 }
 
-                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var userId = await User.GetCurrentUserIdAsync(_userService, ct);
 
                 if (string.IsNullOrEmpty(subscriptionDto.P256dh) || string.IsNullOrEmpty(subscriptionDto.Auth))
                 {
@@ -160,7 +160,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var userId = await User.GetCurrentUserIdAsync(_userService, ct);
                 var settings = await _subscriptionService.GetPushSettingsAsync(userId, ct);
 
                 var result = settings ?? new PushSettingsDto();
@@ -192,7 +192,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var userId = await User.GetCurrentUserIdAsync(_userService, ct);
                 await _subscriptionService.SavePushSettingsAsync(userId, request, ct);
 
                 _logger.LogInformation("Настройки push-уведомлений обновлены для пользователя {UserId}", userId);
@@ -230,7 +230,7 @@ namespace Messenger.API.Controllers
                     return BadRequest(ApiResponse.Failure("Некорректные данные запроса", "INVALID_REQUEST"));
                 }
 
-                var senderId = await User.GetCurrentUserIdAsync(_userService);
+                var senderId = await User.GetCurrentUserIdAsync(_userService, ct);
 
                 await _subscriptionService.SendPushToOfflineUsersAsync(
                     request.ChatId,
