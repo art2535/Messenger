@@ -146,6 +146,25 @@ public sealed class RedisUserPresenceTracker : IUserPresenceTracker
         return count == 0;
     }
 
+    /// <summary>Возвращает активные connection ID пользователя с учётом lease.</summary>
+    public async Task<IReadOnlyList<string>> GetActiveConnectionIdsAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (_database is null)
+        {
+            return _localUsers.TryGetValue(userId, out var connections)
+                ? connections.Keys.ToArray()
+                : Array.Empty<string>();
+        }
+
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var values = await _database.SortedSetRangeByScoreAsync(
+            GetKey(userId), now, double.PositiveInfinity, Exclude.Start, Order.Ascending)
+            .WaitAsync(cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        return values.Select(value => (string)value!).ToArray();
+    }
+
     /// <summary>Проверяет наличие хотя бы одного неистёкшего подключения пользователя.</summary>
     public async Task<bool> HasActiveConnectionsAsync(Guid userId, CancellationToken cancellationToken = default)
     {
