@@ -24,11 +24,19 @@ namespace Messenger.API.Extensions
                         var path = ctx.Context.Request.Path.Value?.ToLowerInvariant() ?? "";
                         var query = ctx.Context.Request.QueryString.Value ?? "";
 
-                        var imageExtensions = new HashSet<string> { ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg", ".avif" };
+                        // SVG может содержать активное содержимое и не должен открываться inline с origin приложения.
+                        var inlineImageExtensions = new HashSet<string>
+                        {
+                            ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".avif"
+                        };
 
                         var extension = Path.GetExtension(path);
+                        var forceDownload = !inlineImageExtensions.Contains(extension)
+                            || query.Contains("download", StringComparison.OrdinalIgnoreCase);
 
-                        if (!imageExtensions.Contains(extension) || query.Contains("download"))
+                        ctx.Context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+
+                        if (forceDownload)
                         {
                             var fileName = Path.GetFileName(path);
                             ctx.Context.Response.Headers.ContentDisposition =

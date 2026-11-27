@@ -63,6 +63,7 @@ namespace Messenger.API
             builder.Services.AddRabbitMQ(builder.Configuration);
             builder.Services.AddHttpClient();
             builder.Services.AddHostedService<ScheduledMessageDispatcherService>();
+            builder.Services.AddHostedService<UploadOrphanCleanupService>();
             builder.Services.AddEtaApiAuthentication(builder.Configuration, !builder.Environment.IsDevelopment());
             builder.Services.AddMessengerRateLimiting();
             builder.Services.AddSessionCleanup(builder.Configuration);
