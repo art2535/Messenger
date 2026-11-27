@@ -76,6 +76,10 @@ namespace Messenger.API.Controllers
 
                 return Ok(ApiResponse.Success(user));
             }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при получении пользователя по externalId {ExternalId}", externalId);
@@ -116,6 +120,10 @@ namespace Messenger.API.Controllers
 
                 return Ok(ApiResponse.Success(data));
             }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при поиске пользователей по запросу {Query}", query);
@@ -141,6 +149,10 @@ namespace Messenger.API.Controllers
 
                 return Ok(ApiResponse.Success(users));
             }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при получении списка всех пользователей");
@@ -165,6 +177,10 @@ namespace Messenger.API.Controllers
                 var roles = await _userService.GetRolesAsync(ct);
 
                 return Ok(ApiResponse.Success(roles));
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -199,6 +215,10 @@ namespace Messenger.API.Controllers
                 var name = $"{currentUser.FirstName} {currentUser.LastName}".Trim() ?? "Удалённый пользователь";
 
                 return Ok(ApiResponse.Success(data: name));
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -249,6 +269,10 @@ namespace Messenger.API.Controllers
                 _logger.LogWarning(ex, "Ошибка авторизации при получении информации о текущем пользователе");
                 return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при получении информации о текущем пользователе");
@@ -294,6 +318,10 @@ namespace Messenger.API.Controllers
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при обновлении профиля");
                 return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -351,6 +379,10 @@ namespace Messenger.API.Controllers
             {
                 return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
             }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при загрузке аватара");
@@ -384,6 +416,10 @@ namespace Messenger.API.Controllers
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при назначении роли");
                 return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -422,6 +458,10 @@ namespace Messenger.API.Controllers
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при удалении аватара");
                 return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
