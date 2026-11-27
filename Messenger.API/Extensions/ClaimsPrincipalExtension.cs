@@ -22,20 +22,20 @@ namespace Messenger.API.Extensions
             /// <summary>
             /// Возвращает объект текущего авторизованного пользователя из базы данных.
             /// </summary>
-            public async Task<UserDto> GetCurrentUserAsync(IUserService userService)
+            public async Task<UserDto> GetCurrentUserAsync(IUserService userService, CancellationToken cancellationToken = default)
             {
                 var externalId = user.GetExternalId();
 
-                return await userService.GetUserByExternalIdAsync(externalId)
+                return await userService.GetUserByExternalIdAsync(externalId, cancellationToken)
                        ?? throw new UnauthorizedAccessException("Пользователь не найден");
             }
 
             /// <summary>
             /// Возвращает внутренний идентификатор (UserId) текущего авторизованного пользователя.
             /// </summary>
-            public async Task<Guid> GetCurrentUserIdAsync(IUserService userService)
+            public async Task<Guid> GetCurrentUserIdAsync(IUserService userService, CancellationToken cancellationToken = default)
             {
-                var currentUser = await user.GetCurrentUserAsync(userService);
+                var currentUser = await user.GetCurrentUserAsync(userService, cancellationToken);
                 return currentUser.UserId;
             }
         }
