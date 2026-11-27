@@ -68,8 +68,12 @@
 
 Проверены все 57 C# исходников Core (DTO, enums, messages, metrics, models, responses и services). Прямых использований EF Core API или типов не обнаружено. Из `Messenger.Core.csproj` удалён `PackageReference` на `Microsoft.EntityFrameworkCore` 10.0.13. `FrameworkReference` на `Microsoft.AspNetCore.App` оставлен, поскольку это независимая зависимость и её удаление требует отдельной проверки ASP.NET Core типов.
 
+## Удаление FrameworkReference ASP.NET Core из Core (2.7.30)
+
+Проверены все 57 C# исходников Core: DTO, enums, messages, metrics, models, responses и services. Не обнаружено ASP.NET Core типов или API: `HttpContext`, `IFormFile`, MVC `ActionResult`/controllers, SignalR hubs, hosted/background services, `IHttpContextAccessor`, ASP.NET Core logging/options/configuration abstractions и других прямых ссылок на `Microsoft.AspNetCore` / `Microsoft.Extensions.*`. Из `Messenger.Core.csproj` удалён `FrameworkReference` на `Microsoft.AspNetCore.App`. В результате Core больше не содержит PackageReference или FrameworkReference.
+
 ## Проверка
 
 Для всех 18 файлов `Messenger.Core/Models/*.cs` выполнена проверка: не обнаружены EF mapping attributes и using из `Microsoft.EntityFrameworkCore` / `System.ComponentModel.DataAnnotations`.
 
-Не запускались `dotnet build`, `dotnet test`, генерация пробной миграции или автоматическое сравнение EF model с snapshot. Поэтому компиляция после удаления PackageReference и полная эквивалентность runtime EF-модели пока не подтверждены. Перед созданием миграций необходимо выполнить model diff и проверить схему на копии PostgreSQL базы.
+Не запускались `dotnet build`, `dotnet test`, генерация пробной миграции или автоматическое сравнение EF model с snapshot. Поэтому компиляция после удаления PackageReference и FrameworkReference, а также полная эквивалентность runtime EF-модели пока не подтверждены. Перед созданием миграций необходимо выполнить model diff и проверить схему на копии PostgreSQL базы.

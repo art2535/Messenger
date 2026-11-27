@@ -178,3 +178,8 @@ Model Snapshot и исторические миграции не редакти�
 ### 2.7.29. Удаление EF Core dependency
 
 Выполнен аудит всех 57 C# исходников Core: DTO, enums, messages, metrics, models, responses и services. Прямых использований EF Core типов и API не обнаружено. Из `Messenger.Core.csproj` удалён PackageReference на `Microsoft.EntityFrameworkCore`. FrameworkReference на `Microsoft.AspNetCore.App` оставлен до отдельного аудита ASP.NET Core compile-time зависимостей. Сборка и тесты после изменения пока не запускались.
+
+
+### 2.7.30. Удаление ASP.NET Core dependency
+
+Проверены все 57 C# исходников Core. Прямых использований ASP.NET Core типов и API не обнаружено. Из `Messenger.Core.csproj` удалён `FrameworkReference Include="Microsoft.AspNetCore.App"`. Теперь Core не содержит ни PackageReference, ни FrameworkReference: проект использует только платформенные возможности .NET. Сборка и тесты после изменения пока не запускались.
