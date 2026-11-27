@@ -1,4 +1,4 @@
-using Messenger.Core.Models;
+using Messenger.Core.Enums;
 
 namespace Messenger.Core.DTOs.Cache
 {

@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Messenger.Core.DTOs.Cache;
+using Messenger.Core.Enums;
 
 namespace Messenger.Infrastructure.Services
 {

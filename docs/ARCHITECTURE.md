@@ -64,7 +64,9 @@ flowchart TB
 
 ### Основные доменные модели (`Messenger.Core/Models`)
 
-`User`, `Role`, `Chat`, `ChatParticipant`, `Message`, `MessageDeliveryStatus`, `Reaction`,
+Перечисление `MessageDeliveryStatus` вынесено в `Messenger.Core/Enums`: это общий тип статуса, используемый EF-моделью `Message` и DTO кеша, а не самостоятельная EF-сущность.
+
+`User`, `Role`, `Chat`, `ChatParticipant`, `Message`, `Reaction`,
 `Attachment`, `Notification`, `PushSubscription`, `Broadcast`, `BroadcastRecipient`,
 `UserStatus`, `AccountSetting`, `Login`, `Blacklist`.
 

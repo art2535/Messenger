@@ -1,4 +1,4 @@
-﻿namespace Messenger.Core.Models
+﻿namespace Messenger.Core.Enums
 {
     public enum MessageDeliveryStatus
     {

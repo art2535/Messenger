@@ -1,5 +1,6 @@
 using MassTransit;
 using Messenger.Core.DTOs.Messages;
+using Messenger.Core.Enums;
 using Messenger.Core.Hubs;
 using Messenger.Core.Interfaces;
 using Messenger.Core.Messages;
