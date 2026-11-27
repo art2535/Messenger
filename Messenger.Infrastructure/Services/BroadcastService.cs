@@ -123,7 +123,7 @@ namespace Messenger.Infrastructure.Services
             };
         }
 
-        public async Task<List<object>> GetMyBroadcastsAsync(Guid userId, bool unreadOnly = true)
+        public async Task<List<BroadcastInboxItemDto>> GetMyBroadcastsAsync(Guid userId, bool unreadOnly = true)
         {
             var query = _context.BroadcastRecipients
                 .AsNoTracking()
@@ -132,18 +132,18 @@ namespace Messenger.Infrastructure.Services
                 .AsQueryable();
             if (unreadOnly)
                 query = query.Where(r => !r.IsRead);
-            var items = (await query.OrderByDescending(r => r.Broadcast.CreatedAt).ToListAsync())
-                .Select(r => (r.Broadcast, r.IsRead, r.ReadAt)).ToList();
-
-            return items.Select(x => new
-            {
-                x.Broadcast.BroadcastId,
-                x.Broadcast.Title,
-                x.Broadcast.MessageText,
-                x.Broadcast.CreatedAt,
-                IsRead = x.IsRead,
-                ReadAt = x.ReadAt
-            }).ToList<object>();
+            return await query
+                .OrderByDescending(r => r.Broadcast.CreatedAt)
+                .Select(r => new BroadcastInboxItemDto
+                {
+                    BroadcastId = r.Broadcast.BroadcastId,
+                    Title = r.Broadcast.Title,
+                    MessageText = r.Broadcast.MessageText,
+                    CreatedAt = r.Broadcast.CreatedAt,
+                    IsRead = r.IsRead,
+                    ReadAt = r.ReadAt
+                })
+                .ToListAsync();
         }
     }
 }

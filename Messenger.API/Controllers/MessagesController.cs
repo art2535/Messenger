@@ -8,7 +8,6 @@ using Messenger.Core.Enums;
 using Messenger.Realtime.Hubs;
 using Messenger.Application.Interfaces;
 using Messenger.Application.Messages;
-using Messenger.Core.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
