@@ -238,7 +238,7 @@ namespace Messenger.API.Controllers
                 if (message == null)
                     return NotFound(ApiResponse.Failure("Сообщение не найдено", "NOT_FOUND"));
 
-                var chat = await _chatService.GetChatByIdAsync(message.ChatId, ct);
+                var chat = await _chatService.GetChatByIdAsync(message.ChatId, userId, ct);
                 if (chat == null)
                     return NotFound(ApiResponse.Failure("Чат не найден", "NOT_FOUND"));
 
