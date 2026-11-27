@@ -1,64 +1,67 @@
-# Архитектурный baseline
+# Архитектурный baseline и целевой граф
 
-## Текущее состояние
+## Текущее состояние на начало этапа 1
 
-```text
-                    Messenger.Core
-                 /        |        \
-                /         |         \
-               v          v          v
-Infrastructure            API       Web
-               \          |
-                \         |
-                 v         v
-                  AppHost
-```
-
-Фактические ProjectReference:
+До начала изменений:
 
 - Infrastructure → Core
 - API → Core + Infrastructure
 - Web → Core
-- AppHost → API + Web
+- AppHost — Aspire host; отдельные ProjectReference в его csproj отсутствуют.
 
-## Целевое состояние после рефакторинга
-
-```text
-                         Messenger.Core
-                              ↑
-                              |
-                    Messenger.Application
-                         ↑          ↑
-                         |          |
-              Infrastructure       API
-                         \          /
-                          \        /
-                           Messenger.Web
-```
-
-В более точной форме направление зависимостей должно быть:
+## Состояние после этапа 1.3
 
 ```text
-Core
-  ↑
-Application
-  ↑
-Infrastructure
-  ↑
-API
+                 Messenger.Core
+                   ↑         ↑
+                   |         |
+          Messenger.Application
+                   ↑
+             ┌─────┴─────┐
+             |           |
+     Infrastructure      API
+             ↑           |
+             └───────────┘
+
+          Web → Core
 ```
 
-Web должен зависеть только от публичных contracts/core-типов, которые действительно нужны UI, и не получать зависимости на Infrastructure/API.
+Фактические прямые ProjectReference:
 
-## Запреты этапа 1
+| Проект | Прямые ссылки |
+|---|---|
+| Messenger.Core | нет |
+| Messenger.Application | Messenger.Core |
+| Messenger.Infrastructure | Messenger.Core, Messenger.Application |
+| Messenger.API | Messenger.Application, Messenger.Infrastructure |
+| Messenger.Web | Messenger.Core |
+| Messenger.AppHost | нет |
 
-- Core не ссылается на Infrastructure.
-- Core не ссылается на API.
-- Application не ссылается на Infrastructure.
-- Application не ссылается на API.
-- Infrastructure реализует интерфейсы Application/Core.
-- API отвечает за transport concerns, а не за бизнес-логику.
+API получает типы Core транзитивно через Infrastructure. Прямую ссылку API → Core удалили, чтобы зафиксировать зависимость transport-слоя от Application и Infrastructure.
 
-## Что пока остаётся
+## Правила направления зависимостей
 
-Baseline не переносит классы и не меняет ProjectReference. Это отдельные изменения следующего PR, чтобы каждый архитектурный шаг можно было проверить независимо.
+- Core не ссылается на Application, Infrastructure, API или Web.
+- Application ссылается только на Core.
+- Infrastructure ссылается на Application и Core.
+- API ссылается на Application и Infrastructure.
+- Web ссылается только на Core.
+- AppHost остаётся точкой композиции Aspire и не содержит бизнес-логики.
+
+## Автоматическая проверка
+
+Скрипт `scripts/check-architecture.py` проверяет точный набор прямых ProjectReference:
+
+```bash
+python3 scripts/check-architecture.py
+```
+
+Проверка добавлена отдельным job `validate-architecture` в GitLab CI и запускается для branch/MR pipeline.
+
+## Что пока не переносилось
+
+Контракты сервисов и DTO пока остаются в Core. Это намеренно: в Core всё ещё находятся SignalR hubs, которые используют часть этих интерфейсов. Их перенос без предварительного отделения transport-адаптеров создал бы обратную зависимость Core → Application. Перенос контрактов будет выполняться после подготовки Core в следующем архитектурном шаге.
+
+## Ограничения проверки
+
+На данном этапе проверяется граф прямых ссылок проектов. Проверка не заменяет `dotnet build`, тесты и запуск приложения. Их необходимо выполнить в среде с .NET 10 SDK и зависимостями проекта.
