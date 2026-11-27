@@ -16,15 +16,6 @@ namespace Messenger.Core.DTOs.Messages
         public DateTime? PinnedAt { get; set; }
     }
 
-    public class AttachmentDto
-    {
-        public Guid AttachmentId { get; set; }
-        public string FileName { get; set; } = null!;
-        public string FileType { get; set; } = null!;
-        public long SizeInBytes { get; set; }
-        public string Url { get; set; } = null!;
-    }
-
     public class ReactionSummaryDto
     {
         public string ReactionType { get; set; } = null!;

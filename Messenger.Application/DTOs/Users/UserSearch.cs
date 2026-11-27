@@ -1,4 +1,4 @@
-﻿namespace Messenger.Core.DTOs.Users
+namespace Messenger.Core.DTOs.Users
 {
     public class UserSearch
     {

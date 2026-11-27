@@ -1,4 +1,4 @@
-﻿namespace Messenger.Core.DTOs.Messages
+namespace Messenger.Core.DTOs.Messages
 {
     public record MessageSearchResponse
     {
