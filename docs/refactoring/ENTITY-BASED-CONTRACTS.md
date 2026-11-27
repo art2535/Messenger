@@ -50,3 +50,8 @@
 ## Результат подэтапа 2.7.11 — IScheduledMessageService
 
 `IScheduledMessageService` физически перенесён в Application и отвязан от EF-сущности `ScheduledMessage`. Пользовательские методы чтения возвращают `ScheduledMessageDto`; фоновый диспетчер получает отдельный `ScheduledMessageDispatchDto` с зашифрованным текстом и исходными данными вложений. `CreateAsync` и `UpdateAsync` возвращают DTO, публичный `ToDto(ScheduledMessage)` удалён. API больше не читает EF-свойства и не расшифровывает данные самостоятельно. `AttachmentInfo` и DTO расписания физически перенесены в Application с сохранением прежних namespace.
+
+
+## Результат подэтапа 2.7.12 — IAttachmentService
+
+`IAttachmentService` перенесён в Application и больше не принимает/возвращает EF-сущность `Attachment`. Добавление использует `CreateAttachmentDto` и `messageId`, чтение возвращает `AttachmentDto`. Создание EF-модели и отображение полей выполняются в `AttachmentService` внутри Infrastructure. `AttachmentsController` и `ChatMessageSentConsumer` используют DTO-контракт.

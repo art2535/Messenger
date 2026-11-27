@@ -83,3 +83,8 @@ Fluent-конфигурации всех сущностей вынесены в 
 ### 2.7.11. DTO-контракт IScheduledMessageService
 
 `IScheduledMessageService` физически перенесён в Application и отвязан от EF-сущности `ScheduledMessage`. Для HTTP-чтения используется `ScheduledMessageDto`, для фоновой отправки — `ScheduledMessageDispatchDto` с зашифрованным текстом и исходными данными вложений. EF-сущности и преобразование JSON вложений остаются внутри Infrastructure. `AttachmentInfo` и DTO расписания также физически перенесены в Application; прежние namespace сохранены для совместимости.
+
+
+### 2.7.12. DTO-контракт IAttachmentService
+
+`IAttachmentService` физически перенесён в Application. Его методы используют `CreateAttachmentDto` и `AttachmentDto`, не раскрывая EF-сущность `Attachment`. API-контроллер и consumer передают нейтральные DTO; EF mapping остаётся в Infrastructure. Namespace интерфейса и DTO сохранены для минимизации изменений потребителей.

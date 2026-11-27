@@ -36,3 +36,7 @@
 ## Подэтап 2.7.11 — контракт запланированных сообщений
 
 `IScheduledMessageService` физически перенесён в Application (namespace `Messenger.Core.Interfaces` временно сохранён для совместимости). Методы создания, чтения и обновления возвращают `ScheduledMessageDto`, а не EF-сущность. Для фоновой отправки введён `ScheduledMessageDispatchDto`, который содержит зашифрованный текст и нейтральный список `AttachmentInfo`; он не используется как HTTP-ответ. Преобразование EF-сущности, расшифровка текста и чтение JSON вложений выполняются внутри Infrastructure. `AttachmentInfo` и `ScheduledMessageDtos.cs` физически перенесены в Application с сохранением прежних namespace.
+
+## Подэтап 2.7.12 — контракт вложений
+
+`IAttachmentService` физически перенесён в Application (namespace `Messenger.Core.Interfaces` сохранён для совместимости). Добавление принимает `CreateAttachmentDto` и идентификатор сообщения отдельно; чтение возвращает `AttachmentDto`. EF-сущность `Attachment` создаётся и преобразуется только внутри Infrastructure. API-контроллер и MassTransit consumer больше не создают и не передают EF-сущности в сервисный контракт.
