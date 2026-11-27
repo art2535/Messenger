@@ -1,4 +1,3 @@
-using Messenger.Core.DTOs.Users;
 using System.Text.Json.Serialization;
 
 namespace Messenger.Application.DTOs.Users;
