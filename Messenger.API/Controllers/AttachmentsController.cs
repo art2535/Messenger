@@ -80,6 +80,10 @@ namespace Messenger.API.Controllers
             {
                 return NotFound(ApiResponse.Failure(ex.Message, "NOT_FOUND"));
             }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при получении вложений для сообщения {MessageId}", messageId);
@@ -305,6 +309,10 @@ namespace Messenger.API.Controllers
             catch (ArgumentException ex)
             {
                 return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
