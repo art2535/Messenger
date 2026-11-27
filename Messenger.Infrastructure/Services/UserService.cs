@@ -98,11 +98,21 @@ namespace Messenger.Infrastructure.Services
 
         public async Task<string> UploadAvatarAsync(Guid userId, IUploadedFile file, CancellationToken token = default)
         {
+            ArgumentNullException.ThrowIfNull(file);
+
+            const long maxFileSize = 2 * 1024 * 1024;
+            if (file.Length <= 0 || file.Length > maxFileSize)
+                throw new ArgumentException("Размер изображения должен быть больше 0 и не превышать 2 МБ");
 
             var fileExtension = Path.GetExtension(file.FileName).ToLowerInvariant();
             var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
             if (!allowedExtensions.Contains(fileExtension))
                 throw new ArgumentException("Неподдерживаемый формат изображения");
+
+            var baseUrl = _configuration["URL:API:HTTPS"]
+                ?? throw new InvalidOperationException("URL API не указан в конфигурационном файле");
+            if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var apiBaseUri))
+                throw new InvalidOperationException("URL API имеет некорректный формат");
 
             var user = await _context.Users
                 .Include(u => u.Account)
@@ -111,44 +121,51 @@ namespace Messenger.Infrastructure.Services
             if (user == null)
                 throw new UnauthorizedAccessException("Пользователь не найден");
 
-            if (user.Account == null)
-            {
-                user.Account = new AccountSetting
-                {
-                    AccountId = userId
-                };
-                _context.AccountSettings.Add(user.Account);
-            }
+            await using var sourceStream = file.OpenReadStream();
+            using var memoryStream = new MemoryStream();
+            await sourceStream.CopyToAsync(memoryStream, token);
 
-            var uploadsFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "avatars");
-            if (!Directory.Exists(uploadsFolder))
-                Directory.CreateDirectory(uploadsFolder);
+            if (memoryStream.Length == 0 || memoryStream.Length > maxFileSize)
+                throw new ArgumentException("Размер изображения должен быть больше 0 и не превышать 2 МБ");
 
-            if (!string.IsNullOrEmpty(user.Account.Avatar))
-            {
-                var oldFilePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", user.Account.Avatar.TrimStart('/'));
-                if (File.Exists(oldFilePath) && !user.Account.Avatar.Contains("default"))
-                {
-                    File.Delete(oldFilePath);
-                }
-            }
+            var imageBytes = memoryStream.ToArray();
+            if (!HasValidImageSignature(imageBytes, fileExtension))
+                throw new ArgumentException("Содержимое файла не соответствует формату изображения");
 
-            var fileName = $"{userId}{fileExtension}";
+            var webRoot = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+            var uploadsFolder = Path.Combine(webRoot, "avatars");
+            Directory.CreateDirectory(uploadsFolder);
+
+            var oldFilePath = user.Account == null
+                ? null
+                : TryGetAvatarFilePath(user.Account.Avatar, apiBaseUri, webRoot);
+
+            var fileName = $"{userId}_{Guid.NewGuid():N}{fileExtension}";
             var filePath = Path.Combine(uploadsFolder, fileName);
+            var avatarUrl = $"{baseUrl.TrimEnd('/')}/avatars/{fileName}";
 
-            await using (var stream = new FileStream(filePath, FileMode.Create))
+            try
             {
-                await using var sourceStream = file.OpenReadStream();
-                await sourceStream.CopyToAsync(stream, token);
+                await File.WriteAllBytesAsync(filePath, imageBytes, token);
+
+                if (user.Account == null)
+                {
+                    user.Account = new AccountSetting { AccountId = userId };
+                    _context.AccountSettings.Add(user.Account);
+                }
+
+                user.Account.Avatar = avatarUrl;
+                await _context.SaveChangesAsync(token);
+            }
+            catch
+            {
+                TryDeleteFile(filePath);
+                throw;
             }
 
-            var baseUrl = _configuration["URL:API:HTTPS"]
-                ?? throw new Exception("URL не указан в конфигурационном файле");
-
-            var avatarUrl = $"{baseUrl}/avatars/{fileName}";
-
-            user.Account.Avatar = avatarUrl;
-            await _context.SaveChangesAsync(token);
+            // Старый файл удаляется только после фиксации новой ссылки в БД.
+            if (oldFilePath != null && !string.Equals(oldFilePath, filePath, StringComparison.Ordinal))
+                TryDeleteFile(oldFilePath);
 
             return avatarUrl;
         }
@@ -159,17 +176,25 @@ namespace Messenger.Infrastructure.Services
                 .Include(u => u.Account)
                 .FirstOrDefaultAsync(u => u.UserId == userId, token);
 
-            if (user == null || user.Account == null || string.IsNullOrEmpty(user.Account.Avatar))
+            if (user?.Account == null || string.IsNullOrWhiteSpace(user.Account.Avatar))
                 return;
 
-            var filePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", user.Account.Avatar.TrimStart('/'));
-            if (File.Exists(filePath))
-            {
-                File.Delete(filePath);
-            }
+            var baseUrl = _configuration["URL:API:HTTPS"];
+            Uri? apiBaseUri = Uri.TryCreate(baseUrl, UriKind.Absolute, out var parsedBaseUri)
+                ? parsedBaseUri
+                : null;
+            var webRoot = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+            var oldFilePath = apiBaseUri == null
+                ? null
+                : TryGetAvatarFilePath(user.Account.Avatar, apiBaseUri, webRoot);
 
             user.Account.Avatar = null;
             await _context.SaveChangesAsync(token);
+
+            // После успешного обновления БД ошибка удаления оставит только orphan-файл,
+            // но не сломанную ссылку на изображение.
+            if (oldFilePath != null)
+                TryDeleteFile(oldFilePath);
         }
 
         public async Task<IEnumerable<UserSearch>> SearchUsersAsync(string search, CancellationToken token = default)
@@ -271,6 +296,77 @@ namespace Messenger.Infrastructure.Services
             await _context.SaveChangesAsync(token);
 
             return MapToDto(user);
+        }
+
+        private static bool HasValidImageSignature(byte[] bytes, string extension)
+        {
+            return extension switch
+            {
+                ".jpg" or ".jpeg" => bytes.Length >= 3
+                    && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF,
+                ".png" => bytes.Length >= 8
+                    && bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47
+                    && bytes[4] == 0x0D && bytes[5] == 0x0A && bytes[6] == 0x1A && bytes[7] == 0x0A,
+                ".gif" => bytes.Length >= 6
+                    && bytes[0] == 0x47 && bytes[1] == 0x49 && bytes[2] == 0x46
+                    && bytes[3] == 0x38 && (bytes[4] == 0x37 || bytes[4] == 0x39) && bytes[5] == 0x61,
+                ".webp" => bytes.Length >= 12
+                    && bytes[0] == 0x52 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x46
+                    && bytes[8] == 0x57 && bytes[9] == 0x45 && bytes[10] == 0x42 && bytes[11] == 0x50,
+                _ => false
+            };
+        }
+
+        private static string? TryGetAvatarFilePath(string? avatar, Uri apiBaseUri, string webRoot)
+        {
+            if (string.IsNullOrWhiteSpace(avatar) || avatar.Contains("default", StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            string path;
+            if (Uri.TryCreate(avatar, UriKind.Absolute, out var avatarUri))
+            {
+                if (!string.Equals(avatarUri.Scheme, apiBaseUri.Scheme, StringComparison.OrdinalIgnoreCase)
+                    || !string.Equals(avatarUri.Host, apiBaseUri.Host, StringComparison.OrdinalIgnoreCase)
+                    || avatarUri.Port != apiBaseUri.Port)
+                    return null;
+
+                path = avatarUri.AbsolutePath;
+            }
+            else
+            {
+                path = avatar;
+            }
+
+            path = Uri.UnescapeDataString(path).Replace('\\', '/').TrimStart('/');
+            if (!path.StartsWith("avatars/", StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            var fileName = Path.GetFileName(path);
+            if (string.IsNullOrWhiteSpace(fileName) || fileName is "." or "..")
+                return null;
+
+            var uploadsFolder = Path.GetFullPath(Path.Combine(webRoot, "avatars"));
+            var filePath = Path.GetFullPath(Path.Combine(uploadsFolder, fileName));
+            return filePath.StartsWith(uploadsFolder + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+                ? filePath
+                : null;
+        }
+
+        private static void TryDeleteFile(string filePath)
+        {
+            try
+            {
+                if (File.Exists(filePath))
+                    File.Delete(filePath);
+            }
+            catch (IOException)
+            {
+                // Cleanup failure leaves an orphan file; the database reference stays consistent.
+            }
+            catch (UnauthorizedAccessException)
+            {
+                // Cleanup failure leaves an orphan file; the database reference stays consistent.
+            }
         }
 
         private static UserDto MapToDto(User user) => new()
