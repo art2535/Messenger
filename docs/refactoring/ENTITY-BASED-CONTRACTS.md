@@ -2,9 +2,9 @@
 
 ## Текущее состояние после этапа 2.7.8
 
-`IUserService` и `IMessageService` физически находятся в Application. `IUserService` уже переведён с EF-моделей `User`/`Role` на `UserDto`/`RoleDto`; `IMessageService` пока сохраняет зависимость от EF-модели `Message`. В Application также перенесены независимые DTO: `UpdateUserProfileRequest`, `UserSearch`, `MessageDto`, `MessageSearchResponse`, `ChatExportResult` и `ServiceResult<T>`. Их прежние namespace сохранены для совместимости.
+`IUserService` переведён с EF-моделей `User`/`Role` на DTO. `IMessageService` пока сохраняет зависимость от EF-модели `Message`; миграция выполняется по вертикальным сценариям.
 
-`AttachmentDto` оставлен в Core, поскольку его использует `ScheduledMessageDto` в Core-контракте `IScheduledMessageService`. `MessageDto` из Application может ссылаться на него по направлению Application -> Core.
+`ServiceResult<T>` в Application унифицирован с `ApiResponse<T>`: он наследует общий формат ответа и использует PascalCase-свойства `IsSuccess`, `Data`, `Error`, `ErrorCode`, `InnerError`, `Message`, `Meta`. `InnerError` добавлен в базовый `ApiResponse<T>` для сохранения прежней диагностики.
 
 ## Карта оставшихся зависимостей
 
@@ -13,41 +13,25 @@
 | `IAttachmentService` | `Attachment` | DTO/команды создания и чтения вложений |
 | `IChatService` | `Chat`, `ChatParticipant` | Модели чтения и команды чатов/участников |
 | `ILoginService` | `Login` | DTO сессии и команды управления сессиями |
-| `IMessageService` (Application) | `Message`, `User` через операции, `ChatMessageSent` | Убрать EF-модели из сигнатур и классифицировать событие |
+| `IMessageService` (Application) | `Message`, `ChatMessageSent` | Перевести все результаты и параметры методов с EF-сущностей на DTO/команды; классифицировать событие отдельно |
 | `INotificationService` | `Notification` | DTO уведомления и команды чтения |
 | `IPushSubscriptionService` | `AccountSetting`, `PushSubscription` | DTO настроек и подписки |
 | `IReactionService` | `Reaction` | DTO реакции и команды |
 | `IScheduledMessageService` | `ScheduledMessage`, `AttachmentInfo` | DTO и команды расписания, отделённые от EF-сущности |
-| `IUserService` (Application) | `UserDto`, `RoleDto` (без EF-сущностей) | Контракт чтения/изменения уже отвязан от EF-моделей; проверить остальные методы и сериализацию |
+| `IUserService` (Application) | `UserDto`, `RoleDto` | Контракт отвязан от EF-моделей |
 | `IUserStatusService` | `UserStatus` | DTO статуса и команды обновления |
 
 ## Сквозные зависимости
 
-`IUploadedFile` отделяет загрузку от ASP.NET. `FormFileUploadAdapter` находится на границе API; `UserService` открывает и освобождает поток в рамках операции. `MessageService` принимает `IUploadedFile[]`, но пока не использует его — это существующее поведение.
+`IUploadedFile` отделяет загрузку от ASP.NET. `MessageDeliveryStatus` находится в `Messenger.Core.Enums` и сохраняет числовые значения Pending=0, Sent=1, Delivered=2, Read=3, Failed=4.
 
-`MessageDeliveryStatus` находится в `Messenger.Core.Enums`, сохраняя значения Pending=0, Sent=1, Delivered=2, Read=3, Failed=4. Enum остаётся в Core, поскольку EF-сущность `Message` также использует его.
+## Следующие шаги
 
-`IMessageService` публикует `ChatMessageSent`, а `IScheduledMessageService` использует `AttachmentInfo`. До переноса требуется проверить сериализацию и потребителей этих контрактов.
-
-## Следующие безопасные шаги
-
-1. Создать response DTO для `Message` и оставшихся entity-based контрактов, не копируя EF navigation properties.
-2. Перевести реализации Infrastructure и потребителей API/Web на эти DTO вертикально, по одному сценарию.
-3. После удаления ссылок на EF-сущности переместить соответствующие интерфейсы и сменить namespace.
-4. Удалять временные EF/ASP.NET compile-time зависимости Core только после аудита оставшихся файлов и успешной сборки.
+1. Создать/уточнить DTO результата сообщения и команды изменения статуса/содержимого.
+2. Перевести реализацию Infrastructure и API/consumer на DTO.
+3. Удалить из сигнатур `IMessageService` все EF-типы, затем сменить namespace интерфейса.
+4. Удалять временные зависимости Core только после полного аудита и успешной сборки.
 
 ## Проверки
 
-Изменения этапа 2.7.7 проверены статически по сигнатурам и зависимостям. `dotnet build` и тесты не запускались; успешная компиляция не подтверждена.
-
-
-## Подэтап 2.7.8 — IUserService
-
-`IUserService` переведён с `User`/`Role` на `UserDto`/`RoleDto`; реализация Infrastructure выполняет отображение EF-сущностей внутри `UserService`. Переведены методы получения пользователя по ID и external ID, список пользователей, список ролей и регистрация внешнего пользователя. `UserDto` содержит только scalar-поля, прикладное представление аккаунта и роли; EF navigation properties в контракт не протекают. API extension `GetCurrentUserAsync` также возвращает DTO.
-
-`IMessageService` и другие entity-based интерфейсы пока остаются отдельной задачей: их EF-зависимости будут устранены после проектирования и миграции соответствующих DTO.
-
-
-## Результат подэтапа 2.7.8
-
-`IUserService` возвращает `UserDto`/`RoleDto` вместо `User`/`Role`. `UserService` выполняет отображение EF-сущностей на DTO внутри Infrastructure; `ClaimsPrincipalExtension.GetCurrentUserAsync` возвращает `UserDto`. Переведены все методы интерфейса, ранее возвращавшие сущности: получение по ID/external ID, регистрация, список пользователей и список ролей. В Core по-прежнему остаются другие entity-based интерфейсы, а `IMessageService` требует отдельного перехода с `Message` на DTO.
+Изменения предыдущих подэтапов проверялись статически. Сборка и тесты не запускались; успешная компиляция не подтверждена.

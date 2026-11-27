@@ -30,14 +30,12 @@ namespace Messenger.API.Consumers
             _chatService = chatService;
             _logger = logger;
             _subscriptionService = subscriptionService;
-
             _logger.LogInformation("=== ChatMessageSentConsumer успешно создан ===");
         }
 
         public async Task Consume(ConsumeContext<ChatMessageSent> context)
         {
             var msg = context.Message;
-
             _logger.LogInformation(
                 "=== CONSUMER ПОЛУЧИЛ СООБЩЕНИЕ === MessageId={MessageId} ChatId={ChatId} SenderId={SenderId} HasText={HasText}",
                 msg.MessageId, msg.ChatId, msg.SenderId, !string.IsNullOrEmpty(msg.MessageText));
@@ -47,11 +45,10 @@ namespace Messenger.API.Consumers
                 var serviceResult = await _messageService.SendMessageAsync(msg.MessageId, msg.ChatId, msg.SenderId,
                     msg.MessageText, msg.HasAttachments, null, context.CancellationToken);
 
-                if (!serviceResult.isSuccess || serviceResult.data == null)
-                    throw new Exception(serviceResult.error ?? "Unknown error");
+                if (!serviceResult.IsSuccess || serviceResult.Data == null)
+                    throw new Exception(serviceResult.Error ?? "Unknown error");
 
-                var savedMessage = serviceResult.data;
-
+                var savedMessage = serviceResult.Data;
                 if (msg.Attachments?.Any() == true)
                 {
                     foreach (var attInfo in msg.Attachments)
@@ -75,7 +72,6 @@ namespace Messenger.API.Consumers
                 var decryptedText = string.IsNullOrEmpty(msg.MessageText)
                     ? null
                     : _encryptionService.TryDecryptSafe(msg.MessageText);
-
                 var finalMessageDto = new MessageDto
                 {
                     MessageId = savedMessage.MessageId,
@@ -148,12 +144,10 @@ namespace Messenger.API.Consumers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "ОШИБКА обработки сообщения {MessageId} в consumer", msg.MessageId);
-
                 try
                 {
                     var failedMessage = await _messageService.GetMessageByIdAsync(
                         msg.ChatId, msg.MessageId, context.CancellationToken);
-
                     if (failedMessage != null)
                     {
                         failedMessage.DeliveryStatus = MessageDeliveryStatus.Failed;
@@ -174,7 +168,6 @@ namespace Messenger.API.Consumers
                         Reason = "Ошибка обработки сообщения на сервере",
                         Timestamp = DateTimeOffset.UtcNow
                     }, context.CancellationToken);
-
                 throw;
             }
         }

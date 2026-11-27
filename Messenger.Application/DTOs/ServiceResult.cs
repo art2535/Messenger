@@ -1,23 +1,30 @@
+using Messenger.Core.Responses;
+
 namespace Messenger.Core.DTOs
 {
-    public class ServiceResult<T>
+    /// <summary>
+    /// Результат выполнения операции сервиса. Использует общий формат ApiResponse.
+    /// </summary>
+    public sealed class ServiceResult<T> : ApiResponse<T>
     {
-        public bool isSuccess { get; set; }
-        public T? data { get; set; }
-        public string? error { get; set; }
-        public string? innerError { get; set; }
-
-        public static ServiceResult<T> Success(T data) => new()
+        public static new ServiceResult<T> Success(T? data = default, string? message = null, object? meta = null) => new()
         {
-            isSuccess = true,
-            data = data
+            IsSuccess = true,
+            Data = data,
+            Message = message,
+            Meta = meta
         };
 
-        public static ServiceResult<T> Failure(string error, string? innerError = null) => new()
+        public static ServiceResult<T> Failure(string error, string? innerError = null,
+            string? errorCode = null, string? message = null, T? data = default, object? meta = null) => new()
         {
-            isSuccess = false,
-            error = error,
-            innerError = innerError
+            IsSuccess = false,
+            Error = error,
+            InnerError = innerError,
+            ErrorCode = errorCode,
+            Message = message,
+            Data = data,
+            Meta = meta
         };
     }
 }

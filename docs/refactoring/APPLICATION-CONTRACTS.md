@@ -10,19 +10,18 @@
 
 ## Подэтап 2.7.6 — контракты загрузки файлов
 
-`IUserService` и `IMessageService` физически перенесены в Application. Для файлов введён нейтральный `IUploadedFile`; API адаптирует `IFormFile` через `FormFileUploadAdapter`. Namespace интерфейсов пока сохранены для совместимости. Контракты всё ещё используют Core-модели.
+`IUserService` и `IMessageService` физически перенесены в Application. Для файлов введён нейтральный `IUploadedFile`; API адаптирует `IFormFile` через `FormFileUploadAdapter`. Namespace интерфейсов пока сохранены для совместимости.
 
-## Подэтап 2.7.7 — перенос независимых DTO
+## Подэтап 2.7.7 — перенос независимых DTO и ответов
 
-В `Messenger.Application/DTOs` перенесены `UpdateUserProfileRequest`, `UserSearch`, `MessageDto`, `MessageSearchResponse`, `ChatExportResult` и `ServiceResult<T>`. Прежние namespace `Messenger.Core.DTOs...` сохранены, чтобы не менять существующие `using` и wire-формат.
+В `Messenger.Application/DTOs` перенесены `UpdateUserProfileRequest`, `UserSearch`, `MessageDto`, `MessageSearchResponse`, `ChatExportResult` и `ServiceResult<T>`. Прежние namespace сохранены для совместимости.
 
-`AttachmentDto` выделен в отдельный файл и оставлен в Core: он используется `ScheduledMessageDto`, который пока является частью Core-контракта `IScheduledMessageService`. DTO `MessageDto` из Application использует `AttachmentDto` через существующую ссылку Application -> Core.
-
-`Messenger.Web` получил прямую ссылку на Application, так как веб-проект использует перенесённый `UpdateUserProfileRequest`. API и Infrastructure уже ссылались на Application.
-
+`ServiceResult<T>` теперь наследуется от общего `ApiResponse<T>` и использует единый набор свойств: `IsSuccess`, `Data`, `Error`, `ErrorCode`, `InnerError`, `Message` и `Meta`. Все имена свойств соответствуют PascalCase. Поле `InnerError` добавлено в `ApiResponse<T>`, чтобы не терять диагностическую информацию старого результата сервиса. Фабрики `Success` и `Failure` сохранены.
 
 ## Подэтап 2.7.8 — DTO-контракт пользователя
 
-`IUserService` и `UserService` больше не возвращают EF-сущности `User` и `Role`. Для чтения, поиска по external ID, регистрации и списка ролей используются `UserDto` и `RoleDto`, физически расположенные в Application и временно сохраняющие namespace `Messenger.Core.DTOs.Users`. `UserDto.Account` доступен прикладному коду, но помечен `JsonIgnore`, чтобы endpoint, возвращающий пользователя напрямую, не начал раскрывать вложенный объект аккаунта — прежняя EF-модель также исключала его из JSON. API extension для получения текущего пользователя теперь возвращает `UserDto`.
+`IUserService` и `UserService` больше не возвращают EF-сущности `User` и `Role`. Для чтения, поиска по external ID, регистрации и списка ролей используются `UserDto` и `RoleDto`, физически расположенные в Application и временно сохраняющие namespace `Messenger.Core.DTOs.Users`. EF-запросы и преобразование сущностей остаются внутри Infrastructure.
 
-EF-запросы и преобразование сущностей остаются внутри Infrastructure. DTO не содержат EF-навигаций и не раскрывают коллекции чатов, сообщений или сессий.
+## Подэтап 2.7.9 — миграция контракта сообщений
+
+Начата отвязка `IMessageService` от EF-сущности `Message`. Подготовлен единый формат результата операции на базе `ApiResponse<T>`; дальнейшая часть этапа переводит методы чтения/изменения сообщений и их потребителей на DTO и команды без EF-навигаций.

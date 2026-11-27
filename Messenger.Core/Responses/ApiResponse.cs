@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace Messenger.Core.Responses
 {
-    public sealed class ApiResponse<T>
+    public class ApiResponse<T>
     {
         public required bool IsSuccess { get; set; }
 
@@ -14,6 +14,9 @@ namespace Messenger.Core.Responses
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? ErrorCode { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? InnerError { get; set; }
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public T? Data { get; set; }
@@ -30,11 +33,12 @@ namespace Messenger.Core.Responses
         };
 
         public static ApiResponse<T> Failure(string error, string? errorCode = null, string? message = null,
-            T? data = default, object? meta = null) => new()
+            T? data = default, object? meta = null, string? innerError = null) => new()
         {
             IsSuccess = false,
             Error = error,
             ErrorCode = errorCode,
+            InnerError = innerError,
             Message = message,
             Data = data,
             Meta = meta
