@@ -9,6 +9,14 @@ namespace Messenger.Infrastructure.Services
         private readonly ILogger<RedisDistributedLock> _logger;
         private readonly bool _enabled;
 
+        private const string ReleaseScript = """
+            if redis.call('get', KEYS[1]) == ARGV[1] then
+                return redis.call('del', KEYS[1])
+            else
+                return 0
+            end
+            """;
+
         public RedisDistributedLock(IConnectionMultiplexer? redis, ILogger<RedisDistributedLock> logger)
         {
             _logger = logger;
@@ -39,9 +47,11 @@ namespace Messenger.Infrastructure.Services
             }
 
             var token = Guid.NewGuid().ToString("N");
+            Task<bool>? acquisitionTask = null;
             try
             {
-                var acquired = await _db.StringSetAsync(key, token, ttl, When.NotExists);
+                acquisitionTask = _db.StringSetAsync(key, token, ttl, When.NotExists);
+                var acquired = await acquisitionTask.WaitAsync(ct);
                 if (!acquired)
                 {
                     _logger.LogDebug("DistributedLock: ключ {Key} уже занят другой репликой", key);
@@ -53,12 +63,34 @@ namespace Messenger.Infrastructure.Services
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
+                if (acquisitionTask is not null)
+                    _ = ReleaseIfAcquiredAsync(acquisitionTask, key, token);
                 throw;
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "DistributedLock: ошибка захвата {Key} — пропускаем тик", key);
                 return null;
+            }
+        }
+
+        private async Task ReleaseIfAcquiredAsync(Task<bool> acquisitionTask, string key, string token)
+        {
+            try
+            {
+                if (!await acquisitionTask.ConfigureAwait(false))
+                    return;
+
+                await _db!.ScriptEvaluateAsync(
+                    ReleaseScript,
+                    new RedisKey[] { key },
+                    new RedisValue[] { token }).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "DistributedLock: не удалось компенсировать захват {Key} после отмены ожидания; ключ истечёт по TTL",
+                    key);
             }
         }
 
@@ -90,14 +122,10 @@ namespace Messenger.Infrastructure.Services
 
                 try
                 {
-                    const string script = """
-                        if redis.call('get', KEYS[1]) == ARGV[1] then
-                            return redis.call('del', KEYS[1])
-                        else
-                            return 0
-                        end
-                        """;
-                    await _db.ScriptEvaluateAsync(script, new RedisKey[] { _key }, new RedisValue[] { _token });
+                    await _db.ScriptEvaluateAsync(
+                        ReleaseScript,
+                        new RedisKey[] { _key },
+                        new RedisValue[] { _token });
                 }
                 catch (Exception ex)
                 {
