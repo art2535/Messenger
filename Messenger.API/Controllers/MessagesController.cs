@@ -149,7 +149,7 @@ namespace Messenger.API.Controllers
                     ?? HttpContext.Connection.RemoteIpAddress?.ToString()
                     ?? "anonymous";
 
-                if (!await _sendLimiter.TryAcquireAsync(rateKey))
+                if (!await _sendLimiter.TryAcquireAsync(rateKey, ct))
                 {
                     _logger.LogWarning("SendMessage rate limit exceeded for {Key}", rateKey);
                     return StatusCode(StatusCodes.Status429TooManyRequests, ApiResponse.Failure("Слишком много запросов. Подождите немного и попробуйте снова.", "RATE_LIMIT_EXCEEDED"));

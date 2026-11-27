@@ -29,6 +29,14 @@ namespace Messenger.Infrastructure.Services
                 .FirstOrDefaultAsync(m => m.MessageId == request.MessageId, ct)
                 ?? throw new InvalidOperationException("Сообщение не найдено");
 
+            var isParticipant = await _context.ChatParticipants.AsNoTracking()
+                .AnyAsync(p => p.ChatId == msg.ChatId && p.UserId == reporterId, ct);
+            if (!isParticipant)
+                throw new UnauthorizedAccessException("Пожаловаться можно только на сообщение из чата, участником которого вы являетесь");
+
+            if (string.IsNullOrWhiteSpace(request.Reason))
+                throw new ArgumentException("Причина жалобы обязательна");
+
             var report = new MessageReport
             {
                 ReportId = Guid.NewGuid(),
@@ -156,6 +164,7 @@ namespace Messenger.Infrastructure.Services
 
         public async Task<List<MessageReportDto>> GetPendingReportsAsync(int take = 50, CancellationToken ct = default)
         {
+            take = Math.Clamp(take, 1, 200);
             return await _context.MessageReports.AsNoTracking()
                 .Where(r => r.Status == "pending")
                 .OrderByDescending(r => r.CreatedAt)
@@ -178,16 +187,27 @@ namespace Messenger.Infrastructure.Services
         {
             var report = await _context.MessageReports.FirstOrDefaultAsync(r => r.ReportId == reportId, ct);
             if (report == null) return;
-            report.Status = status;
+            var normalizedStatus = status?.Trim().ToLowerInvariant();
+            if (normalizedStatus is not ("resolved" or "dismissed"))
+                throw new ArgumentException("Статус жалобы должен быть resolved или dismissed");
+
+            await using var transaction = await _context.Database.BeginTransactionAsync(ct);
+            var report = await _context.MessageReports.FirstOrDefaultAsync(r => r.ReportId == reportId, ct);
+            if (report == null || !string.Equals(report.Status, "pending", StringComparison.OrdinalIgnoreCase))
+                return;
+
+            report.Status = normalizedStatus;
             report.ReviewedAt = UtcDateTime.Now;
             report.ReviewedBy = adminId;
-            report.AdminNote = note;
-            AddLog(status == "dismissed" ? "dismiss_report" : "review_report", adminId, null, report.ChatId, report.MessageId, note);
+            report.AdminNote = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+            AddLog(normalizedStatus == "dismissed" ? "dismiss_report" : "review_report", adminId, null, report.ChatId, report.MessageId, report.AdminNote);
             await _context.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
         }
 
         public async Task<List<ModerationLogDto>> GetLogsAsync(int take = 100, CancellationToken ct = default)
         {
+            take = Math.Clamp(take, 1, 500);
             return await _context.ModerationLogs.AsNoTracking()
                 .OrderByDescending(l => l.CreatedAt)
                 .Take(take)

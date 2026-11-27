@@ -286,7 +286,7 @@ namespace Messenger.Realtime.Hubs
             if (string.IsNullOrEmpty(externalId))
                 return false;
 
-            return await _sendMessageLimiter.TryAcquireAsync(externalId);
+            return await _sendMessageLimiter.TryAcquireAsync(externalId, Context.ConnectionAborted);
         }
 
         public async Task StartTyping(string chatId)
@@ -299,7 +299,7 @@ namespace Messenger.Realtime.Hubs
                 if (string.IsNullOrEmpty(externalId))
                     return;
 
-                if (!await _typingLimiter.TryAcquireAsync(externalId))
+                if (!await _typingLimiter.TryAcquireAsync(externalId, Context.ConnectionAborted))
                     return;
 
                 var user = await _userService.GetUserByExternalIdAsync(externalId);

@@ -18,9 +18,9 @@ namespace Messenger.Realtime.Services
                 }));
         }
 
-        public async ValueTask<bool> TryAcquireAsync(string userId)
+        public async ValueTask<bool> TryAcquireAsync(string userId, CancellationToken cancellationToken = default)
         {
-            using var lease = await _limiter.AcquireAsync(userId);
+            using var lease = await _limiter.AcquireAsync(userId, cancellationToken);
             return lease.IsAcquired;
         }
 

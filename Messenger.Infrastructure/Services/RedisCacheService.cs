@@ -56,7 +56,7 @@ namespace Messenger.Infrastructure.Services
 
             try
             {
-                var value = await _db.StringGetAsync(key);
+                var value = await _db.StringGetAsync(key).WaitAsync(ct);
                 if (value.IsNullOrEmpty)
                 {
                     CacheMetrics.RecordMissForKey(key);
@@ -93,7 +93,7 @@ namespace Messenger.Infrastructure.Services
             try
             {
                 var json = JsonSerializer.Serialize(value, JsonOptions);
-                await _db.StringSetAsync(key, json, ttl);
+                await _db.StringSetAsync(key, json, ttl).WaitAsync(ct);
                 _logger.LogDebug("CACHE SET key={Key} ttl={TtlSeconds}s", key, (int)ttl.TotalSeconds);
             }
             catch (OperationCanceledException)
@@ -114,7 +114,7 @@ namespace Messenger.Infrastructure.Services
 
             try
             {
-                var deleted = await _db.KeyDeleteAsync(key);
+                var deleted = await _db.KeyDeleteAsync(key).WaitAsync(ct);
                 _logger.LogDebug("CACHE INVALIDATE key={Key} deleted={Deleted}", key, deleted);
             }
             catch (OperationCanceledException)
@@ -137,7 +137,7 @@ namespace Messenger.Infrastructure.Services
 
             try
             {
-                var deleted = await _db.KeyDeleteAsync(arr);
+                var deleted = await _db.KeyDeleteAsync(arr).WaitAsync(ct);
                 _logger.LogDebug("CACHE INVALIDATE keys={Count} deleted={Deleted} sample={Sample}",
                     arr.Length, deleted, arr.Length > 0 ? (string)arr[0]! : "");
             }

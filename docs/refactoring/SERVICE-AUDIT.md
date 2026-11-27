@@ -166,3 +166,14 @@ ChatService проверяет роль вызывающего пользова�
 MessagesController и ChatsController передают текущий userId в защищённые overloads. Поэтому доступ к чужому ChatId не зависит только от предварительной проверки контроллера и не может быть получен через этот Application-контракт без прохождения проверки членства.
 
 Старые overloads без actorId сохранены для доверенных внутренних сценариев (consumer/background/service-to-service), где пользовательский authorization boundary отсутствует. HTTP endpoints используют только actor-aware overloads.
+
+
+### 10. Модерация, Redis и rate limiter
+
+Усилена граница модерации: жалобу на сообщение теперь можно создать только участнику соответствующего чата; причина жалобы обязательна. Обработка жалобы ограничивает допустимые статусы и переводит только pending-репорты, чтобы конкурентный повторный review не перезаписывал уже обработанную запись.
+
+Лимиты административных выборок модерации ограничены диапазоном 1..200 для pending reports и 1..500 для moderation logs.
+
+RedisCacheService связывает ожидание Redis-команд с CancellationToken через WaitAsync, поэтому отменённая HTTP/background operation не зависает до завершения Redis-команды. Ошибки Redis по-прежнему деградируют в cache miss/no-op, а отмена пробрасывается.
+
+Realtime rate limiter теперь принимает CancellationToken. HTTP отправка сообщений и SignalR typing/send-permit передают отмену запроса/соединения вместо ожидания queued permit после disconnect/cancel.
