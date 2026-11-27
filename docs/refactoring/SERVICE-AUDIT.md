@@ -11,7 +11,7 @@
 ## Проверенная ревизия
 
 - Начальная ревизия этого аудита: `4d3bbcd3935d74ec822ead8c80a34e5f4702dc43`.
-- Последнее документированное исправление Broadcast: коммит будет указан после публикации текущего набора изменений.
+- Исправление передачи отмены в Broadcast опубликовано в коммите `c10e4e23348b1b6a12a96133eda326466605a895`.
 - Основная область: `Messenger.Infrastructure/Services`, `Messenger.Application/Services`, `Messenger.Application/Interfaces`, `Messenger.API/Services`, `Messenger.Web/Services`, `Messenger.Realtime/Services`.
 - Проверка локальной сборкой в этой среде недоступна: .NET SDK/runtime отсутствует.
 

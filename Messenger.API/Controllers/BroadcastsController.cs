@@ -79,10 +79,6 @@ namespace Messenger.API.Controllers
             {
                 throw;
             }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested)
-            {
-                throw;
-            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при выполнении POST /broadcasts/create");
