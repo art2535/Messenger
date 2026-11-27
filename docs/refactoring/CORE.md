@@ -4,7 +4,7 @@
 
 ## Состав Core и выявленные связи
 
-В `Messenger.Core/Models` сейчас находятся 21 файл модели/вспомогательного типа; 20 типов участвуют в EF-модели, а `UtcDateTime` является helper. Модель `Log` уже вынесена в Infrastructure. В большинстве оставшихся EF-моделей одновременно присутствуют:
+В `Messenger.Core/Models` сейчас находятся 20 файлов модели/вспомогательного типа; 19 типов участвуют в EF-модели, а `UtcDateTime` является helper. Модель `Log` уже вынесена в Infrastructure. В большинстве оставшихся EF-моделей одновременно присутствуют:
 - свойства предметной области;
 - EF-аннотации (`Key`, `Column`, `ForeignKey`, `InverseProperty`, `Table`);
 - навигационные свойства EF;
@@ -47,7 +47,7 @@ Fluent-конфигурации всех сущностей вынесены в 
 ## Что осталось
 
 1. Перенос сервисных контрактов в Application на DTO завершён для всех текущих сервисных интерфейсов.
-2. Создавать persistence entities в Infrastructure и постепенно переводить DbContext/конфигурации; первый тип `Log` уже перенесён, далее — `Login` и `PushSubscription` после проверки связей с `User`.
+2. Создавать persistence entities в Infrastructure и постепенно переводить DbContext/конфигурации; типы `Log` и `Login` уже перенесены; далее — `PushSubscription` после проверки связей с `User`.
 3. Продолжить перевод API/Web и SignalR с оставшихся Core/EF-моделей на DTO/Application contracts.
 4. После перевода всех потребителей удалить EF- и JSON-аннотации, а также EF-навигации из Core.
 5. Удалить временные EF Core и ASP.NET framework references из Core.
