@@ -36,7 +36,7 @@ namespace Messenger.Infrastructure.Services
             IEnumerable<Guid> userIds,
             CancellationToken cancellationToken = default)
         {
-            var ids = userIds.ToList();
+            var ids = userIds.Distinct().ToList();
             if (ids.Count == 0)
                 return;
 
@@ -44,6 +44,22 @@ namespace Messenger.Infrastructure.Services
                 .Where(us => ids.Contains(us.UserId) && us.Online)
                 .ExecuteUpdateAsync(s => s
                     .SetProperty(us => us.Online, false)
+                    .SetProperty(us => us.LastActivity, UtcDateTime.Now),
+                    cancellationToken);
+        }
+
+        public async Task SetOnlineBatchAsync(
+            IEnumerable<Guid> userIds,
+            CancellationToken cancellationToken = default)
+        {
+            var ids = userIds.Distinct().ToList();
+            if (ids.Count == 0)
+                return;
+
+            await _context.UserStatuses
+                .Where(us => ids.Contains(us.UserId) && !us.Online)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(us => us.Online, true)
                     .SetProperty(us => us.LastActivity, UtcDateTime.Now),
                     cancellationToken);
         }

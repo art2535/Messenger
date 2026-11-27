@@ -24,4 +24,8 @@ public interface IUserStatusService
     Task SetOfflineBatchAsync(
         IEnumerable<Guid> userIds,
         CancellationToken cancellationToken = default);
+
+    Task SetOnlineBatchAsync(
+        IEnumerable<Guid> userIds,
+        CancellationToken cancellationToken = default);
 }

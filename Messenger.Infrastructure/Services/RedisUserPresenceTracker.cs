@@ -33,6 +33,14 @@ public sealed class RedisUserPresenceTracker : IUserPresenceTracker
         return count
         """;
 
+    private const string HasConnectionsScript = """
+        local now = tonumber(ARGV[1])
+        redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', now)
+        local count = redis.call('ZCARD', KEYS[1])
+        if count == 0 then redis.call('DEL', KEYS[1]) end
+        return count
+        """;
+
     private const string HeartbeatScript = """
         local now = tonumber(ARGV[1])
         local expiry = tonumber(ARGV[2])
@@ -127,6 +135,22 @@ public sealed class RedisUserPresenceTracker : IUserPresenceTracker
             new RedisKey[] { GetKey(userId) },
             new RedisValue[] { now, connectionId });
         return count == 0;
+    }
+
+    /// <summary>Проверяет наличие хотя бы одного неистёкшего подключения пользователя.</summary>
+    public async Task<bool> HasActiveConnectionsAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (_database is null)
+            return _localUsers.TryGetValue(userId, out var connections) && !connections.IsEmpty;
+
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var count = (long)await _database.ScriptEvaluateAsync(
+            HasConnectionsScript,
+            new RedisKey[] { GetKey(userId) },
+            new RedisValue[] { now });
+        cancellationToken.ThrowIfCancellationRequested();
+        return count > 0;
     }
 
     public async Task HeartbeatAsync(CancellationToken cancellationToken = default)

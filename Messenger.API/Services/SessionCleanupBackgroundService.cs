@@ -15,18 +15,20 @@ namespace Messenger.API.Services
         private readonly ILogger<SessionCleanupBackgroundService> _logger;
         private readonly SessionCleanupOptions _options;
         private readonly RedisDistributedLock _lock;
+        private readonly IUserPresenceTracker _presenceTracker;
 
         private const string LockKey = "messenger:lock:session-cleanup";
 
         public SessionCleanupBackgroundService(IServiceScopeFactory scopeFactory, IHubContext<ChatHub> hubContext,
             IOptions<SessionCleanupOptions> options, ILogger<SessionCleanupBackgroundService> logger,
-            RedisDistributedLock distributedLock)
+            RedisDistributedLock distributedLock, IUserPresenceTracker presenceTracker)
         {
             _scopeFactory = scopeFactory;
             _hubContext = hubContext;
             _options = options.Value;
             _logger = logger;
             _lock = distributedLock;
+            _presenceTracker = presenceTracker;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -86,7 +88,6 @@ namespace Messenger.API.Services
             var chatService = scope.ServiceProvider.GetRequiredService<IChatService>();
 
             var olderThan = UtcDateTime.Now - idleThreshold;
-
             var inactive = await statusService.GetInactiveOnlineStatusesAsync(olderThan, ct);
             if (inactive.Count == 0)
             {
@@ -94,18 +95,54 @@ namespace Messenger.API.Services
                 return;
             }
 
-            var userIds = inactive.Select(s => s.UserId).Distinct().ToList();
+            // LastActivity и SignalR presence — разные сигналы. Не завершаем
+            // сессию и не переводим Offline пользователя с живым соединением.
+            // Если Redis недоступен, ошибка прерывает тик: безопаснее пропустить
+            // очистку, чем ошибочно отключить всех пользователей.
+            var candidateIds = inactive.Select(s => s.UserId).Distinct().ToList();
+            var initiallyConnected = new HashSet<Guid>();
+            foreach (var userId in candidateIds)
+            {
+                if (await _presenceTracker.HasActiveConnectionsAsync(userId, ct))
+                    initiallyConnected.Add(userId);
+            }
+
+            var toMarkOffline = candidateIds.Where(id => !initiallyConnected.Contains(id)).ToList();
+            if (toMarkOffline.Count == 0)
+            {
+                _logger.LogDebug("Все неактивные по LastActivity пользователи имеют активные SignalR-подключения");
+                return;
+            }
+
+            await statusService.SetOfflineBatchAsync(toMarkOffline, ct);
+
+            // Повторная проверка закрывает гонку, когда подключение появилось
+            // между первоначальной проверкой lease и пакетным обновлением БД.
+            var reconnected = new List<Guid>();
+            foreach (var userId in toMarkOffline)
+            {
+                if (await _presenceTracker.HasActiveConnectionsAsync(userId, ct))
+                    reconnected.Add(userId);
+            }
+
+            if (reconnected.Count > 0)
+                await statusService.SetOnlineBatchAsync(reconnected, ct);
+
+            var confirmedOffline = toMarkOffline.Except(reconnected).ToList();
+            if (confirmedOffline.Count == 0)
+            {
+                _logger.LogDebug("Пользователи переподключились во время очистки; состояние Online восстановлено");
+                return;
+            }
+
+            await loginService.CloseActiveLoginsForIdleUsersAsync(confirmedOffline, ct);
 
             _logger.LogInformation(
-                "Очистка: {Count} пользователей неактивны дольше {Idle}. UserIds: {Ids}",
-                userIds.Count, idleThreshold, string.Join(", ", userIds));
-
-            await statusService.SetOfflineBatchAsync(userIds, ct);
-
-            await loginService.CloseActiveLoginsForIdleUsersAsync(userIds, ct);
+                "Очистка: {Count} пользователей неактивны дольше {Idle}; активные Presence-подключения исключены. UserIds: {Ids}",
+                confirmedOffline.Count, idleThreshold, string.Join(", ", confirmedOffline));
 
             var now = UtcDateTime.Now;
-            foreach (var userId in userIds)
+            foreach (var userId in confirmedOffline)
             {
                 var payload = new
                 {
@@ -134,7 +171,8 @@ namespace Messenger.API.Services
                 }
             }
 
-            _logger.LogInformation("Очистка завершена: offline + закрыты сессии для {Count} пользователей", userIds.Count);
+            _logger.LogInformation("Очистка завершена: offline + обработаны idle-сессии для {Count} пользователей",
+                confirmedOffline.Count);
         }
     }
 }
