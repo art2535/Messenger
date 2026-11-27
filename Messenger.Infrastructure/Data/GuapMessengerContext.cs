@@ -66,35 +66,6 @@ public partial class GuapMessengerContext : DbContext
             entity.HasOne(d => d.Message).WithMany(p => p.Attachments).HasConstraintName("fk_attachment_message");
         });
 
-        modelBuilder.Entity<Chat>(entity =>
-        {
-            entity.HasKey(e => e.ChatId).HasName("Chats_pkey");
-
-            entity.Property(e => e.ChatId).ValueGeneratedNever();
-            entity.Property(e => e.CreationDate)
-                .HasColumnType("timestamp with time zone")
-                .HasDefaultValueSql("now() at time zone 'utc'");
-
-            entity.HasOne(d => d.User).WithMany(p => p.Chats).HasConstraintName("fk_chat_creator");
-        });
-
-        modelBuilder.Entity<ChatParticipant>(entity =>
-        {
-            entity.HasKey(e => new { e.ChatId, e.UserId }).HasName("Chat_Participants_pkey");
-
-            entity.Property(e => e.JoinDate)
-                .HasColumnType("timestamp with time zone")
-                .HasDefaultValueSql("now() at time zone 'utc'");
-            entity.Property(e => e.Role).HasDefaultValueSql("'participant'::character varying");
-
-            entity.HasIndex(e => e.UserId)
-                .HasDatabaseName("IX_ChatParticipants_UserId");
-
-            entity.HasOne(d => d.Chat).WithMany(p => p.ChatParticipants).HasConstraintName("fk_participant_chat");
-
-            entity.HasOne(d => d.User).WithMany(p => p.ChatParticipants).HasConstraintName("fk_participant_user");
-        });
-
         modelBuilder.Entity<Login>(entity =>
         {
             entity.HasKey(e => e.LoginId).HasName("Logins_pkey");
@@ -104,74 +75,6 @@ public partial class GuapMessengerContext : DbContext
             entity.Property(e => e.LogoutTime).HasColumnType("timestamp with time zone");
 
             entity.HasOne(d => d.User).WithMany(p => p.Logins).HasConstraintName("fk_login_user");
-        });
-
-        modelBuilder.Entity<Message>(entity =>
-        {
-            entity.HasKey(e => e.MessageId).HasName("Messages_pkey");
-
-            entity.Property(e => e.MessageId).ValueGeneratedNever();
-            entity.Property(e => e.SendTime).HasColumnType("timestamp with time zone");
-            entity.Property(e => e.ReadTime).HasColumnType("timestamp with time zone");
-
-            entity.HasIndex(e => new { e.ChatId, e.SequenceNumber })
-                .IsUnique()
-                .HasDatabaseName("IX_Messages_ChatId_SequenceNumber");
-
-            entity.HasIndex(e => new { e.ChatId, e.SendTime })
-                .HasDatabaseName("IX_Messages_ChatId_SendTime");
-
-            entity.HasIndex(e => new { e.ChatId, e.ReadTime })
-                .HasDatabaseName("IX_Messages_ChatId_ReadTime");
-
-            entity.Property(e => e.IsPinned)
-                .HasColumnName("Is_Pinned")
-                .HasDefaultValue(false);
-
-            entity.Property(e => e.PinnedAt)
-                .HasColumnName("Pinned_At")
-                .HasColumnType("timestamp with time zone");
-
-            entity.HasIndex(e => new { e.ChatId, e.IsPinned })
-                .HasDatabaseName("IX_Messages_ChatId_IsPinned")
-                .HasFilter("\"Is_Pinned\" = true");
-
-            entity.HasOne(d => d.Chat).WithMany(p => p.Messages).HasConstraintName("fk_chat_messages");
-
-            entity.HasOne(d => d.Sender).WithMany(p => p.MessageSenders).HasConstraintName("fk_sender");
-        });
-
-        modelBuilder.Entity<Notification>(entity =>
-        {
-            entity.Property(e => e.CreationDate).HasColumnType("timestamp with time zone");
-            entity.Property(e => e.ReadAt).HasColumnType("timestamp with time zone");
-            entity.HasKey(e => e.NotificationId).HasName("Notifications_pkey");
-
-            entity.Property(e => e.NotificationId).ValueGeneratedNever();
-            entity.Property(e => e.CreationDate)
-                .HasColumnType("timestamp with time zone")
-                .HasDefaultValueSql("now() at time zone 'utc'");
-            entity.Property(e => e.Read).HasDefaultValue(false);
-
-            entity.HasIndex(e => new { e.UserId, e.Read })
-                .HasDatabaseName("IX_Notifications_UserId_Read");
-
-            entity.HasOne(d => d.User).WithMany(p => p.Notifications).HasConstraintName("fk_notification_user");
-        });
-
-        modelBuilder.Entity<Reaction>(entity =>
-        {
-            entity.HasKey(e => e.ReactionId).HasName("Reactions_pkey");
-
-            entity.Property(e => e.ReactionId).ValueGeneratedNever();
-
-            entity.HasIndex(e => new { e.MessageId, e.UserId })
-                .IsUnique()
-                .HasDatabaseName("IX_Reactions_MessageId_UserId");
-
-            entity.HasOne(d => d.Message).WithMany(p => p.Reactions).HasConstraintName("fk_reaction_message");
-
-            entity.HasOne(d => d.User).WithMany(p => p.Reactions).HasConstraintName("fk_reaction_user");
         });
 
         modelBuilder.Entity<Role>(entity =>
@@ -219,38 +122,6 @@ public partial class GuapMessengerContext : DbContext
                 Description = "Стандартный доступ пользователя (ROLE_USER)"
             }
         );
-
-        modelBuilder.Entity<User>(entity =>
-        {
-            entity.HasKey(e => e.UserId).HasName("Users_pkey");
-
-            entity.Property(e => e.UserId).ValueGeneratedNever();
-
-            entity.HasOne(d => d.Account)
-                .WithOne(p => p.User)
-                .HasForeignKey<AccountSetting>(a => a.AccountId)
-                .HasConstraintName("fk_account")
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasMany(d => d.Roles).WithMany(p => p.Users)
-                .UsingEntity<Dictionary<string, object>>(
-                    "UserRole",
-                    r => r.HasOne<Role>().WithMany()
-                        .HasForeignKey("RoleId")
-                        .OnDelete(DeleteBehavior.ClientSetNull)
-                        .HasConstraintName("fk_userrole_role"),
-                    l => l.HasOne<User>().WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.ClientSetNull)
-                        .HasConstraintName("fk_userrole_user"),
-                    j =>
-                    {
-                        j.HasKey("UserId", "RoleId").HasName("UserRoles_pkey");
-                        j.ToTable("User_Roles");
-                        j.IndexerProperty<Guid>("UserId").HasColumnName("User_ID");
-                        j.IndexerProperty<Guid>("RoleId").HasColumnName("Role_ID");
-                    });
-        });
 
         modelBuilder.Entity<UserStatus>(entity =>
         {

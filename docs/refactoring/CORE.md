@@ -66,4 +66,10 @@
 
 ## Проверки
 
-Проверено чтением актуальных файлов из GitHub: конфигурации Log, ChatFolder, ChatFolderChat, MessageReport, UserMute и ModerationLog вынесены в Infrastructure; соответствующие inline-блоки удалены из контекста; `ApplyConfigurationsFromAssembly` присутствует. Проверка эквивалентности EF model snapshot, `dotnet build` и `dotnet test` не запускались.
+Проверено чтением актуальных файлов из GitHub: конфигурации Log, ChatFolder, ChatFolderChat, MessageReport, UserMute, ModerationLog, Chat, ChatParticipant, Message, Notification, Reaction и User вынесены в Infrastructure; соответствующие inline-блоки удалены из контекста; `ApplyConfigurationsFromAssembly` присутствует. Проверка эквивалентности EF model snapshot, `dotnet build` и `dotnet test` не запускались.
+
+### 2.5. Вынос конфигураций основных сущностей
+
+Вынесены Fluent-конфигурации `Chat`, `ChatParticipant`, `Message`, `Notification`, `Reaction` и `User` в отдельные классы Infrastructure. Сохранены исходные ключи, имена индексов, SQL defaults, типы дат, фильтр индекса закреплённых сообщений, имена FK constraints и поведение удаления. Для `User` отдельно сохранена конфигурация связи один-к-одному с `AccountSetting` и join table `User_Roles` с прежними именами ключей и колонок.
+
+Конфигурации переносят только существующий Fluent API. EF-аннотации в Core-моделях остаются, поэтому этот шаг не завершает отделение домена от EF.
