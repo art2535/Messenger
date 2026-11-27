@@ -102,7 +102,15 @@ namespace Messenger.API.Services
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            await Task.Delay(TimeSpan.FromSeconds(3), stoppingToken);
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(3), stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                _logger.LogInformation("RedisMetricsCollectorService остановлен до первого сбора");
+                return;
+            }
 
             while (!stoppingToken.IsCancellationRequested)
             {
