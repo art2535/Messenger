@@ -243,10 +243,9 @@ public class ScheduledMessageService : IScheduledMessageService
             ScheduledMessageId = entity.ScheduledMessageId,
             ChatId = entity.ChatId,
             SenderId = entity.SenderId,
-            SenderName = senderName
-                         ?? (entity.Sender != null
-                             ? $"{entity.Sender.FirstName} {entity.Sender.LastName}".Trim()
-                             : null),
+            SenderName = entity.Sender != null
+                ? $"{entity.Sender.FirstName} {entity.Sender.LastName}".Trim()
+                : null,
             MessageText = text,
             HasAttachments = entity.HasAttachments,
             Attachments = attachments,
@@ -259,7 +258,7 @@ public class ScheduledMessageService : IScheduledMessageService
             ResultMessageId = entity.ResultMessageId,
             ErrorMessage = entity.ErrorMessage,
             ReplyToMessageId = entity.ReplyToMessageId,
-            ChatName = chatName ?? entity.Chat?.Name
+            ChatName = entity.Chat?.Name
         };
     }
 }
