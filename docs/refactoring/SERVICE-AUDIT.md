@@ -207,3 +207,34 @@ Realtime rate limiter теперь принимает CancellationToken. HTTP о
 Проверены и обновлены контроллеры AccountSettings, Admin, Attachments, Authorization, Broadcasts, ChatFolders, Chats, Logins, Messages, Moderation, Notifications, OAuthProxy, Push, Reactions, ScheduledMessages, UserStatuses и Users. Вложенные best-effort SignalR-отправки в ScheduledMessagesController и MessagesController также не подавляют отмену самого HTTP-запроса. Отфильтрованные обработчики локальной очистки файлов, не относящиеся к HTTP-операциям, не менялись.
 
 Фильтр по `ct.IsCancellationRequested` намеренный: отмена внутренней операции по таймауту, не вызванная отменой входящего HTTP-запроса, остаётся обычной ошибкой и проходит в существующую обработку. Проверка не заменяет интеграционные тесты на disconnect/cancel во время DB, Redis, HTTP и файловых операций.
+
+### 14. Передача CancellationToken во внутренних компонентах
+
+Продолжена проверка не только наличия токена в Application-контрактах, но и фактической передачи из consumers, background services и SignalR.
+
+Подтверждено:
+- `ChatMessageSentConsumer` передаёт `ConsumeContext.CancellationToken` в операции сообщений, вложений, статусов доставки, push и SignalR; отмена consumer не подавляется.
+- `ScheduledMessageDispatcherService` передаёт stopping token в dispatch, загрузку отправителя, публикацию в MassTransit Outbox и SignalR.
+- `SessionCleanupBackgroundService` передаёт stopping token в distributed lock, статусы, Presence checks, закрытие login-сессий и SignalR.
+- `PresenceHeartbeatBackgroundService` передаёт stopping token в heartbeat.
+- `UploadOrphanCleanupService` передаёт токен в EF-запросы и ADO.NET open/read.
+- `LogRetentionService` передаёт токен в SQL delete и задержки; отмена не превращается в обычную ошибку cleanup.
+- `RedisMetricsCollectorService`: Redis `PingAsync` и `InfoAsync` не имеют CancellationToken overload, поэтому ожидание теперь ограничено через `WaitAsync(ct)`.
+
+В `ChatHub` исправлены пропуски передачи `Context.ConnectionAborted`: получение пользователя, настройки, статусы, Presence connect, rate limiter, SignalR group membership и отправки событий теперь учитывают жизненный цикл соединения. Best-effort чтение настроек отдельно пробрасывает отмену, а не скрывает её общим пустым catch.
+
+Важное исключение: `OnDisconnectedAsync` намеренно не использует `Context.ConnectionAborted` для Presence cleanup и перевода статуса Offline. При вызове callback токен соединения уже может быть отменён; его передача прервала бы обязательную очистку после disconnect. Для этих операций сохранено выполнение без connection token. Это сознательное разделение пользовательской работы и cleanup после разрыва соединения.
+
+Аудит охватил перечисленные основные consumers/background/realtime-компоненты. Это не является доказательством отсутствия пропусков во всех произвольных внутренних вызовах решения; необходимы сборка, анализаторы и тесты отмены.
+
+### 15. Рефакторинг точки композиции Messenger.API
+
+`Messenger.API/Program.cs` сокращён до последовательности запуска приложения. Конфигурация разделена на тематические extension-классы:
+- `ApiServiceCollectionExtensions`: логирование, JSON, DI, фоновые службы, безопасность, CORS и OpenTelemetry;
+- `ApiApplicationBuilderExtensions`: применение миграций, настройка middleware, обработка SignalR access token и публикация endpoint'ов.
+
+Порядок регистрации зависимостей сохранён: API logging и shared development encryption key выполняются до остальных регистраций; hosted services, authentication/rate limiting, session/log cleanup, health checks и Redis metrics регистрируются в прежней последовательности.
+
+Порядок запуска сохранён: миграции выполняются до обработки запросов; Scalar/health/metrics endpoint'ы отображаются до middleware; затем подключаются request logging, SignalR query-token middleware, static assets, CORS, HTTPS, authentication/authorization, development Serilog UI и rate limiter; после этого публикуются controllers и SignalR hubs. Маршруты, CORS policy, API version fallback и настройки сериализации перенесены без изменения значений.
+
+Это структурный рефакторинг точки композиции, а не перенос бизнес-логики или изменение поведения endpoints. Обязательная проверка сборкой и smoke/integration tests ещё не выполнена.
