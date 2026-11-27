@@ -31,6 +31,10 @@ namespace Messenger.Infrastructure.Services
                 else
                     _logger.LogWarning("Redis cache DISABLED — все запросы идут в PostgreSQL");
             }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Redis недоступен — кэш отключён, работаем только через PostgreSQL");
@@ -43,6 +47,7 @@ namespace Messenger.Infrastructure.Services
 
         public async Task<T?> GetAsync<T>(string key, CancellationToken ct = default)
         {
+            ct.ThrowIfCancellationRequested();
             if (!_enabled || _db is null)
             {
                 _logger.LogDebug("CACHE SKIP (Redis off) key={Key} → PostgreSQL", key);
@@ -64,6 +69,10 @@ namespace Messenger.Infrastructure.Services
                 _logger.LogDebug("CACHE HIT key={Key} (данные из Redis, PostgreSQL не трогаем)", key);
                 return result;
             }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 CacheMetrics.RecordErrorForKey(key);
@@ -74,6 +83,7 @@ namespace Messenger.Infrastructure.Services
 
         public async Task SetAsync<T>(string key, T value, TimeSpan ttl, CancellationToken ct = default)
         {
+            ct.ThrowIfCancellationRequested();
             if (!_enabled || _db is null)
             {
                 _logger.LogDebug("CACHE SET SKIP (Redis off) key={Key}", key);
@@ -86,6 +96,10 @@ namespace Messenger.Infrastructure.Services
                 await _db.StringSetAsync(key, json, ttl);
                 _logger.LogDebug("CACHE SET key={Key} ttl={TtlSeconds}s", key, (int)ttl.TotalSeconds);
             }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 CacheMetrics.RecordErrorForKey(key);
@@ -95,12 +109,17 @@ namespace Messenger.Infrastructure.Services
 
         public async Task RemoveAsync(string key, CancellationToken ct = default)
         {
+            ct.ThrowIfCancellationRequested();
             if (!_enabled || _db is null) return;
 
             try
             {
                 var deleted = await _db.KeyDeleteAsync(key);
                 _logger.LogDebug("CACHE INVALIDATE key={Key} deleted={Deleted}", key, deleted);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -110,6 +129,7 @@ namespace Messenger.Infrastructure.Services
 
         public async Task RemoveAsync(IEnumerable<string> keys, CancellationToken ct = default)
         {
+            ct.ThrowIfCancellationRequested();
             if (!_enabled || _db is null) return;
 
             var arr = keys.Where(k => !string.IsNullOrWhiteSpace(k)).Distinct().Select(k => (RedisKey)k).ToArray();
@@ -120,6 +140,10 @@ namespace Messenger.Infrastructure.Services
                 var deleted = await _db.KeyDeleteAsync(arr);
                 _logger.LogDebug("CACHE INVALIDATE keys={Count} deleted={Deleted} sample={Sample}",
                     arr.Length, deleted, arr.Length > 0 ? (string)arr[0]! : "");
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch (Exception ex)
             {

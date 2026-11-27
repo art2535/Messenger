@@ -227,6 +227,10 @@ namespace Messenger.Web.Services
                     (int)response.StatusCode, Truncate(body, 200));
                 return false;
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "[TokenRefresh] Не удалось отозвать refresh-токен в SSO");

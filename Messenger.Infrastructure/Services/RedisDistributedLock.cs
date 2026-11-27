@@ -17,6 +17,10 @@ namespace Messenger.Infrastructure.Services
                 _db = redis?.GetDatabase();
                 _enabled = _db is not null;
             }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "RedisDistributedLock: Redis недоступен — lock отключён (single-instance fallback)");
@@ -27,6 +31,8 @@ namespace Messenger.Infrastructure.Services
 
         public async Task<IAsyncDisposable?> TryAcquireAsync(string key, TimeSpan ttl, CancellationToken ct = default)
         {
+            ct.ThrowIfCancellationRequested();
+
             if (!_enabled || _db is null)
             {
                 return new NoOpLock();
