@@ -1,5 +1,4 @@
-﻿using Messenger.Core.DTOs.Push;
-using Messenger.Core.Interfaces;
+using Messenger.Application.DTOs.Push;
 using Messenger.Application.Interfaces;
 using Messenger.Core.Models;
 using Messenger.Infrastructure.Data;
@@ -40,16 +39,37 @@ namespace Messenger.Infrastructure.Services
             _notificationService = notificationService;
         }
 
-        public async Task<List<PushSubscription>> GetSubscriptionsByUserIdAsync(Guid userId, CancellationToken ct = default)
+        public async Task<List<PushSubscriptionDto>> GetSubscriptionsByUserIdAsync(Guid userId, CancellationToken ct = default)
         {
             return await _context.PushSubscriptions
+                .AsNoTracking()
                 .Where(s => s.UserId == userId)
+                .Select(s => new PushSubscriptionDto
+                {
+                    Id = s.Id,
+                    UserId = s.UserId,
+                    Endpoint = s.Endpoint,
+                    P256dh = s.P256dh,
+                    Auth = s.Auth,
+                    CreatedAt = s.CreatedAt,
+                    LastUsedAt = s.LastUsedAt
+                })
                 .ToListAsync(ct);
         }
 
-        public async Task AddSubscriptionAsync(PushSubscription subscription, CancellationToken ct = default)
+        public async Task AddSubscriptionAsync(Guid userId, CreatePushSubscriptionDto subscription, CancellationToken ct = default)
         {
-            _context.PushSubscriptions.Add(subscription);
+            var entity = new PushSubscription
+            {
+                UserId = userId,
+                Endpoint = subscription.Endpoint,
+                P256dh = subscription.P256dh,
+                Auth = subscription.Auth,
+                CreatedAt = UtcDateTime.Now,
+                LastUsedAt = UtcDateTime.Now
+            };
+
+            _context.PushSubscriptions.Add(entity);
             await _context.SaveChangesAsync(ct);
         }
 
@@ -89,9 +109,17 @@ namespace Messenger.Infrastructure.Services
             }
         }
 
-        public async Task UpdateSubscriptionAsync(PushSubscription subscription, CancellationToken ct = default)
+        public async Task UpdateSubscriptionAsync(UpdatePushSubscriptionDto subscription, CancellationToken ct = default)
         {
-            _context.PushSubscriptions.Update(subscription);
+            var entity = await _context.PushSubscriptions.FindAsync(new object[] { subscription.Id }, ct);
+            if (entity == null)
+                return;
+
+            entity.Endpoint = subscription.Endpoint;
+            entity.P256dh = subscription.P256dh;
+            entity.Auth = subscription.Auth;
+            entity.LastUsedAt = subscription.LastUsedAt;
+
             await _context.SaveChangesAsync(ct);
         }
 
@@ -107,13 +135,22 @@ namespace Messenger.Infrastructure.Services
             }
         }
 
-        public async Task<AccountSetting?> GetPushSettingsAsync(Guid userId, CancellationToken token = default)
+        public async Task<PushSettingsDto?> GetPushSettingsAsync(Guid userId, CancellationToken token = default)
         {
             return await _context.AccountSettings
-                .FirstOrDefaultAsync(s => s.AccountId == userId, token);
+                .AsNoTracking()
+                .Where(s => s.AccountId == userId)
+                .Select(s => new PushSettingsDto
+                {
+                    PushEnabled = s.PushEnabled,
+                    NotifyMessages = s.NotifyMessages,
+                    NotifyGroupChats = s.NotifyGroupChats,
+                    NotifyMentions = s.NotifyMentions
+                })
+                .FirstOrDefaultAsync(token);
         }
 
-        public async Task SavePushSettingsAsync(Guid userId, PushSubscriptionUpdateRequest request, CancellationToken token = default)
+        public async Task SavePushSettingsAsync(Guid userId, UpdatePushSettingsDto request, CancellationToken token = default)
         {
             var settings = await _context.AccountSettings
                 .FirstOrDefaultAsync(s => s.AccountId == userId, token);
@@ -197,7 +234,8 @@ namespace Messenger.Infrastructure.Services
                     bool notifyGroup = settings?.NotifyGroupChats ?? true;
                     bool notifyMessages = settings?.NotifyMessages ?? true;
                     bool notifyMentions = settings?.NotifyMentions ?? true;
-                    bool notifyPreview = settings?.NotifyPreview ?? true;
+                    bool notifyPreview = true;
+                    bool notifySound = true;
 
                     if (isGroupChat && !notifyGroup)
                     {
@@ -221,7 +259,7 @@ namespace Messenger.Infrastructure.Services
                     {
                         var groupName = !string.IsNullOrWhiteSpace(chat.Name) ? chat.Name : "Групповой чат";
                         var pushTitle = isGroupChat
-                            ? $"Новое сообщение в группе \"{groupName}\""
+                            ? $"Новое сообщение в группе "{groupName}""
                             : $"Новое сообщение от {senderName}";
 
                         string previewBody;
@@ -275,7 +313,7 @@ namespace Messenger.Infrastructure.Services
                                     chatType = isGroupChat ? "group" : "private",
                                     chatName = isGroupChat ? groupName : senderName,
                                     notificationId = notificationId.ToString(),
-                                    silent = !(settings?.NotifySound ?? true),
+                                    silent = !notifySound,
                                     preview = notifyPreview
                                 };
 

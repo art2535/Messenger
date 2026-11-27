@@ -1,7 +1,6 @@
 ﻿using Asp.Versioning;
 using Messenger.API.Extensions;
-using Messenger.Core.DTOs.Push;
-using Messenger.Core.Interfaces;
+using Messenger.Application.DTOs.Push;
 using Messenger.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -48,9 +47,6 @@ namespace Messenger.API.Controllers
                 vapidSection["PrivateKey"]!);
         }
 
-        /// <summary>
-        /// Подписать пользователя на push-уведомления.
-        /// </summary>
         [HttpPost("subscribe")]
         [EndpointName("SubscribeToPush")]
         [EndpointSummary("Подписать пользователя на push-уведомления")]
@@ -60,7 +56,7 @@ namespace Messenger.API.Controllers
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> PostSubscribeAsync(
-            [FromBody, Description("Данные для создания подписки")] PushSubscriptionRequest subscriptionDto,
+            [FromBody, Description("Данные для создания подписки")] CreatePushSubscriptionDto subscriptionDto,
             CancellationToken ct = default)
         {
             try
@@ -78,22 +74,12 @@ namespace Messenger.API.Controllers
                     return BadRequest(ApiResponse.Failure("Отсутствуют ключи шифрования p256dh или auth", "INVALID_REQUEST"));
                 }
 
-                var subscription = new Core.Models.PushSubscription
-                {
-                    UserId = userId,
-                    Endpoint = subscriptionDto.Endpoint,
-                    P256dh = subscriptionDto.P256dh,
-                    Auth = subscriptionDto.Auth,
-                    CreatedAt = DateTime.UtcNow,
-                    LastUsedAt = DateTime.UtcNow
-                };
-
                 await _subscriptionService.RemoveByEndpointAsync(subscriptionDto.Endpoint, ct);
-                await _subscriptionService.AddSubscriptionAsync(subscription, ct);
+                await _subscriptionService.AddSubscriptionAsync(userId, subscriptionDto, ct);
                 await _subscriptionService.EnsurePushEnabledAsync(userId, ct);
 
                 _logger.LogInformation("Push-подписка успешно сохранена для пользователя {UserId}. P256dh length: {Len}",
-                    userId, subscription.P256dh.Length);
+                    userId, subscriptionDto.P256dh.Length);
 
                 return Ok(ApiResponse.Success(message: "Подписка успешно сохранена"));
             }
@@ -109,9 +95,6 @@ namespace Messenger.API.Controllers
             }
         }
 
-        /// <summary>
-        /// Отписать пользователя от push-уведомлений.
-        /// </summary>
         [HttpDelete("unsubscribe")]
         [EndpointName("UnsubscribeFromPush")]
         [EndpointSummary("Отписать пользователя от push-уведомлений")]
@@ -142,9 +125,6 @@ namespace Messenger.API.Controllers
             }
         }
 
-        /// <summary>
-        /// Пометить уведомление как прочитанное.
-        /// </summary>
         [HttpPost("{notificationId}/read")]
         [EndpointName("MarkNotificationAsRead")]
         [EndpointSummary("Пометить уведомление как прочитанное")]
@@ -169,12 +149,9 @@ namespace Messenger.API.Controllers
             }
         }
 
-        /// <summary>
-        /// Получить настройки push-уведомлений текущего пользователя.
-        /// </summary>
         [HttpGet("settings")]
         [EndpointName("GetPushSettings")]
-        [EndpointSummary("Получить настройки push-уведомлений")]
+        [EndpointSummary("Получить настройки push-уведомлений текущего пользователя")]
         [EndpointDescription("Возвращает текущие настройки push-уведомлений (включены ли уведомления, о сообщениях, группах и упоминаниях).")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -186,13 +163,7 @@ namespace Messenger.API.Controllers
                 var userId = await User.GetCurrentUserIdAsync(_userService);
                 var settings = await _subscriptionService.GetPushSettingsAsync(userId, ct);
 
-                var result = new PushSubscriptionUpdateRequest
-                {
-                    PushEnabled = settings.PushEnabled,
-                    NotifyMessages = settings.NotifyMessages,
-                    NotifyGroupChats = settings.NotifyGroupChats,
-                    NotifyMentions = settings.NotifyMentions
-                };
+                var result = settings ?? new PushSettingsDto();
 
                 return Ok(ApiResponse.Success(result));
             }
@@ -208,9 +179,6 @@ namespace Messenger.API.Controllers
             }
         }
 
-        /// <summary>
-        /// Сохранить настройки push-уведомлений.
-        /// </summary>
         [HttpPost("settings")]
         [EndpointName("SavePushSettings")]
         [EndpointSummary("Сохранить настройки push-уведомлений")]
@@ -219,7 +187,7 @@ namespace Messenger.API.Controllers
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> PostSaveSettingsAsync(
-            [FromBody, Description("Настройки push-уведомлений")] PushSubscriptionUpdateRequest request,
+            [FromBody, Description("Настройки push-уведомлений")] UpdatePushSettingsDto request,
             CancellationToken ct = default)
         {
             try
@@ -243,9 +211,6 @@ namespace Messenger.API.Controllers
             }
         }
 
-        /// <summary>
-        /// Отправить push-уведомления участникам чата.
-        /// </summary>
         [HttpPost("send")]
         [EndpointName("SendPushNotification")]
         [EndpointSummary("Отправить push-уведомления участникам чата")]
@@ -294,9 +259,6 @@ namespace Messenger.API.Controllers
             }
         }
 
-        /// <summary>
-        /// Получить публичный VAPID-ключ.
-        /// </summary>
         [HttpGet("vapid-public-key")]
         [AllowAnonymous]
         [EndpointName("GetVapidPublicKey")]
