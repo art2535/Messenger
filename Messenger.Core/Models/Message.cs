@@ -1,4 +1,3 @@
-using System.Text.Json.Serialization;
 using Messenger.Core.Enums;
 
 namespace Messenger.Core.Models;
@@ -16,16 +15,8 @@ public partial class Message
     public DateTime? ReadTime { get; set; }
     public bool IsPinned { get; set; }
     public DateTime? PinnedAt { get; set; }
-
-    [JsonIgnore]
     public virtual ICollection<Attachment> Attachments { get; set; } = new List<Attachment>();
-
-    [JsonIgnore]
     public virtual Chat Chat { get; set; } = null!;
-
-    [JsonIgnore]
     public virtual ICollection<Reaction> Reactions { get; set; } = new List<Reaction>();
-
-    [JsonIgnore]
     public virtual User Sender { get; set; } = null!;
 }

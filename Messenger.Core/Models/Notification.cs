@@ -1,4 +1,3 @@
-using System.Text.Json.Serialization;
 
 namespace Messenger.Core.Models;
 
@@ -10,7 +9,5 @@ public partial class Notification
     public DateTime CreationDate { get; set; }
     public bool Read { get; set; }
     public DateTime? ReadAt { get; set; }
-
-    [JsonIgnore]
     public virtual User User { get; set; } = null!;
 }

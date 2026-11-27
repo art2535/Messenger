@@ -1,4 +1,3 @@
-using System.Text.Json.Serialization;
 
 namespace Messenger.Core.Models;
 
@@ -17,11 +16,7 @@ public class ScheduledMessage
     public Guid? ResultMessageId { get; set; }
     public string? ErrorMessage { get; set; }
     public string? ReplyToMessageId { get; set; }
-
-    [JsonIgnore]
     public virtual Chat? Chat { get; set; }
-
-    [JsonIgnore]
     public virtual User? Sender { get; set; }
 }
 

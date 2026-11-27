@@ -1,4 +1,3 @@
-using System.Text.Json.Serialization;
 
 namespace Messenger.Core.Models;
 
@@ -26,6 +25,5 @@ public partial class AccountSetting
     public bool ShowTyping { get; set; } = true;
     public bool ReadReceipts { get; set; } = true;
     public bool IdleLogout { get; set; } = true;
-    [JsonIgnore]
     public virtual User User { get; set; } = null!;
 }

@@ -1,4 +1,3 @@
-using System.Text.Json.Serialization;
 
 namespace Messenger.Core.Models;
 
@@ -21,7 +20,5 @@ public class MessageReport
     public DateTime? ReviewedAt { get; set; }
     public Guid? ReviewedBy { get; set; }
     public string? AdminNote { get; set; }
-
-    [JsonIgnore]
     public virtual Message? Message { get; set; }
 }
