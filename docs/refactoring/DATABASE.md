@@ -10,7 +10,7 @@
 
 ## EF model
 
-В `GuapMessengerContext` зафиксировано 20 явных `DbSet`:
+В `GuapMessengerContext` зафиксировано 21 явный `DbSet`:
 
 - AccountSetting
 - Attachment
@@ -34,7 +34,7 @@
 - ModerationLog
 - ScheduledMessage
 
-Фактически список содержит 21 сущность: `ScheduledMessage` также объявлен как `DbSet`. Baseline оставляет это количество как исходную точку для аудита.
+Фактически список содержит 21 сущность, включая `ScheduledMessage`. Baseline оставляет это количество как исходную точку для аудита.
 
 Кроме доменных сущностей присутствуют:
 
