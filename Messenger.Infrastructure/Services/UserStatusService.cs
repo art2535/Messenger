@@ -1,5 +1,6 @@
 using Messenger.Application.DTOs.UserStatuses;
 using Messenger.Application.Interfaces;
+using Messenger.Core.Models;
 using Messenger.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 

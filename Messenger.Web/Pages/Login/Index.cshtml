@@ -53,9 +53,12 @@
     @foreach (var key in ViewData.ModelState.Keys)
     {
         var state = ViewData.ModelState[key];
-        foreach (var error in state.Errors)
+        if (state is not null)
+        {
+            foreach (var error in state.Errors)
         {
             <text>window.AUTH_ERRORS.push(@Html.Raw(JsonSerializer.Serialize(error.ErrorMessage)));</text>
+            }
         }
     }
 </script>
