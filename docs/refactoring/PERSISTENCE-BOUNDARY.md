@@ -4,7 +4,7 @@
 
 ## 1. Текущее состояние
 
-- В `Messenger.Core/Models` — 19 файлов модели/вспомогательного типа; 18 оставшихся Core-сущностей участвуют в EF-модели. `UtcDateTime` — helper, а не EF-сущность. Технические модели `Log` и `Login` уже вынесены в `Messenger.Infrastructure/Persistence/Entities`.
+- В `Messenger.Core/Models` — 19 файлов модели/вспомогательного типа; 18 оставшихся Core-сущностей участвуют в EF-модели. `UtcDateTime` — helper, а не EF-сущность. Технические модели `Log`, `Login` и `PushSubscription` уже вынесены в `Messenger.Infrastructure/Persistence/Entities`.
 - `GuapMessengerContext` находится в Infrastructure; большая часть EF-сущностей использует CLR-типы `Messenger.Core.Models.*`, а вынесенные `Log`, `Login` и `PushSubscription` — типы `Messenger.Infrastructure.Persistence.Entities.*`.
 - Все Fluent-конфигурации вынесены в `Messenger.Infrastructure/Data/Configurations`; `OnModelCreating` оставлен для PostgreSQL extension, MassTransit Inbox/Outbox и сканирования конфигураций.
 - `GuapMessengerContextModelSnapshot.cs` содержит CLR-имена обоих пространств имён: `Messenger.Core.Models.*` для ещё не перенесённых сущностей и `Messenger.Infrastructure.Persistence.Entities.*` для вынесенных persistence-типов. При каждом следующем переносе требуется синхронно обновлять контекст, конфигурацию и актуальный snapshot; исторические миграции не переписывать.
@@ -150,7 +150,7 @@ Messenger.Web
 `Log` не является предметной сущностью: это техническая модель таблицы Serilog в схеме `logging`. Она не используется сервисными контрактами и не имеет связей с другими сущностями. Тип физически перенесён из `Messenger.Core.Models` в `Messenger.Infrastructure.Persistence.Entities`. Конфигурация `LogConfiguration` и `DbSet<Log>` теперь ссылаются на Infrastructure-тип. Сохранены имя таблицы/схемы, колонки, типы, ограничения длины, PK, default `gen_random_uuid()` и три индекса. Текущий Model Snapshot обновлён на новый CLR type; исторические миграции не переписывались. Serilog sink и пакетная очистка логов продолжают работать с теми же таблицей и колонками.
 
 
-## Актуализация после подэтапа 2.7.20
+## Актуализация после подэтапа 2.7.21
 
 Технические модели `Log`, `Login` и `PushSubscription` перенесены в Infrastructure. В Core осталось 19 файлов в `Models`, из которых 18 типов являются EF entities и один (`UtcDateTime`) — вспомогательный тип. Все проверенные прикладные интерфейсы находятся в Application и используют DTO/команды; следующий этап — аудит оставшихся Core-моделей и их EF-навигаций.
 
