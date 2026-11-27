@@ -40,7 +40,15 @@ namespace Messenger.API.Services
                 "SessionCleanupBackgroundService запущен. Интервал: {Interval}, порог простоя: {Idle}",
                 interval, idleThreshold);
 
-            await Task.Delay(TimeSpan.FromSeconds(15), stoppingToken);
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(15), stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                _logger.LogInformation("SessionCleanupBackgroundService остановлен до первого тика");
+                return;
+            }
 
             while (!stoppingToken.IsCancellationRequested)
             {
