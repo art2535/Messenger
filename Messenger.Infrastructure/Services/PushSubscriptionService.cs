@@ -155,8 +155,15 @@ namespace Messenger.Infrastructure.Services
                 return;
             }
 
-            await _context.PushSubscriptions
+            var conflictingOwner = await _context.PushSubscriptions
                 .Where(s => s.Endpoint == subscription.Endpoint && s.Id != subscription.Id)
+                .Select(s => (Guid?)s.UserId)
+                .FirstOrDefaultAsync(ct);
+            if (conflictingOwner.HasValue && conflictingOwner.Value != userId)
+                throw new InvalidOperationException("Endpoint уже принадлежит другой учётной записи");
+
+            await _context.PushSubscriptions
+                .Where(s => s.Endpoint == subscription.Endpoint && s.Id != subscription.Id && s.UserId == userId)
                 .ExecuteDeleteAsync(ct);
 
             await _context.PushSubscriptions
