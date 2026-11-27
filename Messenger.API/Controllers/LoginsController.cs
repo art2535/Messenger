@@ -53,7 +53,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var userId = await User.GetCurrentUserIdAsync(_userService, ct);
 
                 var logins = await _loginService.GetLoginsByUserIdAsync(userId, ct);
                 var data = logins
@@ -127,7 +127,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var userId = await User.GetCurrentUserIdAsync(_userService, ct);
 
                 var rawToken = string.IsNullOrWhiteSpace(request.Token)
                     ? Guid.NewGuid().ToString("N")
@@ -185,7 +185,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var userId = await User.GetCurrentUserIdAsync(_userService, ct);
 
                 var logins = await _loginService.GetLoginsByUserIdAsync(userId, ct);
 
@@ -226,7 +226,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var userId = await User.GetCurrentUserIdAsync(_userService, ct);
 
                 var ok = await _loginService.RevokeLoginAndUpdateStatusAsync(userId, loginId, ct);
                 if (!ok)
@@ -264,7 +264,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var userId = await User.GetCurrentUserIdAsync(_userService, ct);
 
                 var revokedCount = await _loginService.RevokeOtherLoginsAsync(userId, keepLoginId, ct);
 
