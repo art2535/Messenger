@@ -138,6 +138,19 @@ namespace Messenger.Infrastructure.Services
         public async Task UpdateSubscriptionAsync(Guid userId, UpdatePushSubscriptionDto subscription, CancellationToken ct = default)
         {
             ArgumentNullException.ThrowIfNull(subscription);
+            if (string.IsNullOrWhiteSpace(subscription.Endpoint)
+                || string.IsNullOrWhiteSpace(subscription.P256dh)
+                || string.IsNullOrWhiteSpace(subscription.Auth))
+                throw new ArgumentException("Push-подписка содержит пустые обязательные поля", nameof(subscription));
+
+            await using var transaction = await _context.Database.BeginTransactionAsync(ct);
+            await _context.Database.ExecuteSqlInterpolatedAsync(
+                $"SELECT pg_advisory_xact_lock(hashtextextended({subscription.Endpoint}, 0))", ct);
+
+            await _context.PushSubscriptions
+                .Where(s => s.Endpoint == subscription.Endpoint && s.Id != subscription.Id)
+                .ExecuteDeleteAsync(ct);
+
             await _context.PushSubscriptions
                 .Where(s => s.Id == subscription.Id && s.UserId == userId)
                 .ExecuteUpdateAsync(setters => setters
@@ -145,6 +158,8 @@ namespace Messenger.Infrastructure.Services
                     .SetProperty(s => s.P256dh, subscription.P256dh)
                     .SetProperty(s => s.Auth, subscription.Auth)
                     .SetProperty(s => s.LastUsedAt, UtcDateTime.Now), ct);
+
+            await transaction.CommitAsync(ct);
         }
 
         public async Task RemoveByEndpointAsync(Guid userId, string endpoint, CancellationToken ct = default)
@@ -203,10 +218,11 @@ namespace Messenger.Infrastructure.Services
                 { SqlState: PostgresErrorCodes.UniqueViolation })
             {
                 await transaction.RollbackAsync(token);
+                await transaction.DisposeAsync();
                 _context.Entry(settings).State = EntityState.Detached;
                 settings = await _context.AccountSettings
                     .FirstOrDefaultAsync(s => s.AccountId == userId, token)
-                    ?? throw;
+                    ?? throw new InvalidOperationException("Не удалось получить настройки push после конкурентного создания");
 
                 settings.PushEnabled = request.PushEnabled;
                 settings.NotifyMessages = request.NotifyMessages;
