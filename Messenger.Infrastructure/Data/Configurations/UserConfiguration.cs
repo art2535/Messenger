@@ -10,11 +10,6 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
     {
         builder.HasKey(e => e.UserId).HasName("Users_pkey");
         builder.Property(e => e.UserId).ValueGeneratedNever();
-        builder.HasOne(d => d.Account)
-            .WithOne(p => p.User)
-            .HasForeignKey<AccountSetting>(a => a.AccountId)
-            .HasConstraintName("fk_account")
-            .OnDelete(DeleteBehavior.Cascade);
         builder.HasMany(d => d.Roles).WithMany(p => p.Users)
             .UsingEntity<Dictionary<string, object>>(
                 "UserRole",

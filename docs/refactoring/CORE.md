@@ -4,13 +4,13 @@
 
 ## Состав Core и выявленные связи
 
-В `Messenger.Core/Models` сейчас находятся 19 файлов модели/вспомогательного типа; 18 типов участвуют в EF-модели, а `UtcDateTime` является helper. Модели `Log`, `Login` и `PushSubscription` уже вынесены в Infrastructure. В большинстве оставшихся EF-моделей одновременно присутствуют:
+В `Messenger.Core/Models` сейчас находятся 19 файлов модели/вспомогательного типа; 18 типов участвуют в EF-модели, а `UtcDateTime` является helper. Модели `Log`, `Login` и `PushSubscription` уже вынесены в Infrastructure. `AccountSetting` остаётся в Core как предметная модель настроек аккаунта; её EF mapping вынесен в Fluent-конфигурацию Infrastructure. В большинстве оставшихся EF-моделей одновременно присутствуют:
 - свойства предметной области;
 - EF-аннотации (`Key`, `Column`, `ForeignKey`, `InverseProperty`, `Table`);
 - навигационные свойства EF;
 - JSON-аннотации (`JsonIgnore`).
 
-Например, `User`, `Message`, `Chat`, `AccountSetting` и связанные типы содержат навигационные коллекции и EF mapping attributes. Поэтому простое удаление атрибутов или перемещение файлов без перевода потребителей изменило бы EF-модель либо поведение сериализации.
+Например, `User`, `Message`, `Chat` и связанные типы пока содержат EF mapping attributes и навигационные свойства. Для `AccountSetting` EF mapping attributes удалены и заменены Fluent-конфигурацией; её предметная связь с `User` сохранена, поскольку используется Infrastructure. Поэтому простое удаление атрибутов или перемещение файлов без перевода потребителей изменило бы EF-модель либо поведение сериализации.
 
 `GuapMessengerContext` содержит 21 DbSet и сейчас конфигурирует сущности через отдельные классы Infrastructure. В нём также есть MassTransit Inbox/Outbox entities.
 
@@ -47,7 +47,7 @@ Fluent-конфигурации всех сущностей вынесены в 
 ## Что осталось
 
 1. Перенос сервисных контрактов в Application на DTO завершён для всех текущих сервисных интерфейсов.
-2. Создавать persistence entities в Infrastructure и постепенно переводить DbContext/конфигурации; типы `Log`, `Login` и `PushSubscription` уже перенесены в Infrastructure.
+2. Продолжать аудит оставшихся моделей: технические persistence-only типы переносить в Infrastructure только после проверки потребителей; предметные модели оставлять в Core, вынося EF mapping в Infrastructure. `Log`, `Login` и `PushSubscription` уже перенесены.
 3. Продолжить перевод API/Web и SignalR с оставшихся Core/EF-моделей на DTO/Application contracts.
 4. После перевода всех потребителей удалить EF- и JSON-аннотации, а также EF-навигации из Core.
 5. Удалить временные EF Core и ASP.NET framework references из Core.
@@ -139,3 +139,10 @@ Fluent-конфигурации всех сущностей вынесены в 
 ### 2.7.21. Перенос PushSubscription в Infrastructure
 
 Persistence-модель push-подписки перенесена в `Messenger.Infrastructure.Persistence.Entities`. DbContext, Fluent-конфигурация, сервис Infrastructure и актуальный Model Snapshot используют новый CLR-тип. Обратная коллекция `User.PushSubscriptions` удалена как неиспользуемая; односторонняя навигация `PushSubscription.User` и обязательный FK сохранены. Прикладной контракт `IPushSubscriptionService` и DTO не менялись. Таблица, колонки, PK, индекс, FK, каскадное удаление и исторические миграции сохранены.
+
+
+### 2.7.22. Аудит AccountSetting и связи с User
+
+`AccountSetting` оставлена в Core: настройки уведомлений, приватности, внешнего вида и поведения аккаунта являются предметными данными, а не технической записью хранения. `User.Account` и `AccountSetting.User` сохранены, так как `UserService` использует эту связь для загрузки/сохранения аватара и формирования пользовательского DTO; сервисы настроек, push и сессий также читают и изменяют `AccountSetting`.
+
+Из `AccountSetting` удалены EF mapping attributes. Полная конфигурация таблицы, колонок, PK, уникального индекса и one-to-one FK перенесена в `AccountSettingConfiguration`. JSON `JsonIgnore` сохранён; навигации не удалялись. Связь конфигурируется в одном месте — в `AccountSettingConfiguration`, а не дублируется в `UserConfiguration`. Схема БД и исторические миграции не менялись; Model Snapshot остаётся с CLR-типом `Messenger.Core.Models.AccountSetting`.

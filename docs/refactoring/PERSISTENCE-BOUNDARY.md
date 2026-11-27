@@ -17,7 +17,7 @@
 | Группа | Типы | Решение |
 |---|---|---|
 | Основные предметные понятия | `User`, `Role`, `Chat`, `ChatParticipant`, `Message`, `Attachment`, `Reaction` | Оставить в Domain как независимые от EF модели. Связи выражать идентификаторами и методами/операциями предметной области; EF-навигации не переносить в Domain автоматически. |
-| Предметные функции вокруг аккаунта и общения | `AccountSetting`, `Notification`, `UserStatus`, `Broadcast`, `BroadcastRecipient`, `ChatFolder`, `ChatFolderChat`, `ScheduledMessage` | Оставить в Domain после уточнения инвариантов. Не копировать механически: определить, какие типы являются агрегатами, дочерними сущностями или настройками. |
+| Предметные функции вокруг аккаунта и общения | `AccountSetting`, `Notification`, `UserStatus`, `Broadcast`, `BroadcastRecipient`, `ChatFolder`, `ChatFolderChat`, `ScheduledMessage` | Оставить в Domain после уточнения инвариантов. `AccountSetting` подтверждён как предметная модель настроек аккаунта и остаётся в Core; его EF mapping находится в Infrastructure. Не копировать механически: определить, какие типы являются агрегатами, дочерними сущностями или настройками. |
 | Модерация | `MessageReport`, `UserMute`, `ModerationLog` | Разделить предметные данные и технические поля хранения; связи с User/Message в Domain — через ID, если они не нужны как агрегатные объекты. |
 | Инфраструктурные данные | `Log`, `Login`, `PushSubscription` | Все три технические модели перенесены в Infrastructure; прикладные контракты используют DTO. |
 | Вспомогательные типы | `MessageDeliveryStatus`, `UtcDateTime` | Enum оставить в Domain, если статус является частью языка сообщений. `UtcDateTime` оценить отдельно: это helper времени, а не persistence entity. |
@@ -28,7 +28,7 @@
 
 ### 3.1. Core содержит EF и ASP.NET детали
 
-В моделях присутствуют `Key`, `Column`, `ForeignKey`, `InverseProperty`, `Table`, `Index`, `PrimaryKey`, `StringLength`, `Required` и другие атрибуты. Есть EF-specific `using Microsoft.EntityFrameworkCore` в `AccountSetting` и `ChatParticipant`.
+В части моделей остаются `Key`, `Column`, `ForeignKey`, `InverseProperty`, `Table`, `Index`, `PrimaryKey`, `StringLength`, `Required` и другие EF-аннотации. EF mapping `AccountSetting` уже переведён в Fluent-конфигурацию Infrastructure; предметная связь с `User` сохранена, поскольку используется `UserService`.
 
 Интерфейсы Core также используют ASP.NET типы, например `IFormFile` в `IUserService` и `IMessageService`. Поэтому удаление EF PackageReference само по себе не сделало Core независимым от инфраструктуры. Все такие зависимости нужно перенести/заменить до окончательного удаления соответствующих ссылок.
 
@@ -133,8 +133,8 @@ Messenger.Web
 - подтвердить отсутствие изменений API/SignalR payload.
 
 Критерии готовности этапа 2.7:
-- все EF entities живут в Infrastructure;
-- Core не содержит EF/ASP.NET зависимостей и EF navigation properties;
+- EF mapping-конфигурации и технические persistence-only entities живут в Infrastructure; предметные сущности остаются в Core;
+- Core не содержит ссылок на EF Core/ASP.NET и EF mapping attributes; предметные связи и навигации очищаются по мере перевода их потребителей;
 - Application не зависит от Infrastructure;
 - API/Web не сериализуют EF entities;
 - snapshot и миграции проверены на отсутствие непредусмотренных изменений схемы;
@@ -167,3 +167,14 @@ Persistence-модель `Login` физически перенесена из `M
 Модель push-подписки физически перенесена из `Messenger.Core.Models` в `Messenger.Infrastructure.Persistence.Entities`. `GuapMessengerContext`, `PushSubscriptionConfiguration`, `PushSubscriptionService` и актуальный Model Snapshot переведены на новый тип. Контракт `IPushSubscriptionService` и DTO Application не менялись: API и прикладные потребители не работают с EF-сущностью.
 
 Связь с `User` сохранена как односторонняя навигация `PushSubscription.User`; неиспользуемая обратная коллекция `User.PushSubscriptions` удалена из Core. Сохранены обязательный FK `UserId`, индекс `IX_PushSubscriptions_UserId`, каскадное удаление и имя ограничения `fk_push_subscription_user`. Таблица `PushSubscriptions`, свойства и типы колонок, PK `PushSubscriptions_pkey` и исторические миграции не менялись. Обновлён только актуальный snapshot.
+
+
+## Подэтап 2.7.22 — аудит AccountSetting и связи с User
+
+Аудит подтвердил, что `AccountSetting` является частью предметной области: настройки управляют уведомлениями, приватностью, темой и поведением аккаунта. Модель остаётся в `Messenger.Core.Models`; перенос в Infrastructure не выполняется.
+
+`User.Account` и `AccountSetting.User` сохранены. Связь используется Infrastructure: `UserService` загружает настройки для аватара и формирования пользовательского DTO, а сервисы настроек и push-функциональности работают с тем же типом. Удалять навигацию сейчас означало бы менять поведение нескольких сценариев.
+
+EF mapping удалён из атрибутов `AccountSetting` и перенесён в `AccountSettingConfiguration`: таблица `Account_Settings`, имена колонок, PK `Account_Settings_pkey`, уникальный индекс `Account_Settings_Account_ID_key`, связь one-to-one по общему ключу, FK `fk_account` и каскадное удаление заданы явно во Fluent API. Связь перенесена из `UserConfiguration` в конфигурацию самой `AccountSetting`. JSON-аннотация `JsonIgnore` сохранена для прежнего поведения сериализации.
+
+Актуальный Model Snapshot не изменён: CLR-тип остаётся `Messenger.Core.Models.AccountSetting`, а реляционная модель намеренно сохраняется без изменений. Исторические миграции не редактировались.
