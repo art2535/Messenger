@@ -1,7 +1,6 @@
 ﻿using Asp.Versioning;
 using Messenger.API.Extensions;
-using Messenger.Core.DTOs.Notifications;
-using Messenger.Core.Interfaces;
+using Messenger.Application.DTOs.Notifications;
 using Messenger.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -50,7 +49,7 @@ namespace Messenger.API.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> PostCreateNotificationAsync(
-            [FromBody, Description("Данные для создания уведомления")] CreateNotificationRequest request,
+            [FromBody, Description("Данные для создания уведомления")] CreateNotificationDto request,
             CancellationToken ct = default)
         {
             try

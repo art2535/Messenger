@@ -1,5 +1,5 @@
-using Messenger.Core.Interfaces;
 using Messenger.Application.Interfaces;
+using Messenger.Application.DTOs.Notifications;
 using Messenger.Core.Models;
 using Messenger.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -39,19 +39,22 @@ namespace Messenger.Infrastructure.Services
             return notification.NotificationId;
         }
 
-        public async Task<IEnumerable<Notification>> GetNotificationsAsync(Guid userId, CancellationToken token = default)
+        public async Task<IEnumerable<NotificationDto>> GetNotificationsAsync(Guid userId, CancellationToken token = default)
         {
             var notifications = await _context.Notifications
                 .Where(notification => notification.UserId == userId)
                 .OrderByDescending(n => n.CreationDate)
                 .ToListAsync(token);
 
-            foreach (var notification in notifications)
+            return notifications.Select(notification => new NotificationDto
             {
-                notification.Text = _encryptionService.TryDecryptSafe(notification.Text);
-            }
-
-            return notifications;
+                NotificationId = notification.NotificationId,
+                UserId = notification.UserId,
+                Text = _encryptionService.TryDecryptSafe(notification.Text),
+                CreationDate = notification.CreationDate,
+                Read = notification.Read,
+                ReadAt = notification.ReadAt
+            }).ToList();
         }
 
         public async Task MarkAsReadAsync(Guid notificationId, CancellationToken token = default)
@@ -69,15 +72,22 @@ namespace Messenger.Infrastructure.Services
             }
         }
 
-        public async Task<Notification?> GetNotificationAsync(Guid notificationId, CancellationToken token = default)
+        public async Task<NotificationDto?> GetNotificationAsync(Guid notificationId, CancellationToken token = default)
         {
             var notification = await _context.Notifications
                 .FirstOrDefaultAsync(n => n.NotificationId == notificationId, token);
-            if (notification != null)
+            if (notification == null)
+                return null;
+
+            return new NotificationDto
             {
-                notification.Text = _encryptionService.TryDecryptSafe(notification.Text);
-            }
-            return notification;
+                NotificationId = notification.NotificationId,
+                UserId = notification.UserId,
+                Text = _encryptionService.TryDecryptSafe(notification.Text),
+                CreationDate = notification.CreationDate,
+                Read = notification.Read,
+                ReadAt = notification.ReadAt
+            };
         }
     }
 }
