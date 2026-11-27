@@ -72,6 +72,17 @@ namespace Messenger.Realtime.Hubs
                 var userId = await ResolveCurrentUserIdAsync(Context.ConnectionAborted);
                 await EnsureChatMembershipAsync(chatId, userId, Context.ConnectionAborted);
                 await Groups.AddToGroupAsync(Context.ConnectionId, chatId.ToString(), Context.ConnectionAborted);
+
+                // Закрывает гонку между первичной проверкой и добавлением в группу.
+                try
+                {
+                    await EnsureChatMembershipAsync(chatId, userId, Context.ConnectionAborted);
+                }
+                catch
+                {
+                    await Groups.RemoveFromGroupAsync(Context.ConnectionId, chatId.ToString(), CancellationToken.None);
+                    throw;
+                }
             }
             finally
             {

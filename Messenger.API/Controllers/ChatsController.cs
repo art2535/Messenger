@@ -26,17 +26,20 @@ namespace Messenger.API.Controllers
         private readonly IChatService _chatService;
         private readonly IHubContext<ChatHub> _hubContext;
         private readonly IUserService _userService;
+        private readonly IUserPresenceTracker _presenceTracker;
         private readonly ILogger<ChatsController> _logger;
 
         public ChatsController(
             IChatService chatService,
             IHubContext<ChatHub> hubContext,
             IUserService userService,
+            IUserPresenceTracker presenceTracker,
             ILogger<ChatsController> logger)
         {
             _chatService = chatService;
             _hubContext = hubContext;
             _userService = userService;
+            _presenceTracker = presenceTracker;
             _logger = logger;
         }
 
@@ -577,6 +580,13 @@ namespace Messenger.API.Controllers
                 }
 
                 await _chatService.DeleteParticipantFromChatAsync(chatId, currentUserId, userId, ct);
+
+                // Отзываем членство всех активных соединений пользователя, в том числе на других API-репликах.
+                var targetConnections = await _presenceTracker.GetActiveConnectionIdsAsync(userId, ct);
+                foreach (var connectionId in targetConnections)
+                {
+                    await _hubContext.Groups.RemoveFromGroupAsync(connectionId, chatId.ToString(), ct);
+                }
 
                 await _hubContext.Clients.Group(chatId.ToString().ToLowerInvariant())
                     .SendAsync("ParticipantRemoved", new

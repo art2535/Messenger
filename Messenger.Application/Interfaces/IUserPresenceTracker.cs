@@ -12,6 +12,9 @@ public interface IUserPresenceTracker
     /// <summary>Проверяет наличие хотя бы одного активного SignalR-подключения.</summary>
     Task<bool> HasActiveConnectionsAsync(Guid userId, CancellationToken cancellationToken = default);
 
+    /// <summary>Возвращает все активные connection ID пользователя из общего presence-хранилища.</summary>
+    Task<IReadOnlyList<string>> GetActiveConnectionIdsAsync(Guid userId, CancellationToken cancellationToken = default);
+
     /// <summary>Продлевает lease всех подключений текущего экземпляра приложения.</summary>
     Task HeartbeatAsync(CancellationToken cancellationToken = default);
 }
