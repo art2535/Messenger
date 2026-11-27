@@ -1,4 +1,4 @@
-﻿namespace Messenger.Core.Interfaces
+namespace Messenger.Core.Interfaces
 {
     public interface IEncryptionService
     {
