@@ -118,6 +118,10 @@ namespace Messenger.API.Consumers
                         "SignalR ReceiveMessage отправлен MessageId={MessageId} ChatId={ChatId}",
                         msg.MessageId, msg.ChatId);
                 }
+                catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
                 catch (Exception signalrEx)
                 {
                     _logger.LogWarning(signalrEx,
@@ -131,6 +135,10 @@ namespace Messenger.API.Consumers
                         msg.ChatId, msg.SenderId, msg.SenderName ?? "Пользователь",
                         msg.MessageText, msg.HasAttachments, false, context.CancellationToken);
                 }
+                catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
                 catch (Exception pushEx)
                 {
                     _logger.LogWarning(pushEx, "Не удалось отправить push для чата {ChatId}", msg.ChatId);
@@ -138,12 +146,20 @@ namespace Messenger.API.Consumers
 
                 _logger.LogInformation("Сообщение {MessageId} полностью обработано и доставлено", msg.MessageId);
             }
+            catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "ОШИБКА обработки сообщения {MessageId} в consumer", msg.MessageId);
                 try
                 {
                     await _messageService.UpdateDeliveryStatusAsync(msg.MessageId, MessageDeliveryStatus.Failed, context.CancellationToken);
+                }
+                catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested)
+                {
+                    throw;
                 }
                 catch (Exception innerEx)
                 {

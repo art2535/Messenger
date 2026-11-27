@@ -109,7 +109,14 @@ public class ScheduledMessageDispatcherService : BackgroundService
                     if (user != null)
                         senderName = $"{user.FirstName} {user.LastName}".Trim();
                 }
-                catch { /* ignore */ }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "Не удалось получить отправителя запланированного сообщения {Id}", item.ScheduledMessageId);
+                }
 
                 var messageId = Guid.NewGuid();
                 var sentAt = DateTime.UtcNow;
@@ -143,6 +150,10 @@ public class ScheduledMessageDispatcherService : BackgroundService
                         SentAt = sentAt
                     }, ct);
                 }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
                 catch (Exception sigEx)
                 {
                     _logger.LogWarning(sigEx, "SignalR ScheduledMessageSent failed for {Id}", item.ScheduledMessageId);
@@ -162,6 +173,10 @@ public class ScheduledMessageDispatcherService : BackgroundService
                 try
                 {
                     await scheduledService.MarkFailedAsync(item.ScheduledMessageId, ex.Message, ct);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
                 }
                 catch (Exception markEx)
                 {
