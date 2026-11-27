@@ -1,8 +1,9 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using System.Text.Json.Serialization;
 
-namespace Messenger.Core.Models
+using Messenger.Core.Models;
+
+namespace Messenger.Infrastructure.Persistence.Entities
 {
     public class PushSubscription
     {
@@ -24,8 +25,6 @@ namespace Messenger.Core.Models
         public DateTime? LastUsedAt { get; set; }
 
         [ForeignKey("UserId")]
-        [InverseProperty("PushSubscriptions")]
-        [JsonIgnore]
         public virtual User User { get; set; } = null!;
     }
 }

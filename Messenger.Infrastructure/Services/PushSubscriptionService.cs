@@ -1,13 +1,13 @@
 using Messenger.Application.DTOs.Push;
 using Messenger.Application.Interfaces;
 using Messenger.Core.Models;
+using Messenger.Infrastructure.Persistence.Entities;
 using Messenger.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using WebPush;
-using PushSubscription = Messenger.Core.Models.PushSubscription;
 
 namespace Messenger.Infrastructure.Services
 {

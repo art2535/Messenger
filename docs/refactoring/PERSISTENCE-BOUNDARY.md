@@ -4,10 +4,10 @@
 
 ## 1. Текущее состояние
 
-- В `Messenger.Core/Models` — 20 файлов модели/вспомогательного типа; 19 типов зарегистрированы в `GuapMessengerContext` через `DbSet`. `UtcDateTime` — helper, а не EF-сущность. Технические модели `Log` и `Login` уже вынесены в `Messenger.Infrastructure/Persistence/Entities`.
-- `GuapMessengerContext` находится в Infrastructure, но EF строит модель непосредственно на CLR-типах `Messenger.Core.Models.*`.
+- В `Messenger.Core/Models` — 19 файлов модели/вспомогательного типа; 18 оставшихся Core-сущностей участвуют в EF-модели. `UtcDateTime` — helper, а не EF-сущность. Технические модели `Log` и `Login` уже вынесены в `Messenger.Infrastructure/Persistence/Entities`.
+- `GuapMessengerContext` находится в Infrastructure; большая часть EF-сущностей использует CLR-типы `Messenger.Core.Models.*`, а вынесенные `Log`, `Login` и `PushSubscription` — типы `Messenger.Infrastructure.Persistence.Entities.*`.
 - Все Fluent-конфигурации вынесены в `Messenger.Infrastructure/Data/Configurations`; `OnModelCreating` оставлен для PostgreSQL extension, MassTransit Inbox/Outbox и сканирования конфигураций.
-- `GuapMessengerContextModelSnapshot.cs` также описывает сущности под именами `Messenger.Core.Models.*`. Следовательно, замена CLR-типов на Infrastructure-типы затронет не только контекст, но и snapshot/историю миграций.
+- `GuapMessengerContextModelSnapshot.cs` содержит CLR-имена обоих пространств имён: `Messenger.Core.Models.*` для ещё не перенесённых сущностей и `Messenger.Infrastructure.Persistence.Entities.*` для вынесенных persistence-типов. При каждом следующем переносе требуется синхронно обновлять контекст, конфигурацию и актуальный snapshot; исторические миграции не переписывать.
 - `Messenger.Application` уже содержит прикладные DTO и все текущие сервисные интерфейсы; use cases/handlers и специализированные repository ports ещё не выделены.
 - `Messenger.Web` ссылается непосредственно на Core. Удаление или переименование Core-моделей без предварительной замены Web-контрактов приведёт к каскадным изменениям в Razor PageModel и UI.
 - `Messenger.API` ссылается на Application и Infrastructure. Контроллеры сейчас используют Core DTO, интерфейсы и модели.
@@ -19,7 +19,7 @@
 | Основные предметные понятия | `User`, `Role`, `Chat`, `ChatParticipant`, `Message`, `Attachment`, `Reaction` | Оставить в Domain как независимые от EF модели. Связи выражать идентификаторами и методами/операциями предметной области; EF-навигации не переносить в Domain автоматически. |
 | Предметные функции вокруг аккаунта и общения | `AccountSetting`, `Notification`, `UserStatus`, `Broadcast`, `BroadcastRecipient`, `ChatFolder`, `ChatFolderChat`, `ScheduledMessage` | Оставить в Domain после уточнения инвариантов. Не копировать механически: определить, какие типы являются агрегатами, дочерними сущностями или настройками. |
 | Модерация | `MessageReport`, `UserMute`, `ModerationLog` | Разделить предметные данные и технические поля хранения; связи с User/Message в Domain — через ID, если они не нужны как агрегатные объекты. |
-| Инфраструктурные данные | `Log`, `Login`, `PushSubscription` | `Log` и `Login` перенесены в Infrastructure. `PushSubscription` остаётся Core persistence-моделью; её прикладной контракт уже использует DTO. |
+| Инфраструктурные данные | `Log`, `Login`, `PushSubscription` | Все три технические модели перенесены в Infrastructure; прикладные контракты используют DTO. |
 | Вспомогательные типы | `MessageDeliveryStatus`, `UtcDateTime` | Enum оставить в Domain, если статус является частью языка сообщений. `UtcDateTime` оценить отдельно: это helper времени, а не persistence entity. |
 
 Группировка предварительная. Перед переносом конкретного типа нужно проверить все его вызовы и JSON-контракты; таблица не является разрешением на массовое копирование классов.
@@ -96,7 +96,7 @@ Messenger.Web
 - Не менять схему БД и не создавать миграцию «на перенос типов».
 
 ### 2.7.2. Начать с изолированных сущностей
-Переносы `Log` и `Login` выполнены в подэтапах 2.7.19 и 2.7.20. Следующий кандидат — `PushSubscription`: его сервисный контракт уже отвязан от EF-модели, но сам класс ещё находится в Core и имеет связь с `User`. До переноса нужно проверить навигации, конфигурацию, snapshot и все места создания/чтения.
+Переносы `Log`, `Login` и `PushSubscription` выполнены в подэтапах 2.7.19–2.7.21. Для каждого типа проверены навигации, конфигурации, snapshot и места создания/чтения.
 
 ### 2.7.3. Перевести контракты на Application
 - Интерфейсы, которые возвращают/принимают Core EF entities, заменить на DTO, domain objects или специализированные command/result contracts.
@@ -152,7 +152,7 @@ Messenger.Web
 
 ## Актуализация после подэтапа 2.7.20
 
-Технические модели `Log` и `Login` перенесены в Infrastructure. В Core осталось 20 файлов в `Models`, из которых 19 типов являются EF entities и один (`UtcDateTime`) — вспомогательный тип. Все проверенные прикладные интерфейсы находятся в Application и используют DTO/команды; следующим кандидатом остаётся `PushSubscription`, для которого требуется отдельный аудит навигаций `User` и текущего snapshot.
+Технические модели `Log`, `Login` и `PushSubscription` перенесены в Infrastructure. В Core осталось 19 файлов в `Models`, из которых 18 типов являются EF entities и один (`UtcDateTime`) — вспомогательный тип. Все проверенные прикладные интерфейсы находятся в Application и используют DTO/команды; следующий этап — аудит оставшихся Core-моделей и их EF-навигаций.
 
 
 ## Подэтап 2.7.20 — перенос Login в Infrastructure
@@ -160,3 +160,10 @@ Messenger.Web
 Persistence-модель `Login` физически перенесена из `Messenger.Core.Models` в `Messenger.Infrastructure.Persistence.Entities`. `GuapMessengerContext`, `LoginConfiguration` и актуальный Model Snapshot используют новый CLR-тип. Прикладные контракты `ILoginService`, `CreateLoginDto` и `LoginDto` не менялись: токен/хеш остаётся внутренним полем persistence-модели.
 
 Связь с `User` сохранена как односторонняя навигация `Login.User`; неиспользуемая обратная коллекция `User.Logins` удалена из Core. Сохранены обязательный FK `User_ID`, индекс по `UserId`, каскадное удаление и имя ограничения `fk_login_user`. Таблица `Logins`, имена колонок, типы данных, PK `Logins_pkey` и исторические миграции не менялись. В актуальном snapshot изменены CLR-имя сущности и описание навигации без изменения реляционной схемы.
+
+
+## Подэтап 2.7.21 — перенос PushSubscription в Infrastructure
+
+Модель push-подписки физически перенесена из `Messenger.Core.Models` в `Messenger.Infrastructure.Persistence.Entities`. `GuapMessengerContext`, `PushSubscriptionConfiguration`, `PushSubscriptionService` и актуальный Model Snapshot переведены на новый тип. Контракт `IPushSubscriptionService` и DTO Application не менялись: API и прикладные потребители не работают с EF-сущностью.
+
+Связь с `User` сохранена как односторонняя навигация `PushSubscription.User`; неиспользуемая обратная коллекция `User.PushSubscriptions` удалена из Core. Сохранены обязательный FK `UserId`, индекс `IX_PushSubscriptions_UserId`, каскадное удаление и имя ограничения `fk_push_subscription_user`. Таблица `PushSubscriptions`, свойства и типы колонок, PK `PushSubscriptions_pkey` и исторические миграции не менялись. Обновлён только актуальный snapshot.

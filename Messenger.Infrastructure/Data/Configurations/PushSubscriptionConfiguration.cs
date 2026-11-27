@@ -1,4 +1,5 @@
 using Messenger.Core.Models;
+using Messenger.Infrastructure.Persistence.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -15,7 +16,7 @@ public sealed class PushSubscriptionConfiguration : IEntityTypeConfiguration<Pus
             .HasDatabaseName("IX_PushSubscriptions_UserId");
 
         builder.HasOne(d => d.User)
-            .WithMany(p => p.PushSubscriptions)
+            .WithMany()
             .HasForeignKey(d => d.UserId)
             .OnDelete(DeleteBehavior.Cascade)
             .HasConstraintName("fk_push_subscription_user");

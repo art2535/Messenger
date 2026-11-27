@@ -4,7 +4,7 @@
 
 ## Состав Core и выявленные связи
 
-В `Messenger.Core/Models` сейчас находятся 20 файлов модели/вспомогательного типа; 19 типов участвуют в EF-модели, а `UtcDateTime` является helper. Модели `Log` и `Login` уже вынесены в Infrastructure. В большинстве оставшихся EF-моделей одновременно присутствуют:
+В `Messenger.Core/Models` сейчас находятся 19 файлов модели/вспомогательного типа; 18 типов участвуют в EF-модели, а `UtcDateTime` является helper. Модели `Log`, `Login` и `PushSubscription` уже вынесены в Infrastructure. В большинстве оставшихся EF-моделей одновременно присутствуют:
 - свойства предметной области;
 - EF-аннотации (`Key`, `Column`, `ForeignKey`, `InverseProperty`, `Table`);
 - навигационные свойства EF;
@@ -47,7 +47,7 @@ Fluent-конфигурации всех сущностей вынесены в 
 ## Что осталось
 
 1. Перенос сервисных контрактов в Application на DTO завершён для всех текущих сервисных интерфейсов.
-2. Создавать persistence entities в Infrastructure и постепенно переводить DbContext/конфигурации; типы `Log` и `Login` уже перенесены; далее — `PushSubscription` после проверки связей с `User`.
+2. Создавать persistence entities в Infrastructure и постепенно переводить DbContext/конфигурации; типы `Log`, `Login` и `PushSubscription` уже перенесены в Infrastructure.
 3. Продолжить перевод API/Web и SignalR с оставшихся Core/EF-моделей на DTO/Application contracts.
 4. После перевода всех потребителей удалить EF- и JSON-аннотации, а также EF-навигации из Core.
 5. Удалить временные EF Core и ASP.NET framework references из Core.
@@ -134,3 +134,8 @@ Fluent-конфигурации всех сущностей вынесены в 
 ### 2.7.20. Перенос Login в Infrastructure
 
 Модель сессии `Login` перенесена в `Messenger.Infrastructure.Persistence.Entities`; Core больше не содержит эту EF-сущность и обратную коллекцию `User.Logins`. Infrastructure сохраняет навигацию `Login.User` к оставшейся в Core сущности `User`. Fluent-конфигурация и актуальный Model Snapshot обновлены с сохранением таблицы, колонок, PK, индекса, обязательного FK, каскадного удаления и имени ограничения. Прикладной контракт авторизации продолжает использовать DTO Application; исторические миграции не редактировались.
+
+
+### 2.7.21. Перенос PushSubscription в Infrastructure
+
+Persistence-модель push-подписки перенесена в `Messenger.Infrastructure.Persistence.Entities`. DbContext, Fluent-конфигурация, сервис Infrastructure и актуальный Model Snapshot используют новый CLR-тип. Обратная коллекция `User.PushSubscriptions` удалена как неиспользуемая; односторонняя навигация `PushSubscription.User` и обязательный FK сохранены. Прикладной контракт `IPushSubscriptionService` и DTO не менялись. Таблица, колонки, PK, индекс, FK, каскадное удаление и исторические миграции сохранены.

@@ -828,7 +828,7 @@ namespace Messenger.Infrastructure.Migrations
                     b.ToTable("Notifications");
                 });
 
-            modelBuilder.Entity("Messenger.Core.Models.PushSubscription", b =>
+            modelBuilder.Entity("Messenger.Infrastructure.Persistence.Entities.PushSubscription", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
@@ -1328,10 +1328,10 @@ namespace Messenger.Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("Messenger.Core.Models.PushSubscription", b =>
+            modelBuilder.Entity("Messenger.Infrastructure.Persistence.Entities.PushSubscription", b =>
                 {
                     b.HasOne("Messenger.Core.Models.User", "User")
-                        .WithMany("PushSubscriptions")
+                        .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()

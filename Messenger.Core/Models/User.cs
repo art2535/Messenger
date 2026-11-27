@@ -69,7 +69,4 @@ public partial class User
     [JsonIgnore]
     public virtual ICollection<BroadcastRecipient> BroadcastRecipients { get; set; } = new List<BroadcastRecipient>();
 
-    [InverseProperty("User")]
-    [JsonIgnore]
-    public virtual ICollection<PushSubscription> PushSubscriptions { get; set; } = new List<PushSubscription>();
 }
