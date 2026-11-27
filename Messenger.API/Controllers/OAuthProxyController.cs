@@ -78,6 +78,10 @@ namespace Messenger.API.Controllers
                 _logger.LogError(ex, "Ошибка сети при проксировании запроса к Keycloak SSO ГУАП");
                 return StatusCode(StatusCodes.Status502BadGateway, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при выполнении POST /oauth/token");
