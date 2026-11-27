@@ -78,9 +78,9 @@
 - согласовать фильтр уникального индекса, если null допустим;
 - добавить миграцию и обработать UniqueViolation при конкурентной регистрации, повторно загрузив победившую запись.
 
-### 4. Broadcast: отмена в Application-контрактах
+### 4. Broadcast: отмена в Application-контрактах — исправлено
 
-`IBroadcastService` и `IBroadcastRepository` не принимают CancellationToken. Необходимо последовательно добавить token в интерфейсы, реализации, EF-запросы и все вызывающие стороны, не оставляя скрытых операций без отмены.
+`IBroadcastService` и `IBroadcastRepository` принимают `CancellationToken` во всех операциях. `BroadcastService` передаёт token в репозиторий; `EfBroadcastRepository` передаёт его во все EF Core-запросы и `SaveChangesAsync`. `BroadcastsController` передаёт request token во все операции и пробрасывает отмену клиентского запроса вместо преобразования её в HTTP 500. Компиляция и поиск дополнительных потребителей контрактов ещё не выполнены.
 
 ### 5. Планировщик сообщений: повторная публикация
 
