@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Validate Messenger project-reference direction for the refactoring baseline."""
+"""Validate project references and framework boundaries for the refactoring baseline."""
 
 from pathlib import Path
+import re
 import sys
 import xml.etree.ElementTree as ET
 
@@ -26,6 +27,18 @@ EXPECTED = {
     "AppHost": set(),
 }
 
+# Core and Application must not compile against persistence or web frameworks.
+FORBIDDEN_SOURCE_REFERENCES = re.compile(
+    r"^\s*using\s+(?:Microsoft\.EntityFrameworkCore|Microsoft\.AspNetCore|"
+    r"Messenger\.Infrastructure)(?:\.|\s*;)|"
+    r"\b(?:Microsoft\.EntityFrameworkCore|Microsoft\.AspNetCore|"
+    r"Messenger\.Infrastructure)\.",
+)
+FORBIDDEN_PACKAGES = (
+    "Microsoft.EntityFrameworkCore",
+    "Microsoft.AspNetCore",
+)
+
 
 def project_references(project_file: Path) -> set[str]:
     root = ET.parse(project_file).getroot()
@@ -44,12 +57,43 @@ def project_references(project_file: Path) -> set[str]:
     return references
 
 
+def framework_boundary_violations(project_name: str, project_file: Path) -> list[str]:
+    if project_name not in {"Core", "Application"}:
+        return []
+
+    errors = []
+    project_root = ET.parse(project_file).getroot()
+    for node in project_root.findall(".//PackageReference"):
+        package = node.attrib.get("Include", "")
+        if any(package == prefix or package.startswith(prefix + ".") for prefix in FORBIDDEN_PACKAGES):
+            errors.append(
+                f"{project_file.relative_to(ROOT)}: forbidden package reference {package}"
+            )
+
+    source_root = project_file.parent
+    for source_file in sorted(source_root.rglob("*.cs")):
+        try:
+            lines = source_file.read_text(encoding="utf-8-sig").splitlines()
+        except UnicodeDecodeError as error:
+            errors.append(f"{source_file.relative_to(ROOT)}: cannot read source as UTF-8: {error}")
+            continue
+
+        for line_number, line in enumerate(lines, start=1):
+            if FORBIDDEN_SOURCE_REFERENCES.search(line):
+                errors.append(
+                    f"{source_file.relative_to(ROOT)}:{line_number}: "
+                    f"forbidden framework/infrastructure reference: {line.strip()}"
+                )
+    return errors
+
+
 def main() -> int:
     errors = []
     for name, path in PROJECTS.items():
         if not path.is_file():
             errors.append(f"{name}: project file not found: {path.relative_to(ROOT)}")
             continue
+
         actual = project_references(path)
         expected = EXPECTED[name]
         if actual != expected:
@@ -58,6 +102,11 @@ def main() -> int:
             )
         else:
             print(f"OK {name}: {', '.join(sorted(actual)) or 'no project references'}")
+
+        boundary_errors = framework_boundary_violations(name, path)
+        errors.extend(boundary_errors)
+        if name in {"Core", "Application"} and not boundary_errors:
+            print(f"OK {name}: no EF Core, ASP.NET Core or Infrastructure source/package references")
 
     if errors:
         print("\nArchitecture validation failed:", file=sys.stderr)
