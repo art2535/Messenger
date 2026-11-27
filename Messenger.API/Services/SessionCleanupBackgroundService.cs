@@ -123,6 +123,10 @@ namespace Messenger.API.Services
                     else
                         await _hubContext.Clients.Group($"User_{userId}").SendAsync("UserOnlineStatusChanged", payload, ct);
                 }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
                 catch (Exception ex)
                 {
                     _logger.LogWarning(ex,

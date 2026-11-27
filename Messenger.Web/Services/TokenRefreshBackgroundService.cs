@@ -43,7 +43,7 @@ namespace Messenger.Web.Services
                     }
                 }
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
             }
         }
@@ -121,6 +121,10 @@ namespace Messenger.Web.Services
                         res.StatusCode, sessionKey);
                 }
             }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogDebug(ex, "[TokenRefresh] Не удалось уведомить API об истечении сессии {Key}", sessionKey);
@@ -147,6 +151,10 @@ namespace Messenger.Web.Services
                 if (root.TryGetProperty("Active", out var a2))
                     return a2.GetBoolean();
                 return null;
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
