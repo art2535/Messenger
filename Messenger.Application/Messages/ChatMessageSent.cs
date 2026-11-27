@@ -1,6 +1,7 @@
-﻿using Messenger.Core.Messages;
+﻿using MassTransit;
 
-namespace Messenger.Core.Messages
+[MessageUrn("urn:message:Messenger.Core.Messages:ChatMessageSent", useDefaultPrefix: false)]
+namespace Messenger.Application.Messages
 {
     public record ChatMessageSent
     {

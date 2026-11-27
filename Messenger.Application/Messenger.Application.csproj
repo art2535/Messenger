@@ -7,6 +7,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="MassTransit.Abstractions" Version="8.5.8" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Messenger.Core\Messenger.Core.csproj" />
   </ItemGroup>
 
