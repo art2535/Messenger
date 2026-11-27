@@ -10,7 +10,7 @@
 
 ## Проверенная ревизия
 
-- Последнее обновление аудита: остановка фоновых служб при shutdown и финальная проверка cancellation/retry-поведения фоновых циклов.
+- Последнее обновление аудита: CancellationToken доведён через получение текущего пользователя в HTTP-контроллерах до IUserService; проверены Application-контракты и вызовы контроллеров.
 - Основная область: `Messenger.Infrastructure/Services`, `Messenger.Application/Services`, `Messenger.Application/Interfaces`, `Messenger.API/Services`, `Messenger.Web/Services`, `Messenger.Realtime/Services`.
 - Проверка локальной сборкой в этой среде недоступна: .NET SDK/runtime отсутствует.
 
@@ -190,3 +190,12 @@ Realtime rate limiter теперь принимает CancellationToken. HTTP о
 Обычные ошибки фоновых операций остаются recoverable: текущий тик логирует ошибку и цикл продолжает работу. Для файловой уборки уже предусмотрена более длинная задержка после ошибки (`10 минут` вместо штатных `6 часов`). Остальные службы используют штатный фиксированный интервал; отдельный глобальный exponential backoff не вводился, поскольку для cleanup/metrics/heartbeat фиксированные интервалы предсказуемее и уже ограничивают частоту повторов.
 
 Отдельно подтверждено, что consumer `ChatMessageSentConsumer` не подавляет `OperationCanceledException`: отмена передаётся MassTransit, а transient-ошибки push пробрасываются для broker retry.
+
+
+### 12. Application-контракты и получение текущего пользователя
+
+Проверены интерфейсы `IAccountSettingsService`, `IAdminService`, `IAttachmentService`, `IBroadcastRepository`, `IBroadcastService`, `ICacheService`, `IChatFolderService`, `IChatService`, `IEncryptionService`, `ILoginService`, `IMessageService`, `IModerationService`, `INotificationService`, `IPushSubscriptionService`, `IReactionService`, `IScheduledMessageService`, `IUserPresenceTracker`, `IUserService` и `IUserStatusService`. Асинхронные операции Application-сервисов в этих контрактах принимают `CancellationToken` (с optional default); синхронные/чистые операции и функции шифрования не требуют искусственного токена.
+
+Найден пропуск в API boundary: `ClaimsPrincipalExtension.GetCurrentUserAsync` и `GetCurrentUserIdAsync` не принимали токен, из-за чего загрузка пользователя по externalId выполнялась без отмены даже в HTTP-запросе. Методы расширения теперь принимают `CancellationToken` и передают его в `IUserService.GetUserByExternalIdAsync`. Все вызовы этих helpers в API-контроллерах передают request `ct`. Дополнительно исправлен прямой вызов `UsersController.GetUserByExternalIdAsync`, который ранее игнорировал свой параметр `ct`.
+
+Это устраняет потерю отмены на общем пути разрешения текущего пользователя. Полный аудит всех вызовов Application-методов из каждого background/internal компонента и автоматизированная проверка отсутствующих аргументов токена остаются частью проверки сборкой/тестами; наличие параметра в интерфейсе само по себе не доказывает, что каждый caller его передаёт.
