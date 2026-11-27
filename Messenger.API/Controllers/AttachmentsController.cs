@@ -61,7 +61,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var userId = await User.GetCurrentUserIdAsync(_userService, ct);
                 var message = await _messageService.GetMessageByIdGlobalAsync(messageId, ct);
                 if (message == null)
                     return NotFound(ApiResponse.Failure("Сообщение не найдено", "NOT_FOUND"));
@@ -104,7 +104,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var userId = await User.GetCurrentUserIdAsync(_userService, ct);
                 var (attachment, messageId) = await _attachmentService.GetAttachmentWithMessageIdAsync(attachmentId, ct);
                 if (attachment == null || !messageId.HasValue)
                     return NotFound(ApiResponse.Failure("Вложение не найдено", "NOT_FOUND"));
@@ -233,7 +233,7 @@ namespace Messenger.API.Controllers
                     return BadRequest(ApiResponse.Failure("Некорректные метаданные вложения", "INVALID_REQUEST"));
                 }
 
-                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var userId = await User.GetCurrentUserIdAsync(_userService, ct);
                 var message = await _messageService.GetMessageByIdGlobalAsync(messageId, ct);
                 if (message == null)
                     return NotFound(ApiResponse.Failure("Сообщение не найдено", "NOT_FOUND"));
