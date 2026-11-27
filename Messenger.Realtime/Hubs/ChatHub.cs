@@ -170,7 +170,7 @@ namespace Messenger.Realtime.Hubs
                                   ?? Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
                     if (!string.IsNullOrEmpty(externalId))
                     {
-                        var user = await _userService.GetUserByExternalIdAsync(externalId, Context.ConnectionAborted);
+                        var user = await _userService.GetUserByExternalIdAsync(externalId);
                         userId = user?.UserId;
                     }
                 }
@@ -179,10 +179,10 @@ namespace Messenger.Realtime.Hubs
                 {
                     MessengerMetrics.SignalRActiveConnections.Add(-1,
                         new KeyValuePair<string, object?>("hub", "chat"));
-                    var becameOffline = await _presenceTracker.DisconnectAsync(userId.Value, Context.ConnectionId, Context.ConnectionAborted);
+                    var becameOffline = await _presenceTracker.DisconnectAsync(userId.Value, Context.ConnectionId);
                     if (becameOffline)
                     {
-                        await _userStatusService.UpdateUserStatusAsync(userId.Value, false, Context.ConnectionAborted);
+                        await _userStatusService.UpdateUserStatusAsync(userId.Value, false);
 
                         var statusData = new
                         {
@@ -190,7 +190,7 @@ namespace Messenger.Realtime.Hubs
                             isOnline = false,
                             lastActivity = DateTime.UtcNow
                         };
-                        await SendToPeersAsync(userId.Value, "UserOnlineStatusChanged", statusData, Context.ConnectionAborted);
+                        await SendToPeersAsync(userId.Value, "UserOnlineStatusChanged", statusData);
                     }
                 }
 
