@@ -1,5 +1,5 @@
 ﻿using Messenger.Core.Interfaces;
-using Messenger.Core.Models;
+using Messenger.Core.DTOs.Users;
 using System.Security.Claims;
 
 namespace Messenger.API.Extensions
@@ -22,7 +22,7 @@ namespace Messenger.API.Extensions
             /// <summary>
             /// Возвращает объект текущего авторизованного пользователя из базы данных.
             /// </summary>
-            public async Task<User> GetCurrentUserAsync(IUserService userService)
+            public async Task<UserDto> GetCurrentUserAsync(IUserService userService)
             {
                 var externalId = user.GetExternalId();
 

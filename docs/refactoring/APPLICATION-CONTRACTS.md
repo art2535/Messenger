@@ -19,3 +19,10 @@
 `AttachmentDto` выделен в отдельный файл и оставлен в Core: он используется `ScheduledMessageDto`, который пока является частью Core-контракта `IScheduledMessageService`. DTO `MessageDto` из Application использует `AttachmentDto` через существующую ссылку Application -> Core.
 
 `Messenger.Web` получил прямую ссылку на Application, так как веб-проект использует перенесённый `UpdateUserProfileRequest`. API и Infrastructure уже ссылались на Application.
+
+
+## Подэтап 2.7.8 — DTO-контракт пользователя
+
+`IUserService` и `UserService` больше не возвращают EF-сущности `User` и `Role`. Для чтения, поиска по external ID, регистрации и списка ролей используются `UserDto` и `RoleDto`, физически расположенные в Application и временно сохраняющие namespace `Messenger.Core.DTOs.Users`. `UserDto.Account` доступен прикладному коду, но помечен `JsonIgnore`, чтобы endpoint, возвращающий пользователя напрямую, не начал раскрывать вложенный объект аккаунта — прежняя EF-модель также исключала его из JSON. API extension для получения текущего пользователя теперь возвращает `UserDto`.
+
+EF-запросы и преобразование сущностей остаются внутри Infrastructure. DTO не содержат EF-навигаций и не раскрывают коллекции чатов, сообщений или сессий.

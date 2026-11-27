@@ -52,23 +52,32 @@ namespace Messenger.Infrastructure.Services
             }
         }
 
-        public async Task<IEnumerable<User>> GetAllUsersAsync(CancellationToken token = default)
+        public async Task<IEnumerable<UserDto>> GetAllUsersAsync(CancellationToken token = default)
         {
-            return await _context.Users.ToListAsync(token);
+            var users = await _context.Users.AsNoTracking().ToListAsync(token);
+            return users.Select(MapToDto).ToList();
         }
 
-        public async Task<IEnumerable<Role>> GetRolesAsync(CancellationToken token = default)
+        public async Task<IEnumerable<RoleDto>> GetRolesAsync(CancellationToken token = default)
         {
-            return await _context.Roles.ToListAsync(token);
+            var roles = await _context.Roles.AsNoTracking().ToListAsync(token);
+            return roles.Select(role => new RoleDto
+            {
+                RoleId = role.RoleId,
+                Name = role.Name,
+                Description = role.Description
+            }).ToList();
         }
 
-        public async Task<User?> GetUserByIdAsync(Guid id, CancellationToken token = default)
+        public async Task<UserDto?> GetUserByIdAsync(Guid id, CancellationToken token = default)
         {
-            return await _context.Users
+            var user = await _context.Users
+                .AsNoTracking()
                 .Include(u => u.Account)
-                .Include(u => u.UserStatus)
                 .Include(u => u.Roles)
                 .FirstOrDefaultAsync(u => u.UserId == id, token);
+
+            return user == null ? null : MapToDto(user);
         }
 
         public async Task<string> UploadAvatarAsync(Guid userId, IUploadedFile file, CancellationToken token = default)
@@ -200,13 +209,17 @@ namespace Messenger.Infrastructure.Services
             await _context.SaveChangesAsync(token);
         }
 
-        public async Task<User?> GetUserByExternalIdAsync(string externalId)
+        public async Task<UserDto?> GetUserByExternalIdAsync(string externalId)
         {
-            return await _context.Users
+            var user = await _context.Users
+                .AsNoTracking()
+                .Include(u => u.Account)
                 .FirstOrDefaultAsync(u => u.ExternalId == externalId);
+
+            return user == null ? null : MapToDto(user);
         }
 
-        public async Task<User> RegisterExternalUserAsync(string externalId, string email, string firstName,
+        public async Task<UserDto> RegisterExternalUserAsync(string externalId, string email, string firstName,
             string lastName, IEnumerable<string>? tokenRoles = null)
         {
             var existing = await GetUserByExternalIdAsync(externalId);
@@ -239,8 +252,29 @@ namespace Messenger.Infrastructure.Services
 
             await AssignRolesFromTokenAsync(userId, tokenRoles);
 
-            return user;
+            return MapToDto(user);
         }
+
+        private static UserDto MapToDto(User user) => new()
+        {
+            UserId = user.UserId,
+            LastName = user.LastName,
+            FirstName = user.FirstName,
+            RegistrationDate = user.RegistrationDate,
+            Login = user.Login,
+            ExternalId = user.ExternalId,
+            Account = user.Account == null ? null : new AccountDto
+            {
+                Avatar = user.Account.Avatar,
+                Theme = user.Account.Theme
+            },
+            Roles = user.Roles?.Select(role => new RoleDto
+            {
+                RoleId = role.RoleId,
+                Name = role.Name,
+                Description = role.Description
+            }).ToList() ?? new List<RoleDto>()
+        };
 
         private async Task AssignRolesFromTokenAsync(Guid userId, IEnumerable<string>? tokenRoles)
         {
