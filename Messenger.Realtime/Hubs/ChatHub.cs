@@ -99,6 +99,7 @@ namespace Messenger.Realtime.Hubs
                 }
 
                 var userId = user.UserId;
+                Context.Items["PresenceUserId"] = userId;
 
                 _logger.LogInformation("OnConnectedAsync: {UserId} подключился", userId);
 
@@ -150,35 +151,38 @@ namespace Messenger.Realtime.Hubs
         {
             try
             {
-                var externalId = Context.User?.FindFirst("sub")?.Value
-                              ?? Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                Guid? userId = Context.Items.TryGetValue("PresenceUserId", out var presenceUserId)
+                    && presenceUserId is Guid trackedUserId
+                    ? trackedUserId
+                    : null;
 
-                if (!string.IsNullOrEmpty(externalId))
+                if (!userId.HasValue)
                 {
-                    var user = await _userService.GetUserByExternalIdAsync(externalId);
-                    if (user != null)
+                    var externalId = Context.User?.FindFirst("sub")?.Value
+                                  ?? Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                    if (!string.IsNullOrEmpty(externalId))
                     {
-                        var userId = user.UserId;
+                        var user = await _userService.GetUserByExternalIdAsync(externalId);
+                        userId = user?.UserId;
+                    }
+                }
 
-                        MessengerMetrics.SignalRActiveConnections.Add(-1, 
-                            new KeyValuePair<string, object?>("hub", "chat"));
-
-                        var becameOffline = await _presenceTracker.DisconnectAsync(userId, Context.ConnectionId);
-                        if (!becameOffline)
-                        {
-                            await base.OnDisconnectedAsync(exception);
-                            return;
-                        }
-
-                        await _userStatusService.UpdateUserStatusAsync(userId, false);
+                if (userId.HasValue)
+                {
+                    MessengerMetrics.SignalRActiveConnections.Add(-1,
+                        new KeyValuePair<string, object?>("hub", "chat"));
+                    var becameOffline = await _presenceTracker.DisconnectAsync(userId.Value, Context.ConnectionId);
+                    if (becameOffline)
+                    {
+                        await _userStatusService.UpdateUserStatusAsync(userId.Value, false);
 
                         var statusData = new
                         {
-                            userId = userId.ToString(),
+                            userId = userId.Value.ToString(),
                             isOnline = false,
                             lastActivity = DateTime.UtcNow
                         };
-                        await SendToPeersAsync(userId, "UserOnlineStatusChanged", statusData);
+                        await SendToPeersAsync(userId.Value, "UserOnlineStatusChanged", statusData);
                     }
                 }
 
