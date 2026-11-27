@@ -26,6 +26,7 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\Messenger.Core\Messenger.Core.csproj" />
+		<ProjectReference Include="..\Messenger.Application\Messenger.Application.csproj" />
 	</ItemGroup>
 
 </Project>
