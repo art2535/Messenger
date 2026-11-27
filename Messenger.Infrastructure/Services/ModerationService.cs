@@ -185,22 +185,41 @@ namespace Messenger.Infrastructure.Services
 
         public async Task ReviewReportAsync(Guid reportId, Guid adminId, string status, string? note, CancellationToken ct = default)
         {
-            var report = await _context.MessageReports.FirstOrDefaultAsync(r => r.ReportId == reportId, ct);
-            if (report == null) return;
             var normalizedStatus = status?.Trim().ToLowerInvariant();
             if (normalizedStatus is not ("resolved" or "dismissed"))
                 throw new ArgumentException("Статус жалобы должен быть resolved или dismissed");
 
+            // Conditional UPDATE makes review single-winner under concurrent admin requests.
+            // The status transition and its audit record commit in the same transaction.
             await using var transaction = await _context.Database.BeginTransactionAsync(ct);
-            var report = await _context.MessageReports.FirstOrDefaultAsync(r => r.ReportId == reportId, ct);
-            if (report == null || !string.Equals(report.Status, "pending", StringComparison.OrdinalIgnoreCase))
+
+            var reviewedAt = UtcDateTime.Now;
+            var adminNote = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+            var updated = await _context.MessageReports
+                .Where(r => r.ReportId == reportId && r.Status == "pending")
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(r => r.Status, normalizedStatus)
+                    .SetProperty(r => r.ReviewedAt, reviewedAt)
+                    .SetProperty(r => r.ReviewedBy, adminId)
+                    .SetProperty(r => r.AdminNote, adminNote), ct);
+
+            if (updated == 0)
                 return;
 
-            report.Status = normalizedStatus;
-            report.ReviewedAt = UtcDateTime.Now;
-            report.ReviewedBy = adminId;
-            report.AdminNote = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
-            AddLog(normalizedStatus == "dismissed" ? "dismiss_report" : "review_report", adminId, null, report.ChatId, report.MessageId, report.AdminNote);
+            var report = await _context.MessageReports
+                .AsNoTracking()
+                .Where(r => r.ReportId == reportId)
+                .Select(r => new { r.ChatId, r.MessageId })
+                .FirstAsync(ct);
+
+            AddLog(
+                normalizedStatus == "dismissed" ? "dismiss_report" : "review_report",
+                adminId,
+                null,
+                report.ChatId,
+                report.MessageId,
+                adminNote);
+
             await _context.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);
         }
