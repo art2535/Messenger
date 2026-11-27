@@ -2,6 +2,7 @@ using Messenger.API.Hubs;
 using Messenger.Infrastructure.Data;
 using Messenger.Realtime.Hubs;
 using Microsoft.EntityFrameworkCore;
+using OpenTelemetry.Metrics;
 using Serilog;
 using Serilog.Ui.Web.Extensions;
 
