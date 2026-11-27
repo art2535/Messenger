@@ -160,23 +160,10 @@ namespace Messenger.Infrastructure.Services
 
             login.Active = false;
             login.Token = string.Empty;
-            login.LogoutTime = DateTime.UtcNow;
+            login.LogoutTime = UtcDateTime.Now;
 
-            var hasOtherActiveSessions = await _context.Logins
-                .AnyAsync(l => l.UserId == userId && l.LoginId != loginId && l.Active, cancellationToken);
-
-            if (!hasOtherActiveSessions)
-            {
-                var userStatus = await _context.UserStatuses
-                    .FirstOrDefaultAsync(us => us.UserId == userId, cancellationToken);
-
-                if (userStatus != null)
-                {
-                    userStatus.Online = false;
-                    userStatus.LastActivity = DateTime.UtcNow;
-                }
-            }
-
+            // Login-сессия и SignalR presence — разные состояния.
+            // Онлайн-статус изменяется только по фактическим SignalR-подключениям.
             await _context.SaveChangesAsync(cancellationToken);
             return true;
         }
@@ -186,9 +173,7 @@ namespace Messenger.Infrastructure.Services
             if (string.IsNullOrWhiteSpace(sessionKey))
                 return false;
 
-            // Как в IsSessionKeyActiveAsync — обязательно хешируем
             var tokenHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(sessionKey)));
-
             var login = await _context.Logins
                 .FirstOrDefaultAsync(l => l.Token == tokenHash && l.Active, cancellationToken);
 
@@ -196,27 +181,13 @@ namespace Messenger.Infrastructure.Services
                 return false;
 
             login.Active = false;
-            login.Token = string.Empty;          // обязательно очищаем
-            login.LogoutTime = DateTime.UtcNow;
+            login.Token = string.Empty;
+            login.LogoutTime = UtcDateTime.Now;
 
-            // Не ставим Online = false, если у пользователя есть другие активные сессии
-            var hasOtherActiveSessions = await _context.Logins
-                .AnyAsync(l => l.UserId == login.UserId && l.LoginId != login.LoginId && l.Active, cancellationToken);
-
-            if (!hasOtherActiveSessions)
-            {
-                var userStatus = await _context.UserStatuses
-                    .FirstOrDefaultAsync(us => us.UserId == login.UserId, cancellationToken);
-
-                if (userStatus != null)
-                {
-                    userStatus.Online = false;
-                    userStatus.LastActivity = DateTime.UtcNow;
-                }
-            }
-
+            // Истечение login-сессии не доказывает отсутствие SignalR-подключений.
             await _context.SaveChangesAsync(cancellationToken);
             return true;
         }
+
     }
 }

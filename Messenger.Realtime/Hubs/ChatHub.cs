@@ -13,18 +13,20 @@ namespace Messenger.Realtime.Hubs
     {
         private readonly IUserService _userService;
         private readonly IUserStatusService _userStatusService;
+        private readonly IUserPresenceTracker _presenceTracker;
         private readonly IChatService _chatService;
         private readonly IAccountSettingsService _accountSettingsService;
         private readonly ILogger<ChatHub> _logger;
         private readonly TypingRateLimiterService _typingLimiter;
         private readonly SendMessageRateLimiterService _sendMessageLimiter;
 
-        public ChatHub(IUserService userService, IUserStatusService userStatusService, IChatService chatService,
+        public ChatHub(IUserService userService, IUserStatusService userStatusService, IUserPresenceTracker presenceTracker, IChatService chatService,
             IAccountSettingsService accountSettingsService,
             ILogger<ChatHub> logger, TypingRateLimiterService typingLimiter, SendMessageRateLimiterService sendMessageLimiter)
         {
             _userService = userService;
             _userStatusService = userStatusService;
+            _presenceTracker = presenceTracker;
             _chatService = chatService;
             _accountSettingsService = accountSettingsService;
             _logger = logger;
@@ -105,7 +107,14 @@ namespace Messenger.Realtime.Hubs
 
                 await Groups.AddToGroupAsync(Context.ConnectionId, $"User_{userId}");
 
-                await _userStatusService.UpdateUserStatusAsync(userId, true);
+                var becameOnline = await _presenceTracker.ConnectAsync(userId, Context.ConnectionId, Context.ConnectionAborted);
+                if (!becameOnline)
+                {
+                    await base.OnConnectedAsync();
+                    return;
+                }
+
+                await _userStatusService.UpdateUserStatusAsync(userId, true, Context.ConnectionAborted);
 
                 var showOnline = true;
                 try
@@ -153,6 +162,13 @@ namespace Messenger.Realtime.Hubs
 
                         MessengerMetrics.SignalRActiveConnections.Add(-1, 
                             new KeyValuePair<string, object?>("hub", "chat"));
+
+                        var becameOffline = await _presenceTracker.DisconnectAsync(userId, Context.ConnectionId);
+                        if (!becameOffline)
+                        {
+                            await base.OnDisconnectedAsync(exception);
+                            return;
+                        }
 
                         await _userStatusService.UpdateUserStatusAsync(userId, false);
 

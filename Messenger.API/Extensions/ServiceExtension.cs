@@ -29,6 +29,9 @@ namespace Messenger.API.Extensions
                 services.AddScoped<ILoginService, LoginService>();
                 services.AddScoped<IAccountSettingsService, AccountSettingsService>();
                 services.AddScoped<IUserStatusService, UserStatusService>();
+                services.AddSingleton<IUserPresenceTracker>(sp => new RedisUserPresenceTracker(
+                    sp.GetService<IConnectionMultiplexer>(),
+                    sp.GetRequiredService<ILogger<RedisUserPresenceTracker>>()));
                 services.AddScoped<IBroadcastService, BroadcastService>();
                 services.AddScoped<IBroadcastRepository, EfBroadcastRepository>();
                 services.AddScoped<IMessageService, MessageService>();
@@ -93,6 +96,7 @@ namespace Messenger.API.Extensions
             {
                 services.Configure<SessionCleanupOptions>(configuration.GetSection(SessionCleanupOptions.SectionName));
                 services.AddHostedService<SessionCleanupBackgroundService>();
+                services.AddHostedService<PresenceHeartbeatBackgroundService>();
                 return services;
             }
 
