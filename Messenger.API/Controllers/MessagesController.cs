@@ -991,7 +991,7 @@ namespace Messenger.API.Controllers
             {
                 var userId = await User.GetCurrentUserIdAsync(_userService);
 
-                var message = await _messageService.GetMessageByIdAsync(request.ChatId, messageId, ct);
+                var message = await _messageService.GetMessageByIdAsync(request.ChatId, messageId, userId, ct);
                 if (message == null)
                 {
                     return NotFound(ApiResponse.Failure("Сообщение не найдено", "NOT_FOUND"));

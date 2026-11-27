@@ -86,7 +86,7 @@ namespace Messenger.API.Controllers
                     return BadRequest(ApiResponse.Failure("Время отправки должно быть хотя бы на 30 секунд в будущем", "INVALID_REQUEST"));
                 }
 
-                var chat = await _chatService.GetChatByIdAsync(chatId, ct);
+                var chat = await _chatService.GetChatByIdAsync(chatId, user.UserId, ct);
                 if (chat == null)
                 {
                     return NotFound(ApiResponse.Failure("Чат не найден", "NOT_FOUND"));

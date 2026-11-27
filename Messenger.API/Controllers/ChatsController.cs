@@ -513,7 +513,7 @@ namespace Messenger.API.Controllers
                     return NotFound(ApiResponse.Failure("Пользователь не найден", "NOT_FOUND"));
                 }
 
-                var participants = (await _chatService.GetChatParticipantsAsync(chatId, ct)).ToList();
+                var participants = (await _chatService.GetChatParticipantsAsync(chatId, currentUserId, ct)).ToList();
                 var actor = participants.FirstOrDefault(p => p.UserId == currentUserId);
                 if (actor == null)
                 {
