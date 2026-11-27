@@ -1,4 +1,4 @@
-using Messenger.Core.Models;
+using Messenger.Infrastructure.Persistence.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 

@@ -512,7 +512,7 @@ namespace Messenger.Infrastructure.Migrations
                     b.ToTable("Chat_Participants");
                 });
 
-            modelBuilder.Entity("Messenger.Core.Models.Log", b =>
+            modelBuilder.Entity("Messenger.Infrastructure.Persistence.Entities.Log", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()

@@ -1,5 +1,6 @@
 using MassTransit;
 using Messenger.Core.Models;
+using Messenger.Infrastructure.Persistence.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace Messenger.Infrastructure.Data;
