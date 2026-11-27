@@ -288,7 +288,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                await User.GetCurrentUserIdAsync(_userService);
+                var currentUserId = await User.GetCurrentUserIdAsync(_userService);
 
                 var chat = await _chatService.GetChatByIdAsync(chatId, ct);
                 if (chat == null)
@@ -296,9 +296,20 @@ namespace Messenger.API.Controllers
                     return NotFound(ApiResponse.Failure("Чат не найден", "NOT_FOUND"));
                 }
 
-                await _chatService.AddParticipantToChatAsync(chatId, userId, role, ct);
+                var actor = chat.Participants.FirstOrDefault(p => p.UserId == currentUserId);
+                if (actor == null || !IsChatAdministrator(actor.Role))
+                    return Forbid();
+
+                if (!IsRegularParticipantRole(role))
+                    return BadRequest(ApiResponse.Failure(
+                        "Через этот метод можно назначить только роль участника",
+                        "INVALID_ROLE"));
 
                 var addedUser = await _userService.GetUserByIdAsync(userId, ct);
+                if (addedUser == null)
+                    return NotFound(ApiResponse.Failure("Пользователь не найден", "NOT_FOUND"));
+
+                await _chatService.AddParticipantToChatAsync(chatId, userId, "участник", ct);
                 if (addedUser == null)
                 {
                     return NotFound(ApiResponse.Failure("Пользователь не найден", "NOT_FOUND"));
@@ -388,13 +399,22 @@ namespace Messenger.API.Controllers
 
             try
             {
-                await User.GetCurrentUserIdAsync(_userService);
+                var currentUserId = await User.GetCurrentUserIdAsync(_userService);
 
                 var chat = await _chatService.GetChatByIdAsync(chatId, ct);
                 if (chat == null)
                 {
                     return NotFound(ApiResponse.Failure("Чат не найден", "NOT_FOUND"));
                 }
+
+                var actor = chat.Participants.FirstOrDefault(p => p.UserId == currentUserId);
+                if (actor == null || !IsChatAdministrator(actor.Role))
+                    return Forbid();
+
+                if (!string.Equals(chat.Type, "group", StringComparison.OrdinalIgnoreCase))
+                    return BadRequest(ApiResponse.Failure(
+                        "Переименовывать можно только групповые чаты",
+                        "INVALID_CHAT_TYPE"));
 
                 await _chatService.UpdateChatAsync(new UpdateChatDto { ChatId = chatId, Name = request.Name }, ct);
 
@@ -435,13 +455,17 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                await User.GetCurrentUserIdAsync(_userService);
+                var currentUserId = await User.GetCurrentUserIdAsync(_userService);
 
                 var chat = await _chatService.GetChatByIdAsync(chatId, ct);
                 if (chat == null)
                 {
                     return NotFound(ApiResponse.Failure("Чат не найден", "NOT_FOUND"));
                 }
+
+                var actor = chat.Participants.FirstOrDefault(p => p.UserId == currentUserId);
+                if (actor == null || !IsChatOwner(actor.Role))
+                    return Forbid();
 
                 await _chatService.DeleteChatAsync(chatId, ct);
 
@@ -516,14 +540,15 @@ namespace Messenger.API.Controllers
                     return BadRequest(ApiResponse.Failure("Нельзя удалить самого себя из чата этим методом", "INVALID_REQUEST"));
                 }
 
+                if (!IsChatAdministrator(actor.Role))
+                    return Forbid();
+
                 if (IsAdminOrOwnerRole(target.Role))
                 {
                     return StatusCode(StatusCodes.Status403Forbidden, new
                     {
                         IsSuccess = false,
-                        Error = IsAdminOrOwnerRole(actor.Role)
-                            ? "Администратор не может удалить владельца или другого администратора"
-                            : "Нельзя удалить владельца или администратора чата"
+                        Error = "Нельзя удалить владельца или администратора чата"
                     });
                 }
 
@@ -567,6 +592,19 @@ namespace Messenger.API.Controllers
                 return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
         }
+
+        private static string NormalizeChatRole(string? role) =>
+            string.IsNullOrWhiteSpace(role) ? "участник" : role.Trim().ToLowerInvariant();
+
+        private static bool IsChatOwner(string? role) =>
+            NormalizeChatRole(role) is "владелец" or "owner";
+
+        private static bool IsChatAdministrator(string? role) =>
+            IsChatOwner(role) || NormalizeChatRole(role) is
+                "admin" or "админ" or "administrator" or "модератор" or "moderator";
+
+        private static bool IsRegularParticipantRole(string? role) =>
+            NormalizeChatRole(role) is "участник" or "member";
 
         private async Task<string> GetPrivateChatDisplayNameAsync(Guid chatId, Guid currentUserId, CancellationToken ct)
         {

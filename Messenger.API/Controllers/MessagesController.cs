@@ -997,6 +997,10 @@ namespace Messenger.API.Controllers
                     return NotFound(ApiResponse.Failure("Сообщение не найдено", "NOT_FOUND"));
                 }
 
+                var chat = await _chatService.GetChatByIdAsync(request.ChatId, ct);
+                if (chat == null || !chat.Participants.Any(p => p.UserId == userId))
+                    return Forbid();
+
                 if (message.SenderId != userId)
                 {
                     return StatusCode(StatusCodes.Status403Forbidden, ApiResponse.Failure("Редактировать можно только своё сообщение", "FORBIDDEN"));
