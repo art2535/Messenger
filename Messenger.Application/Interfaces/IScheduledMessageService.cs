@@ -1,7 +1,7 @@
-using Messenger.Core.DTOs.Messages;
-using Messenger.Core.Messages;
+using Messenger.Application.DTOs.Messages;
+using Messenger.Application.Messages;
 
-namespace Messenger.Core.Interfaces;
+namespace Messenger.Application.Interfaces;
 
 public interface IScheduledMessageService
 {

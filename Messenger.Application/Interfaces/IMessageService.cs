@@ -1,10 +1,10 @@
-using Messenger.Core.DTOs;
-using Messenger.Core.DTOs.Messages;
-using Messenger.Core.Messages;
+using Messenger.Application.DTOs;
+using Messenger.Application.DTOs.Messages;
+using Messenger.Application.Messages;
 using Messenger.Application.Files;
 using Messenger.Core.Enums;
 
-namespace Messenger.Core.Interfaces
+namespace Messenger.Application.Interfaces
 {
     public interface IMessageService
     {

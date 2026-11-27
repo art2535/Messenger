@@ -1,6 +1,6 @@
 using Messenger.Core.DTOs.ChatFolders;
 
-namespace Messenger.Core.Interfaces
+namespace Messenger.Application.Interfaces
 {
     public interface IChatFolderService
     {

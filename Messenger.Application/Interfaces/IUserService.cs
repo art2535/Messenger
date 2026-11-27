@@ -1,7 +1,7 @@
-﻿using Messenger.Core.DTOs.Users;
+﻿using Messenger.Application.DTOs.Users;
 using Messenger.Application.Files;
 
-namespace Messenger.Core.Interfaces
+namespace Messenger.Application.Interfaces
 {
     public interface IUserService
     {

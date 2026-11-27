@@ -1,4 +1,4 @@
-﻿namespace Messenger.Core.Messages
+﻿namespace Messenger.Application.Messages
 {
     public record AttachmentInfo
     {
