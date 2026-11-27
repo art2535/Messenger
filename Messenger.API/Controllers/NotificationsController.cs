@@ -77,6 +77,10 @@ namespace Messenger.API.Controllers
             {
                 return NotFound(ApiResponse.Failure($"Пользователь с ID {request.UserId} не найден", "NOT_FOUND"));
             }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при выполнении POST /notifications");
@@ -107,6 +111,10 @@ namespace Messenger.API.Controllers
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при получении уведомлений");
                 return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
