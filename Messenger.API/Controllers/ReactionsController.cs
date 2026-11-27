@@ -63,6 +63,10 @@ namespace Messenger.API.Controllers
 
                 return Ok(ApiResponse.Success(reactions));
             }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при получении реакций для сообщения {MessageId}", messageId);
@@ -132,6 +136,10 @@ namespace Messenger.API.Controllers
             {
                 return NotFound(ApiResponse.Failure("Сообщение не найдено", "NOT_FOUND"));
             }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при добавлении реакции к сообщению {MessageId}", messageId);
@@ -190,6 +198,10 @@ namespace Messenger.API.Controllers
             catch (KeyNotFoundException)
             {
                 return NotFound(ApiResponse.Failure("Сообщение или реакция не найдены", "NOT_FOUND"));
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
