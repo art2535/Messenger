@@ -1,20 +1,19 @@
 using System.Threading.RateLimiting;
 
-namespace Messenger.API.Services
+namespace Messenger.Realtime.Services
 {
-    public sealed class SendMessageRateLimiterService : IDisposable
+    public sealed class TypingRateLimiterService : IDisposable
     {
         private readonly PartitionedRateLimiter<string> _limiter;
 
-        public SendMessageRateLimiterService()
+        public TypingRateLimiterService()
         {
             _limiter = PartitionedRateLimiter.Create<string, string>(userId =>
                 RateLimitPartition.GetFixedWindowLimiter(userId, _ => new FixedWindowRateLimiterOptions
                 {
-                    PermitLimit = 30,
+                    PermitLimit = 60,
                     Window = TimeSpan.FromMinutes(1),
-                    QueueLimit = 5,
-                    QueueProcessingOrder = QueueProcessingOrder.OldestFirst
+                    QueueLimit = 0
                 }));
         }
 

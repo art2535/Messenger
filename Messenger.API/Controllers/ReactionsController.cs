@@ -2,7 +2,7 @@ using System.ComponentModel;
 using Asp.Versioning;
 using Messenger.API.Extensions;
 using Messenger.Application.DTOs.Reactions;
-using Messenger.API.Hubs;
+using Messenger.Realtime.Hubs;
 using Messenger.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;

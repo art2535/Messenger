@@ -1,13 +1,13 @@
 ﻿using Messenger.Core.Interfaces;
 using Messenger.Application.Interfaces;
 using Messenger.Core.Metrics;
-using Messenger.API.Services;
+using Messenger.Realtime.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 using System.Security.Claims;
 
-namespace Messenger.API.Hubs
+namespace Messenger.Realtime.Hubs
 {
     [Authorize]
     public class ChatHub : Hub

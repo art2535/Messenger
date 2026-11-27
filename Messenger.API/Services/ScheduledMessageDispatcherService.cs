@@ -5,7 +5,7 @@ using Messenger.Core.Messages;
 using Messenger.Application.Messages;
 using Messenger.Core.Models;
 using Microsoft.AspNetCore.SignalR;
-using Messenger.Core.Hubs;
+using Messenger.Realtime.Hubs;
 
 namespace Messenger.API.Services;
 

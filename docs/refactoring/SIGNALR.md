@@ -18,7 +18,11 @@
 
 ## Текущее расположение
 
-Классы Hub находятся в `Messenger.Core/Hubs`, хотя используют ASP.NET Core SignalR и сервисы приложения. Это архитектурное нарушение целевой границы Core и один из приоритетных объектов следующих этапов.
+`ChatHub` размещён в отдельном проекте `Messenger.Realtime`, поскольку его тип нужен и API, и Web для публикации событий через общий SignalR Redis backplane. `UserStatusHub` и `NotificationHub` остаются в `Messenger.API`, так как используются только API.
+
+## Разделение realtime-транспорта
+
+`Messenger.Realtime` содержит общий тип `ChatHub` и связанные с ним rate limiter-сервисы. Проект зависит от Core и Application, но не от API или Infrastructure. API размещает endpoint хаба, а Web использует тот же тип для отправки сообщений через общий Redis backplane.
 
 ## Целевое состояние
 

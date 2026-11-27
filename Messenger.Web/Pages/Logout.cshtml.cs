@@ -1,5 +1,5 @@
 using Messenger.Application.DTOs.UserStatuses;
-using Messenger.API.Hubs;
+using Messenger.Realtime.Hubs;
 using Messenger.Web.Helpers;
 using Messenger.Web.Services;
 using Microsoft.AspNetCore.Authentication;

@@ -4,7 +4,7 @@ using Messenger.Application.DTOs.Messages;
 using Messenger.Core.DTOs.Attachments;
 using Messenger.Application.DTOs.Attachments;
 using Messenger.Core.Enums;
-using Messenger.Core.Hubs;
+using Messenger.Realtime.Hubs;
 using Messenger.Core.Interfaces;
 using Messenger.Application.Interfaces;
 using Messenger.Core.Messages;

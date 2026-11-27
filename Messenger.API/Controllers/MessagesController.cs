@@ -4,7 +4,7 @@ using MassTransit;
 using Messenger.Core.DTOs.Messages;
 using Messenger.Application.DTOs.Messages;
 using Messenger.Core.Enums;
-using Messenger.API.Hubs;
+using Messenger.Realtime.Hubs;
 using Messenger.Core.Interfaces;
 using Messenger.Application.Interfaces;
 using Messenger.Core.Messages;
@@ -17,7 +17,7 @@ using Microsoft.AspNetCore.SignalR;
 using System.ComponentModel;
 using System.Security.Claims;
 using Messenger.Core.Services;
-using Messenger.API.Services;
+using Messenger.Realtime.Services;
 using Messenger.Core.Responses;
 
 namespace Messenger.API.Controllers

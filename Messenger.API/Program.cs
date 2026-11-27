@@ -1,6 +1,7 @@
 using Messenger.API.Extensions;
 using Messenger.API.Services;
 using Messenger.API.Hubs;
+using Messenger.Realtime.Hubs;
 using Messenger.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using OpenTelemetry.Metrics;

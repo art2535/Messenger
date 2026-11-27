@@ -1,6 +1,7 @@
 using Messenger.API.Options;
 using Messenger.API.Providers;
 using Messenger.API.Services;
+using Messenger.Realtime.Services;
 using Messenger.Core.Interfaces;
 using Messenger.Application.Interfaces;
 using Messenger.Core.Services;

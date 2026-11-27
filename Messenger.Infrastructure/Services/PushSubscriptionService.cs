@@ -259,7 +259,7 @@ namespace Messenger.Infrastructure.Services
                     {
                         var groupName = !string.IsNullOrWhiteSpace(chat.Name) ? chat.Name : "Групповой чат";
                         var pushTitle = isGroupChat
-                            ? $"Новое сообщение в группе "{groupName}""
+                            ? $"Новое сообщение в группе \"{groupName}\""
                             : $"Новое сообщение от {senderName}";
 
                         string previewBody;

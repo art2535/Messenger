@@ -2,7 +2,7 @@ using Asp.Versioning;
 using Messenger.API.Extensions;
 using Messenger.Core.DTOs.Messages;
 using Messenger.Application.DTOs.Messages;
-using Messenger.API.Hubs;
+using Messenger.Realtime.Hubs;
 using Messenger.Core.Interfaces;
 using Messenger.Application.Interfaces;
 using Messenger.Core.Messages;
