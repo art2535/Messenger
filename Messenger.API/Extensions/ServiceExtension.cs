@@ -3,6 +3,7 @@ using Messenger.API.Providers;
 using Messenger.API.Services;
 using Messenger.Realtime.Services;
 using Messenger.Application.Interfaces;
+using Messenger.Application.Services;
 using Messenger.Infrastructure.Services;
 using Microsoft.AspNetCore.SignalR;
 using StackExchange.Redis;
@@ -29,6 +30,7 @@ namespace Messenger.API.Extensions
                 services.AddScoped<IAccountSettingsService, AccountSettingsService>();
                 services.AddScoped<IUserStatusService, UserStatusService>();
                 services.AddScoped<IBroadcastService, BroadcastService>();
+                services.AddScoped<IBroadcastRepository, EfBroadcastRepository>();
                 services.AddScoped<IMessageService, MessageService>();
                 services.AddScoped<IAdminService, AdminService>();
                 services.AddScoped<IModerationService, ModerationService>();
