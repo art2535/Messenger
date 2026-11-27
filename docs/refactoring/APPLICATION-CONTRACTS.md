@@ -1,19 +1,31 @@
 # Перенос сервисных контрактов в Application
 
-## Подэтап 2.7.2 — первая вертикаль
+## Подэтап 2.7.2 — независимые контракты
 
-В `Messenger.Application` перенесены контракты `ICacheService` и `IEncryptionService`. Они не зависят от EF-моделей, ASP.NET типов или других контрактов Core, поэтому подходят для первого изолированного переноса.
+В `Messenger.Application/Interfaces` перенесены `ICacheService` и `IEncryptionService`. Они не зависят от EF-моделей, ASP.NET типов или других контрактов Core.
 
-Файлы находятся в `Messenger.Application/Interfaces`. Пространство имён временно оставлено `Messenger.Core.Interfaces` для совместимости с существующими потребителями и минимизации риска массового изменения импортов в одном коммите. Это осознанный переходный шаг: физическая сборка-владелец контрактов уже Application, но логическое переименование namespace ещё предстоит.
+Пространство имён временно оставлено `Messenger.Core.Interfaces` для совместимости с существующими потребителями и минимизации риска массового изменения импортов. Это переходный шаг: физическая сборка-владелец контрактов уже Application, логическое переименование namespace ещё предстоит.
 
-Реализации `RedisCacheService` и `AesGcmEncryptionService` остаются в Infrastructure. Регистрация DI остаётся в API. Сигнатуры интерфейсов не изменены.
+Реализации Redis и AES-GCM остаются в Infrastructure, регистрация DI — в API. Сигнатуры интерфейсов не изменены.
+
+## Подэтап 2.7.3 — контракты на DTO
+
+В `Messenger.Application/Interfaces` перенесены:
+
+- `IAccountSettingsService`
+- `IAdminService`
+- `IBroadcastService`
+- `IChatFolderService`
+- `IModerationService`
+
+Перед переносом проверены DTO, используемые этими интерфейсами. Они содержат только простые .NET-типы и коллекции; DTO модерации используют стандартные атрибуты `System.ComponentModel.DataAnnotations`. Ссылок на EF-сущности, EF API или ASP.NET-типы в этих пяти контрактах нет.
+
+DTO пока остаются в `Messenger.Core.DTOs`, а namespace интерфейсов — `Messenger.Core.Interfaces`. Это сохраняет текущие импорты и сигнатуры, пока Application зависит от Core. Отдельный этап будет посвящён переносу DTO и переименованию namespace.
 
 ## Что остаётся в Core
 
-Остальные сервисные интерфейсы пока используют DTO Core и/или EF-модели. В частности, `IUserService`, `IMessageService`, `IChatService`, `ILoginService`, `INotificationService`, `IAttachmentService`, `IReactionService`, `IPushSubscriptionService`, `IScheduledMessageService` возвращают или принимают модели Core. `IUserService` и `IMessageService` также используют `IFormFile`.
-
-Их перенос будет выполняться после подготовки Application DTO и нейтрального контракта для файлов, с последующим переводом реализаций и потребителей.
+Остальные сервисные интерфейсы пока используют модели Core и/или платформенные типы. В частности, `IUserService` и `IMessageService` используют `IFormFile`; `IAttachmentService`, `IChatService`, `ILoginService`, `INotificationService`, `IReactionService`, `IPushSubscriptionService`, `IScheduledMessageService` принимают или возвращают Core-модели. Их перенос требует предварительного отделения persistence-моделей и платформенных абстракций.
 
 ## Проверки
 
-Проверено по исходникам, что оба интерфейса не содержат ссылок на Core-модели и ASP.NET/EF типы, а Infrastructure уже ссылается на Application. `dotnet build` и тесты не запускались; успешная компиляция не подтверждена.
+Проверены сигнатуры пяти интерфейсов и исходники соответствующих DTO. Файлы перемещены без изменения содержимого; реализации и DI-регистрация не менялись. `dotnet build` и тесты не запускались, успешная компиляция не подтверждена.
