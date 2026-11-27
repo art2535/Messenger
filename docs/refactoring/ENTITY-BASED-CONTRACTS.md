@@ -55,3 +55,10 @@
 ## Результат подэтапа 2.7.12 — IAttachmentService
 
 `IAttachmentService` перенесён в Application и больше не принимает/возвращает EF-сущность `Attachment`. Добавление использует `CreateAttachmentDto` и `messageId`, чтение возвращает `AttachmentDto`. Создание EF-модели и отображение полей выполняются в `AttachmentService` внутри Infrastructure. `AttachmentsController` и `ChatMessageSentConsumer` используют DTO-контракт.
+
+
+## Нормализация пространств имён перенесённых файлов
+
+После физического переноса контракты получили namespaces нового проекта (`Messenger.Application.Interfaces`, `Messenger.Application.DTOs.*`, `Messenger.Application.Messages`). Потребители в API, Infrastructure и Web обновлены на новые namespaces. Физические копии перенесённых файлов в Core отсутствуют; оставшиеся в Core типы DTO и интерфейсы сохраняют собственные прежние namespaces до отдельной миграции.
+
+`ChatMessageSent` теперь объявлен в `Messenger.Application.Messages`, но его MassTransit URN явно закреплён за прежним значением `urn:message:Messenger.Core.Messages:ChatMessageSent`, чтобы не менять wire contract.

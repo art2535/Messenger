@@ -88,3 +88,8 @@ Fluent-конфигурации всех сущностей вынесены в 
 ### 2.7.12. DTO-контракт IAttachmentService
 
 `IAttachmentService` физически перенесён в Application. Его методы используют `CreateAttachmentDto` и `AttachmentDto`, не раскрывая EF-сущность `Attachment`. API-контроллер и consumer передают нейтральные DTO; EF mapping остаётся в Infrastructure. Namespace интерфейса и DTO сохранены для минимизации изменений потребителей.
+
+
+### Пространства имён после переноса контрактов
+
+Перенесённые в Application интерфейсы, DTO и сообщения используют namespaces `Messenger.Application.*`; обратные совместимые namespaces `Messenger.Core.*` для них больше не сохраняются. Сами файлы находятся только в `Messenger.Application`. В Core остаются лишь типы, которые ещё не переносились. Для события `ChatMessageSent` исходный MassTransit URN сохранён атрибутом `MessageUrn`.

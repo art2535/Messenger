@@ -40,3 +40,10 @@
 ## Подэтап 2.7.12 — контракт вложений
 
 `IAttachmentService` физически перенесён в Application (namespace `Messenger.Core.Interfaces` сохранён для совместимости). Добавление принимает `CreateAttachmentDto` и идентификатор сообщения отдельно; чтение возвращает `AttachmentDto`. EF-сущность `Attachment` создаётся и преобразуется только внутри Infrastructure. API-контроллер и MassTransit consumer больше не создают и не передают EF-сущности в сервисный контракт.
+
+
+## Единые пространства имён перенесённых контрактов
+
+Все файлы, физически перенесённые в `Messenger.Application`, используют пространства имён по новому проекту: `Messenger.Application.Interfaces`, `Messenger.Application.DTOs` (с соответствующими подпространствами) и `Messenger.Application.Messages`. Старые `using Messenger.Core.*` для этих контрактов заменены или дополнены новыми импортами там, где в Core остаются DTO/интерфейсы с тем же родительским пространством имён. Файлы перенесённых контрактов удалены из `Messenger.Core`; старые пространства имён больше не используются как алиасы совместимости.
+
+Для `ChatMessageSent` сохранён исходный MassTransit message URN `urn:message:Messenger.Core.Messages:ChatMessageSent` через `MessageUrnAttribute`. Это позволяет изменить CLR namespace без изменения идентификатора сообщения в брокере. `Messenger.Application` ссылается на `MassTransit.Abstractions` только ради атрибута контракта.
