@@ -71,7 +71,7 @@ namespace Messenger.Infrastructure.Services
                 .FirstOrDefaultAsync(u => u.UserId == id, token);
         }
 
-        public async Task<string> UploadAvatarAsync(Guid userId, IFormFile file, CancellationToken token = default)
+        public async Task<string> UploadAvatarAsync(Guid userId, IUploadedFile file, CancellationToken token = default)
         {
             var user = await _context.Users
                 .Include(u => u.Account)
