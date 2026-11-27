@@ -1,12 +1,6 @@
 name: Сборка решения
 
 on:
-  push:
-    branches:
-      - refactor/architecture
-  pull_request:
-    branches:
-      - refactor/architecture
   workflow_dispatch:
 
 permissions:
@@ -18,7 +12,7 @@ concurrency:
 
 jobs:
   build:
-    name: Восстановление и сборка
+    name: Восстановление, сборка и тесты
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
