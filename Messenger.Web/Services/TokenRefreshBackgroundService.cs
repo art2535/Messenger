@@ -60,7 +60,7 @@ namespace Messenger.Web.Services
 
                 if (entry.IsRevoked)
                 {
-                    _store.Remove(entry.Key);
+                    _store.Remove(entry.Key, entry);
                     _logger.LogInformation("[TokenRefresh] Сессия {Key} удалена: отозвана (logout)", entry.Key);
                     needsDbExpiration = true;
                 }

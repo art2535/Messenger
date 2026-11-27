@@ -17,7 +17,17 @@ namespace Messenger.Web.Services
             => _entries.GetOrAdd(key, k => new TokenEntry(
                 k, TokenSet.Create(accessToken, refreshToken, TokenSet.DefaultLifetime)));
 
-        public void Remove(string key) => _entries.TryRemove(key, out _);
+        public void Remove(string key, TokenEntry? expectedEntry = null)
+        {
+            if (expectedEntry is null)
+            {
+                _entries.TryRemove(key, out _);
+                return;
+            }
+
+            ((ICollection<KeyValuePair<string, TokenEntry>>)_entries)
+                .Remove(new KeyValuePair<string, TokenEntry>(key, expectedEntry));
+        }
 
         public IReadOnlyList<TokenEntry> RevokeSession(string? key, string? accessToken, string? refreshToken)
         {
@@ -28,8 +38,11 @@ namespace Messenger.Web.Services
             if (!string.IsNullOrEmpty(key) && _entries.TryGetValue(key, out var byKey))
             {
                 byKey.IsRevoked = true;
-                if (_entries.TryRemove(key, out _))
+                if (((ICollection<KeyValuePair<string, TokenEntry>>)_entries)
+                    .Remove(new KeyValuePair<string, TokenEntry>(key, byKey)))
+                {
                     revoked.Add(byKey);
+                }
             }
 
             if (!string.IsNullOrEmpty(accessToken) || !string.IsNullOrEmpty(refreshToken))
@@ -45,8 +58,11 @@ namespace Messenger.Web.Services
                         continue;
 
                     entry.IsRevoked = true;
-                    if (_entries.TryRemove(entry.Key, out _))
+                    if (((ICollection<KeyValuePair<string, TokenEntry>>)_entries)
+                        .Remove(new KeyValuePair<string, TokenEntry>(entry.Key, entry)))
+                    {
                         revoked.Add(entry);
+                    }
                 }
             }
 
@@ -78,7 +94,7 @@ namespace Messenger.Web.Services
             foreach (var pair in _revoked)
             {
                 if (pair.Value < limit)
-                    _revoked.TryRemove(pair.Key, out _);
+                    ((ICollection<KeyValuePair<string, DateTime>>)_revoked).Remove(pair);
             }
         }
 

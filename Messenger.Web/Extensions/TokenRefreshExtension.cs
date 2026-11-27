@@ -89,7 +89,7 @@ namespace Messenger.Web.Extensions
             if (entry.IsRevoked)
             {
                 logger.LogWarning("[TokenRefresh] Сессия {Key}: refresh-токен отклонён — выполняем выход", key);
-                store.Remove(key!);
+                store.Remove(key!, entry);
                 store.MarkRevoked(key, refreshToken);
                 context.RejectPrincipal();
                 await context.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
