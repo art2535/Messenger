@@ -65,6 +65,7 @@ namespace Messenger.API.Controllers
         [EndpointDescription("Возвращает пользователя по внешнему идентификатору из SSO (Keycloak).")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> GetUserByExternalIdAsync(
             [Description("Внешний идентификатор пользователя из SSO")] string externalId,
@@ -140,6 +141,7 @@ namespace Messenger.API.Controllers
         [EndpointDescription("Возвращает полный список зарегистрированных пользователей системы.")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> GetAllUsersAsync(CancellationToken ct = default)
         {
@@ -399,6 +401,7 @@ namespace Messenger.API.Controllers
         [EndpointDescription("Назначает указанную роль авторизованному пользователю (для администраторов).")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> PostAssignRoleAsync(
             [Description("Идентификатор роли")] Guid roleId,
