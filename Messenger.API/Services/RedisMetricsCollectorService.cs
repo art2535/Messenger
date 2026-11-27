@@ -147,7 +147,7 @@ namespace Messenger.API.Services
                 return;
 
             var db = _mux.GetDatabase();
-            var ping = await db.PingAsync();
+            var ping = await db.PingAsync().WaitAsync(ct);
             _pingMsValue = ping.TotalMilliseconds;
 
             var endpoints = _mux.GetEndPoints();
@@ -164,7 +164,7 @@ namespace Messenger.API.Services
             IGrouping<string, KeyValuePair<string, string>>[] info;
             try
             {
-                info = await server.InfoAsync();
+                info = await server.InfoAsync().WaitAsync(ct);
             }
             catch (RedisCommandException ex) when (ex.Message.Contains("admin mode", StringComparison.OrdinalIgnoreCase))
             {
