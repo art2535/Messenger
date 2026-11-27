@@ -83,6 +83,10 @@ namespace Messenger.API.Controllers
             {
                 return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
             }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при выполнении POST /moderation/report");
@@ -130,6 +134,10 @@ namespace Messenger.API.Controllers
             {
                 return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
             }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Ошибка при выполнении POST /moderation/mute");
@@ -176,6 +184,10 @@ namespace Messenger.API.Controllers
             catch (ArgumentException ex)
             {
                 return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
