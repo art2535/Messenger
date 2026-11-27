@@ -77,3 +77,8 @@
 Для всех 18 файлов `Messenger.Core/Models/*.cs` выполнена проверка: не обнаружены EF mapping attributes и using из `Microsoft.EntityFrameworkCore` / `System.ComponentModel.DataAnnotations`.
 
 Не запускались `dotnet build`, `dotnet test`, генерация пробной миграции или автоматическое сравнение EF model с snapshot. Поэтому компиляция после удаления PackageReference и FrameworkReference, а также полная эквивалентность runtime EF-модели пока не подтверждены. Перед созданием миграций необходимо выполнить model diff и проверить схему на копии PostgreSQL базы.
+
+
+## Исправление результата аудита после первой сборки (2.7.31)
+
+Ручная Release-сборка выявила пропущенное использование `System.Threading.RateLimiting` в двух классах Core: `SendMessageRateLimiterService` и `TypingRateLimiterService`. Это не типы ASP.NET Core, поэтому предыдущая проверка на `Microsoft.AspNetCore.*` не обнаружила их. Оба класса использовались исключительно API-контроллером и SignalR-хабом. Реализации перенесены в `Messenger.API.Services`; их настройки лимитов сохранены. Это уточняет результат этапа 2.7.30: Core не использует ASP.NET Core API, но аудит compile-time зависимостей должен учитывать и отдельные сборки .NET, ранее поступавшие транзитивно через `Microsoft.AspNetCore.App`.

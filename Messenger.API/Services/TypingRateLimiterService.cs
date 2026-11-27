@@ -1,20 +1,19 @@
 using System.Threading.RateLimiting;
 
-namespace Messenger.Core.Services
+namespace Messenger.API.Services
 {
-    public class SendMessageRateLimiterService
+    public sealed class TypingRateLimiterService : IDisposable
     {
         private readonly PartitionedRateLimiter<string> _limiter;
 
-        public SendMessageRateLimiterService()
+        public TypingRateLimiterService()
         {
             _limiter = PartitionedRateLimiter.Create<string, string>(userId =>
                 RateLimitPartition.GetFixedWindowLimiter(userId, _ => new FixedWindowRateLimiterOptions
                 {
-                    PermitLimit = 30,
+                    PermitLimit = 60,
                     Window = TimeSpan.FromMinutes(1),
-                    QueueLimit = 5,
-                    QueueProcessingOrder = QueueProcessingOrder.OldestFirst
+                    QueueLimit = 0
                 }));
         }
 
@@ -23,5 +22,7 @@ namespace Messenger.Core.Services
             using var lease = await _limiter.AcquireAsync(userId);
             return lease.IsAcquired;
         }
+
+        public void Dispose() => _limiter.Dispose();
     }
 }

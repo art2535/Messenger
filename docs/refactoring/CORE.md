@@ -183,3 +183,10 @@ Model Snapshot и исторические миграции не редакти�
 ### 2.7.30. Удаление ASP.NET Core dependency
 
 Проверены все 57 C# исходников Core. Прямых использований ASP.NET Core типов и API не обнаружено. Из `Messenger.Core.csproj` удалён `FrameworkReference Include="Microsoft.AspNetCore.App"`. Теперь Core не содержит ни PackageReference, ни FrameworkReference: проект использует только платформенные возможности .NET. Сборка и тесты после изменения пока не запускались.
+
+
+### 2.7.31. Перенос rate limiter сервисов из Core в API
+
+Первая ручная Release-сборка после удаления `Microsoft.AspNetCore.App` выявила неучтённую compile-time зависимость: `SendMessageRateLimiterService` и `TypingRateLimiterService` используют `System.Threading.RateLimiting`. Эти классы используются только `MessagesController` и `ChatHub` в API, поэтому реализации перенесены в `Messenger.API.Services`. Лимиты и параметры окон сохранены. Core больше не содержит этих технических сервисов и не требует возвращения ASP.NET Core FrameworkReference или добавления RateLimiting package reference.
+
+Сборка после исправления ожидает повторного ручного запуска GitHub Actions; локально `dotnet build` не выполнялся.

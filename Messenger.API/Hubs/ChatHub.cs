@@ -1,7 +1,7 @@
 ﻿using Messenger.Core.Interfaces;
 using Messenger.Application.Interfaces;
 using Messenger.Core.Metrics;
-using Messenger.Core.Services;
+using Messenger.API.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
