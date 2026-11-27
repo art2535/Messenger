@@ -89,7 +89,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var user = await User.GetCurrentUserAsync(_userService);
+                var user = await User.GetCurrentUserAsync(_userService, ct);
 
                 if (request == null || string.IsNullOrWhiteSpace(request.ReactionType))
                 {
@@ -156,7 +156,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var user = await User.GetCurrentUserAsync(_userService);
+                var user = await User.GetCurrentUserAsync(_userService, ct);
 
                 if (!await _reactionService.MessageExistsAsync(messageId, ct))
                 {
