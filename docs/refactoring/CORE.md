@@ -1,73 +1,57 @@
 # Этап 2 — аудит и очистка Messenger.Core
 
-Документ отражает состояние ветки `refactor/architecture` после commit `eece268b9388f26b99531ffce2fd959b8c3c7155`.
+Документ отражает состояние ветки `refactor/architecture` после commit `187315734527881e275f8d5574af31585ea20c59`.
 
-## Что было в Core
+## Состав Core и выявленные связи
 
-По дереву исходников Core содержит следующие группы:
+В `Messenger.Core/Models` находятся 23 модели. В большинстве одновременно присутствуют:
+- свойства предметной области;
+- EF-аннотации (`Key`, `Column`, `ForeignKey`, `InverseProperty`, `Table`);
+- навигационные свойства EF;
+- JSON-аннотации (`JsonIgnore`).
 
-- `Models` — доменные/EF-модели (23 файла на baseline);
-- `DTOs` — HTTP/API и внутренние DTO;
-- `Interfaces` — сервисные интерфейсы, используемые API и Infrastructure;
-- `Messages` — контракты сообщений;
-- `Responses` — API response-модели;
-- `Metrics` — метрики;
-- `Services` — rate limiter helpers;
-- `Hubs` — SignalR transport-адаптеры (перенесены на этапе 2).
+Например, `User`, `Message`, `Chat`, `AccountSetting` и связанные типы содержат навигационные коллекции и EF mapping attributes. Поэтому простое удаление атрибутов или перемещение файлов без перевода потребителей изменило бы EF-модель либо поведение сериализации.
+
+`GuapMessengerContext` содержит 21 DbSet и сейчас конфигурирует сущности смешанным способом: Fluent API в самом контексте плюс атрибуты на моделях. В нём также есть MassTransit Inbox/Outbox entities.
 
 ## Выполнено
 
-### 2.2. Удаление ASP.NET/SignalR из Core — первый перенос
+### 2.2. Перенос SignalR
 
-Перенесены:
+Перенесены `ChatHub`, `NotificationHub`, `UserStatusHub` из Core в `Messenger.API/Hubs`. Namespace и импорт Program.cs обновлены; маршруты `MapHub` сохранены.
 
-- `ChatHub`
-- `NotificationHub`
-- `UserStatusHub`
+### 2.3. Первый вынос EF mapping
 
-Новые пути:
+Создан `Messenger.Infrastructure/Data/Configurations/LogConfiguration.cs`, реализующий `IEntityTypeConfiguration<Log>`.
 
-- `Messenger.API/Hubs/ChatHub.cs`
-- `Messenger.API/Hubs/NotificationHub.cs`
-- `Messenger.API/Hubs/UserStatusHub.cs`
+Из `GuapMessengerContext.OnModelCreating` удалён inline-блок конфигурации `Log`; вместо него включено `modelBuilder.ApplyConfigurationsFromAssembly(typeof(GuapMessengerContext).Assembly)`.
 
-Namespace изменён на `Messenger.API.Hubs`, импорт в `Program.cs` обновлён. Маршруты и вызовы `MapHub` оставлены прежними.
+Сохранены настройки таблицы `logging.Logs`, первичного ключа, uuid/default SQL, типов колонок и индексов:
+- `IX_logs_timestamp`
+- `IX_logs_level`
+- `IX_logs_application`
 
-Из `Messenger.Core.csproj` удалены прямые зависимости `Microsoft.AspNetCore.Authentication.JwtBearer` и `Microsoft.EntityFrameworkCore`. Это убирает эти пакеты из Core, но само по себе ещё не доказывает, что все оставшиеся исходники Core полностью очищены от инфраструктурных концепций.
+Это перенос только Fluent mapping. Тип `Log` пока остаётся в Core; это промежуточный шаг, а не завершённое разделение Domain и Persistence.
+
+### 2.4. Зависимости Core
+
+Из `Messenger.Core.csproj` удалены прямые PackageReference на JwtBearer и EntityFrameworkCore. Сами модели пока всё ещё используют EF-аннотации и требуют дальнейшей миграции.
 
 ## Что осталось
 
-### 2.1. EF Core и persistence concerns
+1. Создать persistence entities/configurations в Infrastructure для основных сущностей.
+2. Перевести Infrastructure repositories/services на persistence entities.
+3. Перевести API/Web и Application contracts с прежних EF-моделей на чистые domain/DTO типы.
+4. После перевода потребителей удалить EF и JSON атрибуты из Core.
+5. Перенести DTO и сервисные интерфейсы в Application, не создавая зависимости Core → Application.
+6. Добавить архитектурную проверку, запрещающую EF Core/ASP.NET references и namespaces в Core.
 
-- проверить каждую модель на EF-specific атрибуты и навигационные свойства;
-- создать отдельные persistence entities/configurations в Infrastructure;
-- перенести mapping без изменения схемы БД;
-- только после миграции всех потребителей удалить persistence attributes из доменных типов.
+## Важные ограничения
 
-### 2.2. ASP.NET concerns
-
-- Hub-классы уже вынесены;
-- проверить оставшиеся файлы Core на ASP.NET/HTTP/JWT типы;
-- переносить найденные transport-specific типы в API, не добавляя обратных ссылок.
-
-### 2.3. Serialization concerns
-
-В моделях, например `Message` и `User`, ещё присутствуют `JsonIgnore` и другие serialization attributes. Их нужно заменить на отдельные DTO/контракты и настройки сериализации на границах приложения. Удалять их до замены нельзя: это может изменить JSON-ответы и раскрыть навигационные графы.
-
-### 2.4. Domain и DTO
-
-DTO, request/response модели и сервисные интерфейсы пока остаются в Core. Их переносить после подготовки Application contracts и обновления зависимых потребителей. Нельзя заставлять Core ссылаться на Application.
-
-## Безопасный порядок продолжения
-
-1. Инвентаризировать все типы Core и их потребителей.
-2. Создать persistence entities/configurations в Infrastructure и перенести mapping по одной сущности за раз.
-3. Перевести Infrastructure services/repositories на persistence entities, сохранив публичные контракты на переходный период.
-4. Создать Application.Contracts и перенести DTO с одновременным обновлением API/Web/Infrastructure.
-5. Перенести сервисные интерфейсы в Application.Common.Interfaces, когда Core перестанет зависеть от них.
-6. Удалить из Core EF mapping и serialization attributes после полного перевода потребителей.
-7. Зафиксировать отсутствие ASP.NET, EF Core и transport-зависимостей в Core архитектурной проверкой.
+- Нельзя удалять `JsonIgnore` до замены сериализации на DTO: это может раскрыть навигационные графы и изменить API payload.
+- Нельзя менять EF-аннотации до полного переноса соответствующего mapping в Fluent API.
+- Нельзя генерировать новую миграцию только на основании этого изменения: текущий перенос Log mapping должен сохранять модель БД, но сравнение snapshot/model и проверка миграций требуют .NET SDK.
 
 ## Проверки
 
-Для текущего изменения проверены Git tree, расположение файлов Hub, namespace и импорт в Program.cs, а также содержимое Core csproj. Сборка и тесты не запускались; поэтому совместимость после удаления PackageReference пока не подтверждена компилятором.
+Проверено чтением актуальных файлов из GitHub: Log mapping удалён из контекста, вынесенный класс содержит прежние настройки, а `ApplyConfigurationsFromAssembly` присутствует. `dotnet build`, `dotnet test` и сравнение EF model snapshot не запускались.
