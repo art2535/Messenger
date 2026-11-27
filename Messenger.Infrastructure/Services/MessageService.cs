@@ -49,6 +49,15 @@ namespace Messenger.Infrastructure.Services
         private static string LatestMessagesCacheKey(Guid chatId, int limit)
             => $"chat:{chatId:N}:messages:latest:{limit}";
 
+        private async Task<bool> IsChatParticipantAsync(Guid chatId, Guid userId, CancellationToken token)
+        {
+            if (userId == Guid.Empty)
+                return false;
+
+            return await _context.ChatParticipants.AsNoTracking()
+                .AnyAsync(p => p.ChatId == chatId && p.UserId == userId, token);
+        }
+
         private async Task InvalidateMessageCachesBestEffortAsync(Guid chatId, CancellationToken token)
         {
             try { await InvalidateMessageCachesAsync(chatId, token); }
@@ -134,6 +143,19 @@ namespace Messenger.Infrastructure.Services
 
         public async Task<List<MessageDto>> SearchMessagesAsync(Guid chatId, string query, CancellationToken token = default)
         {
+            return await SearchMessagesAsync(chatId, Guid.Empty, query, token, false);
+        }
+
+        public async Task<List<MessageDto>> SearchMessagesAsync(Guid chatId, Guid actorId, string query, CancellationToken token = default)
+        {
+            return await SearchMessagesAsync(chatId, actorId, query, token, true);
+        }
+
+        private async Task<List<MessageDto>> SearchMessagesAsync(Guid chatId, Guid actorId, string query, CancellationToken token, bool requireAuthorization)
+        {
+            if (requireAuthorization && !await IsChatParticipantAsync(chatId, actorId, token))
+                throw new UnauthorizedAccessException("Вы не участник этого чата");
+
             if (string.IsNullOrWhiteSpace(query))
                 return new List<MessageDto>();
 
@@ -201,6 +223,21 @@ namespace Messenger.Infrastructure.Services
         public async Task<(IReadOnlyList<MessageDto> Items, bool HasMore)> GetMessagesPagedAsync(
             Guid chatId, long? beforeSequence = null, int limit = 50, CancellationToken token = default)
         {
+            return await GetMessagesPagedAsync(chatId, Guid.Empty, beforeSequence, limit, token, false);
+        }
+
+        public async Task<(IReadOnlyList<MessageDto> Items, bool HasMore)> GetMessagesPagedAsync(
+            Guid chatId, Guid actorId, long? beforeSequence = null, int limit = 50, CancellationToken token = default)
+        {
+            return await GetMessagesPagedAsync(chatId, actorId, beforeSequence, limit, token, true);
+        }
+
+        private async Task<(IReadOnlyList<MessageDto> Items, bool HasMore)> GetMessagesPagedAsync(
+            Guid chatId, Guid actorId, long? beforeSequence, int limit, CancellationToken token, bool requireAuthorization)
+        {
+            if (requireAuthorization && !await IsChatParticipantAsync(chatId, actorId, token))
+                throw new UnauthorizedAccessException("Вы не участник этого чата");
+
             var (items, hasMore) = await GetMessagesByChatIdPagedAsync(chatId, beforeSequence, limit, token);
             return (items.Select(m => MapToDto(m, _encryptionService.TryDecryptSafe(m.MessageText))).ToList(), hasMore);
         }
@@ -241,6 +278,19 @@ namespace Messenger.Infrastructure.Services
 
         public async Task<MessageDto?> GetMessageByIdAsync(Guid chatId, Guid messageId, CancellationToken token = default)
         {
+            return await GetMessageByIdAsync(chatId, messageId, Guid.Empty, token, false);
+        }
+
+        public async Task<MessageDto?> GetMessageByIdAsync(Guid chatId, Guid messageId, Guid actorId, CancellationToken token = default)
+        {
+            return await GetMessageByIdAsync(chatId, messageId, actorId, token, true);
+        }
+
+        private async Task<MessageDto?> GetMessageByIdAsync(Guid chatId, Guid messageId, Guid actorId, CancellationToken token, bool requireAuthorization)
+        {
+            if (requireAuthorization && !await IsChatParticipantAsync(chatId, actorId, token))
+                throw new UnauthorizedAccessException("Вы не участник этого чата");
+
             var message = await _context.Messages.AsNoTracking().Where(m => m.ChatId == chatId && m.MessageId == messageId)
                 .Include(m => m.Sender).Include(m => m.Reactions).ThenInclude(r => r.User).Include(m => m.Attachments)
                 .AsSplitQuery().FirstOrDefaultAsync(token);
@@ -330,6 +380,21 @@ namespace Messenger.Infrastructure.Services
         public async Task<ChatExportResult> ExportChatAsync(Guid chatId, string format, string? chatName = null, 
             CancellationToken token = default)
         {
+            return await ExportChatAsync(chatId, Guid.Empty, format, chatName, token, false);
+        }
+
+        public async Task<ChatExportResult> ExportChatAsync(Guid chatId, Guid actorId, string format, string? chatName = null, 
+            CancellationToken token = default)
+        {
+            return await ExportChatAsync(chatId, actorId, format, chatName, token, true);
+        }
+
+        private async Task<ChatExportResult> ExportChatAsync(Guid chatId, Guid actorId, string format, string? chatName, 
+            CancellationToken token, bool requireAuthorization)
+        {
+            if (requireAuthorization && !await IsChatParticipantAsync(chatId, actorId, token))
+                throw new UnauthorizedAccessException("Вы не участник этого чата");
+
             format = (format ?? "txt").Trim().ToLowerInvariant();
             if (format is not ("txt" or "json" or "html" or "csv"))
                 format = "txt";
@@ -892,6 +957,19 @@ namespace Messenger.Infrastructure.Services
 
         public async Task<List<MessageDto>> GetPinnedMessagesAsync(Guid chatId, CancellationToken token = default)
         {
+            return await GetPinnedMessagesAsync(chatId, Guid.Empty, token, false);
+        }
+
+        public async Task<List<MessageDto>> GetPinnedMessagesAsync(Guid chatId, Guid actorId, CancellationToken token = default)
+        {
+            return await GetPinnedMessagesAsync(chatId, actorId, token, true);
+        }
+
+        private async Task<List<MessageDto>> GetPinnedMessagesAsync(Guid chatId, Guid actorId, CancellationToken token, bool requireAuthorization)
+        {
+            if (requireAuthorization && !await IsChatParticipantAsync(chatId, actorId, token))
+                throw new UnauthorizedAccessException("Вы не участник этого чата");
+
             var messages = await _context.Messages.AsNoTracking().Where(m => m.ChatId == chatId && m.IsPinned)
                 .OrderBy(m => m.PinnedAt).ThenBy(m => m.SequenceNumber)
                 .Include(m => m.Sender).Include(m => m.Reactions).ThenInclude(r => r.User).Include(m => m.Attachments)

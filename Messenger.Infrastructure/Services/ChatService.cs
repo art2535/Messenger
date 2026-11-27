@@ -29,6 +29,15 @@ namespace Messenger.Infrastructure.Services
 
         private static string UserChatsCacheKey(Guid userId) => $"user:{userId:N}:chats";
 
+        private async Task<bool> IsChatParticipantAsync(Guid chatId, Guid userId, CancellationToken token)
+        {
+            if (userId == Guid.Empty)
+                return false;
+
+            return await _context.ChatParticipants.AsNoTracking()
+                .AnyAsync(p => p.ChatId == chatId && p.UserId == userId, token);
+        }
+
         private static ChatDto MapChat(Chat chat)
         {
             return new ChatDto
@@ -303,6 +312,19 @@ namespace Messenger.Infrastructure.Services
 
         public async Task<ChatDto?> GetChatByIdAsync(Guid chatId, CancellationToken token = default)
         {
+            return await GetChatByIdAsync(chatId, Guid.Empty, token, false);
+        }
+
+        public async Task<ChatDto?> GetChatByIdAsync(Guid chatId, Guid actorId, CancellationToken token = default)
+        {
+            return await GetChatByIdAsync(chatId, actorId, token, true);
+        }
+
+        private async Task<ChatDto?> GetChatByIdAsync(Guid chatId, Guid actorId, CancellationToken token, bool requireAuthorization)
+        {
+            if (requireAuthorization && !await IsChatParticipantAsync(chatId, actorId, token))
+                throw new UnauthorizedAccessException("Вы не участник этого чата");
+
             var chat = await _context.Chats
                 .AsNoTracking()
                 .Include(c => c.ChatParticipants)
@@ -316,6 +338,21 @@ namespace Messenger.Infrastructure.Services
         public async Task<IEnumerable<ChatParticipantDto>> GetChatParticipantsAsync(Guid chatId,
             CancellationToken token = default)
         {
+            return await GetChatParticipantsAsync(chatId, Guid.Empty, token, false);
+        }
+
+        public async Task<IEnumerable<ChatParticipantDto>> GetChatParticipantsAsync(Guid chatId, Guid actorId,
+            CancellationToken token = default)
+        {
+            return await GetChatParticipantsAsync(chatId, actorId, token, true);
+        }
+
+        private async Task<IEnumerable<ChatParticipantDto>> GetChatParticipantsAsync(Guid chatId, Guid actorId,
+            CancellationToken token, bool requireAuthorization)
+        {
+            if (requireAuthorization && !await IsChatParticipantAsync(chatId, actorId, token))
+                throw new UnauthorizedAccessException("Вы не участник этого чата");
+
             var participants = await _context.ChatParticipants
                 .AsNoTracking()
                 .Where(part => part.ChatId == chatId)

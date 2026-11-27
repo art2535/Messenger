@@ -9,8 +9,10 @@ public interface IChatService
     Task AddParticipantToChatAsync(Guid chatId, Guid actorId, Guid userId, string role, CancellationToken cancellationToken = default);
     Task DeleteParticipantFromChatAsync(Guid chatId, Guid actorId, Guid userId, CancellationToken cancellationToken = default);
     Task<IEnumerable<ChatParticipantDto>> GetChatParticipantsAsync(Guid chatId, CancellationToken cancellationToken = default);
+        Task<IEnumerable<ChatParticipantDto>> GetChatParticipantsAsync(Guid chatId, Guid actorId, CancellationToken cancellationToken = default);
     Task UpdateChatAsync(UpdateChatDto chat, Guid actorId, CancellationToken cancellationToken = default);
     Task<ChatDto?> GetChatByIdAsync(Guid chatId, CancellationToken cancellationToken = default);
+        Task<ChatDto?> GetChatByIdAsync(Guid chatId, Guid actorId, CancellationToken cancellationToken = default);
     Task DeleteChatAsync(Guid chatId, Guid actorId, CancellationToken cancellationToken = default);
     Task<List<ChatListItemDto>> GetUserChatsWithLastMessageAsync(Guid userId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<Guid>> GetPeerUserIdsAsync(Guid userId, CancellationToken cancellationToken = default);

@@ -83,7 +83,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                await User.GetCurrentUserIdAsync(_userService);
+                var userId = await User.GetCurrentUserIdAsync(_userService);
 
                 if (string.IsNullOrWhiteSpace(query))
                 {
@@ -91,7 +91,7 @@ namespace Messenger.API.Controllers
                     ));
                 }
 
-                var results = await _messageService.SearchMessagesAsync(chatId, query.Trim());
+                var results = await _messageService.SearchMessagesAsync(chatId, userId, query.Trim(), ct);
 
                 return Ok(ApiResponse.Success(results));
             }
@@ -203,7 +203,7 @@ namespace Messenger.API.Controllers
                     }
                 }
 
-                var chat = await _chatService.GetChatByIdAsync(chatId, ct);
+                var chat = await _chatService.GetChatByIdAsync(chatId, userId, ct);
                 if (chat == null)
                 {
                     return NotFound(ApiResponse.Failure("Чат не найден", "NOT_FOUND"));
@@ -438,7 +438,7 @@ namespace Messenger.API.Controllers
                         return NotFound(ApiResponse.Failure($"Сообщение {mid} не найдено", "NOT_FOUND"));
                     }
 
-                    var sourceChat = await _chatService.GetChatByIdAsync(msg.ChatId, ct);
+                    var sourceChat = await _chatService.GetChatByIdAsync(msg.ChatId, userId, ct);
                     if (sourceChat == null || !sourceChat.Participants.Any(p => p.UserId == user.UserId))
                     {
                         return StatusCode(StatusCodes.Status403Forbidden, ApiResponse.Failure("Нет доступа к исходному чату", "FORBIDDEN"));
@@ -452,7 +452,7 @@ namespace Messenger.API.Controllers
                 var targetChats = new List<ChatDto>();
                 foreach (var targetChatId in request.TargetChatIds.Distinct())
                 {
-                    var chat = await _chatService.GetChatByIdAsync(targetChatId, ct);
+                    var chat = await _chatService.GetChatByIdAsync(targetChatId, userId, ct);
                     if (chat == null)
                     {
                         return NotFound(ApiResponse.Failure($"Чат {targetChatId} не найден", "NOT_FOUND"));
@@ -804,7 +804,7 @@ namespace Messenger.API.Controllers
             {
                 var userId = await User.GetCurrentUserIdAsync(_userService);
 
-                var chat = await _chatService.GetChatByIdAsync(chatId, ct);
+                var chat = await _chatService.GetChatByIdAsync(chatId, userId, ct);
                 if (chat == null)
                 {
                     return NotFound(ApiResponse.Failure("Чат не найден", "NOT_FOUND"));
@@ -881,10 +881,10 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                await User.GetCurrentUserIdAsync(_userService);
+                var userId = await User.GetCurrentUserIdAsync(_userService);
 
                 var (messages, hasMore) = await _messageService.GetMessagesPagedAsync(
-                    chatId, beforeSequence, limit, ct);
+                    chatId, userId, beforeSequence, limit, ct);
 
                 var dtos = messages.ToList();
 
@@ -930,13 +930,13 @@ namespace Messenger.API.Controllers
             {
                 var userId = await User.GetCurrentUserIdAsync(_userService);
 
-                var participants = await _chatService.GetChatParticipantsAsync(chatId, ct);
+                var participants = await _chatService.GetChatParticipantsAsync(chatId, userId, ct);
                 if (!participants.Any(p => p.UserId == userId))
                 {
                     return StatusCode(StatusCodes.Status403Forbidden, ApiResponse.Failure("Вы не являетесь участником этого чата", "FORBIDDEN"));
                 }
 
-                var chat = await _chatService.GetChatByIdAsync(chatId, ct);
+                var chat = await _chatService.GetChatByIdAsync(chatId, userId, ct);
                 if (chat == null)
                 {
                     return NotFound(ApiResponse.Failure("Чат не найден", "NOT_FOUND"));
@@ -948,7 +948,7 @@ namespace Messenger.API.Controllers
                     return BadRequest(ApiResponse.Failure("Поддерживаемые форматы: txt, json, html, csv", "INVALID_REQUEST"));
                 }
 
-                var result = await _messageService.ExportChatAsync(chatId, normalizedFormat, chat.Name, ct);
+                var result = await _messageService.ExportChatAsync(chatId, userId, normalizedFormat, chat.Name, ct);
 
                 return File(result.Content, result.ContentType, result.FileName);
             }
@@ -997,7 +997,7 @@ namespace Messenger.API.Controllers
                     return NotFound(ApiResponse.Failure("Сообщение не найдено", "NOT_FOUND"));
                 }
 
-                var chat = await _chatService.GetChatByIdAsync(request.ChatId, ct);
+                var chat = await _chatService.GetChatByIdAsync(request.ChatId, userId, ct);
                 if (chat == null || !chat.Participants.Any(p => p.UserId == userId))
                     return Forbid();
 
@@ -1058,13 +1058,13 @@ namespace Messenger.API.Controllers
             {
                 var userId = await User.GetCurrentUserIdAsync(_userService);
 
-                var message = await _messageService.GetMessageByIdAsync(chatId, messageId, ct);
+                var message = await _messageService.GetMessageByIdAsync(chatId, messageId, userId, ct);
                 if (message == null)
                 {
                     return NotFound(ApiResponse.Failure("Сообщение не найдено", "NOT_FOUND"));
                 }
 
-                var chat = await _chatService.GetChatByIdAsync(chatId, ct);
+                var chat = await _chatService.GetChatByIdAsync(chatId, userId, ct);
                 if (chat == null || !chat.Participants.Any(p => p.UserId == userId))
                 {
                     return StatusCode(StatusCodes.Status403Forbidden, ApiResponse.Failure("Вы не являетесь участником этого чата", "FORBIDDEN"));
@@ -1137,7 +1137,7 @@ namespace Messenger.API.Controllers
                 }
 
                 var chatId = request.ChatId;
-                var chat = await _chatService.GetChatByIdAsync(chatId, ct);
+                var chat = await _chatService.GetChatByIdAsync(chatId, userId, ct);
                 if (chat == null)
                     return NotFound(ApiResponse.Failure("Чат не найден", "NOT_FOUND"));
 
@@ -1149,7 +1149,7 @@ namespace Messenger.API.Controllers
 
                 foreach (var mid in request.MessageIds.Distinct())
                 {
-                    var message = await _messageService.GetMessageByIdAsync(chatId, mid, ct);
+                    var message = await _messageService.GetMessageByIdAsync(chatId, mid, userId, ct);
                     if (message == null)
                         continue;
 
@@ -1170,7 +1170,7 @@ namespace Messenger.API.Controllers
                 if (deleted > 0)
                     DeleteStoredAttachmentFiles(attachmentsToDelete);
 
-                var bulkChat = await _chatService.GetChatByIdAsync(chatId, ct);
+                var bulkChat = await _chatService.GetChatByIdAsync(chatId, userId, ct);
                 var participants = bulkChat?.Participants?.ToList()
                     ?? new List<ChatParticipantDto>();
 
@@ -1270,7 +1270,7 @@ namespace Messenger.API.Controllers
                 await _hubContext.Clients.Group(message.ChatId.ToString())
                     .SendAsync("MessagePinned", payload, ct);
 
-                var chat = await _chatService.GetChatByIdAsync(message.ChatId, ct);
+                var chat = await _chatService.GetChatByIdAsync(message.ChatId, userId, ct);
                 if (chat?.Participants != null)
                 {
                     foreach (var participant in chat.Participants)
@@ -1342,7 +1342,7 @@ namespace Messenger.API.Controllers
                 await _hubContext.Clients.Group(message.ChatId.ToString())
                     .SendAsync("MessagePinned", payload, ct);
 
-                var chat = await _chatService.GetChatByIdAsync(message.ChatId, ct);
+                var chat = await _chatService.GetChatByIdAsync(message.ChatId, userId, ct);
                 if (chat?.Participants != null)
                 {
                     foreach (var participant in chat.Participants)
@@ -1385,13 +1385,13 @@ namespace Messenger.API.Controllers
             {
                 var userId = await User.GetCurrentUserIdAsync(_userService);
 
-                var chat = await _chatService.GetChatByIdAsync(chatId, ct);
+                var chat = await _chatService.GetChatByIdAsync(chatId, userId, ct);
                 if (chat == null || !chat.Participants.Any(p => p.UserId == userId))
                 {
                     return StatusCode(StatusCodes.Status403Forbidden, ApiResponse.Failure("Вы не являетесь участником этого чата", "FORBIDDEN"));
                 }
 
-                var messages = await _messageService.GetPinnedMessagesAsync(chatId, ct);
+                var messages = await _messageService.GetPinnedMessagesAsync(chatId, userId, ct);
                 var data = messages.Select(m =>
                 {
                     var decrypted = m.MessageText;

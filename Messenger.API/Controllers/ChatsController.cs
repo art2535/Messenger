@@ -91,13 +91,13 @@ namespace Messenger.API.Controllers
             {
                 var userId = await User.GetCurrentUserIdAsync(_userService);
 
-                var chat = await _chatService.GetChatByIdAsync(chatId, ct);
+                var chat = await _chatService.GetChatByIdAsync(chatId, userId, ct);
                 if (chat == null)
                 {
                     return NotFound(ApiResponse.Failure("Чат не найден", "NOT_FOUND"));
                 }
 
-                var participants = await _chatService.GetChatParticipantsAsync(chatId, ct);
+                var participants = await _chatService.GetChatParticipantsAsync(chatId, userId, ct);
                 if (!participants.Any(p => p.UserId == userId))
                 {
                     return StatusCode(StatusCodes.Status403Forbidden, ApiResponse.Failure("Доступ к чату запрещён", "FORBIDDEN"));
@@ -290,7 +290,7 @@ namespace Messenger.API.Controllers
             {
                 var currentUserId = await User.GetCurrentUserIdAsync(_userService);
 
-                var chat = await _chatService.GetChatByIdAsync(chatId, ct);
+                var chat = await _chatService.GetChatByIdAsync(chatId, currentUserId, ct);
                 if (chat == null)
                 {
                     return NotFound(ApiResponse.Failure("Чат не найден", "NOT_FOUND"));
@@ -330,7 +330,7 @@ namespace Messenger.API.Controllers
                         User = userInfo
                     }, ct);
 
-                var updatedChat = await _chatService.GetChatByIdAsync(chatId, ct);
+                var updatedChat = await _chatService.GetChatByIdAsync(chatId, currentUserId, ct);
                 var updatedCount = updatedChat?.Participants?.Count ?? 0;
 
                 await _hubContext.Clients.Group(chatId.ToString())
@@ -401,7 +401,7 @@ namespace Messenger.API.Controllers
             {
                 var currentUserId = await User.GetCurrentUserIdAsync(_userService);
 
-                var chat = await _chatService.GetChatByIdAsync(chatId, ct);
+                var chat = await _chatService.GetChatByIdAsync(chatId, currentUserId, ct);
                 if (chat == null)
                 {
                     return NotFound(ApiResponse.Failure("Чат не найден", "NOT_FOUND"));
@@ -457,7 +457,7 @@ namespace Messenger.API.Controllers
             {
                 var currentUserId = await User.GetCurrentUserIdAsync(_userService);
 
-                var chat = await _chatService.GetChatByIdAsync(chatId, ct);
+                var chat = await _chatService.GetChatByIdAsync(chatId, currentUserId, ct);
                 if (chat == null)
                 {
                     return NotFound(ApiResponse.Failure("Чат не найден", "NOT_FOUND"));
@@ -561,7 +561,7 @@ namespace Messenger.API.Controllers
                         UserId = userId
                     }, ct);
 
-                var updatedChat = await _chatService.GetChatByIdAsync(chatId, ct);
+                var updatedChat = await _chatService.GetChatByIdAsync(chatId, currentUserId, ct);
                 var updatedCount = updatedChat?.Participants?.Count ?? 0;
 
                 await _hubContext.Clients.Group(chatId.ToString())
@@ -608,7 +608,7 @@ namespace Messenger.API.Controllers
 
         private async Task<string> GetPrivateChatDisplayNameAsync(Guid chatId, Guid currentUserId, CancellationToken ct)
         {
-            var participants = await _chatService.GetChatParticipantsAsync(chatId, ct);
+            var participants = await _chatService.GetChatParticipantsAsync(chatId, currentUserId, ct);
 
             var otherParticipant = participants
                 .FirstOrDefault(p => p.UserId != currentUserId);
