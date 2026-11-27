@@ -2,7 +2,7 @@
 
 ## Текущее состояние после этапа 2.7.9
 
-`IUserService` переведён с EF-моделей `User`/`Role` на DTO. `IMessageService` также отвязан от EF-сущности `Message`: чтение и закрепление возвращают `MessageDto`, изменение текста и статуса выполняется командами по ID. В контракте остаётся событие `ChatMessageSent`, его назначение и место размещения требуют отдельного решения.
+`IUserService` переведён с EF-моделей `User`/`Role` на DTO. `IMessageService` также отвязан от EF-сущности `Message`: чтение и закрепление возвращают `MessageDto`, изменение текста и статуса выполняется командами по ID. `ChatMessageSent` выделено в Application как интеграционный контракт; физическое расположение изменено без изменения CLR namespace и MassTransit message URN.
 
 `ServiceResult<T>` в Application унифицирован с `ApiResponse<T>`: он наследует общий формат ответа и использует PascalCase-свойства `IsSuccess`, `Data`, `Error`, `ErrorCode`, `InnerError`, `Message`, `Meta`. `InnerError` добавлен в базовый `ApiResponse<T>` для сохранения прежней диагностики.
 
@@ -27,8 +27,8 @@
 
 ## Следующие шаги
 
-1. Отделить `ChatMessageSent` от Core-моделей и определить границу интеграционных событий.
-2. Перевести оставшиеся entity-based сервисные контракты на DTO/команды.
+1. Перевести оставшиеся entity-based сервисные контракты на DTO/команды, включая `IScheduledMessageService` и его `AttachmentInfo` dependency.
+2. Определить дальнейшее разделение интеграционных событий и прикладных команд.
 3. После аудита потребителей сменить namespace интерфейсов Application с временных `Messenger.Core.Interfaces`.
 4. Удалять временные зависимости Core только после полного аудита и успешной сборки.
 
@@ -40,3 +40,8 @@
 ## Результат подэтапа 2.7.9 — IMessageService
 
 Методы чтения и закрепления сообщений переведены на `MessageDto`. `SendMessageAsync` возвращает `ServiceResult<MessageDto>`. Для записи введены операции `UpdateMessageContentAsync` и `UpdateDeliveryStatusAsync`, принимающие идентификатор и необходимые данные вместо EF-сущности `Message`. API и consumer используют эти контракты. EF-сущность и внутренние методы кэширования/пагинации остаются внутри Infrastructure.
+
+
+## Результат подэтапа 2.7.10 — ChatMessageSent
+
+`ChatMessageSent` перенесено физически в `Messenger.Application/Messages`, при этом namespace `Messenger.Core.Messages` сохранён для совместимости MassTransit. Событие используется API-контроллером, фоновым диспетчером запланированных сообщений, `MessageService` и `ChatMessageSentConsumer`. `AttachmentInfo` оставлен в Core: он также входит в контракт `IScheduledMessageService`, который ещё не отвязан от EF-модели `ScheduledMessage`; Application не может быть ссылкой для Core.

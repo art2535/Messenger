@@ -73,3 +73,8 @@ Fluent-конфигурации всех сущностей вынесены в 
 ### 2.7.9. DTO-контракт IMessageService
 
 Методы `IMessageService` больше не принимают и не возвращают EF-сущность `Message`. Отправка возвращает `ServiceResult<MessageDto>`; чтение, поиск и закреплённые сообщения возвращают `MessageDto`. Изменение содержимого и статуса доставки выполняется командами `UpdateMessageContentAsync` и `UpdateDeliveryStatusAsync` по идентификатору. Преобразование EF-сущностей и навигаций в DTO находится в Infrastructure. API-контроллер и MassTransit consumer переведены на DTO/команды. В контракте остаётся `ChatMessageSent`, который ещё требует отдельного архитектурного решения.
+
+
+### 2.7.10. Интеграционное событие ChatMessageSent
+
+`ChatMessageSent` физически перенесено в `Messenger.Application/Messages`. Namespace `Messenger.Core.Messages` сохранён намеренно, чтобы не менять MassTransit message URN и совместимость уже опубликованных сообщений. Событие по-прежнему использует `AttachmentInfo` из Core; его перенос отложен до миграции `IScheduledMessageService`, который также зависит от этого типа. Публикация через EF Core Bus Outbox, consumer, endpoint и retry policy не изменялись.

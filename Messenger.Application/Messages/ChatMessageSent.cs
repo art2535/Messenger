@@ -1,4 +1,6 @@
-﻿namespace Messenger.Core.Messages
+﻿using Messenger.Core.Messages;
+
+namespace Messenger.Core.Messages
 {
     public record ChatMessageSent
     {

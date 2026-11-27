@@ -26,3 +26,9 @@
 ## Подэтап 2.7.9 — DTO-контракт сообщений
 
 Методы чтения `IMessageService` переведены на `MessageDto`, включая отправку, постраничное чтение, получение по ID, поиск и закреплённые сообщения. DTO формируется в Infrastructure из EF-сущностей; текст расшифровывается там же, EF-навигации не выходят за границу Persistence. Изменение текста и статуса доставки выполняется отдельными командами по идентификатору, а не передачей EF-сущности. API-контроллер и MassTransit consumer используют DTO и команды обновления.
+
+## Подэтап 2.7.10 — интеграционное событие ChatMessageSent
+
+`ChatMessageSent` физически перенесено из Core в `Messenger.Application/Messages`. Его CLR namespace `Messenger.Core.Messages` намеренно сохранён: MassTransit использует идентификатор типа сообщения, производный от namespace и имени CLR-типа. Сохранение namespace позволяет не менять message URN и не создавать несовместимость для уже опубликованных сообщений в RabbitMQ. Контракт по-прежнему использует `AttachmentInfo` из Core; перенос этого типа отдельно невозможен до отвязки `IScheduledMessageService` от Core, поскольку сам интерфейс находится в Core.
+
+Событие публикуется через `IPublishEndpoint` с включённым EF Core Bus Outbox и обрабатывается `ChatMessageSentConsumer`. Перенос не меняет поля, сериализацию, consumer, endpoint, retry policy или порядок публикации.
