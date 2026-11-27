@@ -62,3 +62,8 @@
 После физического переноса контракты получили namespaces нового проекта (`Messenger.Application.Interfaces`, `Messenger.Application.DTOs.*`, `Messenger.Application.Messages`). Потребители в API, Infrastructure и Web обновлены на новые namespaces. Физические копии перенесённых файлов в Core отсутствуют; оставшиеся в Core типы DTO и интерфейсы сохраняют собственные прежние namespaces до отдельной миграции.
 
 `ChatMessageSent` теперь объявлен в `Messenger.Application.Messages`, но его MassTransit URN явно закреплён за прежним значением `urn:message:Messenger.Core.Messages:ChatMessageSent`, чтобы не менять wire contract.
+
+
+## Результат подэтапа 2.7.13 — ILoginService
+
+`ILoginService` перенесён в Application и отвязан от EF-сущности `Login`. Добавление принимает `CreateLoginDto`, чтение возвращает `LoginDto`, завершение сессии выполняется командой `CloseLoginAsync`. DTO чтения не раскрывает токен/хеш. Все EF-операции и mapping остаются в `LoginService` Infrastructure. `LoginsController` использует только DTO и идентификаторы.

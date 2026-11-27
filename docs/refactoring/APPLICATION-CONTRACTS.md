@@ -47,3 +47,8 @@
 Все файлы, физически перенесённые в `Messenger.Application`, используют пространства имён по новому проекту: `Messenger.Application.Interfaces`, `Messenger.Application.DTOs` (с соответствующими подпространствами) и `Messenger.Application.Messages`. Старые `using Messenger.Core.*` для этих контрактов заменены или дополнены новыми импортами там, где в Core остаются DTO/интерфейсы с тем же родительским пространством имён. Файлы перенесённых контрактов удалены из `Messenger.Core`; старые пространства имён больше не используются как алиасы совместимости.
 
 Для `ChatMessageSent` сохранён исходный MassTransit message URN `urn:message:Messenger.Core.Messages:ChatMessageSent` через `MessageUrnAttribute`. Это позволяет изменить CLR namespace без изменения идентификатора сообщения в брокере. `Messenger.Application` ссылается на `MassTransit.Abstractions` только ради атрибута контракта.
+
+
+## Подэтап 2.7.13 — контракт сессий входа
+
+`ILoginService` перенесён в `Messenger.Application.Interfaces`. Методы добавления и чтения используют `CreateLoginDto` и `LoginDto`; обновление активной сессии заменено на команду `CloseLoginAsync(userId, loginId)`. `LoginDto` не содержит токен или его хеш. Infrastructure создаёт и обновляет EF-сущность `Login` и отображает её в DTO. `LoginsController` больше не создаёт и не изменяет EF-сущности напрямую.
