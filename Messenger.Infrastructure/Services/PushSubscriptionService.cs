@@ -147,6 +147,14 @@ namespace Messenger.Infrastructure.Services
             await _context.Database.ExecuteSqlInterpolatedAsync(
                 $"SELECT pg_advisory_xact_lock(hashtextextended({subscription.Endpoint}, 0))", ct);
 
+            var ownsSubscription = await _context.PushSubscriptions
+                .AnyAsync(s => s.Id == subscription.Id && s.UserId == userId, ct);
+            if (!ownsSubscription)
+            {
+                await transaction.CommitAsync(ct);
+                return;
+            }
+
             await _context.PushSubscriptions
                 .Where(s => s.Endpoint == subscription.Endpoint && s.Id != subscription.Id)
                 .ExecuteDeleteAsync(ct);
