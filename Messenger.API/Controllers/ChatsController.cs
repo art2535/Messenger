@@ -1,6 +1,6 @@
 ﻿using Asp.Versioning;
 using Messenger.API.Extensions;
-using Messenger.Core.DTOs.Chats;
+using Messenger.Application.DTOs.Chats;
 using Messenger.API.Hubs;
 using Messenger.Core.Interfaces;
 using Messenger.Application.Interfaces;
@@ -116,9 +116,9 @@ namespace Messenger.API.Controllers
                     {
                         Id = p.UserId,
                         UserId = p.UserId,
-                        Name = $"{p.User?.FirstName} {p.User?.LastName}".Trim(),
-                        FullName = $"{p.User?.FirstName} {p.User?.LastName}".Trim(),
-                        Avatar = p.User?.Account?.Avatar,
+                        Name = $"{p.FirstName} {p.LastName}".Trim(),
+                        FullName = $"{p.FirstName} {p.LastName}".Trim(),
+                        Avatar = p.Avatar,
                         Role = role
                     };
                 }).ToList();
@@ -166,7 +166,7 @@ namespace Messenger.API.Controllers
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> PostCreateChatAsync(
-            [FromBody, Description("Данные для создания чата")] CreateChatRequest request,
+            [FromBody, Description("Данные для создания чата")] CreateChatDto request,
             CancellationToken ct = default)
         {
             if (!new[] { "private", "group" }.Contains(request.Type))
@@ -379,7 +379,7 @@ namespace Messenger.API.Controllers
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> PutUpdateChatAsync(
             [FromRoute, Description("Идентификатор чата")] Guid chatId,
-            [FromBody, Description("Новые данные чата")] UpdateChatRequest request,
+            [FromBody, Description("Новые данные чата")] UpdateChatDto request,
             CancellationToken ct = default)
         {
             if (string.IsNullOrWhiteSpace(request.Name))
@@ -399,7 +399,7 @@ namespace Messenger.API.Controllers
 
                 chat.Name = request.Name;
 
-                await _chatService.UpdateChatAsync(chat, ct);
+                await _chatService.UpdateChatAsync(new UpdateChatDto { ChatId = chatId, Name = request.Name }, ct);
 
                 await _hubContext.Clients.Group(chatId.ToString()).SendAsync("ChatUpdated", new
                 {
@@ -446,7 +446,7 @@ namespace Messenger.API.Controllers
                     return NotFound(ApiResponse.Failure("Чат не найден", "NOT_FOUND"));
                 }
 
-                await _chatService.DeleteChatAsync(chat, ct);
+                await _chatService.DeleteChatAsync(chatId, ct);
 
                 await _hubContext.Clients.Group(chatId.ToString()).SendAsync("ChatDeleted", chatId, ct);
 
@@ -578,10 +578,10 @@ namespace Messenger.API.Controllers
             var otherParticipant = participants
                 .FirstOrDefault(p => p.UserId != currentUserId);
 
-            if (otherParticipant?.User == null)
+            if (otherParticipant == null)
                 return "Удалённый пользователь";
 
-            return $"{otherParticipant.User.FirstName} {otherParticipant.User.LastName}".Trim();
+            return $"{otherParticipant.FirstName} {otherParticipant.LastName}".Trim();
         }
 
         private async Task<string?> GetOtherUserAvatarAsync(Guid userId, CancellationToken ct)

@@ -7,6 +7,7 @@ using Messenger.Core.Enums;
 using Messenger.Core.Hubs;
 using Messenger.Core.Interfaces;
 using Messenger.Application.Interfaces;
+using Messenger.Application.Interfaces;
 using Messenger.Core.Messages;
 using Messenger.Application.Messages;
 using Microsoft.AspNetCore.SignalR;

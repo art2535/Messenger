@@ -1,4 +1,5 @@
-using Messenger.Core.Interfaces;
+using Messenger.Application.DTOs.Chats;
+using Messenger.Application.Interfaces;
 using Messenger.Application.Interfaces;
 using Messenger.Core.Models;
 using Messenger.Infrastructure.Data;
@@ -27,7 +28,35 @@ namespace Messenger.Infrastructure.Services
 
         private static string UserChatsCacheKey(Guid userId) => $"user:{userId:N}:chats";
 
-        public async Task<Chat> CreateChatAsync(string name, string type, Guid creatorId, CancellationToken token = default)
+        private static ChatDto MapChat(Chat chat)
+        {
+            return new ChatDto
+            {
+                ChatId = chat.ChatId,
+                Name = chat.Name,
+                Type = chat.Type,
+                UserId = chat.UserId,
+                CreationDate = chat.CreationDate,
+                Participants = chat.ChatParticipants.Select(MapParticipant).ToList()
+            };
+        }
+
+        private static ChatParticipantDto MapParticipant(ChatParticipant participant)
+        {
+            return new ChatParticipantDto
+            {
+                ChatId = participant.ChatId,
+                UserId = participant.UserId,
+                Role = participant.Role,
+                JoinDate = participant.JoinDate,
+                FirstName = participant.User?.FirstName,
+                LastName = participant.User?.LastName,
+                Avatar = participant.User?.Account?.Avatar,
+                ExternalId = participant.User?.ExternalId
+            };
+        }
+
+        public async Task<ChatDto> CreateChatAsync(string name, string type, Guid creatorId, CancellationToken token = default)
         {
             var chat = new Chat
             {
@@ -53,13 +82,13 @@ namespace Messenger.Infrastructure.Services
 
             await _cache.RemoveAsync(UserChatsCacheKey(creatorId), token);
 
-            return chat;
+            return new ChatDto { ChatId = chat.ChatId, Name = chat.Name, Type = chat.Type, UserId = chat.UserId, CreationDate = chat.CreationDate };
         }
 
-        public async Task<List<object>> GetUserChatsWithLastMessageAsync(Guid userId, CancellationToken token = default)
+        public async Task<List<ChatListItemDto>> GetUserChatsWithLastMessageAsync(Guid userId, CancellationToken token = default)
         {
             var cacheKey = UserChatsCacheKey(userId);
-            var cached = await _cache.GetAsync<List<object>>(cacheKey, token);
+            var cached = await _cache.GetAsync<List<ChatListItemDto>>(cacheKey, token);
             if (cached is { Count: > 0 })
             {
                 _logger.LogInformation("GetUserChats: source=Redis userId={UserId} chats={Count}", userId, cached.Count);
@@ -78,7 +107,7 @@ namespace Messenger.Infrastructure.Services
 
             if (chats.Count == 0)
             {
-                await _cache.SetAsync(cacheKey, new List<object>(), ChatsListTtl, token);
+                await _cache.SetAsync(cacheKey, new List<ChatListItemDto>(), ChatsListTtl, token);
                 return new List<object>();
             }
 
@@ -133,7 +162,7 @@ namespace Messenger.Infrastructure.Services
                 .Select(g => new { ChatId = g.Key, Count = g.Count() })
                 .ToDictionaryAsync(x => x.ChatId, x => x.Count, token);
 
-            var sortable = new List<(DateTime SortKey, object Item)>();
+            var sortable = new List<(DateTime SortKey, ChatListItemDto Item)>();
 
             foreach (var chat in chats)
             {
@@ -165,28 +194,28 @@ namespace Messenger.Infrastructure.Services
 
                 var sortKey = lastMessageAt ?? DateTime.MinValue;
 
-                var item = new
+                var item = new ChatListItemDto
                 {
-                    chatId = chat.ChatId,
-                    name = chat.Type == "private"
+                    ChatId = chat.ChatId,
+                    Name = chat.Type == "private"
                         ? chat.ChatParticipants
                             .Where(p => p.UserId != userId)
                             .Select(p => $"{p.User.FirstName} {p.User.LastName}".Trim())
                             .FirstOrDefault() ?? "Приватный чат"
                         : chat.Name,
-                    avatar = chat.Type == "private"
+                    Avatar = chat.Type == "private"
                         ? chat.ChatParticipants
                             .Where(p => p.UserId != userId)
                             .Select(p => p.User.Account?.Avatar)
                             .FirstOrDefault()
                         : null,
-                    type = chat.Type,
-                    lastMessage = decryptedLastMessage,
-                    lastMessageAt = lastMessageAt,
-                    lastMessageTime = lastMessageAt,
-                    lastMessageSentAt = lastMessageAt,
-                    isOnline = true,
-                    unreadCount = unreadCount
+                    Type = chat.Type,
+                    LastMessage = decryptedLastMessage,
+                    LastMessageAt = lastMessageAt,
+                    LastMessageTime = lastMessageAt,
+                    LastMessageSentAt = lastMessageAt,
+                    IsOnline = true,
+                    UnreadCount = unreadCount
                 };
 
                 sortable.Add((sortKey, item));
@@ -201,15 +230,17 @@ namespace Messenger.Infrastructure.Services
             return result;
         }
 
-        public async Task<IEnumerable<Chat>> GetUserChatsAsync(Guid userId, CancellationToken token = default)
+        public async Task<IEnumerable<ChatDto>> GetUserChatsAsync(Guid userId, CancellationToken token = default)
         {
-            return await _context.Chats
+            var chats = await _context.Chats
                 .AsNoTracking()
                 .Include(c => c.ChatParticipants)
                     .ThenInclude(cp => cp.User)
                         .ThenInclude(u => u.Account)
                 .Where(c => c.ChatParticipants.Any(cp => cp.UserId == userId))
                 .ToListAsync(token);
+
+            return chats.Select(MapChat);
         }
 
         public async Task AddParticipantToChatAsync(Guid chatId, Guid userId, string role, CancellationToken token = default)
@@ -253,12 +284,16 @@ namespace Messenger.Infrastructure.Services
             await InvalidateChatsCacheForParticipantsAsync(chatId, token);
         }
 
-        public async Task DeleteChatAsync(Chat chat, CancellationToken token = default)
+        public async Task DeleteChatAsync(Guid chatId, CancellationToken token = default)
         {
             var participantIds = await _context.ChatParticipants
-                .Where(p => p.ChatId == chat.ChatId)
+                .Where(p => p.ChatId == chatId)
                 .Select(p => p.UserId)
                 .ToListAsync(token);
+
+            var chat = await _context.Chats.FirstOrDefaultAsync(c => c.ChatId == chatId, token);
+            if (chat == null)
+                return;
 
             _context.Chats.Remove(chat);
             await _context.SaveChangesAsync(token);
@@ -267,26 +302,38 @@ namespace Messenger.Infrastructure.Services
             await _cache.RemoveAsync(keys, token);
         }
 
-        public async Task<Chat?> GetChatByIdAsync(Guid chatId, CancellationToken token = default)
+        public async Task<ChatDto?> GetChatByIdAsync(Guid chatId, CancellationToken token = default)
         {
-            return await _context.Chats
+            var chat = await _context.Chats
+                .AsNoTracking()
                 .Include(c => c.ChatParticipants)
+                    .ThenInclude(cp => cp.User)
+                        .ThenInclude(u => u.Account)
                 .FirstOrDefaultAsync(c => c.ChatId == chatId, token);
+
+            return chat == null ? null : MapChat(chat);
         }
 
-        public async Task<IEnumerable<ChatParticipant>> GetChatParticipantsAsync(Guid chatId,
+        public async Task<IEnumerable<ChatParticipantDto>> GetChatParticipantsAsync(Guid chatId,
             CancellationToken token = default)
         {
-            return await _context.ChatParticipants
+            var participants = await _context.ChatParticipants
+                .AsNoTracking()
                 .Where(part => part.ChatId == chatId)
                 .Include(p => p.User)
                     .ThenInclude(u => u.Account)
                 .ToListAsync(token);
+
+            return participants.Select(MapParticipant);
         }
 
-        public async Task UpdateChatAsync(Chat chat, CancellationToken token = default)
+        public async Task UpdateChatAsync(UpdateChatDto chat, CancellationToken token = default)
         {
-            _context.Chats.Update(chat);
+            var entity = await _context.Chats.FirstOrDefaultAsync(c => c.ChatId == chat.ChatId, token);
+            if (entity == null)
+                return;
+
+            entity.Name = chat.Name;
             await _context.SaveChangesAsync(token);
             await InvalidateChatsCacheForParticipantsAsync(chat.ChatId, token);
         }
