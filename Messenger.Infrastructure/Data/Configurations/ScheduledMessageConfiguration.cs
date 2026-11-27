@@ -9,8 +9,8 @@ public sealed class ScheduledMessageConfiguration : IEntityTypeConfiguration<Sch
     public void Configure(EntityTypeBuilder<ScheduledMessage> builder)
     {
         builder.ToTable("Scheduled_Messages");
-        builder.HasKey(e => e.ScheduledMessageId).HasName("Scheduled_Messages_pkey");
 
+        builder.HasKey(e => e.ScheduledMessageId).HasName("Scheduled_Messages_pkey");
         builder.Property(e => e.ScheduledMessageId)
             .HasColumnName("Scheduled_Message_ID")
             .ValueGeneratedNever();
@@ -20,18 +20,10 @@ public sealed class ScheduledMessageConfiguration : IEntityTypeConfiguration<Sch
         builder.Property(e => e.MessageText).HasColumnName("Message_Text");
         builder.Property(e => e.HasAttachments).HasColumnName("Has_Attachments");
         builder.Property(e => e.AttachmentsJson).HasColumnName("Attachments_Json");
-        builder.Property(e => e.ScheduledAt)
-            .HasColumnName("Scheduled_At")
-            .HasColumnType("timestamp with time zone");
-        builder.Property(e => e.CreatedAt)
-            .HasColumnName("Created_At")
-            .HasColumnType("timestamp with time zone");
-        builder.Property(e => e.UpdatedAt)
-            .HasColumnName("Updated_At")
-            .HasColumnType("timestamp with time zone");
-        builder.Property(e => e.Status)
-            .HasColumnName("Status")
-            .HasMaxLength(32);
+        builder.Property(e => e.ScheduledAt).HasColumnName("Scheduled_At").HasColumnType("timestamp with time zone");
+        builder.Property(e => e.CreatedAt).HasColumnName("Created_At").HasColumnType("timestamp with time zone");
+        builder.Property(e => e.UpdatedAt).HasColumnName("Updated_At").HasColumnType("timestamp with time zone");
+        builder.Property(e => e.Status).HasColumnName("Status").HasMaxLength(32).IsRequired();
         builder.Property(e => e.ResultMessageId).HasColumnName("Result_Message_ID");
         builder.Property(e => e.ErrorMessage).HasColumnName("Error_Message");
         builder.Property(e => e.ReplyToMessageId).HasColumnName("Reply_To_Message_ID");
@@ -46,12 +38,14 @@ public sealed class ScheduledMessageConfiguration : IEntityTypeConfiguration<Sch
             .WithMany()
             .HasForeignKey(d => d.ChatId)
             .OnDelete(DeleteBehavior.Cascade)
+            .IsRequired()
             .HasConstraintName("fk_scheduled_message_chat");
 
         builder.HasOne(d => d.Sender)
             .WithMany()
             .HasForeignKey(d => d.SenderId)
             .OnDelete(DeleteBehavior.Cascade)
+            .IsRequired()
             .HasConstraintName("fk_scheduled_message_sender");
     }
 }
