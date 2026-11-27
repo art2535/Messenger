@@ -23,6 +23,7 @@ public interface IPushSubscriptionService
         CancellationToken cancellationToken = default);
 
     Task RemoveByEndpointAsync(
+        Guid userId,
         string endpoint,
         CancellationToken cancellationToken = default);
 

@@ -121,10 +121,10 @@ namespace Messenger.Infrastructure.Services
             await _context.SaveChangesAsync(ct);
         }
 
-        public async Task RemoveByEndpointAsync(string endpoint, CancellationToken ct = default)
+        public async Task RemoveByEndpointAsync(Guid userId, string endpoint, CancellationToken ct = default)
         {
             await _context.PushSubscriptions
-                .Where(s => s.Endpoint == endpoint)
+                .Where(s => s.UserId == userId && s.Endpoint == endpoint)
                 .ExecuteDeleteAsync(ct);
         }
 

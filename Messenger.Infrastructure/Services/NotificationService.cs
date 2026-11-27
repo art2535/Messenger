@@ -114,10 +114,10 @@ namespace Messenger.Infrastructure.Services
             }).ToList();
         }
 
-        public async Task MarkAsReadAsync(Guid notificationId, CancellationToken token = default)
+        public async Task MarkAsReadAsync(Guid userId, Guid notificationId, CancellationToken token = default)
         {
             var updatedRows = await _context.Notifications
-                .Where(n => n.NotificationId == notificationId)
+                .Where(n => n.NotificationId == notificationId && n.UserId == userId)
                 .ExecuteUpdateAsync(property => property
                     .SetProperty(n => n.Read, true)
                     .SetProperty(n => n.ReadAt, UtcDateTime.Now),

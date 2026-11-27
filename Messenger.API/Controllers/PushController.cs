@@ -74,7 +74,7 @@ namespace Messenger.API.Controllers
                     return BadRequest(ApiResponse.Failure("Отсутствуют ключи шифрования p256dh или auth", "INVALID_REQUEST"));
                 }
 
-                await _subscriptionService.RemoveByEndpointAsync(subscriptionDto.Endpoint, ct);
+                await _subscriptionService.RemoveByEndpointAsync(userId, subscriptionDto.Endpoint, ct);
                 await _subscriptionService.AddSubscriptionAsync(userId, subscriptionDto, ct);
                 await _subscriptionService.EnsurePushEnabledAsync(userId, ct);
 
@@ -118,7 +118,8 @@ namespace Messenger.API.Controllers
                     return BadRequest(ApiResponse.Failure("Endpoint не может быть пустым", "INVALID_REQUEST"));
                 }
 
-                await _subscriptionService.RemoveByEndpointAsync(endpoint, ct);
+                var userId = await User.GetCurrentUserIdAsync(_userService, ct);
+                await _subscriptionService.RemoveByEndpointAsync(userId, endpoint, ct);
 
                 return Ok(ApiResponse.Success(message: "Подписка удалена"));
             }
@@ -146,7 +147,8 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                await _notificationService.MarkAsReadAsync(notificationId, ct);
+                var userId = await User.GetCurrentUserIdAsync(_userService, ct);
+                await _notificationService.MarkAsReadAsync(userId, notificationId, ct);
 
                 return Ok(ApiResponse.Success(message: "Уведомление помечено как прочитанное"));
             }
