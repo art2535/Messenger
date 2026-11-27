@@ -220,7 +220,7 @@ namespace Messenger.API.Controllers
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> PostSendPushNotificationAsync(
-            [FromBody, Description("Данные для отправки уведомления")] SendPushNotificationRequest request,
+            [FromBody, Description("Данные для отправки уведомления")] SendPushNotificationDto request,
             CancellationToken ct = default)
         {
             try

@@ -84,7 +84,7 @@ namespace Messenger.API.Controllers
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> PostAddReactionAsync(
             [Description("Идентификатор сообщения (GUID)")] Guid messageId,
-            [FromBody, Description("Данные реакции")] CreateReactionRequest request,
+            [FromBody, Description("Данные реакции")] CreateReactionDto request,
             CancellationToken ct = default)
         {
             try
