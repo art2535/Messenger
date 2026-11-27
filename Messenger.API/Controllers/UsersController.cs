@@ -72,7 +72,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var user = await _userService.GetUserByExternalIdAsync(externalId);
+                var user = await _userService.GetUserByExternalIdAsync(externalId, ct);
 
                 return Ok(ApiResponse.Success(user));
             }
@@ -222,7 +222,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var user = await User.GetCurrentUserAsync(_userService);
+                var user = await User.GetCurrentUserAsync(_userService, ct);
 
                 var currentUser = await _userService.GetUserByIdAsync(user.UserId, ct);
                 if (currentUser == null)
@@ -273,7 +273,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var user = await User.GetCurrentUserAsync(_userService);
+                var user = await User.GetCurrentUserAsync(_userService, ct);
 
                 await _userService.UpdateProfileAsync(user.UserId, request, avatarUrl, ct);
 
@@ -330,7 +330,7 @@ namespace Messenger.API.Controllers
                     return BadRequest(ApiResponse.Failure("Файл не должен превышать 2 МБ", "INVALID_REQUEST"));
                 }
 
-                var user = await User.GetCurrentUserAsync(_userService);
+                var user = await User.GetCurrentUserAsync(_userService, ct);
 
                 var avatarUrl = await _userService.UploadAvatarAsync(user.UserId, new FormFileUploadAdapter(avatarFile), ct);
 
@@ -374,7 +374,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var user = await User.GetCurrentUserAsync(_userService);
+                var user = await User.GetCurrentUserAsync(_userService, ct);
 
                 await _userService.AssignRoleAsync(user.UserId, roleId, ct);
 
@@ -406,7 +406,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var user = await User.GetCurrentUserAsync(_userService);
+                var user = await User.GetCurrentUserAsync(_userService, ct);
 
                 await _userService.DeleteAvatarAsync(user.UserId, ct);
 
