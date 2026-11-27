@@ -58,7 +58,7 @@ namespace Messenger.API.Controllers
                 }
 
                 var senderId = await User.GetCurrentUserIdAsync(_userService);
-                var created = await _broadcastService.CreateBroadcastAsync(request, senderId);
+                var created = await _broadcastService.CreateBroadcastAsync(request, senderId, ct);
 
                 return Ok(ApiResponse.Success(created));
             }
@@ -74,6 +74,14 @@ namespace Messenger.API.Controllers
             catch (ArgumentException ex)
             {
                 return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -104,7 +112,7 @@ namespace Messenger.API.Controllers
                 var userId = await User.GetCurrentUserIdAsync(_userService);
                 var isAdmin = User.IsInRole("Admin");
 
-                var summary = await _broadcastService.GetBroadcastSummaryAsync(id, userId, isAdmin);
+                var summary = await _broadcastService.GetBroadcastSummaryAsync(id, userId, isAdmin, ct);
 
                 if (summary == null)
                 {
@@ -117,6 +125,10 @@ namespace Messenger.API.Controllers
             {
                 _logger.LogWarning(ex, "Ошибка доступа при получении статуса рассылки {BroadcastId}", id);
                 return StatusCode(StatusCodes.Status403Forbidden, ApiResponse.Failure(ex.Message, "FORBIDDEN"));
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -143,7 +155,7 @@ namespace Messenger.API.Controllers
             try
             {
                 var userId = await User.GetCurrentUserIdAsync(_userService);
-                var result = await _broadcastService.MarkAsReadAsync(id, userId);
+                var result = await _broadcastService.MarkAsReadAsync(id, userId, ct);
 
                 return Ok(ApiResponse.Success(result
                 ));
@@ -156,6 +168,10 @@ namespace Messenger.API.Controllers
             catch (KeyNotFoundException ex)
             {
                 return NotFound(ApiResponse.Failure(ex.Message, "NOT_FOUND"));
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -181,7 +197,7 @@ namespace Messenger.API.Controllers
             try
             {
                 var userId = await User.GetCurrentUserIdAsync(_userService);
-                var broadcasts = await _broadcastService.GetMyBroadcastsAsync(userId, unreadOnly);
+                var broadcasts = await _broadcastService.GetMyBroadcastsAsync(userId, unreadOnly, ct);
 
                 return Ok(ApiResponse.Success(broadcasts));
             }
@@ -189,6 +205,10 @@ namespace Messenger.API.Controllers
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при получении списка рассылок");
                 return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {

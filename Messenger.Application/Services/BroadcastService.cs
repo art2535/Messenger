@@ -17,23 +17,32 @@ public sealed class BroadcastService : IBroadcastService
 
     public async Task<BroadcastCreatedResponse> CreateBroadcastAsync(
         CreateBroadcastRequest request,
-        Guid senderId)
+        Guid senderId,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var recipientIds = await _repository.GetExistingRecipientIdsAsync(request.RecipientIds);
+        var recipientIds = await _repository.GetExistingRecipientIdsAsync(
+            request.RecipientIds,
+            cancellationToken);
+
         if (recipientIds.Count != request.RecipientIds.Count)
             throw new ArgumentException("Один или несколько получателей не существуют");
 
-        return await _repository.CreateBroadcastAsync(request, senderId, recipientIds);
+        return await _repository.CreateBroadcastAsync(
+            request,
+            senderId,
+            recipientIds,
+            cancellationToken);
     }
 
     public async Task<BroadcastSummaryDto?> GetBroadcastSummaryAsync(
         Guid id,
         Guid currentUserId,
-        bool isAdmin)
+        bool isAdmin,
+        CancellationToken cancellationToken = default)
     {
-        var summary = await _repository.GetBroadcastSummaryAsync(id);
+        var summary = await _repository.GetBroadcastSummaryAsync(id, cancellationToken);
         if (summary is null)
             return null;
 
@@ -43,12 +52,18 @@ public sealed class BroadcastService : IBroadcastService
         return summary;
     }
 
-    public async Task<MarkAsReadResponse> MarkAsReadAsync(Guid broadcastId, Guid userId)
+    public async Task<MarkAsReadResponse> MarkAsReadAsync(
+        Guid broadcastId,
+        Guid userId,
+        CancellationToken cancellationToken = default)
     {
-        var result = await _repository.MarkAsReadAsync(broadcastId, userId);
+        var result = await _repository.MarkAsReadAsync(broadcastId, userId, cancellationToken);
         return result ?? throw new KeyNotFoundException("Вы не являетесь получателем этой рассылки");
     }
 
-    public Task<List<BroadcastInboxItemDto>> GetMyBroadcastsAsync(Guid userId, bool unreadOnly = true)
-        => _repository.GetMyBroadcastsAsync(userId, unreadOnly);
+    public Task<List<BroadcastInboxItemDto>> GetMyBroadcastsAsync(
+        Guid userId,
+        bool unreadOnly = true,
+        CancellationToken cancellationToken = default)
+        => _repository.GetMyBroadcastsAsync(userId, unreadOnly, cancellationToken);
 }

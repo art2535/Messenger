@@ -19,19 +19,21 @@ public sealed class EfBroadcastRepository : IBroadcastRepository
     }
 
     public async Task<IReadOnlyList<Guid>> GetExistingRecipientIdsAsync(
-        IReadOnlyCollection<Guid> recipientIds)
+        IReadOnlyCollection<Guid> recipientIds,
+        CancellationToken cancellationToken = default)
     {
         return await _context.Users
             .AsNoTracking()
             .Where(user => recipientIds.Contains(user.UserId))
             .Select(user => user.UserId)
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
     }
 
     public async Task<BroadcastCreatedResponse> CreateBroadcastAsync(
         CreateBroadcastRequest request,
         Guid senderId,
-        IReadOnlyCollection<Guid> recipientIds)
+        IReadOnlyCollection<Guid> recipientIds,
+        CancellationToken cancellationToken = default)
     {
         var now = DateTime.UtcNow;
         var broadcast = new Broadcast
@@ -54,7 +56,7 @@ public sealed class EfBroadcastRepository : IBroadcastRepository
         // Один SaveChanges выполняет обе вставки в одной транзакции EF Core.
         _context.Broadcasts.Add(broadcast);
         _context.BroadcastRecipients.AddRange(recipients);
-        await _context.SaveChangesAsync();
+        await _context.SaveChangesAsync(cancellationToken);
 
         return new BroadcastCreatedResponse
         {
@@ -64,11 +66,13 @@ public sealed class EfBroadcastRepository : IBroadcastRepository
         };
     }
 
-    public async Task<BroadcastSummaryDto?> GetBroadcastSummaryAsync(Guid id)
+    public async Task<BroadcastSummaryDto?> GetBroadcastSummaryAsync(
+        Guid id,
+        CancellationToken cancellationToken = default)
     {
         var broadcast = await _context.Broadcasts
             .AsNoTracking()
-            .FirstOrDefaultAsync(item => item.BroadcastId == id);
+            .FirstOrDefaultAsync(item => item.BroadcastId == id, cancellationToken);
 
         if (broadcast is null)
             return null;
@@ -82,11 +86,11 @@ public sealed class EfBroadcastRepository : IBroadcastRepository
                 IsRead = recipient.IsRead,
                 ReadAt = recipient.ReadAt
             })
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         var readCount = await _context.BroadcastRecipients
             .AsNoTracking()
-            .CountAsync(recipient => recipient.BroadcastId == id && recipient.IsRead);
+            .CountAsync(recipient => recipient.BroadcastId == id && recipient.IsRead, cancellationToken);
 
         return new BroadcastSummaryDto
         {
@@ -101,10 +105,15 @@ public sealed class EfBroadcastRepository : IBroadcastRepository
         };
     }
 
-    public async Task<MarkAsReadResponse?> MarkAsReadAsync(Guid broadcastId, Guid userId)
+    public async Task<MarkAsReadResponse?> MarkAsReadAsync(
+        Guid broadcastId,
+        Guid userId,
+        CancellationToken cancellationToken = default)
     {
         var recipient = await _context.BroadcastRecipients
-            .FirstOrDefaultAsync(item => item.BroadcastId == broadcastId && item.UserId == userId);
+            .FirstOrDefaultAsync(
+                item => item.BroadcastId == broadcastId && item.UserId == userId,
+                cancellationToken);
 
         if (recipient is null)
             return null;
@@ -113,7 +122,7 @@ public sealed class EfBroadcastRepository : IBroadcastRepository
         {
             recipient.IsRead = true;
             recipient.ReadAt = DateTime.UtcNow;
-            await _context.SaveChangesAsync();
+            await _context.SaveChangesAsync(cancellationToken);
         }
 
         return new MarkAsReadResponse
@@ -125,7 +134,8 @@ public sealed class EfBroadcastRepository : IBroadcastRepository
 
     public async Task<List<BroadcastInboxItemDto>> GetMyBroadcastsAsync(
         Guid userId,
-        bool unreadOnly = true)
+        bool unreadOnly = true,
+        CancellationToken cancellationToken = default)
     {
         var query = _context.BroadcastRecipients
             .AsNoTracking()
@@ -145,6 +155,6 @@ public sealed class EfBroadcastRepository : IBroadcastRepository
                 IsRead = recipient.IsRead,
                 ReadAt = recipient.ReadAt
             })
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
     }
 }

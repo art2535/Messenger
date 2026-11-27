@@ -10,7 +10,8 @@
 
 ## Проверенная ревизия
 
-- Ревизия начала текущего прохода: `4d3bbcd3935d74ec822ead8c80a34e5f4702dc43`.
+- Начальная ревизия этого аудита: `4d3bbcd3935d74ec822ead8c80a34e5f4702dc43`.
+- Последнее документированное исправление Broadcast: коммит будет указан после публикации текущего набора изменений.
 - Основная область: `Messenger.Infrastructure/Services`, `Messenger.Application/Services`, `Messenger.Application/Interfaces`, `Messenger.API/Services`, `Messenger.Web/Services`, `Messenger.Realtime/Services`.
 - Проверка локальной сборкой в этой среде недоступна: .NET SDK/runtime отсутствует.
 
@@ -24,7 +25,7 @@
 | Сообщения | `MessageService`, `ScheduledMessageService`, `ScheduledMessageDispatcherService` | Частично проверены; идемпотентность планировщика остаётся открытой |
 | Реакции и вложения | `ReactionService`, `AttachmentService` | Частично проверены; конкурентное добавление реакции обработано, файловые сценарии требуют отдельного прохода |
 | Уведомления | `NotificationService`, `PushSubscriptionService` | Частично проверены; отмена и повторное шифрование push-текста исправлены |
-| Рассылки | `BroadcastService`, `EfBroadcastRepository` | Требуют проверки; контракты не принимают CancellationToken |
+| Рассылки | `BroadcastService`, `EfBroadcastRepository`, `BroadcastsController` | Контракты, реализация и HTTP-вызовы передают CancellationToken; проверка сборкой ещё не выполнена |
 | Модерация и администрирование | `ModerationService`, `AdminService` | Частично проверены; продолжить проверку атомарности операций и обработки ошибок |
 | Статусы и realtime | `UserStatusService`, `SendMessageRateLimiterService`, `TypingRateLimiterService` | Частично проверены; согласовать семантику статуса с жизненным циклом сессий и SignalR |
 | Кэш и шифрование | `RedisCacheService`, `RedisDistributedLock`, `AesGcmEncryptionService`, `CacheMetrics` | Частично проверены; отмена ожидания распределённой блокировки исправлена |
