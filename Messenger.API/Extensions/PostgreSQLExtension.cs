@@ -56,11 +56,6 @@ namespace Messenger.API.Extensions
         private static string EnsurePoolSettings(string connectionString)
         {
             var csb = new NpgsqlConnectionStringBuilder(connectionString);
-            if (!connectionString.Contains("Maximum Pool Size", StringComparison.OrdinalIgnoreCase) &&
-                csb.MaxPoolSize == 100)
-            {                
-            }
-
             if (!connectionString.Contains("Maximum Pool Size", StringComparison.OrdinalIgnoreCase))
                 csb.MaxPoolSize = 100;
             if (!connectionString.Contains("Minimum Pool Size", StringComparison.OrdinalIgnoreCase) &&
