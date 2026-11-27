@@ -15,7 +15,7 @@ Baseline зафиксирован на commit `6524a3a322c8a745fb94f800a6dd0afc2
 | Messenger.Infrastructure | Messenger.Core, Messenger.Application |
 | Messenger.Realtime | Messenger.Application |
 | Messenger.API | Messenger.Application, Messenger.Infrastructure, Messenger.Realtime |
-| Messenger.Web | Messenger.Core, Messenger.Application |
+| Messenger.Web | Messenger.Application, Messenger.Realtime |
 | Messenger.AppHost | нет |
 
 API получает типы Core транзитивно через Infrastructure.
@@ -27,7 +27,7 @@ API получает типы Core транзитивно через Infrastruct
 - Infrastructure ссылается на Application и Core.
 - Realtime ссылается только на Application; ASP.NET Core подключается как shared framework, а не как проектная зависимость.
 - API ссылается на Application, Infrastructure и Realtime.
-- Web может ссылаться на Application и Core; бизнес-логика и persistence остаются вне Web.
+- Web ссылается на Application и Realtime: Web использует `IHubContext<ChatHub>` для отправки realtime-уведомлений. Прямой ссылки на Core сейчас нет; бизнес-логика и persistence остаются вне Web.
 - AppHost остаётся точкой композиции Aspire и не содержит бизнес-логики.
 
 Автоматическая проверка прямых ссылок: `python3 scripts/check-architecture.py`. Она также запускается в GitLab CI, но не заменяет сборку и тесты.
@@ -89,7 +89,7 @@ GitHub-изменения проверены чтением файлов и Git 
 
 В PostgreSQLExtension.EnsurePoolSettings удалён пустой условный блок, который не выполнял действий и не влиял на итоговые параметры пула.
 
-Автоматический архитектурный guard расширен проектами Messenger.Realtime и Messenger.AppHost. Теперь проверяются все шесть проектных границ, включая API → Realtime и отсутствие проектных ссылок у AppHost. Проверка контролирует только прямые ProjectReference и не анализирует namespace/type-level зависимости или NuGet package references.
+Автоматический архитектурный guard расширен проектами Messenger.Realtime и Messenger.AppHost. Проверяются все семь проектов, включая API → Realtime, Web → Realtime и отсутствие проектных ссылок у AppHost. Прямая ссылка Web → Realtime подтверждена использованием `IHubContext<ChatHub>` в сценариях входа и выхода; это не случайная транзитивная зависимость. Проверка контролирует только прямые ProjectReference и не анализирует namespace/type-level зависимости или NuGet package references.
 
 Ограничения этапа:
 - DI-проверка основана на статическом чтении регистраций; runtime validation контейнера и integration tests не запускались.
