@@ -60,7 +60,8 @@ namespace Messenger.API.Consumers
                             SizeInBytes = (int)attInfo.SizeInBytes,
                             Url = attInfo.Url
                         };
-                        await _attachmentService.AddAttachmentAsync(savedMessage.MessageId, attachment, context.CancellationToken);
+                        await _attachmentService.AddAttachmentAsync(
+                            savedMessage.MessageId, attInfo.AttachmentId, attachment, context.CancellationToken);
                     }
                 }
 

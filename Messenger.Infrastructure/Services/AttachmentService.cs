@@ -16,13 +16,34 @@ public class AttachmentService : IAttachmentService
         _context = context;
     }
 
-    public async Task AddAttachmentAsync(Guid messageId, CreateAttachmentDto attachment, CancellationToken cancellationToken = default)
+    public Task AddAttachmentAsync(Guid messageId, CreateAttachmentDto attachment,
+        CancellationToken cancellationToken = default)
+        => AddAttachmentAsync(messageId, Guid.NewGuid(), attachment, cancellationToken);
+
+    /// <summary>
+    /// Идемпотентно добавляет вложение с идентификатором из исходного события.
+    /// </summary>
+    public async Task AddAttachmentAsync(Guid messageId, Guid attachmentId, CreateAttachmentDto attachment,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(attachment);
+        if (attachmentId == Guid.Empty)
+            throw new ArgumentException("Идентификатор вложения не может быть пустым", nameof(attachmentId));
+
+        var existing = await _context.Attachments.AsNoTracking()
+            .FirstOrDefaultAsync(a => a.AttachmentId == attachmentId, cancellationToken);
+        if (existing != null)
+        {
+            if (existing.MessageId != messageId || existing.FileName != attachment.FileName
+                || existing.FileType != attachment.FileType || existing.SizeInBytes != attachment.SizeInBytes
+                || existing.Url != attachment.Url)
+                throw new InvalidOperationException($"AttachmentId {attachmentId} уже используется другим вложением");
+            return;
+        }
 
         var entity = new Attachment
         {
-            AttachmentId = Guid.NewGuid(),
+            AttachmentId = attachmentId,
             MessageId = messageId,
             FileName = attachment.FileName,
             FileType = attachment.FileType,
@@ -31,7 +52,20 @@ public class AttachmentService : IAttachmentService
         };
 
         await _context.Attachments.AddAsync(entity, cancellationToken);
-        await _context.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            _context.Entry(entity).State = EntityState.Detached;
+            var concurrent = await _context.Attachments.AsNoTracking()
+                .FirstOrDefaultAsync(a => a.AttachmentId == attachmentId, cancellationToken);
+            if (concurrent == null || concurrent.MessageId != messageId
+                || concurrent.FileName != attachment.FileName || concurrent.FileType != attachment.FileType
+                || concurrent.SizeInBytes != attachment.SizeInBytes || concurrent.Url != attachment.Url)
+                throw;
+        }
     }
 
     public async Task<IEnumerable<AttachmentDto>> GetAttachmentsByMessageIdAsync(Guid messageId, CancellationToken cancellationToken = default)

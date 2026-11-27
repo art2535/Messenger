@@ -10,7 +10,7 @@
 
 ## Проверенная ревизия
 
-- Последнее обновление аудита: transactional outbox для планировщика отложенных сообщений; изменения зафиксированы в текущей ревизии ветки.
+- Последнее обновление аудита: идемпотентность записей сообщений и вложений при повторной доставке `ChatMessageSent`.
 - Основная область: `Messenger.Infrastructure/Services`, `Messenger.Application/Services`, `Messenger.Application/Interfaces`, `Messenger.API/Services`, `Messenger.Web/Services`, `Messenger.Realtime/Services`.
 - Проверка локальной сборкой в этой среде недоступна: .NET SDK/runtime отсутствует.
 
@@ -21,7 +21,7 @@
 | Пользователи и настройки | `UserService`, `AccountSettingsService` | Частично проверены; гонка создания настроек, безопасная замена/удаление аватаров и конкурентная регистрация по ExternalId исправлены |
 | Аутентификация и сессии | `LoginService`, `JwtService`, `TokenRefresher`, `UserTokenStore`, `TokenRefreshBackgroundService` | Частично проверены; login-session отделена от realtime presence |
 | Чаты и папки | `ChatService`, `ChatFolderService` | Частично проверены; конкурентное добавление участника и чата в папку обработано |
-| Сообщения | `MessageService`, `ScheduledMessageService`, `ScheduledMessageDispatcherService` | Планировщик использует PostgreSQL row lock и transactional Bus Outbox; consumer side effects требуют отдельного аудита |
+| Сообщения | `MessageService`, `ScheduledMessageService`, `ScheduledMessageDispatcherService`, `ChatMessageSentConsumer` | MessageId и AttachmentId используются как ключи идемпотентности БД; consumer side effects остаются at-least-once |
 | Реакции и вложения | `ReactionService`, `AttachmentService` | Частично проверены; конкурентное добавление реакции обработано, файловые сценарии требуют отдельного прохода |
 | Уведомления | `NotificationService`, `PushSubscriptionService` | Частично проверены; отмена и повторное шифрование push-текста исправлены |
 | Рассылки | `BroadcastService`, `EfBroadcastRepository`, `BroadcastsController` | Контракты, реализация и HTTP-вызовы передают CancellationToken; проверка сборкой ещё не выполнена |
@@ -82,7 +82,13 @@ Idle cleanup по-прежнему учитывает пользовательс
 
 Нужно подтвердить интеграционными тестами на PostgreSQL два параллельных диспетчера, rollback между публикацией в Bus Outbox и commit, восстановление после рестарта и гонки редактирования/отмены.
 
-### 3. Остальные обязательные направления
+### 3. Повторная доставка ChatMessageSent
+
+Исправлена идемпотентность основных записей БД. `MessageService.AddMessageAsync` после блокировки чата проверяет `MessageId`: повторное событие с тем же чатом, отправителем, текстом и флагом вложений возвращает существующую запись без выделения нового SequenceNumber. Повторное использование того же MessageId с другим содержимым отклоняется. `AttachmentService` получил перегрузку с явным AttachmentId; consumer передаёт стабильный идентификатор из `AttachmentInfo`, а повторная вставка сверяет принадлежность и метаданные вложения. Конфликт с другим вложением не маскируется.
+
+Переход статуса сделан условным: повторный сбой не может понизить Delivered/Read до Failed, а Delivered не перезаписывает Read. Это не обеспечивает exactly-once для внешних эффектов. Между отправкой SignalR/Push и подтверждением сообщения брокеру остаётся окно, в котором повторная доставка может повторить уведомление. Для строгой гарантии понадобится durable delivery outbox с отдельными записями на получателя и идемпотентный обработчик/клиент; внешние push-провайдеры не участвуют в транзакции PostgreSQL.
+
+### 4. Остальные обязательные направления
 
 - Проверить файловые операции `AttachmentService`: ограничения размера, имена и пути, очистка orphan-файлов, согласованность БД и файлового хранилища.
 - Проверить `MessageService` и `ChatService`: права доступа, атомарность удаления/изменения, cache invalidation и поведение при частичном отказе.

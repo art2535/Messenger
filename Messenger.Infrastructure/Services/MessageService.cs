@@ -256,11 +256,29 @@ namespace Messenger.Infrastructure.Services
 
         public async Task UpdateDeliveryStatusAsync(Guid messageId, MessageDeliveryStatus status, CancellationToken token = default)
         {
-            var message = await _context.Messages.FirstOrDefaultAsync(m => m.MessageId == messageId, token);
-            if (message == null) return;
-            message.DeliveryStatus = status;
-            await _context.SaveChangesAsync(token);
-            await InvalidateMessageCachesAsync(message.ChatId, token);
+            var chatId = await _context.Messages.AsNoTracking()
+                .Where(m => m.MessageId == messageId)
+                .Select(m => (Guid?)m.ChatId)
+                .FirstOrDefaultAsync(token);
+            if (!chatId.HasValue)
+                return;
+
+            var query = _context.Messages.Where(m => m.MessageId == messageId);
+            query = status switch
+            {
+                MessageDeliveryStatus.Failed => query.Where(m =>
+                    m.DeliveryStatus == MessageDeliveryStatus.Pending
+                    || m.DeliveryStatus == MessageDeliveryStatus.Sent),
+                MessageDeliveryStatus.Delivered => query.Where(m =>
+                    m.DeliveryStatus != MessageDeliveryStatus.Delivered
+                    && m.DeliveryStatus != MessageDeliveryStatus.Read),
+                _ => query.Where(m => m.DeliveryStatus != status)
+            };
+
+            var updated = await query.ExecuteUpdateAsync(setters => setters
+                .SetProperty(m => m.DeliveryStatus, status), token);
+            if (updated > 0)
+                await InvalidateMessageCachesAsync(chatId.Value, token);
         }
 
         public async Task<ChatExportResult> ExportChatAsync(Guid chatId, string format, string? chatName = null, 
@@ -560,7 +578,7 @@ namespace Messenger.Infrastructure.Services
                     : null
             };
         }
-        private async Task AddMessageAsync(Message message, CancellationToken token = default)
+        private async Task<bool> AddMessageAsync(Message message, CancellationToken token = default)
         {
             await using var transaction = await _context.Database.BeginTransactionAsync(token);
             try
@@ -571,13 +589,29 @@ namespace Messenger.Infrastructure.Services
                     new object[] { lockKey },
                     token);
 
+                // MessageId является ключом идемпотентности события ChatMessageSent.
+                var existing = await _context.Messages.AsNoTracking()
+                    .FirstOrDefaultAsync(m => m.MessageId == message.MessageId, token);
+                if (existing != null)
+                {
+                    if (existing.ChatId != message.ChatId || existing.SenderId != message.SenderId
+                        || existing.MessageText != message.MessageText
+                        || existing.HasAttachments != message.HasAttachments)
+                    {
+                        throw new InvalidOperationException(
+                            $"MessageId {message.MessageId} уже используется другим содержимым сообщения");
+                    }
+
+                    await transaction.CommitAsync(token);
+                    return false;
+                }
+
                 var lastSeq = await _context.Messages
                     .Where(m => m.ChatId == message.ChatId)
                     .MaxAsync(m => (long?)m.SequenceNumber, token) ?? 0L;
 
                 message.SequenceNumber = lastSeq + 1;
                 message.DeliveryStatus = MessageDeliveryStatus.Pending;
-
                 await _context.Messages.AddAsync(message, token);
                 await _context.SaveChangesAsync(token);
                 await transaction.CommitAsync(token);
@@ -588,8 +622,6 @@ namespace Messenger.Infrastructure.Services
                 throw;
             }
 
-            // Сохранение сообщения уже зафиксировано. Ошибка кеша не должна превращать
-            // успешную отправку в ошибку и провоцировать повторную отправку сообщения.
             try
             {
                 var forCache = await _context.Messages
@@ -612,6 +644,8 @@ namespace Messenger.Infrastructure.Services
                     "Сообщение {MessageId} сохранено, но обновить кеш чата {ChatId} не удалось",
                     message.MessageId, message.ChatId);
             }
+
+            return true;
         }
 
         private async Task<(IReadOnlyList<Message> Items, bool HasMore)> GetMessagesByChatIdPagedAsync(Guid chatId,
