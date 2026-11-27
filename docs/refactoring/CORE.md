@@ -64,36 +64,29 @@ Fluent-конфигурации всех сущностей вынесены в 
 
 Исходники проверены по GitHub. В этой среде не удалось выполнить `dotnet build`, `dotnet test` или сравнение EF model snapshot; поэтому компиляция и эквивалентность EF-модели пока не подтверждены.
 
-
 ### 2.7.8. DTO-контракт IUserService
 
 `IUserService` и `UserService` больше не возвращают `User` и `Role`. Для чтения пользователей и ролей используются `UserDto` и `RoleDto`, расположенные в Application; EF-сущности преобразуются внутри Infrastructure. API extension `GetCurrentUserAsync` также возвращает `UserDto`. В DTO нет EF-навигаций; `Account` и `Roles` доступны прикладному коду, но исключены из JSON, чтобы сохранить прежнее поведение сериализации.
-
 
 ### 2.7.9. DTO-контракт IMessageService
 
 Методы `IMessageService` больше не принимают и не возвращают EF-сущность `Message`. Отправка возвращает `ServiceResult<MessageDto>`; чтение, поиск и закреплённые сообщения возвращают `MessageDto`. Изменение содержимого и статуса доставки выполняется командами `UpdateMessageContentAsync` и `UpdateDeliveryStatusAsync` по идентификатору. Преобразование EF-сущностей и навигаций в DTO находится в Infrastructure. API-контроллер и MassTransit consumer переведены на DTO/команды. В контракте остаётся `ChatMessageSent`, который ещё требует отдельного архитектурного решения.
 
-
 ### 2.7.10. Интеграционное событие ChatMessageSent
 
 `ChatMessageSent` физически перенесено в `Messenger.Application/Messages`. Namespace `Messenger.Core.Messages` сохранён намеренно, чтобы не менять MassTransit message URN и совместимость уже опубликованных сообщений. Событие по-прежнему использует `AttachmentInfo` из Core; его перенос отложен до миграции `IScheduledMessageService`, который также зависит от этого типа. Публикация через EF Core Bus Outbox, consumer, endpoint и retry policy не изменялись.
-
 
 ### 2.7.11. DTO-контракт IScheduledMessageService
 
 `IScheduledMessageService` физически перенесён в Application и отвязан от EF-сущности `ScheduledMessage`. Для HTTP-чтения используется `ScheduledMessageDto`, для фоновой отправки — `ScheduledMessageDispatchDto` с зашифрованным текстом и исходными данными вложений. EF-сущности и преобразование JSON вложений остаются внутри Infrastructure. `AttachmentInfo` и DTO расписания также физически перенесены в Application; прежние namespace сохранены для совместимости.
 
-
 ### 2.7.12. DTO-контракт IAttachmentService
 
 `IAttachmentService` физически перенесён в Application. Его методы используют `CreateAttachmentDto` и `AttachmentDto`, не раскрывая EF-сущность `Attachment`. API-контроллер и consumer передают нейтральные DTO; EF mapping остаётся в Infrastructure. Namespace интерфейса и DTO сохранены для минимизации изменений потребителей.
 
-
 ### Пространства имён после переноса контрактов
 
 Перенесённые в Application интерфейсы, DTO и сообщения используют namespaces `Messenger.Application.*`; обратные совместимые namespaces `Messenger.Core.*` для них больше не сохраняются. Сами файлы находятся только в `Messenger.Application`. В Core остаются лишь типы, которые ещё не переносились. Для события `ChatMessageSent` исходный MassTransit URN сохранён атрибутом `MessageUrn`.
-
 
 ### 2.7.13. Контракт ILoginService
 
@@ -101,12 +94,18 @@ Fluent-конфигурации всех сущностей вынесены в 
 
 `AttachmentDto` перемещён в `Messenger.Application.DTOs.Messages`; Core больше не содержит DTO вложения, используемый контрактами Application.
 
-
 ### 2.7.14. Контракт INotificationService
 
 `INotificationService` и DTO уведомлений перенесены в Application. Core больше не содержит интерфейс сервиса уведомлений или request DTO его API-контракта. EF-сущность `Notification` остаётся persistence-моделью Core, но не выходит через Application-контракт.
 
-
 ### 2.7.15. Контракт IReactionService
 
 `IReactionService` и request DTO реакций перенесены из Core в Application. EF-сущность `Reaction` остаётся persistence-моделью Core, но больше не используется публичным контрактом сервиса.
+
+### 2.7.16. Контракт IUserStatusService
+
+`IUserStatusService` физически перенесён из Core в `Messenger.Application.Interfaces`. Вместо EF-сущности `UserStatus` контракт использует `UserStatusDto` и `UpdateUserStatusDto` из `Messenger.Application.DTOs.UserStatuses`. Обновление статуса выполняется по идентификатору пользователя и признаку online, а для обновления времени активности добавлена отдельная операция `UpdateActivityAsync`. EF-сущность `UserStatus` остаётся в Core и используется только внутри `UserStatusService` Infrastructure.
+
+### Проверка подэтапа 2.7.16
+
+Старый `Messenger.Core/Interfaces/IUserStatusService.cs` и `Messenger.Core/DTOs/UserStatuses/UpdateStatusRequest.cs` удалены. API controller и SignalR hub больше не создают `UserStatus` и не передают EF-сущность через сервисный контракт.
