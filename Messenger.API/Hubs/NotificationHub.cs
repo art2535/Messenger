@@ -1,6 +1,5 @@
-﻿using Messenger.Application.Interfaces;
+using Messenger.Application.Interfaces;
 using Messenger.Realtime.Metrics;
-using Messenger.Application.DTOs.Notifications;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using System.Security.Claims;
@@ -8,69 +7,67 @@ using System.Security.Claims;
 namespace Messenger.API.Hubs
 {
     [Authorize]
-    public class NotificationHub : Hub
+    public sealed class NotificationHub : Hub
     {
-        private readonly INotificationService _notificationService;
+        private readonly IUserService _userService;
 
-        public NotificationHub(INotificationService notificationService)
+        public NotificationHub(IUserService userService)
         {
-            _notificationService = notificationService;
+            _userService = userService;
         }
 
         public override async Task OnConnectedAsync()
         {
-            MessengerMetrics.SignalRActiveConnections.Add(1, 
+            var userId = await ResolveCurrentUserIdAsync(Context.ConnectionAborted);
+            Context.Items["NotificationUserId"] = userId;
+
+            await Groups.AddToGroupAsync(
+                Context.ConnectionId,
+                $"Notifications_{userId}",
+                Context.ConnectionAborted);
+
+            MessengerMetrics.SignalRActiveConnections.Add(
+                1,
                 new KeyValuePair<string, object?>("hub", "notification"));
 
-            var userId = Guid.Parse(Context.User!.FindFirst(ClaimTypes.NameIdentifier)!.Value);
-            await Groups.AddToGroupAsync(Context.ConnectionId, $"Notifications_{userId}");
             await base.OnConnectedAsync();
         }
 
         public override async Task OnDisconnectedAsync(Exception? exception)
         {
-            MessengerMetrics.SignalRActiveConnections.Add(-1, 
-                new KeyValuePair<string, object?>("hub", "notification"));
+            if (Context.Items.TryGetValue("NotificationUserId", out var value) && value is Guid userId)
+            {
+                await Groups.RemoveFromGroupAsync(
+                    Context.ConnectionId,
+                    $"Notifications_{userId}",
+                    CancellationToken.None);
+
+                MessengerMetrics.SignalRActiveConnections.Add(
+                    -1,
+                    new KeyValuePair<string, object?>("hub", "notification"));
+            }
 
             if (exception != null)
             {
-                MessengerMetrics.SignalRErrors.Add(1, 
+                MessengerMetrics.SignalRErrors.Add(
+                    1,
                     new KeyValuePair<string, object?>("hub", "notification"),
                     new KeyValuePair<string, object?>("error_type", exception.GetType().Name));
             }
 
-            var userId = Guid.Parse(Context.User!.FindFirst(ClaimTypes.NameIdentifier)!.Value);
-            await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"Notifications_{userId}");
             await base.OnDisconnectedAsync(exception);
         }
 
-        public async Task SendNotification(Guid userId, string text)
+        private async Task<Guid> ResolveCurrentUserIdAsync(CancellationToken cancellationToken)
         {
-            var startTime = DateTime.UtcNow;
-            try
-            {
-                var notificationId = await _notificationService.CreateNotificationAsync(
-                    userId,
-                    text,
-                    Context.GetHttpContext()?.RequestAborted ?? CancellationToken.None);
+            var externalId = Context.User?.FindFirst("sub")?.Value
+                ?? Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
-                var notification = await _notificationService.GetNotificationAsync(
-                    notificationId,
-                    Context.GetHttpContext()?.RequestAborted ?? CancellationToken.None);
+            if (string.IsNullOrWhiteSpace(externalId))
+                throw new HubException("Не удалось определить пользователя.");
 
-                if (notification != null)
-                {
-                    await Clients.Group($"Notifications_{userId}").SendAsync("ReceiveNotification", notification);
-                }
-                
-                MessengerMetrics.NotificationsSent.Add(1);
-            }
-            finally
-            {
-                var duration = (DateTime.UtcNow - startTime).TotalSeconds;
-                MessengerMetrics.HubActionDuration.Record(duration, 
-                    new KeyValuePair<string, object?>("action", "send_notification"));
-            }
+            var user = await _userService.GetUserByExternalIdAsync(externalId, cancellationToken);
+            return user?.UserId ?? throw new HubException("Пользователь не найден.");
         }
     }
 }

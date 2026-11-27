@@ -46,11 +46,31 @@ namespace Messenger.Realtime.Hubs
             await Clients.Groups(groups).SendAsync(method, payload, ct);
         }
 
+        private async Task<Guid> ResolveCurrentUserIdAsync(CancellationToken cancellationToken)
+        {
+            var externalId = Context.User?.FindFirst("sub")?.Value
+                ?? Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            if (string.IsNullOrWhiteSpace(externalId))
+                throw new HubException("Не удалось определить пользователя.");
+
+            var user = await _userService.GetUserByExternalIdAsync(externalId, cancellationToken);
+            return user?.UserId ?? throw new HubException("Пользователь не найден.");
+        }
+
+        private async Task EnsureChatMembershipAsync(Guid chatId, Guid userId, CancellationToken cancellationToken)
+        {
+            // Вариант метода с actorId проверяет членство до возврата списка участников.
+            await _chatService.GetChatParticipantsAsync(chatId, userId, cancellationToken);
+        }
+
         public async Task JoinChat(Guid chatId)
         {
             var startTime = DateTime.UtcNow;
             try
             {
+                var userId = await ResolveCurrentUserIdAsync(Context.ConnectionAborted);
+                await EnsureChatMembershipAsync(chatId, userId, Context.ConnectionAborted);
                 await Groups.AddToGroupAsync(Context.ConnectionId, chatId.ToString(), Context.ConnectionAborted);
             }
             finally
@@ -213,84 +233,6 @@ namespace Messenger.Realtime.Hubs
             await base.OnDisconnectedAsync(exception);
         }
 
-        public async Task NotifyParticipantRemoved(Guid chatId, Guid removedUserId)
-        {
-            await Clients.Group(chatId.ToString()).SendAsync("ParticipantRemoved", new
-            {
-                chatId = chatId,
-                userId = removedUserId
-            }, Context.ConnectionAborted);
-
-            await Clients.User(removedUserId.ToString()).SendAsync("YouWereRemovedFromChat", chatId, Context.ConnectionAborted);
-        }
-
-        public async Task NotifyParticipantAdded(Guid chatId, Guid addedUserId, object userInfo)
-        {
-            await Clients.Group(chatId.ToString()).SendAsync("ParticipantAdded", new
-            {
-                chatId,
-                user = userInfo
-            }, Context.ConnectionAborted);
-        }
-
-        public async Task NotifyParticipantCountChanged(Guid chatId, int count)
-        {
-            await Clients.Group(chatId.ToString()).SendAsync("ParticipantCountChanged", new
-            {
-                chatId = chatId,
-                count = count
-            }, Context.ConnectionAborted);
-        }
-
-        public async Task NewChat(object chatInfo)
-        {
-            await Task.CompletedTask;
-        }
-
-        public async Task NotifyChatDeleted(Guid chatId)
-        {
-            await Clients.Group(chatId.ToString()).SendAsync("ChatDeleted", chatId, Context.ConnectionAborted);
-        }
-
-        public async Task NotifyChatUpdated(Guid chatId, string newName)
-        {
-            await Clients.Group(chatId.ToString()).SendAsync("ChatUpdated", new
-            {
-                chatId,
-                name = newName
-            }, Context.ConnectionAborted);
-        }
-
-        public async Task NotifyAvatarUpdated(string userId, string newAvatarUrl)
-        {
-            if (!Guid.TryParse(userId, out var uid))
-            {
-                await Clients.All.SendAsync("AvatarUpdated", new { userId, avatarUrl = newAvatarUrl }, Context.ConnectionAborted);
-                return;
-            }
-            await SendToPeersAsync(uid, "AvatarUpdated", new { userId, avatarUrl = newAvatarUrl }, Context.ConnectionAborted);
-        }
-
-        public async Task NotifyProfileNameUpdated(string userId, string newDisplayName)
-        {
-            if (!Guid.TryParse(userId, out var uid))
-            {
-                await Clients.All.SendAsync("ProfileNameUpdated", new { userId, displayName = newDisplayName }, Context.ConnectionAborted);
-                return;
-            }
-            await SendToPeersAsync(uid, "ProfileNameUpdated", new { userId, displayName = newDisplayName }, Context.ConnectionAborted);
-        }
-
-        public async Task NotifyProfileUpdated(string userId, string? newAvatarUrl, string newDisplayName)
-        {
-            if (!Guid.TryParse(userId, out var uid))
-            {
-                await Clients.All.SendAsync("ProfileUpdated", new { userId, avatarUrl = newAvatarUrl, displayName = newDisplayName }, Context.ConnectionAborted);
-                return;
-            }
-            await SendToPeersAsync(uid, "ProfileUpdated", new { userId, avatarUrl = newAvatarUrl, displayName = newDisplayName }, Context.ConnectionAborted);
-        }
-
         public async Task<bool> TryAcquireSendMessagePermit()
         {
             var externalId = Context.User?.FindFirst("sub")?.Value
@@ -306,7 +248,10 @@ namespace Messenger.Realtime.Hubs
             var startTime = DateTime.UtcNow;
             try
             {
-                var externalId = Context.User?.FindFirst("sub")?.Value 
+                if (!Guid.TryParse(chatId, out var parsedChatId))
+                    return;
+
+                var externalId = Context.User?.FindFirst("sub")?.Value
                     ?? Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
                 if (string.IsNullOrEmpty(externalId))
                     return;
@@ -317,6 +262,8 @@ namespace Messenger.Realtime.Hubs
                 var user = await _userService.GetUserByExternalIdAsync(externalId, Context.ConnectionAborted);
                 if (user == null)
                     return;
+
+                await EnsureChatMembershipAsync(parsedChatId, user.UserId, Context.ConnectionAborted);
 
                 try
                 {
@@ -330,7 +277,7 @@ namespace Messenger.Realtime.Hubs
                 }
                 catch { }
 
-                await Clients.Group(chatId).SendAsync("UserIsTyping", new
+                await Clients.Group(parsedChatId.ToString()).SendAsync("UserIsTyping", new
                 {
                     chatId,
                     userId = user.UserId.ToString(),
@@ -350,17 +297,22 @@ namespace Messenger.Realtime.Hubs
             var startTime = DateTime.UtcNow;
             try
             {
-                var externalId = Context.User?.FindFirst("sub")?.Value 
+                if (!Guid.TryParse(chatId, out var parsedChatId))
+                    return;
+
+                var externalId = Context.User?.FindFirst("sub")?.Value
                     ?? Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                if (string.IsNullOrEmpty(externalId)) 
+                if (string.IsNullOrEmpty(externalId))
                     return;
 
                 if (!await _typingLimiter.TryAcquireAsync(externalId, Context.ConnectionAborted))
                     return;
 
                 var user = await _userService.GetUserByExternalIdAsync(externalId, Context.ConnectionAborted);
-                if (user == null) 
+                if (user == null)
                     return;
+
+                await EnsureChatMembershipAsync(parsedChatId, user.UserId, Context.ConnectionAborted);
 
                 try
                 {
@@ -393,6 +345,11 @@ namespace Messenger.Realtime.Hubs
         {
             try
             {
+                var requesterId = await ResolveCurrentUserIdAsync(Context.ConnectionAborted);
+                var peerIds = await _chatService.GetPeerUserIdsAsync(requesterId, Context.ConnectionAborted);
+                if (requesterId != userId && !peerIds.Contains(userId))
+                    return;
+
                 var status = await _userStatusService.GetUserStatusByUserIdAsync(userId, Context.ConnectionAborted);
                 if (status == null) 
                     return;

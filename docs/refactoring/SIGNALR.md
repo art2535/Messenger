@@ -24,6 +24,15 @@
 
 `Messenger.Realtime` содержит общий тип `ChatHub` и связанные с ним rate limiter-сервисы. Проект зависит от Core и Application, но не от API или Infrastructure. API размещает endpoint хаба, а Web использует тот же тип для отправки сообщений через общий Redis backplane.
 
+## Результаты security-аудита
+
+- `ChatHub.JoinChat` проверяет членство через actor-aware контракт `IChatService.GetChatParticipantsAsync(chatId, actorId, ...)` до добавления в группу.
+- `StartTyping` и `StopTyping` выполняют ту же проверку и нормализуют `chatId` как GUID до отправки события.
+- Публичные методы `NotifyParticipant*`, `NotifyChat*`, `NotifyProfile*` удалены из Hub: серверные контроллеры используют `IHubContext<ChatHub>`, поэтому эти методы не должны быть доступны как клиентские invocations.
+- `RequestAndBroadcastUserStatus` ограничен пользователями, с которыми вызывающий состоит в общем чате.
+- `NotificationHub` не принимает команды на создание уведомлений от SignalR-клиента; идентификатор пользователя резолвится из `sub` через Application service.
+- `UserStatusHub` также резолвит внутренний `UserId` из `sub` и использует общий presence tracker, учитывающий несколько соединений пользователя.
+
 ## Целевое состояние
 
 Hub должен быть thin transport adapter:
