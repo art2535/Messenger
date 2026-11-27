@@ -117,7 +117,7 @@ namespace Messenger.Infrastructure.Services
                     _context.Entry(settings).State = EntityState.Detached;
                     settings = await _context.AccountSettings
                         .FirstOrDefaultAsync(s => s.AccountId == userId, token)
-                        ?? throw;
+                        ?? throw new InvalidOperationException("Не удалось получить настройки push после конкурентного создания");
                 }
             }
 
