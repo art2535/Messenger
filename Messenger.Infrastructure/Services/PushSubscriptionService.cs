@@ -274,8 +274,8 @@ namespace Messenger.Infrastructure.Services
                                 : $"{pushTitle}: {body}")
                             : pushTitle;
 
-                        var notificationId = await _notificationService.CreateNotificationAsync(participant.UserId,
-                            _encryptionService.Encrypt(notificationText), cancellationToken);
+                        var notificationId = await _notificationService.CreateNotificationAsync(
+                            participant.UserId, notificationText, cancellationToken);
 
                         var subscriptions = await _context.PushSubscriptions
                             .Where(s => s.UserId == participant.UserId)
