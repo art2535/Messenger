@@ -41,7 +41,7 @@ namespace Messenger.API.Controllers
 
         private async Task<(Guid userId, bool isAdmin)> ResolveAdminAsync(CancellationToken ct)
         {
-            var userId = await User.GetCurrentUserIdAsync(_userService);
+            var userId = await User.GetCurrentUserIdAsync(_userService, ct);
             var isAdmin = await _adminService.IsSystemAdminAsync(userId, ct);
             return (userId, isAdmin);
         }
@@ -72,7 +72,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var userId = await User.GetCurrentUserIdAsync(_userService, ct);
                 var isAdmin = await _adminService.IsSystemAdminAsync(userId, ct);
                 var user = await _userService.GetUserByIdAsync(userId, ct);
 
