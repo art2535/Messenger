@@ -35,6 +35,12 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
             .HasColumnName("External_ID")
             .HasMaxLength(255);
 
+        // NULL разрешён для пользователей без внешней учётной записи.
+        builder.HasIndex(e => e.ExternalId)
+            .IsUnique()
+            .HasDatabaseName("IX_Users_External_ID")
+            .HasFilter("\"External_ID\" IS NOT NULL");
+
         builder.HasMany(d => d.Roles).WithMany(p => p.Users)
             .UsingEntity<Dictionary<string, object>>(
                 "UserRole",

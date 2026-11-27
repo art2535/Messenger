@@ -264,6 +264,7 @@ namespace Messenger.Infrastructure.Services
             var user = await _context.Users
                 .AsNoTracking()
                 .Include(u => u.Account)
+                .Include(u => u.Roles)
                 .FirstOrDefaultAsync(u => u.ExternalId == externalId, token);
 
             return user == null ? null : MapToDto(user);
@@ -272,6 +273,11 @@ namespace Messenger.Infrastructure.Services
         public async Task<UserDto> RegisterExternalUserAsync(string externalId, string email, string firstName,
             string lastName, IEnumerable<string>? tokenRoles = null, CancellationToken token = default)
         {
+            ArgumentException.ThrowIfNullOrWhiteSpace(externalId);
+            externalId = externalId.Trim();
+            if (externalId.Length > 255)
+                throw new ArgumentException("Внешний идентификатор не должен превышать 255 символов", nameof(externalId));
+
             var existing = await GetUserByExternalIdAsync(externalId, token);
             if (existing != null)
                 return existing;
@@ -299,11 +305,48 @@ namespace Messenger.Infrastructure.Services
 
             user.Roles = await GetRolesFromTokenAsync(tokenRoles, token);
 
-            // Пользователь, настройки, статус и связи с ролями создаются одним сохранением.
+            // Уникальный индекс External_ID является окончательной защитой от
+            // параллельной регистрации одного внешнего пользователя.
             _context.Users.Add(user);
-            await _context.SaveChangesAsync(token);
+            try
+            {
+                await _context.SaveChangesAsync(token);
+                return MapToDto(user);
+            }
+            catch (DbUpdateException ex) when (
+                ex.InnerException is PostgresException
+                {
+                    SqlState: PostgresErrorCodes.UniqueViolation,
+                    ConstraintName: "IX_Users_External_ID"
+                })
+            {
+                // INSERT проиграл конкурентной регистрации. Отсоединяем только
+                // добавленные сущности проигравшего графа, не затрагивая другие изменения.
+                foreach (var entry in _context.ChangeTracker.Entries().ToList())
+                {
+                    if (ReferenceEquals(entry.Entity, user)
+                        || ReferenceEquals(entry.Entity, user.Account)
+                        || ReferenceEquals(entry.Entity, user.UserStatus))
+                    {
+                        entry.State = EntityState.Detached;
+                        continue;
+                    }
 
-            return MapToDto(user);
+                    if (entry.State == EntityState.Added && entry.Metadata.Name == "UserRole"
+                        && (Guid)entry.Property("UserId").CurrentValue! == userId)
+                    {
+                        entry.State = EntityState.Detached;
+                    }
+                }
+
+                var concurrentUser = await GetUserByExternalIdAsync(externalId, token);
+                if (concurrentUser is not null)
+                    return concurrentUser;
+
+                // Нарушение уникальности не по External_ID или запись была удалена
+                // до повторного чтения — исходную ошибку нельзя скрывать.
+                throw;
+            }
         }
 
         private static bool HasValidImageSignature(byte[] bytes, string extension)

@@ -1059,6 +1059,11 @@ namespace Messenger.Infrastructure.Migrations
                     b.HasKey("UserId")
                         .HasName("Users_pkey");
 
+                    b.HasIndex("ExternalId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Users_External_ID")
+                        .HasFilter("\"External_ID\" IS NOT NULL");
+
                     b.ToTable("Users");
                 });
 
