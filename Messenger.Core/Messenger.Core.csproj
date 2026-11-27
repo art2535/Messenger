@@ -4,4 +4,12 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-  </PropertyGroup></Project>
+  </PropertyGroup>
+
+  <!-- Временный мост: Core ещё содержит EF-аннотации и ASP.NET-типы в сервисных контрактах. -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.13" />
+  </ItemGroup>
+
+</Project>

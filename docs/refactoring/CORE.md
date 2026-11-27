@@ -12,50 +12,45 @@
 
 Например, `User`, `Message`, `Chat`, `AccountSetting` и связанные типы содержат навигационные коллекции и EF mapping attributes. Поэтому простое удаление атрибутов или перемещение файлов без перевода потребителей изменило бы EF-модель либо поведение сериализации.
 
-`GuapMessengerContext` содержит 21 DbSet и сейчас конфигурирует сущности смешанным способом: Fluent API в самом контексте плюс атрибуты на моделях. В нём также есть MassTransit Inbox/Outbox entities.
+`GuapMessengerContext` содержит 21 DbSet и сейчас конфигурирует сущности через отдельные классы Infrastructure. В нём также есть MassTransit Inbox/Outbox entities.
 
 ## Выполнено
 
 ### 2.2. Перенос SignalR
 
-Перенесены `ChatHub`, `NotificationHub`, `UserStatusHub` из Core в `Messenger.API/Hubs`. Namespace и импорт Program.cs обновлены; маршруты `MapHub` сохранены.
+Перенесены `ChatHub`, `NotificationHub`, `UserStatusHub` из Core в `Messenger.API/Hubs`. Namespace и импорты обновлены; маршруты `MapHub` сохранены.
 
-### 2.3. Первый вынос EF mapping
+### 2.3–2.6. Вынос EF mapping
 
-Создан `Messenger.Infrastructure/Data/Configurations/LogConfiguration.cs`, реализующий `IEntityTypeConfiguration<Log>`.
+Fluent-конфигурации всех сущностей вынесены в отдельные `IEntityTypeConfiguration<T>` классы Infrastructure. Сохранены существующие имена таблиц, колонок, ключей, индексов и FK constraints, SQL defaults, типы данных, правила удаления и seed-данные. В `OnModelCreating` остались настройки PostgreSQL extension, MassTransit Inbox/Outbox, вызов `ApplyConfigurationsFromAssembly` и partial hook.
 
-Из `GuapMessengerContext.OnModelCreating` удалён inline-блок конфигурации `Log`; вместо него включено `modelBuilder.ApplyConfigurationsFromAssembly(typeof(GuapMessengerContext).Assembly)`.
+Это перенос только Fluent mapping. Типы сущностей, EF-аннотации и навигационные свойства пока остаются в Core; разделение Domain и Persistence не завершено.
 
-Сохранены настройки таблицы `logging.Logs`, первичного ключа, uuid/default SQL, типов колонок и индексов:
-- `IX_logs_timestamp`
-- `IX_logs_level`
-- `IX_logs_application`
+### 2.5. Первичное удаление зависимостей
 
-Это перенос только Fluent mapping. Тип `Log` пока остаётся в Core; это промежуточный шаг, а не завершённое разделение Domain и Persistence.
+Из `Messenger.Core.csproj` ранее были удалены прямые ссылки на JwtBearer и EntityFrameworkCore. Последующий аудит показал, что это было преждевременно: Core всё ещё содержит EF-аннотации в моделях и ASP.NET `IFormFile` в контрактах `IUserService` и `IMessageService`.
 
+### 2.7. Аудит границы Domain / Persistence
 
-### 2.4. Вынос конфигураций модерации и папок чатов
+Проведён аудит моделей Core, DbContext, EF Model Snapshot, сервисных интерфейсов и ключевых реализаций Infrastructure/API. Выявлено, что сервисные контракты возвращают Core EF-модели, Infrastructure использует их напрямую через DbSet и навигации, а API/Web читают навигационные свойства и сериализуют результаты. Также Core содержит EF-аннотации и ASP.NET типы в интерфейсах.
 
-Из `GuapMessengerContext.OnModelCreating` в отдельные `IEntityTypeConfiguration<T>` классы Infrastructure вынесены конфигурации:
-- `ChatFolder` — таблица, ключ, ограничение имени, индекс пользователя и связь с пользователем;
-- `ChatFolderChat` — таблица, ключ, уникальный индекс пары Folder/Chat и каскадные связи;
-- `MessageReport` — таблица, ключ, явные имена колонок и индекс статуса;
-- `UserMute` — таблица, ключ и явные имена колонок;
-- `ModerationLog` — таблица, ключ и явные имена колонок.
+Подробная матрица типов, найденные зависимости, целевая схема, порядок миграции и критерии приёмки описаны в [PERSISTENCE-BOUNDARY.md](PERSISTENCE-BOUNDARY.md). На этом подэтапе кодовую модель DbContext не дублировали: до перевода контрактов это создало бы две конкурирующие модели и не дало бы реального разделения.
 
-Содержимое Fluent-конфигураций перенесено без изменения заданных имён таблиц, ключей, индексов, колонок и правил удаления. `ApplyConfigurationsFromAssembly` уже подключён на предыдущем шаге, поэтому новые классы обнаруживаются автоматически. Data annotations в моделях оставлены: они пока остаются частью текущей EF-модели.
+### 2.7.1. Временный мост зависимостей Core
 
-### 2.5. Зависимости Core
+В `Messenger.Core.csproj` временно возвращены только те compile-time зависимости, которые фактически ещё используются исходниками:
+- `Microsoft.EntityFrameworkCore` — для оставшихся EF Core-аннотаций моделей;
+- `Microsoft.AspNetCore.App` — для `IFormFile` в существующих сервисных интерфейсах.
 
-Из `Messenger.Core.csproj` удалены прямые PackageReference на JwtBearer и EntityFrameworkCore. Сами модели пока всё ещё используют EF-аннотации и требуют дальнейшей миграции.
+Это не целевая архитектура и не означает, что Core очищен. Мост предотвращает ситуацию, когда удаление PackageReference делает проект несобираемым раньше, чем будут перенесены контракты и модели. Удалить обе ссылки можно только после перевода соответствующих типов и аннотаций в Application/API/Infrastructure.
 
 ## Что осталось
 
-1. Провести полный аудит оставшихся EF-аннотаций и связей моделей, спроектировать границу Domain/Persistence и правила преобразования между ними.
-2. Создать persistence entities в Infrastructure и постепенно перевести repositories/services на них.
-3. Перевести API/Web и Application contracts с прежних EF-моделей на чистые domain/DTO типы.
+1. Перенести сервисные контракты из Core в Application и убрать из них ASP.NET типы, заменив загрузку файлов нейтральной абстракцией.
+2. Создать persistence entities в Infrastructure и постепенно перевести DbContext и реализации сервисов на них.
+3. Перевести API/Web и SignalR с EF-моделей на DTO/Application contracts.
 4. После перевода всех потребителей удалить EF- и JSON-аннотации, а также EF-навигации из Core.
-5. Перенести DTO и сервисные интерфейсы в Application, не создавая зависимости Core → Application.
+5. Удалить временные EF Core и ASP.NET framework references из Core.
 6. Усилить архитектурную проверку: запретить EF Core/ASP.NET references и namespaces в Core.
 
 ## Важные ограничения
@@ -63,28 +58,8 @@
 - Нельзя удалять `JsonIgnore` до замены сериализации на DTO: это может раскрыть навигационные графы и изменить API payload.
 - Нельзя менять EF-аннотации до полного переноса соответствующего mapping в Fluent API.
 - Нельзя генерировать новую миграцию только на основании выноса конфигураций: перенос существующего Fluent API не должен менять модель БД, но сравнение snapshot/model и проверка миграций требуют .NET SDK.
+- Временный мост зависимостей нельзя считать завершением этапа 2: это защитная мера до фактического переноса контрактов и сущностей.
 
 ## Проверки
 
-Проверено чтением актуальных файлов из GitHub: все оставшиеся inline-конфигурации из `GuapMessengerContext` вынесены в Infrastructure, включая девять конфигураций этапа 2.6; все ранее вынесенные конфигурации остаются в каталоге `Configurations`; `OnModelCreating` вызывает `ApplyConfigurationsFromAssembly`. Проверка эквивалентности EF model snapshot, `dotnet build` и `dotnet test` не запускались.
-
-### 2.5. Вынос конфигураций основных сущностей
-
-Вынесены Fluent-конфигурации `Chat`, `ChatParticipant`, `Message`, `Notification`, `Reaction` и `User` в отдельные классы Infrastructure. Сохранены исходные ключи, имена индексов, SQL defaults, типы дат, фильтр индекса закреплённых сообщений, имена FK constraints и поведение удаления. Для `User` отдельно сохранена конфигурация связи один-к-одному с `AccountSetting` и join table `User_Roles` с прежними именами ключей и колонок.
-
-Конфигурации переносят только существующий Fluent API. EF-аннотации в Core-моделях остаются, поэтому этот шаг не завершает отделение домена от EF.
-
-### 2.6. Вынос оставшихся Fluent-конфигураций
-
-В отдельные `IEntityTypeConfiguration<T>` классы Infrastructure перенесены конфигурации `AccountSetting`, `Attachment`, `Login`, `Role`, `UserStatus`, `Broadcast`, `BroadcastRecipient`, `PushSubscription` и `ScheduledMessage`. В `RoleConfiguration` перенесены все шесть записей `HasData` с исходными GUID, названиями и описаниями.
-
-Сохранены заданные в контексте ключи и их имена, `ValueGeneratedNever`, индексы, имена FK constraints, правила удаления, SQL defaults (`gen_random_uuid()`, `now()`), имена/типы колонок, ограничения длины и таблица `Scheduled_Messages`. Аннотации моделей, включая `[Table]`, `[Column]`, `[ForeignKey]`, `[InverseProperty]` и `[JsonIgnore]`, пока не удалялись: они остаются частью действующей EF-модели.
-
-После переноса `OnModelCreating` содержит только настройки расширения PostgreSQL, MassTransit Inbox/Outbox и вызов `ApplyConfigurationsFromAssembly`, а также partial hook.
-
-
-### 2.7. Аудит границы Domain / Persistence
-
-Проведён аудит моделей Core, DbContext, EF Model Snapshot, сервисных интерфейсов и ключевых реализаций Infrastructure/API. Выявлено, что сервисные контракты возвращают Core EF-модели, Infrastructure использует их напрямую через DbSet и навигации, а API/Web читают навигационные свойства и сериализуют результаты. Также Core содержит EF-аннотации и ASP.NET типы в интерфейсах.
-
-Подробная матрица типов, найденные зависимости, целевая схема, порядок миграции и критерии приёмки описаны в [PERSISTENCE-BOUNDARY.md](PERSISTENCE-BOUNDARY.md). На этом подэтапе кодовую модель DbContext не дублировали: до перевода контрактов это создало бы две конкурирующие модели и не дало бы реального разделения.
+Исходники проверены по GitHub. В этой среде не удалось выполнить `dotnet build`, `dotnet test` или сравнение EF model snapshot; поэтому компиляция и эквивалентность EF-модели пока не подтверждены.
