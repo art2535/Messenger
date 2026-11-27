@@ -73,3 +73,8 @@
 ## Подэтап 2.7.17 — push-подписки
 
 `IPushSubscriptionService` физически перенесён в `Messenger.Application.Interfaces`. Добавлены `CreatePushSubscriptionDto`, `UpdatePushSubscriptionDto`, `PushSubscriptionDto`, `PushSettingsDto` и `UpdatePushSettingsDto` в `Messenger.Application.DTOs.Push`. Контракт больше не принимает и не возвращает EF-сущности `PushSubscription` и `AccountSetting`: идентификатор пользователя и прикладные DTO передаются отдельно. Infrastructure создаёт, изменяет и проецирует EF-сущности внутри `PushSubscriptionService`. `PushController` больше не создаёт `PushSubscription` и не читает `AccountSetting` напрямую.
+
+
+## Подэтап 2.7.18 — чаты
+
+`IChatService` физически перенесён в `Messenger.Application.Interfaces`. Добавлены `CreateChatDto`, `UpdateChatDto`, `ChatDto`, `ChatParticipantDto` и `ChatListItemDto` в `Messenger.Application.DTOs.Chats`. Контракт больше не содержит `Chat` или `ChatParticipant`; обновление и удаление выполняются по идентификатору, а чтение возвращает DTO. `ChatService` создаёт и изменяет EF-сущности только внутри Infrastructure. Контроллеры, SignalR hubs и MassTransit consumer обновлены на DTO-контракт.

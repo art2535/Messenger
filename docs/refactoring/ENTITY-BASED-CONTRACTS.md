@@ -11,7 +11,7 @@
 | Контракт | Связь с моделями / платформой | Что требуется до переноса |
 |---|---|---|
 | `IAttachmentService` | `Attachment` | DTO/команды создания и чтения вложений |
-| `IChatService` | `Chat`, `ChatParticipant` | Модели чтения и команды чатов/участников |
+| `IChatService` | DTO чатов и участников | Переведён на прикладные DTO; EF-модели остаются внутри Infrastructure |
 | `ILoginService` | `Login` | DTO сессии и команды управления сессиями |
 | `IMessageService` (Application) | `ChatMessageSent` (интеграционное событие) | Решить, должно ли событие находиться в Application или отдельном Contracts-проекте; проверить MassTransit serialization |
 | `INotificationService` | `Notification` | DTO уведомления и команды чтения |
@@ -88,3 +88,8 @@
 ## Результат подэтапа 2.7.17 — IPushSubscriptionService
 
 `IPushSubscriptionService` отвязан от EF-моделей `PushSubscription` и `AccountSetting`. Создание подписки принимает `userId` и `CreatePushSubscriptionDto`, настройки используют `PushSettingsDto`/`UpdatePushSettingsDto`, а обновление подписки — `UpdatePushSubscriptionDto`. `PushSubscriptionService` Infrastructure выполняет mapping и все операции EF внутри persistence-слоя. `PushController` больше не создаёт EF-сущность подписки и не возвращает `AccountSetting`.
+
+
+## Результат подэтапа 2.7.18 — IChatService
+
+`IChatService` физически перенесён в `Messenger.Application.Interfaces` и больше не принимает/возвращает EF-сущности `Chat` и `ChatParticipant`. Для создания и изменения чата используются `CreateChatDto` и `UpdateChatDto`, чтение возвращает `ChatDto`, `ChatParticipantDto` и `ChatListItemDto`. Идентификаторы участников и чатов передаются отдельно. `ChatService` Infrastructure выполняет все EF-запросы и mapping внутри persistence-слоя; API, SignalR и consumers используют только Application-контракт.

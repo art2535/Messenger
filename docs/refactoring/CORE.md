@@ -119,3 +119,8 @@ Fluent-конфигурации всех сущностей вынесены в 
 ### 2.7.17. Контракт IPushSubscriptionService
 
 `IPushSubscriptionService` физически перенесён из Core в `Messenger.Application.Interfaces`. DTO push-подписок и настроек находятся в `Messenger.Application.DTOs.Push`. Контракт больше не принимает и не возвращает `PushSubscription` или `AccountSetting`; создание подписки использует `userId` и `CreatePushSubscriptionDto`, чтение настроек возвращает `PushSettingsDto`, а обновление подписки использует `UpdatePushSubscriptionDto`. EF-сущности создаются, изменяются и проецируются только внутри Infrastructure. `PushController` использует Application DTO и не создаёт persistence-модели.
+
+
+## Подэтап 2.7.18 — граница чатов
+
+Контракт `IChatService` больше не находится в Core и не зависит от EF-моделей `Chat`/`ChatParticipant`. Core-модели продолжают использоваться как persistence-модели внутри Infrastructure, но наружу из `ChatService` выходят только DTO Application.
