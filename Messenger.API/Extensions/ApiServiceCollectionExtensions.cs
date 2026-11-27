@@ -1,8 +1,6 @@
 using Messenger.API.Services;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
-using Serilog;
-using Serilog.Ui.Web.Extensions;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
