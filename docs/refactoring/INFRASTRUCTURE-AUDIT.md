@@ -43,7 +43,7 @@
 - `Broadcast.SenderId` и навигация `Sender` стали nullable;
 - Fluent API сохраняет `DeleteBehavior.SetNull`, но больше не помечает связь обязательной;
 - `BroadcastSummaryDto.SenderId` допускает отсутствие автора; существующая проверка доступа оставляет просмотр такой рассылки только администраторам;
-- новая миграция `20261127200000_MakeBroadcastSenderOptional` меняет `Broadcasts.Sender_ID` на nullable; исходные миграции не изменялись;
+- новая миграция `20261127200000_MakeBroadcastSenderOptional` меняет `Broadcasts.Sender_ID` на nullable; исходные миграции не изменялись. Откат возможен только до появления строк с NULL в `Sender_ID` либо после ручного восстановления авторов;
 - snapshot и migration target model синхронизированы с nullable FK.
 
 Проверка consumers: создание рассылки по-прежнему требует существующий `senderId`; идентификатор используется в проверке владельца сводки, а UI не требует навигацию Sender. Получатели и их статусы чтения не зависят от наличия автора.

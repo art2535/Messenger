@@ -23,6 +23,7 @@ namespace Messenger.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            // Откат возможен только если все рассылки снова имеют Sender_ID.
             migrationBuilder.AlterColumn<Guid>(
                 name: "Sender_ID",
                 table: "Broadcasts",
