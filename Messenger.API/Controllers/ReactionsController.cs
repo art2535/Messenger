@@ -4,6 +4,7 @@ using Messenger.API.Extensions;
 using Messenger.Core.DTOs.Reactions;
 using Messenger.API.Hubs;
 using Messenger.Core.Interfaces;
+using Messenger.Application.Interfaces;
 using Messenger.Core.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;

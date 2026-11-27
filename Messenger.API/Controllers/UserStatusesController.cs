@@ -2,6 +2,7 @@
 using Messenger.API.Extensions;
 using Messenger.Core.DTOs.UserStatuses;
 using Messenger.Core.Interfaces;
+using Messenger.Application.Interfaces;
 using Messenger.Core.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
