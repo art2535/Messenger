@@ -1,8 +1,8 @@
 # Миграция сервисных контрактов, зависящих от моделей Core
 
-## Текущее состояние после этапа 2.7.8
+## Текущее состояние после этапа 2.7.9
 
-`IUserService` переведён с EF-моделей `User`/`Role` на DTO. `IMessageService` пока сохраняет зависимость от EF-модели `Message`; миграция выполняется по вертикальным сценариям.
+`IUserService` переведён с EF-моделей `User`/`Role` на DTO. `IMessageService` также отвязан от EF-сущности `Message`: чтение и закрепление возвращают `MessageDto`, изменение текста и статуса выполняется командами по ID. В контракте остаётся событие `ChatMessageSent`, его назначение и место размещения требуют отдельного решения.
 
 `ServiceResult<T>` в Application унифицирован с `ApiResponse<T>`: он наследует общий формат ответа и использует PascalCase-свойства `IsSuccess`, `Data`, `Error`, `ErrorCode`, `InnerError`, `Message`, `Meta`. `InnerError` добавлен в базовый `ApiResponse<T>` для сохранения прежней диагностики.
 
@@ -13,7 +13,7 @@
 | `IAttachmentService` | `Attachment` | DTO/команды создания и чтения вложений |
 | `IChatService` | `Chat`, `ChatParticipant` | Модели чтения и команды чатов/участников |
 | `ILoginService` | `Login` | DTO сессии и команды управления сессиями |
-| `IMessageService` (Application) | `Message`, `ChatMessageSent` | Перевести все результаты и параметры методов с EF-сущностей на DTO/команды; классифицировать событие отдельно |
+| `IMessageService` (Application) | `ChatMessageSent` (интеграционное событие) | Решить, должно ли событие находиться в Application или отдельном Contracts-проекте; проверить MassTransit serialization |
 | `INotificationService` | `Notification` | DTO уведомления и команды чтения |
 | `IPushSubscriptionService` | `AccountSetting`, `PushSubscription` | DTO настроек и подписки |
 | `IReactionService` | `Reaction` | DTO реакции и команды |
@@ -27,9 +27,9 @@
 
 ## Следующие шаги
 
-1. Создать/уточнить DTO результата сообщения и команды изменения статуса/содержимого.
-2. Перевести реализацию Infrastructure и API/consumer на DTO.
-3. Удалить из сигнатур `IMessageService` все EF-типы, затем сменить namespace интерфейса.
+1. Отделить `ChatMessageSent` от Core-моделей и определить границу интеграционных событий.
+2. Перевести оставшиеся entity-based сервисные контракты на DTO/команды.
+3. После аудита потребителей сменить namespace интерфейсов Application с временных `Messenger.Core.Interfaces`.
 4. Удалять временные зависимости Core только после полного аудита и успешной сборки.
 
 ## Проверки

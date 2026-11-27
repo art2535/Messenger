@@ -68,3 +68,8 @@ Fluent-конфигурации всех сущностей вынесены в 
 ### 2.7.8. DTO-контракт IUserService
 
 `IUserService` и `UserService` больше не возвращают `User` и `Role`. Для чтения пользователей и ролей используются `UserDto` и `RoleDto`, расположенные в Application; EF-сущности преобразуются внутри Infrastructure. API extension `GetCurrentUserAsync` также возвращает `UserDto`. В DTO нет EF-навигаций; `Account` и `Roles` доступны прикладному коду, но исключены из JSON, чтобы сохранить прежнее поведение сериализации.
+
+
+### 2.7.9. DTO-контракт IMessageService
+
+Методы `IMessageService` больше не принимают и не возвращают EF-сущность `Message`. Отправка возвращает `ServiceResult<MessageDto>`; чтение, поиск и закреплённые сообщения возвращают `MessageDto`. Изменение содержимого и статуса доставки выполняется командами `UpdateMessageContentAsync` и `UpdateDeliveryStatusAsync` по идентификатору. Преобразование EF-сущностей и навигаций в DTO находится в Infrastructure. API-контроллер и MassTransit consumer переведены на DTO/команды. В контракте остаётся `ChatMessageSent`, который ещё требует отдельного архитектурного решения.
