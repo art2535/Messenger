@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using StackExchange.Redis;
 using System.Text;
-using System.Text.Encodings.Web;
 using System.Text.Json;
 
 namespace Messenger.API.Extensions
@@ -62,7 +61,6 @@ namespace Messenger.API.Extensions
         {
             WriteIndented = true,
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
         };
 
         private static async Task WriteJsonResponse(HttpContext context, HealthReport report)
@@ -78,10 +76,7 @@ namespace Messenger.API.Extensions
                     e => new
                     {
                         status = e.Value.Status.ToString(),
-                        description = e.Value.Description,
-                        duration = e.Value.Duration.ToString(),
-                        error = e.Value.Exception?.Message,
-                        data = e.Value.Data.Count > 0 ? e.Value.Data : null
+                        duration = e.Value.Duration.ToString()
                     })
             };
 

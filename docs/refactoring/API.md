@@ -39,6 +39,14 @@
 - `NotificationHub` больше не предоставляет клиенту метод отправки уведомлений произвольному `userId`; внутренний пользователь определяется по `sub` через `IUserService`.
 - `UserStatusHub` использует `sub` -> внутренний `UserId` и общий `IUserPresenceTracker`, чтобы не переводить пользователя offline при закрытии только одного из нескольких соединений; метрики соединений учитываются только после успешного добавления в SignalR group.
 
+### Diagnostics и инфраструктурные ограничения
+
+- /health, /health/live и /health/ready публикуются без авторизации; payload очищен от exception messages и внутренних data, оставляя только общий статус, статус каждой проверки и длительность.
+- /metrics также опубликован без endpoint authorization. В production доступ следует ограничить сетью мониторинга или отдельной схемой аутентификации.
+- HTTP и SignalR rate limiters используют локальные in-memory partitions. При нескольких API-репликах лимиты не являются глобальными; нужен Redis-backed/distributed limiter.
+- CORS whitelist сейчас зашит в код и допускает только localhost и *.dev.localhost; production cross-origin Web deployment требует конфигурационного списка origins.
+- Миграции БД применяются при старте каждого API процесса. Для горизонтального масштабирования предпочтителен отдельный deployment migration step/lock.
+
 ## Наблюдение для рефакторинга
 
 Контроллеры в текущем состоянии напрямую координируют сервисы и transport-level concerns. Следующий этап должен привести API к модели:
