@@ -54,7 +54,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var userId = await User.GetCurrentUserIdAsync(_userService, ct);
                 var chats = await _chatService.GetUserChatsWithLastMessageAsync(userId, ct);
 
                 return Ok(ApiResponse.Success(chats));
@@ -89,7 +89,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var userId = await User.GetCurrentUserIdAsync(_userService, ct);
 
                 var chat = await _chatService.GetChatByIdAsync(chatId, userId, ct);
                 if (chat == null)
@@ -190,7 +190,7 @@ namespace Messenger.API.Controllers
 
             try
             {
-                var currentUserId = await User.GetCurrentUserIdAsync(_userService);
+                var currentUserId = await User.GetCurrentUserIdAsync(_userService, ct);
 
                 string chatNameForDb = request.Type == "group"
                     ? request.Name.Trim()
@@ -288,7 +288,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var currentUserId = await User.GetCurrentUserIdAsync(_userService);
+                var currentUserId = await User.GetCurrentUserIdAsync(_userService, ct);
 
                 var chat = await _chatService.GetChatByIdAsync(chatId, currentUserId, ct);
                 if (chat == null)
@@ -399,7 +399,7 @@ namespace Messenger.API.Controllers
 
             try
             {
-                var currentUserId = await User.GetCurrentUserIdAsync(_userService);
+                var currentUserId = await User.GetCurrentUserIdAsync(_userService, ct);
 
                 var chat = await _chatService.GetChatByIdAsync(chatId, currentUserId, ct);
                 if (chat == null)
@@ -455,7 +455,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var currentUserId = await User.GetCurrentUserIdAsync(_userService);
+                var currentUserId = await User.GetCurrentUserIdAsync(_userService, ct);
 
                 var chat = await _chatService.GetChatByIdAsync(chatId, currentUserId, ct);
                 if (chat == null)
@@ -505,7 +505,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var currentUserId = await User.GetCurrentUserIdAsync(_userService);
+                var currentUserId = await User.GetCurrentUserIdAsync(_userService, ct);
 
                 var userToDelete = await _userService.GetUserByIdAsync(userId, ct);
                 if (userToDelete == null)
