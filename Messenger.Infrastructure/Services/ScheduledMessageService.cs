@@ -72,7 +72,7 @@ public class ScheduledMessageService : IScheduledMessageService
     public async Task<List<ScheduledMessageDto>> GetPendingByUserAsync(Guid userId, CancellationToken ct = default)
     {
         var entities = await _context.ScheduledMessages.AsNoTracking()
-            .Include(x => x.Sender).Include(x => x.Chat)
+            .Include(x => x.Chat)
             .Where(x => x.SenderId == userId && x.Status == ScheduledMessageStatus.Pending)
             .OrderBy(x => x.ScheduledAt).ToListAsync(ct);
         return entities.Select(MapToDto).ToList();
@@ -81,7 +81,6 @@ public class ScheduledMessageService : IScheduledMessageService
     public async Task<List<ScheduledMessageDto>> GetPendingByChatAsync(Guid chatId, Guid userId, CancellationToken ct = default)
     {
         var entities = await _context.ScheduledMessages.AsNoTracking()
-            .Include(x => x.Sender)
             .Where(x => x.ChatId == chatId && x.SenderId == userId && x.Status == ScheduledMessageStatus.Pending)
             .OrderBy(x => x.ScheduledAt).ToListAsync(ct);
         return entities.Select(MapToDto).ToList();
