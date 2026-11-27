@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Messenger.Core.Models;
 
 namespace Messenger.Infrastructure.Persistence.Entities;
 

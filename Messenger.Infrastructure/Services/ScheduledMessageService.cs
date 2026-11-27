@@ -1,7 +1,6 @@
 using System.Text.Json;
 using Messenger.Core.DTOs.Messages;
 using Messenger.Application.DTOs.Messages;
-using Messenger.Core.Interfaces;
 using Messenger.Application.Interfaces;
 using Messenger.Core.Messages;
 using Messenger.Application.Messages;

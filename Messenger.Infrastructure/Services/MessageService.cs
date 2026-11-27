@@ -5,7 +5,6 @@ using Messenger.Application.DTOs;
 using Messenger.Application.Files;
 using Messenger.Core.DTOs.Messages;
 using Messenger.Application.DTOs.Messages;
-using Messenger.Core.Interfaces;
 using Messenger.Application.Interfaces;
 using Messenger.Core.Models;
 using MassTransit;

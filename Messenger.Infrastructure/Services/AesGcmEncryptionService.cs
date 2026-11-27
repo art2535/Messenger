@@ -1,7 +1,6 @@
 ﻿using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Options;
-using Messenger.Core.Interfaces;
 using Messenger.Application.Interfaces;
 
 namespace Messenger.Infrastructure.Services
