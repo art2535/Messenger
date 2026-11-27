@@ -10,16 +10,20 @@ PROJECTS = {
     "Core": ROOT / "Messenger.Core" / "Messenger.Core.csproj",
     "Application": ROOT / "Messenger.Application" / "Messenger.Application.csproj",
     "Infrastructure": ROOT / "Messenger.Infrastructure" / "Messenger.Infrastructure.csproj",
+    "Realtime": ROOT / "Messenger.Realtime" / "Messenger.Realtime.csproj",
     "API": ROOT / "Messenger.API" / "Messenger.API.csproj",
     "Web": ROOT / "Messenger.Web" / "Messenger.Web.csproj",
+    "AppHost": ROOT / "Messenger.AppHost" / "Messenger.AppHost.csproj",
 }
 
 EXPECTED = {
     "Core": set(),
     "Application": {"Core"},
     "Infrastructure": {"Core", "Application"},
-    "API": {"Application", "Infrastructure"},
+    "Realtime": {"Application"},
+    "API": {"Application", "Infrastructure", "Realtime"},
     "Web": {"Core", "Application"},
+    "AppHost": set(),
 }
 
 
