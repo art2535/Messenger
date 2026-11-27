@@ -372,7 +372,7 @@ namespace Messenger.API.Controllers
                 if (string.IsNullOrWhiteSpace(senderName))
                     senderName = "Пользователь";
 
-                var sourceMessages = new List<(Message msg, string? plainText, List<Attachment> attachments)>();
+                var sourceMessages = new List<(MessageDto msg, string? plainText, List<AttachmentDto> attachments)>();
                 foreach (var mid in request.MessageIds.Distinct())
                 {
                     var msg = await _messageService.GetMessageByIdGlobalAsync(mid, ct);
@@ -387,12 +387,8 @@ namespace Messenger.API.Controllers
                         return StatusCode(StatusCodes.Status403Forbidden, ApiResponse.Failure("Нет доступа к исходному чату", "FORBIDDEN"));
                     }
 
-                    var plain = string.IsNullOrEmpty(msg.MessageText)
-                        ? null
-                        : _encryptionService.TryDecryptSafe(msg.MessageText);
-
-                    var atts = msg.Attachments?.ToList()
-                        ?? (await _attachmentService.GetAttachmentsByMessageIdAsync(mid, ct)).ToList();
+                    var plain = msg.MessageText;
+                    var atts = msg.Attachments ?? new List<AttachmentDto>();
                     sourceMessages.Add((msg, plain, atts));
                 }
 
@@ -426,9 +422,7 @@ namespace Messenger.API.Controllers
                     {
                         try
                         {
-                            var originalSender = srcMsg.Sender != null
-                                ? $"{srcMsg.Sender.FirstName} {srcMsg.Sender.LastName}".Trim()
-                                : "Пользователь";
+                            var originalSender = string.IsNullOrWhiteSpace(srcMsg.SenderName) ? "Пользователь" : srcMsg.SenderName;
                             if (string.IsNullOrWhiteSpace(originalSender))
                                 originalSender = "Пользователь";
 
@@ -461,7 +455,7 @@ namespace Messenger.API.Controllers
 
                                 var newAttId = Guid.NewGuid();
                                 var fileUrl = $"{apiBase}/uploads/{newFileName}";
-                                var size = att.SizeInBytes ?? (int)new FileInfo(destPath).Length;
+                                var size = att.SizeInBytes > 0 ? att.SizeInBytes : (int)new FileInfo(destPath).Length;
 
                                 attachmentsInfo.Add(new AttachmentInfo
                                 {
@@ -686,55 +680,7 @@ namespace Messenger.API.Controllers
                 var (messages, hasMore) = await _messageService.GetMessagesPagedAsync(
                     chatId, beforeSequence, limit, ct);
 
-                var dtos = messages.Select(m => new MessageDto
-                {
-                    MessageId = m.MessageId,
-                    ChatId = m.ChatId == Guid.Empty ? chatId : m.ChatId,
-                    SenderId = m.SenderId,
-                    SenderName = m.Sender != null
-                        ? $"{m.Sender.FirstName} {m.Sender.LastName}".Trim()
-                        : "Удалённый пользователь",
-                    MessageText = string.IsNullOrEmpty(m.MessageText)
-                        ? null
-                        : _encryptionService.TryDecryptSafe(m.MessageText),
-                    SentAt = UtcDateTime.AsUtc(m.SendTime),
-                    SequenceNumber = m.SequenceNumber,
-                    Status = m.DeliveryStatus switch
-                    {
-                        MessageDeliveryStatus.Pending => "Pending",
-                        MessageDeliveryStatus.Sent => "Sent",
-                        MessageDeliveryStatus.Delivered => "Delivered",
-                        MessageDeliveryStatus.Read => "Read",
-                        MessageDeliveryStatus.Failed => "Failed",
-                        _ => "Invalid status"
-                    },
-                    Attachments = m.Attachments.Select(a => new AttachmentDto
-                    {
-                        AttachmentId = a.AttachmentId,
-                        FileName = a.FileName,
-                        FileType = a.FileType ?? GetMimeType(a.FileName),
-                        SizeInBytes = a.SizeInBytes ?? 0,
-                        Url = a.Url
-                    }).ToList(),
-                    Reactions = (m.Reactions ?? Enumerable.Empty<Reaction>())
-                        .GroupBy(r => r.ReactionType)
-                        .Select(g => new ReactionSummaryDto
-                        {
-                            ReactionType = g.Key,
-                            Count = g.Count(),
-                            Users = g.Select(r => new ReactionUserDto
-                            {
-                                UserId = r.UserId,
-                                UserName = r.User != null
-                                    ? $"{r.User.FirstName} {r.User.LastName}".Trim()
-                                    : null
-                            }).ToList()
-                        })
-                        .OrderByDescending(x => x.Count)
-                        .ToList(),
-                    IsPinned = m.IsPinned,
-                    PinnedAt = m.PinnedAt.HasValue ? UtcDateTime.AsUtc(m.PinnedAt.Value) : null
-                }).ToList();
+                var dtos = messages.ToList();
 
                 return Ok(ApiResponse.Success(dtos, meta: new
                 {
@@ -850,8 +796,8 @@ namespace Messenger.API.Controllers
                     return StatusCode(StatusCodes.Status403Forbidden, ApiResponse.Failure("Редактировать можно только своё сообщение", "FORBIDDEN"));
                 }
 
-                message.MessageText = _encryptionService.Encrypt(request.MessageText);
-                await _messageService.UpdateMessageAsync(message, ct);
+                var encryptedContent = _encryptionService.Encrypt(request.MessageText);
+                await _messageService.UpdateMessageContentAsync(messageId, encryptedContent, ct);
 
                 var updatedDto = new MessageDto
                 {
@@ -859,8 +805,9 @@ namespace Messenger.API.Controllers
                     ChatId = request.ChatId,
                     SenderId = message.SenderId,
                     MessageText = request.MessageText.Trim(),
-                    SentAt = UtcDateTime.AsUtc(message.SendTime),
-                    Status = "Sent"
+                    SentAt = message.SentAt,
+                    Status = message.Status,
+                    SequenceNumber = message.SequenceNumber
                 };
 
                 await _hubContext.Clients.Group(request.ChatId.ToString())
@@ -1063,7 +1010,7 @@ namespace Messenger.API.Controllers
             {
                 var userId = await User.GetCurrentUserIdAsync(_userService);
 
-                Message? message;
+                MessageDto? message;
                 try
                 {
                     message = await _messageService.PinMessageAsync(messageId, userId, ct);
@@ -1078,9 +1025,7 @@ namespace Messenger.API.Controllers
                     return NotFound(ApiResponse.Failure("Сообщение не найдено", "NOT_FOUND"));
                 }
 
-                var text = string.IsNullOrEmpty(message.MessageText)
-                    ? null
-                    : _encryptionService.TryDecryptSafe(message.MessageText);
+                var text = message.MessageText;
 
                 var payload = new
                 {
@@ -1139,7 +1084,7 @@ namespace Messenger.API.Controllers
             {
                 var userId = await User.GetCurrentUserIdAsync(_userService);
 
-                Message? message;
+                MessageDto? message;
                 try
                 {
                     message = await _messageService.UnpinMessageAsync(messageId, userId, ct);
@@ -1219,9 +1164,7 @@ namespace Messenger.API.Controllers
                 var messages = await _messageService.GetPinnedMessagesAsync(chatId, ct);
                 var data = messages.Select(m =>
                 {
-                    var decrypted = string.IsNullOrEmpty(m.MessageText)
-                        ? null
-                        : _encryptionService.TryDecryptSafe(m.MessageText);
+                    var decrypted = m.MessageText;
                     return new
                     {
                         MessageId = m.MessageId,
@@ -1232,9 +1175,7 @@ namespace Messenger.API.Controllers
                         PinnedAt = m.PinnedAt.HasValue ? UtcDateTime.AsUtc(m.PinnedAt.Value) : (DateTime?)null,
                         SequenceNumber = m.SequenceNumber,
                         SenderId = m.SenderId,
-                        SenderName = m.Sender != null
-                            ? $"{m.Sender.FirstName} {m.Sender.LastName}".Trim()
-                            : (string?)null
+                        SenderName = m.SenderName
                     };
                 }).ToList();
 

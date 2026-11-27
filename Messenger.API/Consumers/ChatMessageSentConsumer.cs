@@ -66,8 +66,7 @@ namespace Messenger.API.Consumers
                     }
                 }
 
-                savedMessage.DeliveryStatus = MessageDeliveryStatus.Delivered;
-                await _messageService.UpdateMessageAsync(savedMessage, context.CancellationToken);
+                await _messageService.UpdateDeliveryStatusAsync(savedMessage.MessageId, MessageDeliveryStatus.Delivered, context.CancellationToken);
 
                 var decryptedText = string.IsNullOrEmpty(msg.MessageText)
                     ? null
@@ -79,7 +78,7 @@ namespace Messenger.API.Consumers
                     SenderId = savedMessage.SenderId,
                     SenderName = msg.SenderName ?? "Пользователь",
                     MessageText = decryptedText,
-                    SentAt = UtcDateTime.AsUtc(savedMessage.SendTime),
+                    SentAt = savedMessage.SentAt,
                     SequenceNumber = savedMessage.SequenceNumber,
                     Status = "Sent",
                     Attachments = msg.Attachments?.Select(a => new AttachmentDto
@@ -146,13 +145,7 @@ namespace Messenger.API.Consumers
                 _logger.LogError(ex, "ОШИБКА обработки сообщения {MessageId} в consumer", msg.MessageId);
                 try
                 {
-                    var failedMessage = await _messageService.GetMessageByIdAsync(
-                        msg.ChatId, msg.MessageId, context.CancellationToken);
-                    if (failedMessage != null)
-                    {
-                        failedMessage.DeliveryStatus = MessageDeliveryStatus.Failed;
-                        await _messageService.UpdateMessageAsync(failedMessage, context.CancellationToken);
-                    }
+                    await _messageService.UpdateDeliveryStatusAsync(msg.MessageId, MessageDeliveryStatus.Failed, context.CancellationToken);
                 }
                 catch (Exception innerEx)
                 {

@@ -168,19 +168,20 @@ namespace Messenger.Infrastructure.Services
             return updated;
         }
 
-        public async Task<IEnumerable<Message>> GetMessagesAsync(Guid chatId, CancellationToken token = default)
+        public async Task<IEnumerable<MessageDto>> GetMessagesAsync(Guid chatId, CancellationToken token = default)
         {
-            var (items, _) = await GetMessagesByChatIdPagedAsync(chatId, null, 100, token);
+            var (items, _) = await GetMessagesPagedAsync(chatId, null, 100, token);
             return items;
         }
 
-        public async Task<(IReadOnlyList<Message> Items, bool HasMore)> GetMessagesPagedAsync(
+        public async Task<(IReadOnlyList<MessageDto> Items, bool HasMore)> GetMessagesPagedAsync(
             Guid chatId, long? beforeSequence = null, int limit = 50, CancellationToken token = default)
         {
-            return await GetMessagesByChatIdPagedAsync(chatId, beforeSequence, limit, token);
+            var (items, hasMore) = await GetMessagesByChatIdPagedAsync(chatId, beforeSequence, limit, token);
+            return (items.Select(m => MapToDto(m, _encryptionService.TryDecryptSafe(m.MessageText))).ToList(), hasMore);
         }
 
-        public async Task<ServiceResult<Message>> SendMessageAsync(Guid messageId, Guid chatId, Guid senderId,
+        public async Task<ServiceResult<MessageDto>> SendMessageAsync(Guid messageId, Guid chatId, Guid senderId,
             string? content, bool hasAttachments, IUploadedFile[]? files = null, CancellationToken token = default)
         {
             try
@@ -201,27 +202,29 @@ namespace Messenger.Infrastructure.Services
                 var savedMessage = await GetMessageByIdAsync(chatId, message.MessageId, token);
 
                 return savedMessage != null
-                    ? ServiceResult<Message>.Success(savedMessage)
-                    : ServiceResult<Message>.Failure("Не удалось сохранить сообщение");
+                    ? ServiceResult<MessageDto>.Success(savedMessage)
+                    : ServiceResult<MessageDto>.Failure("Не удалось сохранить сообщение");
             }
             catch (Exception ex)
             {
-                return ServiceResult<Message>.Failure(ex.Message, ex.InnerException?.Message);
+                return ServiceResult<MessageDto>.Failure(ex.Message, ex.InnerException?.Message);
             }
         }
 
-        public async Task<Message?> GetMessageByIdAsync(Guid chatId, Guid messageId, CancellationToken token = default)
+        public async Task<MessageDto?> GetMessageByIdAsync(Guid chatId, Guid messageId, CancellationToken token = default)
         {
-            return await _context.Messages
-                .FirstOrDefaultAsync(m => m.ChatId == chatId && m.MessageId == messageId, token);
+            var message = await _context.Messages.AsNoTracking().Where(m => m.ChatId == chatId && m.MessageId == messageId)
+                .Include(m => m.Sender).Include(m => m.Reactions).ThenInclude(r => r.User).Include(m => m.Attachments)
+                .AsSplitQuery().FirstOrDefaultAsync(token);
+            return message == null ? null : MapToDto(message, _encryptionService.TryDecryptSafe(message.MessageText));
         }
 
-        public async Task<Message?> GetMessageByIdGlobalAsync(Guid messageId, CancellationToken token = default)
+        public async Task<MessageDto?> GetMessageByIdGlobalAsync(Guid messageId, CancellationToken token = default)
         {
-            return await _context.Messages
-                .Include(m => m.Attachments)
-                .Include(m => m.Sender)
-                .FirstOrDefaultAsync(m => m.MessageId == messageId, token);
+            var message = await _context.Messages.AsNoTracking().Where(m => m.MessageId == messageId)
+                .Include(m => m.Sender).Include(m => m.Reactions).ThenInclude(r => r.User).Include(m => m.Attachments)
+                .AsSplitQuery().FirstOrDefaultAsync(token);
+            return message == null ? null : MapToDto(message, _encryptionService.TryDecryptSafe(message.MessageText));
         }
 
         public async Task DeleteMessageAsync(Guid messageId, CancellationToken token = default)
@@ -237,9 +240,20 @@ namespace Messenger.Infrastructure.Services
             }
         }
 
-        public async Task UpdateMessageAsync(Message message, CancellationToken token = default)
+        public async Task UpdateMessageContentAsync(Guid messageId, string encryptedContent, CancellationToken token = default)
         {
-            _context.Messages.Update(message);
+            var message = await _context.Messages.FirstOrDefaultAsync(m => m.MessageId == messageId, token);
+            if (message == null) throw new KeyNotFoundException($"Сообщение {messageId} не найдено");
+            message.MessageText = encryptedContent;
+            await _context.SaveChangesAsync(token);
+            await InvalidateMessageCachesAsync(message.ChatId, token);
+        }
+
+        public async Task UpdateDeliveryStatusAsync(Guid messageId, MessageDeliveryStatus status, CancellationToken token = default)
+        {
+            var message = await _context.Messages.FirstOrDefaultAsync(m => m.MessageId == messageId, token);
+            if (message == null) return;
+            message.DeliveryStatus = status;
             await _context.SaveChangesAsync(token);
             await InvalidateMessageCachesAsync(message.ChatId, token);
         }
@@ -729,30 +743,7 @@ namespace Messenger.Infrastructure.Services
             }).ToList()
         };
 
-        public async Task<Message?> PinMessageAsync(Guid messageId, Guid userId, CancellationToken token = default)
-        {
-            var message = await _context.Messages
-                .FirstOrDefaultAsync(m => m.MessageId == messageId, token);
-            if (message == null)
-                return null;
-
-            var isParticipant = await _context.ChatParticipants
-                .AsNoTracking()
-                .AnyAsync(p => p.ChatId == message.ChatId && p.UserId == userId, token);
-            if (!isParticipant)
-                throw new UnauthorizedAccessException("Вы не участник этого чата");
-
-            if (message.IsPinned)
-                return message;
-
-            message.IsPinned = true;
-            message.PinnedAt = Messenger.Core.Models.UtcDateTime.Now;
-            await _context.SaveChangesAsync(token);
-            await InvalidateMessageCachesAsync(message.ChatId, token);
-            return message;
-        }
-
-        public async Task<Message?> UnpinMessageAsync(Guid messageId, Guid userId, CancellationToken token = default)
+        public async Task<MessageDto?> PinMessageAsync(Guid messageId, Guid userId, CancellationToken token = default)
         {
             var message = await _context.Messages
                 .FirstOrDefaultAsync(m => m.MessageId == messageId, token);
@@ -766,24 +757,45 @@ namespace Messenger.Infrastructure.Services
                 throw new UnauthorizedAccessException("Вы не участник этого чата");
 
             if (!message.IsPinned)
-                return message;
-
-            message.IsPinned = false;
-            message.PinnedAt = null;
-            await _context.SaveChangesAsync(token);
-            await InvalidateMessageCachesAsync(message.ChatId, token);
-            return message;
+            {
+                message.IsPinned = true;
+                message.PinnedAt = Messenger.Core.Models.UtcDateTime.Now;
+                await _context.SaveChangesAsync(token);
+                await InvalidateMessageCachesAsync(message.ChatId, token);
+            }
+            return await GetMessageByIdGlobalAsync(messageId, token);
         }
 
-        public async Task<List<Message>> GetPinnedMessagesAsync(Guid chatId, CancellationToken token = default)
+        public async Task<MessageDto?> UnpinMessageAsync(Guid messageId, Guid userId, CancellationToken token = default)
         {
-            return await _context.Messages
+            var message = await _context.Messages
+                .FirstOrDefaultAsync(m => m.MessageId == messageId, token);
+            if (message == null)
+                return null;
+
+            var isParticipant = await _context.ChatParticipants
                 .AsNoTracking()
-                .Where(m => m.ChatId == chatId && m.IsPinned)
-                .OrderBy(m => m.PinnedAt)
-                .ThenBy(m => m.SequenceNumber)
-                .Include(m => m.Sender)
-                .ToListAsync(token);
+                .AnyAsync(p => p.ChatId == message.ChatId && p.UserId == userId, token);
+            if (!isParticipant)
+                throw new UnauthorizedAccessException("Вы не участник этого чата");
+
+            if (message.IsPinned)
+            {
+                message.IsPinned = false;
+                message.PinnedAt = null;
+                await _context.SaveChangesAsync(token);
+                await InvalidateMessageCachesAsync(message.ChatId, token);
+            }
+            return await GetMessageByIdGlobalAsync(messageId, token);
+        }
+
+        public async Task<List<MessageDto>> GetPinnedMessagesAsync(Guid chatId, CancellationToken token = default)
+        {
+            var messages = await _context.Messages.AsNoTracking().Where(m => m.ChatId == chatId && m.IsPinned)
+                .OrderBy(m => m.PinnedAt).ThenBy(m => m.SequenceNumber)
+                .Include(m => m.Sender).Include(m => m.Reactions).ThenInclude(r => r.User).Include(m => m.Attachments)
+                .AsSplitQuery().ToListAsync(token);
+            return messages.Select(m => MapToDto(m, _encryptionService.TryDecryptSafe(m.MessageText))).ToList();
         }
     }
 }
