@@ -49,7 +49,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var userId = await User.GetCurrentUserIdAsync(_userService, ct);
                 var list = await _chatFolderService.GetFoldersAsync(userId, ct);
 
                 return Ok(ApiResponse.Success(list));
@@ -83,7 +83,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var userId = await User.GetCurrentUserIdAsync(_userService, ct);
                 var folder = await _chatFolderService.GetFolderAsync(userId, folderId, ct);
 
                 if (folder == null)
@@ -122,7 +122,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var userId = await User.GetCurrentUserIdAsync(_userService, ct);
                 var folder = await _chatFolderService.CreateFolderAsync(userId, request, ct);
 
                 return Ok(ApiResponse.Success(folder));
@@ -166,7 +166,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var userId = await User.GetCurrentUserIdAsync(_userService, ct);
                 var folder = await _chatFolderService.UpdateFolderAsync(userId, folderId, request, ct);
 
                 if (folder == null)
@@ -213,7 +213,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var userId = await User.GetCurrentUserIdAsync(_userService, ct);
                 var ok = await _chatFolderService.DeleteFolderAsync(userId, folderId, ct);
 
                 if (!ok)
@@ -253,7 +253,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var userId = await User.GetCurrentUserIdAsync(_userService, ct);
                 var ok = await _chatFolderService.AddChatAsync(userId, folderId, request.ChatId, ct);
 
                 if (!ok)
@@ -293,7 +293,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var userId = await User.GetCurrentUserIdAsync(_userService, ct);
                 var ok = await _chatFolderService.RemoveChatAsync(userId, folderId, chatId, ct);
 
                 if (!ok)
