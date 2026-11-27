@@ -333,7 +333,7 @@ namespace Messenger.Infrastructure.Migrations
                         .HasColumnType("text")
                         .HasColumnName("Message_Text");
 
-                    b.Property<Guid>("SenderId")
+                    b.Property<Guid?>("SenderId")
                         .HasColumnType("uuid")
                         .HasColumnName("Sender_ID");
 
@@ -1197,7 +1197,6 @@ namespace Messenger.Infrastructure.Migrations
                         .WithMany("BroadcastsCreated")
                         .HasForeignKey("SenderId")
                         .OnDelete(DeleteBehavior.SetNull)
-                        .IsRequired()
                         .HasConstraintName("fk_broadcast_sender");
 
                     b.Navigation("Sender");

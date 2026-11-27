@@ -27,7 +27,6 @@ public sealed class BroadcastConfiguration : IEntityTypeConfiguration<Broadcast>
             .WithMany(p => p.BroadcastsCreated)
             .HasForeignKey(d => d.SenderId)
             .OnDelete(DeleteBehavior.SetNull)
-            .IsRequired()
             .HasConstraintName("fk_broadcast_sender");
     }
 }

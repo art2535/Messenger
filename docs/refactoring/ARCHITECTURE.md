@@ -110,13 +110,13 @@ GitHub-изменения проверены чтением файлов и Git 
 
 ## Подэтап backend: аудит Messenger.Infrastructure
 
-На ревизии `92e5052babf3dd69f8aecead0f41823c74b2bb34` проверены project dependencies, DbContext/design-time factory, Fluent API configurations, persistence-only entities, ключевые миграции и основные EF/Redis сервисы.
+На ревизии `95dfcb5c803579a2de780135aada583ad98488b7` проверены project dependencies, DbContext/design-time factory, Fluent API configurations, persistence-only entities, ключевые миграции и основные EF/Redis сервисы.
 
 Архитектурная граница выдержана: Infrastructure зависит только от Core и Application; EF Core/Npgsql/Redis/MassTransit EF находятся в Infrastructure; конфигурации EF, DbContext, миграции и persistence-only entities не протекают в Core/Application. Большинство прикладных сервисов реализуют Application-интерфейсы и работают с DbContext напрямую. Универсальный generic repository не вводится; специализированные persistence contracts выделяются по необходимости.
 
-Найдено противоречие схемы Broadcast: `SenderId` и связь обязательные, но FK настроен как `ON DELETE SET NULL`. Такое удаление пользователя не сможет завершиться при NOT NULL колонке. Требуется выбрать продуктовую семантику: nullable sender с новой миграцией или запрет удаления автора через Restrict/NoAction. До решения схему не меняли.
+Исправлена противоречивая связь Broadcast: автор теперь nullable, FK сохраняет `ON DELETE SET NULL`, а миграция `20261127200000_MakeBroadcastSenderOptional` переводит `Sender_ID` в nullable. Это позволяет удалять аккаунт, сохраняя рассылку и историю её получателей; просмотр сводки рассылки без автора остаётся доступен администраторам.
 
-Также отмечена хрупкость `GuapMessengerContextFactory`: путь к API appsettings зависит от cwd и безусловно использует Development config. Проверка лишних Identity NuGet packages оставлена отдельной задачей до полного usage audit.
+Укреплена `GuapMessengerContextFactory`: путь к API-проекту ищется относительно cwd и каталога сборки, конфигурационные JSON-файлы необязательны, переменные окружения имеют приоритет. Identity NuGet packages остаются на проверку до завершения полного usage audit.
 
 Подробности, подтверждённые файлы и последовательность исправлений: [INFRASTRUCTURE-AUDIT.md](INFRASTRUCTURE-AUDIT.md).
 
