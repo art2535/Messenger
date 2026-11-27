@@ -155,3 +155,12 @@ User подтверждена как центральная доменная с�
 Из User удалены EF-аннотации [Key], [Column], [StringLength], [ForeignKey] и [InverseProperty]. Скалярный mapping перенесён в UserConfiguration: таблица Users, PK Users_pkey, колонка User_ID, длины и обязательность FirstName/LastName, Login (50), ExternalId (255), Registration_Date и External_ID. Существующие связи с AccountSetting, Chat, ChatParticipant, Message, Notification, Reaction, Role, UserStatus, Broadcast и BroadcastRecipient оставлены и конфигурируются в соответствующих Fluent-конфигурациях.
 
 Все JsonIgnore сохранены, чтобы не менять существующее поведение сериализации. DbSet, CLR-имя сущности в Model Snapshot и схема БД не менялись; исторические миграции не редактировались.
+
+
+### 2.7.24. Аудит и очистка Role
+
+Role остаётся доменной сущностью Core: роли определяют права и тип доступа пользователя. EF-аннотации Key, Column, StringLength, ForeignKey и InverseProperty удалены; скалярная конфигурация таблицы Roles, ключа Role_ID, длины Name (50) и обязательности Name/Description перенесена в RoleConfiguration. Навигация Users и JsonIgnore сохранены.
+
+Связь User.Roles <-> Role.Users остаётся many-to-many и конфигурируется единообразно в UserConfiguration через join table User_Roles, с исходными именами колонок, PK и FK. Проверены потребители: UserService назначает роли и строит RoleDto, JwtService формирует role claims, AdminService проверяет административную роль, а Web использует claims для авторизации. Seed-данные шести ролей сохранены без изменений.
+
+Model Snapshot и исторические миграции не редактировались; схема и CLR-тип Messenger.Core.Models.Role не менялись.

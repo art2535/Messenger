@@ -187,3 +187,12 @@ User оставлена в Core как центральная доменная �
 EF-аннотации Key, Column, StringLength, ForeignKey и InverseProperty удалены из User. Все scalar mapping details перенесены в UserConfiguration, включая имена таблицы/колонок, PK, длины строк и required для имени/фамилии. Fluent-конфигурации зависимых сущностей уже задают связи с User; many-to-many UserRole остаётся в UserConfiguration. JSON-аннотации JsonIgnore сохранены.
 
 GuapMessengerContext и CLR-тип Messenger.Core.Models.User в Model Snapshot не менялись; snapshot не редактировался, исторические миграции не изменялись. Очистка User не означает, что все остальные Core-модели уже свободны от EF-аннотаций.
+
+
+## Подэтап 2.7.24 — аудит и очистка Role
+
+`Role` оставлена в Core как доменная сущность авторизации. Удалены EF-аннотации `Key`, `Column`, `StringLength`, `ForeignKey` и `InverseProperty`; Fluent mapping таблицы `Roles`, PK `Roles_pkey`, колонки `Role_ID`, длины `Name` (50) и обязательности `Name`/`Description` закреплён в `RoleConfiguration`. `Users` navigation и `JsonIgnore` сохранены.
+
+Many-to-many `User.Roles` / `Role.Users` настроена один раз в `UserConfiguration` через `User_Roles`; имена колонок, составной PK, FK и delete behavior сохранены. Потребители проверены: `UserService`, `JwtService`, `AdminService`, API DTO и Web claims authorization. Шесть seed-записей в `RoleConfiguration` не изменены.
+
+Model Snapshot, CLR-тип `Messenger.Core.Models.Role` и исторические миграции не менялись. Подэтап не меняет формат role claims и контрактов API.

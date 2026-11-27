@@ -8,8 +8,19 @@ public sealed class RoleConfiguration : IEntityTypeConfiguration<Role>
 {
     public void Configure(EntityTypeBuilder<Role> builder)
     {
+        builder.ToTable("Roles");
+
         builder.HasKey(e => e.RoleId).HasName("Roles_pkey");
-        builder.Property(e => e.RoleId).ValueGeneratedNever();
+        builder.Property(e => e.RoleId)
+            .HasColumnName("Role_ID")
+            .ValueGeneratedNever();
+
+        builder.Property(e => e.Name)
+            .HasMaxLength(50)
+            .IsRequired();
+
+        builder.Property(e => e.Description)
+            .IsRequired();
 
         builder.HasData(
             new Role
