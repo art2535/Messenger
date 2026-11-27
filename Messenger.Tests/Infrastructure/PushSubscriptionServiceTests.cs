@@ -3,6 +3,7 @@ using Messenger.Core.Models;
 using Messenger.Infrastructure.Data;
 using Messenger.Infrastructure.Persistence.Entities;
 using Messenger.Infrastructure.Services;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
@@ -42,8 +43,9 @@ public sealed class PushSubscriptionServiceTests
             secondService.AddSubscriptionAsync(secondUserId, CreateSubscription(endpoint, "key-b", "auth-b")));
 
         await using var verify = _database.CreateContext();
-        var rows = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions
-            .ToListAsync(verify.PushSubscriptions.Where(subscription => subscription.Endpoint == endpoint));
+        var rows = await verify.PushSubscriptions
+            .Where(subscription => subscription.Endpoint == endpoint)
+            .ToListAsync();
 
         Assert.Single(rows);
         Assert.Contains(rows[0].UserId, new[] { firstUserId, secondUserId });
