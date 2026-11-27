@@ -50,7 +50,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var userId = await User.GetCurrentUserIdAsync(_userService, ct);
 
                 var status = await _userStatusService.GetUserStatusByUserIdAsync(userId, ct);
 
@@ -90,7 +90,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var userId = await User.GetCurrentUserIdAsync(_userService, ct);
 
                 await _userStatusService.UpdateUserStatusAsync(userId, request.Online, ct);
 
