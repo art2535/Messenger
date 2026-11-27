@@ -81,3 +81,10 @@
 Сохранены заданные в контексте ключи и их имена, `ValueGeneratedNever`, индексы, имена FK constraints, правила удаления, SQL defaults (`gen_random_uuid()`, `now()`), имена/типы колонок, ограничения длины и таблица `Scheduled_Messages`. Аннотации моделей, включая `[Table]`, `[Column]`, `[ForeignKey]`, `[InverseProperty]` и `[JsonIgnore]`, пока не удалялись: они остаются частью действующей EF-модели.
 
 После переноса `OnModelCreating` содержит только настройки расширения PostgreSQL, MassTransit Inbox/Outbox и вызов `ApplyConfigurationsFromAssembly`, а также partial hook.
+
+
+### 2.7. Аудит границы Domain / Persistence
+
+Проведён аудит моделей Core, DbContext, EF Model Snapshot, сервисных интерфейсов и ключевых реализаций Infrastructure/API. Выявлено, что сервисные контракты возвращают Core EF-модели, Infrastructure использует их напрямую через DbSet и навигации, а API/Web читают навигационные свойства и сериализуют результаты. Также Core содержит EF-аннотации и ASP.NET типы в интерфейсах.
+
+Подробная матрица типов, найденные зависимости, целевая схема, порядок миграции и критерии приёмки описаны в [PERSISTENCE-BOUNDARY.md](PERSISTENCE-BOUNDARY.md). На этом подэтапе кодовую модель DbContext не дублировали: до перевода контрактов это создало бы две конкурирующие модели и не дало бы реального разделения.
