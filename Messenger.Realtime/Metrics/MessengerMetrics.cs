@@ -1,6 +1,6 @@
 using System.Diagnostics.Metrics;
 
-namespace Messenger.Core.Metrics
+namespace Messenger.Realtime.Metrics
 {
     public static class MessengerMetrics
     {

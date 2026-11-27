@@ -1,3 +1,4 @@
+using Messenger.Application.Common;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -304,7 +305,7 @@ namespace Messenger.Infrastructure.Services
                     SenderId = m.SenderId,
                     SenderName = senderName,
                     Text = text,
-                    SentAt = Messenger.Core.Models.UtcDateTime.AsUtc(m.SendTime),
+                    SentAt = UtcDateTime.AsUtc(m.SendTime),
                     Status = m.DeliveryStatus.ToString(),
                     HasAttachments = m.HasAttachments,
                     Attachments = m.Attachments?.Select(a => new
@@ -537,7 +538,7 @@ namespace Messenger.Infrastructure.Services
                     ? $"{m.Sender.FirstName} {m.Sender.LastName}".Trim()
                     : "Пользователь",
                 MessageText = decryptedText,
-                SentAt = Messenger.Core.Models.UtcDateTime.AsUtc(m.SendTime),
+                SentAt = UtcDateTime.AsUtc(m.SendTime),
                 SequenceNumber = m.SequenceNumber,
                 Status = m.DeliveryStatus.ToString(),
                 Attachments = m.Attachments?.Select(a => new AttachmentDto
@@ -551,7 +552,7 @@ namespace Messenger.Infrastructure.Services
                 Reactions = reactionGroups,
                 IsPinned = m.IsPinned,
                 PinnedAt = m.PinnedAt.HasValue
-                    ? Messenger.Core.Models.UtcDateTime.AsUtc(m.PinnedAt.Value)
+                    ? UtcDateTime.AsUtc(m.PinnedAt.Value)
                     : null
             };
         }
@@ -759,7 +760,7 @@ namespace Messenger.Infrastructure.Services
             if (!message.IsPinned)
             {
                 message.IsPinned = true;
-                message.PinnedAt = Messenger.Core.Models.UtcDateTime.Now;
+                message.PinnedAt = UtcDateTime.Now;
                 await _context.SaveChangesAsync(token);
                 await InvalidateMessageCachesAsync(message.ChatId, token);
             }

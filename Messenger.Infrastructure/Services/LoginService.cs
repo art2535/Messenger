@@ -1,3 +1,4 @@
+using Messenger.Application.Common;
 using Messenger.Application.Interfaces;
 using Messenger.Application.DTOs.Logins;
 using Messenger.Core.Models;

@@ -1,4 +1,4 @@
-namespace Messenger.Core.Models
+namespace Messenger.Application.Common
 {
     public static class UtcDateTime
     {

@@ -1,3 +1,4 @@
+using Messenger.Application.Common;
 using Messenger.API.Options;
 using Messenger.Realtime.Hubs;
 using Messenger.Application.Interfaces;

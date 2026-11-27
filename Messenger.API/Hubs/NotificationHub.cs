@@ -1,5 +1,5 @@
 ﻿using Messenger.Application.Interfaces;
-using Messenger.Core.Metrics;
+using Messenger.Realtime.Metrics;
 using Messenger.Application.DTOs.Notifications;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;

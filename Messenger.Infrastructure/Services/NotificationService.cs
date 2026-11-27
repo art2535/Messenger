@@ -1,3 +1,4 @@
+using Messenger.Application.Common;
 using Messenger.Application.Interfaces;
 using Messenger.Application.DTOs.Notifications;
 using Messenger.Core.Models;

@@ -1,3 +1,4 @@
+using Messenger.Application.Common;
 using System.Text.RegularExpressions;
 using Messenger.Application.DTOs.Moderation;
 using Messenger.Application.Interfaces;

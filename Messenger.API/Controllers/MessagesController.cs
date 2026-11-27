@@ -1,3 +1,4 @@
+using Messenger.Application.Common;
 using Asp.Versioning;
 using Messenger.API.Extensions;
 using MassTransit;
