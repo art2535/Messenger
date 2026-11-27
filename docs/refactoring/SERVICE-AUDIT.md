@@ -12,7 +12,7 @@
 
 - Начальная ревизия этого аудита: `4d3bbcd3935d74ec822ead8c80a34e5f4702dc43`.
 - Передача отмены в Broadcast опубликована в коммите `c10e4e23348b1b6a12a96133eda326466605a895`.
-- Безопасная работа с файлами аватаров опубликована в коммите `c2edd13e092b9e337e595adbc09728b87aef0b84` (последующее уточнение ограничения размера также входит в следующий коммит).
+- Безопасная замена и удаление аватаров опубликованы в коммите `c2edd13e092b9e337e595adbc09728b87aef0b84`; ограничение фактического размера читаемого потока — в `42add39c21487f3856f78b62d469d2748c091366`.
 - Основная область: `Messenger.Infrastructure/Services`, `Messenger.Application/Services`, `Messenger.Application/Interfaces`, `Messenger.API/Services`, `Messenger.Web/Services`, `Messenger.Realtime/Services`.
 - Проверка локальной сборкой в этой среде недоступна: .NET SDK/runtime отсутствует.
 
