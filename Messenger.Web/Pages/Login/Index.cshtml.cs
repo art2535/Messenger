@@ -1,4 +1,3 @@
-using Azure.Core;
 using Messenger.Application.DTOs.Auth;
 using Messenger.Application.DTOs.Logins;
 using Messenger.Application.DTOs.UserStatuses;
