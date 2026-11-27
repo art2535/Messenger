@@ -74,3 +74,8 @@
 ## Результат подэтапа 2.7.14 — INotificationService
 
 `INotificationService` отвязан от EF-модели `Notification`. `GetNotificationsAsync` и `GetNotificationAsync` возвращают `NotificationDto`; создание сохраняет существующий результат `Guid`, а `MarkAsReadAsync` работает по идентификатору. Mapping и работа с зашифрованным полем `Text` остаются в `NotificationService` Infrastructure. SignalR `NotificationHub` также публикует DTO, а не EF-сущность.
+
+
+## Результат подэтапа 2.7.15 — IReactionService
+
+`IReactionService` отвязан от EF-модели `Reaction`. `AddReactionAsync` принимает идентификаторы и тип реакции и возвращает `ReactionDto`; `GetReactionsByMessageIdAsync` возвращает `IEnumerable<ReactionDto>`. API больше не создаёт EF-сущность `Reaction`. Mapping, проверка существования сообщения и получение имени пользователя выполняются в Infrastructure.

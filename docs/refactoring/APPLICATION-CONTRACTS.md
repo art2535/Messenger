@@ -59,3 +59,8 @@
 ## Подэтап 2.7.14 — уведомления
 
 `INotificationService` перенесён в `Messenger.Application.Interfaces`. Публичный контракт больше не использует EF-сущность `Notification`: чтение возвращает `NotificationDto`, а создание и отметка прочтения работают через прикладные аргументы. `CreateNotificationDto` и `NotificationDto` находятся в `Messenger.Application.DTOs.Notifications`. Infrastructure выполняет mapping между `Notification` и DTO, включая безопасную расшифровку текста. `NotificationsController` и `NotificationHub` больше не передают EF-сущность наружу.
+
+
+## Подэтап 2.7.15 — реакции
+
+`IReactionService` перенесён в `Messenger.Application.Interfaces`. Добавлены `CreateReactionDto` и `ReactionDto` в `Messenger.Application.DTOs.Reactions`. Контракт не содержит EF-сущность `Reaction`; API получает и отправляет DTO.

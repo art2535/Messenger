@@ -105,3 +105,8 @@ Fluent-конфигурации всех сущностей вынесены в 
 ### 2.7.14. Контракт INotificationService
 
 `INotificationService` и DTO уведомлений перенесены в Application. Core больше не содержит интерфейс сервиса уведомлений или request DTO его API-контракта. EF-сущность `Notification` остаётся persistence-моделью Core, но не выходит через Application-контракт.
+
+
+### 2.7.15. Контракт IReactionService
+
+`IReactionService` и request DTO реакций перенесены из Core в Application. EF-сущность `Reaction` остаётся persistence-моделью Core, но больше не используется публичным контрактом сервиса.
