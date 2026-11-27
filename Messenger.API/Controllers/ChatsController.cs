@@ -1,7 +1,7 @@
 ﻿using Asp.Versioning;
 using Messenger.API.Extensions;
 using Messenger.Core.DTOs.Chats;
-using Messenger.Core.Hubs;
+using Messenger.API.Hubs;
 using Messenger.Core.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
