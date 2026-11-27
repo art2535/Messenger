@@ -1,5 +1,5 @@
-using Messenger.Core.Interfaces;
 using Messenger.Application.Interfaces;
+using Messenger.Application.DTOs.Reactions;
 using Messenger.Core.Models;
 using Messenger.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -15,46 +15,74 @@ namespace Messenger.Infrastructure.Services
             _context = context;
         }
 
-        public async Task AddReactionAsync(Reaction reaction, CancellationToken cancellationToken = default)
+        public async Task<ReactionDto> AddReactionAsync(Guid messageId, Guid userId, string reactionType, CancellationToken cancellationToken = default)
         {
-            if (string.IsNullOrWhiteSpace(reaction.ReactionType))
-                throw new ArgumentException("Тип реакции обязателен", nameof(reaction.ReactionType));
+            if (string.IsNullOrWhiteSpace(reactionType))
+                throw new ArgumentException("Тип реакции обязателен", nameof(reactionType));
 
-            if (reaction.ReactionType.Length > 30)
-                throw new ArgumentException("Тип реакции не должен превышать 30 символов", nameof(reaction.ReactionType));
+            if (reactionType.Length > 30)
+                throw new ArgumentException("Тип реакции не должен превышать 30 символов", nameof(reactionType));
 
-            if (!await MessageExistsAsync(reaction.MessageId, cancellationToken))
+            if (!await MessageExistsAsync(messageId, cancellationToken))
                 throw new KeyNotFoundException("Сообщение не найдено");
 
             var existing = await _context.Reactions
                 .FirstOrDefaultAsync(
-                    r => r.MessageId == reaction.MessageId && r.UserId == reaction.UserId,
+                    r => r.MessageId == messageId && r.UserId == userId,
                     cancellationToken);
 
+            Reaction reaction;
             if (existing != null)
             {
-                existing.ReactionType = reaction.ReactionType;
-                reaction.ReactionId = existing.ReactionId;
+                existing.ReactionType = reactionType;
+                reaction = existing;
             }
             else
             {
-                if (reaction.ReactionId == Guid.Empty)
-                    reaction.ReactionId = Guid.NewGuid();
+                reaction = new Reaction
+                {
+                    ReactionId = Guid.NewGuid(),
+                    MessageId = messageId,
+                    UserId = userId,
+                    ReactionType = reactionType
+                };
 
                 await _context.Reactions.AddAsync(reaction, cancellationToken);
             }
 
             await _context.SaveChangesAsync(cancellationToken);
+
+            var userName = await _context.Users
+                .AsNoTracking()
+                .Where(u => u.UserId == userId)
+                .Select(u => ($"{u.FirstName} {u.LastName}").Trim())
+                .FirstOrDefaultAsync(cancellationToken);
+
+            return new ReactionDto
+            {
+                ReactionId = reaction.ReactionId,
+                MessageId = reaction.MessageId,
+                UserId = reaction.UserId,
+                ReactionType = reaction.ReactionType,
+                UserName = userName
+            };
         }
 
-        public async Task<IEnumerable<Reaction>> GetReactionsByMessageIdAsync(Guid messageId,
+        public async Task<IEnumerable<ReactionDto>> GetReactionsByMessageIdAsync(Guid messageId,
             CancellationToken cancellationToken = default)
         {
             return await _context.Reactions
                 .AsNoTracking()
                 .Where(r => r.MessageId == messageId)
-                .Include(r => r.User)
                 .OrderBy(r => r.ReactionType)
+                .Select(r => new ReactionDto
+                {
+                    ReactionId = r.ReactionId,
+                    MessageId = r.MessageId,
+                    UserId = r.UserId,
+                    ReactionType = r.ReactionType,
+                    UserName = ($"{r.User.FirstName} {r.User.LastName}").Trim()
+                })
                 .ToListAsync(cancellationToken);
         }
 

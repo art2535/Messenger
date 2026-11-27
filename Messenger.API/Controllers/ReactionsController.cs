@@ -1,11 +1,9 @@
 using System.ComponentModel;
 using Asp.Versioning;
 using Messenger.API.Extensions;
-using Messenger.Core.DTOs.Reactions;
+using Messenger.Application.DTOs.Reactions;
 using Messenger.API.Hubs;
-using Messenger.Core.Interfaces;
 using Messenger.Application.Interfaces;
-using Messenger.Core.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
@@ -63,18 +61,7 @@ namespace Messenger.API.Controllers
             {
                 var reactions = await _reactionService.GetReactionsByMessageIdAsync(messageId, ct);
 
-                var data = reactions.Select(r => new
-                {
-                    ReactionId = r.ReactionId,
-                    MessageId = r.MessageId,
-                    UserId = r.UserId,
-                    ReactionType = r.ReactionType,
-                    UserName = r.User != null
-                        ? $"{r.User.FirstName} {r.User.LastName}".Trim()
-                        : null
-                });
-
-                return Ok(ApiResponse.Success(data));
+                return Ok(ApiResponse.Success(reactions));
             }
             catch (Exception ex)
             {
@@ -109,15 +96,11 @@ namespace Messenger.API.Controllers
                     return BadRequest(ApiResponse.Failure("Укажите тип реакции (ReactionType)", "INVALID_REQUEST"));
                 }
 
-                var reaction = new Reaction
-                {
-                    ReactionId = Guid.NewGuid(),
-                    MessageId = messageId,
-                    UserId = user.UserId,
-                    ReactionType = request.ReactionType.Trim()
-                };
-
-                await _reactionService.AddReactionAsync(reaction, ct);
+                var reaction = await _reactionService.AddReactionAsync(
+                    messageId,
+                    user.UserId,
+                    request.ReactionType.Trim(),
+                    ct);
 
                 var chatId = await _reactionService.GetChatIdByMessageIdAsync(messageId, ct);
                 if (chatId.HasValue)
