@@ -1,8 +1,8 @@
 ﻿using MassTransit;
 
-[MessageUrn("urn:message:Messenger.Core.Messages:ChatMessageSent", useDefaultPrefix: false)]
 namespace Messenger.Application.Messages
 {
+    [MessageUrn("urn:message:Messenger.Core.Messages:ChatMessageSent", useDefaultPrefix: false)]
     public record ChatMessageSent
     {
         public Guid MessageId { get; init; }
