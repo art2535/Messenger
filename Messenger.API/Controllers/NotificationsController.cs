@@ -54,7 +54,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                await User.GetCurrentUserIdAsync(_userService);
+                await User.GetCurrentUserIdAsync(_userService, ct);
 
                 await _notificationService.CreateNotificationAsync(request.UserId, request.Text, ct);
 
@@ -98,7 +98,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var userId = await User.GetCurrentUserIdAsync(_userService, ct);
                 var notifications = await _notificationService.GetNotificationsAsync(userId, ct);
 
                 return Ok(ApiResponse.Success(notifications));
