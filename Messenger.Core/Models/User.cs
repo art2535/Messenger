@@ -29,7 +29,7 @@ public partial class User
     public string? ExternalId { get; set; }
 
     [JsonIgnore]
-    public virtual AccountSetting Account { get; set; } = null!
+    public virtual AccountSetting Account { get; set; } = null!;
 
     [InverseProperty("User")]
     [JsonIgnore]
