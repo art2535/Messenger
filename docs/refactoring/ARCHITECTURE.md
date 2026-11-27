@@ -4,7 +4,7 @@
 
 Baseline зафиксирован на commit `6524a3a322c8a745fb94f800a6dd0afc205d9c33`. Подробная статистика и исходные зависимости — в [BASELINE.md](BASELINE.md).
 
-## Состояние после этапа 1
+## Текущее состояние прямых ссылок
 
 Фактические прямые ProjectReference:
 
@@ -41,8 +41,8 @@ API получает типы Core транзитивно через Infrastruct
 
 Что ещё не выполнено:
 
-- DTO всё ещё находятся в Core;
-- сервисные интерфейсы всё ещё находятся в Core;
+- часть DTO ещё остаётся в Core; независимые DTO поэтапно переносятся в Application;
+- часть сервисных интерфейсов всё ещё находится в Core; entity-based контракты требуют предварительной замены EF-моделей на DTO;
 - модели всё ещё совмещают доменные данные, EF mapping attributes и JSON serialization attributes;
 - DataAnnotations/EF navigation attributes и JSON attributes ещё не очищены;
 - перенос EF entities и конфигураций в Infrastructure ещё впереди.
