@@ -1,6 +1,6 @@
+using Messenger.Application.DTOs.Responses;
 ﻿using Asp.Versioning;
 using Messenger.Application.Interfaces;
-using Messenger.Core.Responses;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel;
 

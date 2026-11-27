@@ -11,8 +11,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using System.ComponentModel;
-using Messenger.Core.Responses;
 
+using Messenger.Application.DTOs.Responses;
 namespace Messenger.API.Controllers
 {
     /// <summary>

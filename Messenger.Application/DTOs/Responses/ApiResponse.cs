@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace Messenger.Core.Responses
+namespace Messenger.Application.DTOs.Responses
 {
     public class ApiResponse<T>
     {

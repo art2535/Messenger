@@ -1,11 +1,11 @@
 using Asp.Versioning;
 using Messenger.API.Extensions;
 using Messenger.Application.Interfaces;
-using Messenger.Core.Responses;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel;
 
+using Messenger.Application.DTOs.Responses;
 namespace Messenger.API.Controllers
 {
     /// <summary>

@@ -17,8 +17,8 @@ using Microsoft.AspNetCore.SignalR;
 using System.ComponentModel;
 using System.Security.Claims;
 using Messenger.Realtime.Services;
-using Messenger.Core.Responses;
 
+using Messenger.Application.DTOs.Responses;
 namespace Messenger.API.Controllers
 {
     /// <summary>
