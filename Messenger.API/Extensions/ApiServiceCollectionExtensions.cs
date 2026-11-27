@@ -1,7 +1,4 @@
 using Messenger.API.Services;
-using Messenger.Infrastructure.Data;
-using Messenger.Realtime.Hubs;
-using Microsoft.EntityFrameworkCore;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using Serilog;
@@ -21,9 +18,14 @@ public static class ApiServiceCollectionExtensions
     /// <summary>
     /// Регистрирует все сервисы, необходимые Messenger.API.
     /// </summary>
-    public static WebApplicationBuilder AddMessengerApiServices(this WebApplicationBuilder builder)
+    public static WebApplicationBuilder AddMessengerApiLogging(this WebApplicationBuilder builder)
     {
         ConfigureLogging(builder);
+        return builder;
+    }
+
+    public static WebApplicationBuilder AddMessengerApiServices(this WebApplicationBuilder builder)
+    {
         ConfigureJson(builder.Services);
 
         builder.Services.AddValidation();
