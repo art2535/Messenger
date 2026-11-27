@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
-  <!-- Временный мост: Core ещё содержит EF-аннотации и ASP.NET-типы в сервисных контрактах. -->
+  <!-- Временный мост: ссылки оставлены до финального аудита всех compile-time зависимостей Core. -->
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.13" />
