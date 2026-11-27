@@ -28,7 +28,7 @@ public class ScheduledMessageService : IScheduledMessageService
         _logger = logger;
     }
 
-    public async Task<ScheduledMessage> CreateAsync(Guid chatId, Guid senderId, string? encryptedText,
+    public async Task<ScheduledMessageDto> CreateAsync(Guid chatId, Guid senderId, string? encryptedText,
         bool hasAttachments, List<AttachmentInfo>? attachments, DateTime scheduledAtUtc, string? replyToMessageId = null,
         CancellationToken ct = default)
     {
@@ -58,51 +58,45 @@ public class ScheduledMessageService : IScheduledMessageService
             "ScheduledMessage created {Id} chat={ChatId} at={At:o}",
             entity.ScheduledMessageId, chatId, entity.ScheduledAt);
 
-        return entity;
+        return await GetScheduledMessageDtoAsync(entity.ScheduledMessageId, ct)
+            ?? throw new InvalidOperationException("Не удалось прочитать созданное запланированное сообщение");
     }
 
-    public async Task<ScheduledMessage?> GetByIdAsync(Guid scheduledMessageId, CancellationToken ct = default)
+    public async Task<ScheduledMessageDispatchDto?> GetByIdAsync(Guid scheduledMessageId, CancellationToken ct = default)
     {
-        return await _context.ScheduledMessages
-            .AsNoTracking()
-            .Include(x => x.Sender)
-            .Include(x => x.Chat)
+        var entity = await _context.ScheduledMessages.AsNoTracking()
             .FirstOrDefaultAsync(x => x.ScheduledMessageId == scheduledMessageId, ct);
+        return entity == null ? null : MapToDispatchDto(entity);
     }
 
-    public async Task<List<ScheduledMessage>> GetPendingByUserAsync(Guid userId, CancellationToken ct = default)
+    public async Task<List<ScheduledMessageDto>> GetPendingByUserAsync(Guid userId, CancellationToken ct = default)
     {
-        return await _context.ScheduledMessages
-            .AsNoTracking()
-            .Include(x => x.Chat)
+        var entities = await _context.ScheduledMessages.AsNoTracking()
+            .Include(x => x.Sender).Include(x => x.Chat)
             .Where(x => x.SenderId == userId && x.Status == ScheduledMessageStatus.Pending)
-            .OrderBy(x => x.ScheduledAt)
-            .ToListAsync(ct);
+            .OrderBy(x => x.ScheduledAt).ToListAsync(ct);
+        return entities.Select(MapToDto).ToList();
     }
 
-    public async Task<List<ScheduledMessage>> GetPendingByChatAsync(Guid chatId, Guid userId, CancellationToken ct = default)
+    public async Task<List<ScheduledMessageDto>> GetPendingByChatAsync(Guid chatId, Guid userId, CancellationToken ct = default)
     {
-        return await _context.ScheduledMessages
-            .AsNoTracking()
-            .Where(x => x.ChatId == chatId
-                        && x.SenderId == userId
-                        && x.Status == ScheduledMessageStatus.Pending)
-            .OrderBy(x => x.ScheduledAt)
-            .ToListAsync(ct);
+        var entities = await _context.ScheduledMessages.AsNoTracking()
+            .Include(x => x.Sender)
+            .Where(x => x.ChatId == chatId && x.SenderId == userId && x.Status == ScheduledMessageStatus.Pending)
+            .OrderBy(x => x.ScheduledAt).ToListAsync(ct);
+        return entities.Select(MapToDto).ToList();
     }
 
-    public async Task<List<ScheduledMessage>> GetDueAsync(DateTime nowUtc, int limit = 50, CancellationToken ct = default)
+    public async Task<List<ScheduledMessageDispatchDto>> GetDueAsync(DateTime nowUtc, int limit = 50, CancellationToken ct = default)
     {
-        // Берём с небольшим запасом в прошлое, чтобы не пропускать из-за задержек
         var horizon = nowUtc.AddSeconds(2);
-        return await _context.ScheduledMessages
+        var entities = await _context.ScheduledMessages.AsNoTracking()
             .Where(x => x.Status == ScheduledMessageStatus.Pending && x.ScheduledAt <= horizon)
-            .OrderBy(x => x.ScheduledAt)
-            .Take(limit)
-            .ToListAsync(ct);
+            .OrderBy(x => x.ScheduledAt).Take(limit).ToListAsync(ct);
+        return entities.Select(MapToDispatchDto).ToList();
     }
 
-    public async Task<ScheduledMessage?> UpdateAsync(
+    public async Task<ScheduledMessageDto?> UpdateAsync(
         Guid scheduledMessageId,
         Guid userId,
         string? encryptedText,
@@ -134,7 +128,7 @@ public class ScheduledMessageService : IScheduledMessageService
 
         entity.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync(ct);
-        return entity;
+        return await GetScheduledMessageDtoAsync(entity.ScheduledMessageId, ct);
     }
 
     public async Task<bool> CancelAsync(Guid scheduledMessageId, Guid userId, CancellationToken ct = default)
@@ -181,8 +175,42 @@ public class ScheduledMessageService : IScheduledMessageService
         await _context.SaveChangesAsync(ct);
     }
 
-    public ScheduledMessageDto ToDto(ScheduledMessage entity, string? decryptedText = null,
-        string? senderName = null, string? chatName = null)
+    private async Task<ScheduledMessageDto?> GetScheduledMessageDtoAsync(Guid id, CancellationToken ct)
+    {
+        var entity = await _context.ScheduledMessages.AsNoTracking()
+            .Include(x => x.Sender).Include(x => x.Chat)
+            .FirstOrDefaultAsync(x => x.ScheduledMessageId == id, ct);
+        return entity == null ? null : MapToDto(entity);
+    }
+
+    private static ScheduledMessageDispatchDto MapToDispatchDto(ScheduledMessage entity)
+    {
+        List<AttachmentInfo> attachments = new();
+        if (!string.IsNullOrWhiteSpace(entity.AttachmentsJson))
+        {
+            try
+            {
+                attachments = JsonSerializer.Deserialize<List<AttachmentInfo>>(entity.AttachmentsJson, JsonOpts)
+                    ?? new List<AttachmentInfo>();
+            }
+            catch { attachments = new List<AttachmentInfo>(); }
+        }
+
+        return new ScheduledMessageDispatchDto
+        {
+            ScheduledMessageId = entity.ScheduledMessageId,
+            ChatId = entity.ChatId,
+            SenderId = entity.SenderId,
+            EncryptedMessageText = entity.MessageText,
+            HasAttachments = entity.HasAttachments,
+            Attachments = attachments,
+            ScheduledAt = DateTime.SpecifyKind(entity.ScheduledAt, DateTimeKind.Utc),
+            Status = entity.Status,
+            ReplyToMessageId = entity.ReplyToMessageId
+        };
+    }
+
+    private ScheduledMessageDto MapToDto(ScheduledMessage entity)
     {
         var attachments = new List<AttachmentDto>();
         if (!string.IsNullOrEmpty(entity.AttachmentsJson))
@@ -208,9 +236,7 @@ public class ScheduledMessageService : IScheduledMessageService
             }
         }
 
-        string? text = decryptedText;
-        if (text == null && !string.IsNullOrEmpty(entity.MessageText))
-            text = _encryption.TryDecryptSafe(entity.MessageText);
+        var text = string.IsNullOrEmpty(entity.MessageText) ? null : _encryption.TryDecryptSafe(entity.MessageText);
 
         return new ScheduledMessageDto
         {

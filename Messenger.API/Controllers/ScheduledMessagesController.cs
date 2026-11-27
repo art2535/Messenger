@@ -145,11 +145,9 @@ namespace Messenger.API.Controllers
                     ? null
                     : _encryption.Encrypt(messageText.Trim());
 
-                var entity = await _scheduledService.CreateAsync(chatId, user.UserId, encrypted,
+                var dto = await _scheduledService.CreateAsync(chatId, user.UserId, encrypted,
                     attachmentsInfo.Count > 0, attachmentsInfo, scheduledUtc, replyToMessageId, ct);
 
-                var senderName = $"{user.FirstName} {user.LastName}".Trim();
-                var dto = _scheduledService.ToDto(entity, messageText?.Trim(), senderName, chat.Name);
 
                 try
                 {
@@ -195,14 +193,7 @@ namespace Messenger.API.Controllers
             {
                 var user = await User.GetCurrentUserAsync(_userService);
 
-                var list = await _scheduledService.GetPendingByUserAsync(user.UserId, ct);
-                var dtos = list.Select(e =>
-                {
-                    string? plain = null;
-                    if (!string.IsNullOrEmpty(e.MessageText))
-                        plain = _encryption.TryDecryptSafe(e.MessageText);
-                    return _scheduledService.ToDto(e, plain, null, e.Chat?.Name);
-                }).ToList();
+                var dtos = await _scheduledService.GetPendingByUserAsync(user.UserId, ct);
 
                 return Ok(ApiResponse.Success(dtos));
             }
@@ -236,14 +227,7 @@ namespace Messenger.API.Controllers
             {
                 var user = await User.GetCurrentUserAsync(_userService);
 
-                var list = await _scheduledService.GetPendingByChatAsync(chatId, user.UserId, ct);
-                var dtos = list.Select(e =>
-                {
-                    string? plain = null;
-                    if (!string.IsNullOrEmpty(e.MessageText))
-                        plain = _encryption.TryDecryptSafe(e.MessageText);
-                    return _scheduledService.ToDto(e, plain);
-                }).ToList();
+                var dtos = await _scheduledService.GetPendingByChatAsync(chatId, user.UserId, ct);
 
                 return Ok(ApiResponse.Success(dtos));
             }
@@ -292,21 +276,15 @@ namespace Messenger.API.Controllers
 
                 DateTime? at = request.ScheduledAt?.UtcDateTime;
 
-                var entity = await _scheduledService.UpdateAsync(
+                var dto = await _scheduledService.UpdateAsync(
                     scheduledMessageId, user.UserId, encrypted, at, ct);
 
-                if (entity == null)
+                if (dto == null)
                 {
                     return NotFound(ApiResponse.Failure("Запланированное сообщение не найдено", "NOT_FOUND"));
                 }
 
-                var plain = request.MessageText?.Trim()
-                            ?? (string.IsNullOrEmpty(entity.MessageText)
-                                ? null
-                                : _encryption.TryDecryptSafe(entity.MessageText));
-
-                var dto = _scheduledService.ToDto(entity, plain,
-                    $"{user.FirstName} {user.LastName}".Trim());
+                
 
                 try
                 {

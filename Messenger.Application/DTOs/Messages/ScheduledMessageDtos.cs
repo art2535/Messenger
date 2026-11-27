@@ -53,3 +53,18 @@ public class ScheduledMessagesListResponse
     public bool IsSuccess { get; set; } = true;
     public List<ScheduledMessageDto> Data { get; set; } = new();
 }
+
+
+/// <summary>Данные запланированного сообщения для фоновой отправки.</summary>
+public class ScheduledMessageDispatchDto
+{
+    public Guid ScheduledMessageId { get; set; }
+    public Guid ChatId { get; set; }
+    public Guid SenderId { get; set; }
+    public string? EncryptedMessageText { get; set; }
+    public bool HasAttachments { get; set; }
+    public List<AttachmentInfo> Attachments { get; set; } = new();
+    public DateTime ScheduledAt { get; set; }
+    public string Status { get; set; } = "Pending";
+    public string? ReplyToMessageId { get; set; }
+}

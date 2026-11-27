@@ -1,4 +1,3 @@
-using System.Text.Json;
 using MassTransit;
 using Messenger.Core.Interfaces;
 using Messenger.Core.Messages;
@@ -17,12 +16,7 @@ public class ScheduledMessageDispatcherService : BackgroundService
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<ScheduledMessageDispatcherService> _logger;
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(5);
-    private static readonly JsonSerializerOptions JsonOpts = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-    };
-
-    public ScheduledMessageDispatcherService(IServiceScopeFactory scopeFactory,
+public ScheduledMessageDispatcherService(IServiceScopeFactory scopeFactory,
         ILogger<ScheduledMessageDispatcherService> logger)
     {
         _scopeFactory = scopeFactory;
@@ -90,19 +84,7 @@ public class ScheduledMessageDispatcherService : BackgroundService
                 if (fresh == null || fresh.Status != ScheduledMessageStatus.Pending)
                     continue;
 
-                List<AttachmentInfo> attachments = new();
-                if (!string.IsNullOrEmpty(item.AttachmentsJson))
-                {
-                    try
-                    {
-                        attachments = JsonSerializer.Deserialize<List<AttachmentInfo>>(item.AttachmentsJson, JsonOpts)
-                                      ?? new List<AttachmentInfo>();
-                    }
-                    catch
-                    {
-                        attachments = new List<AttachmentInfo>();
-                    }
-                }
+                var attachments = item.Attachments;
 
                 string? senderName = null;
                 try
@@ -122,7 +104,7 @@ public class ScheduledMessageDispatcherService : BackgroundService
                     ChatId = item.ChatId,
                     SenderId = item.SenderId,
                     SenderName = string.IsNullOrWhiteSpace(senderName) ? "Пользователь" : senderName,
-                    MessageText = item.MessageText,
+                    MessageText = item.EncryptedMessageText,
                     SentAt = sentAt,
                     HasAttachments = item.HasAttachments || attachments.Count > 0,
                     Attachments = attachments,
