@@ -41,15 +41,9 @@ API получает типы Core транзитивно через Infrastruct
 - регистрация Hub в `Messenger.API/Program.cs` обновлена;
 - из `Messenger.Core.csproj` удалены прямые PackageReference на JwtBearer и EntityFrameworkCore.
 
-Что ещё не выполнено:
+Актуальная проверка исходников Core на текущей ветке показывает, что в проекте остались только доменные модели и enum; DTO и прикладные интерфейсы находятся в Application. Все 19 C#-файлов Core проверены на прямые EF Core, ASP.NET Core и Infrastructure references; запрещённых using/type references не обнаружено. В моделях Core также не обнаружены EF mapping или JSON serialization attributes.
 
-- часть DTO ещё остаётся в Core; независимые DTO поэтапно переносятся в Application;
-- часть сервисных интерфейсов всё ещё находится в Core; entity-based контракты требуют предварительной замены EF-моделей на DTO;
-- модели всё ещё совмещают доменные данные, EF mapping attributes и JSON serialization attributes;
-- DataAnnotations/EF navigation attributes и JSON attributes ещё не очищены;
-- перенос EF entities и конфигураций в Infrastructure ещё впереди.
-
-Подробный аудит и последовательность следующих подэтапов: [CORE.md](CORE.md).
+Это уточняет исторический статус исходного этапа: перечисленные выше переносы/очистки больше не следует считать открытыми задачами без повторного подтверждения по актуальной ветке. Подробный исторический аудит и план дальнейшего разделения сущностей/маппинга: [CORE.md](CORE.md).
 
 ## Ограничения проверок
 
@@ -95,3 +89,20 @@ GitHub-изменения проверены чтением файлов и Git 
 - DI-проверка основана на статическом чтении регистраций; runtime validation контейнера и integration tests не запускались.
 - dotnet build/dotnet test не выполнялись в среде без .NET SDK.
 - Проверка границ по .csproj не заменяет отдельный аудит EF Core/ASP.NET Core типов в исходниках Core и Application.
+
+
+## Подэтап backend: аудит границ Core и Application
+
+На ревизии `69b8a2d7b4c4b990b590f1495874a983e0a2f432` выполнен статический аудит исходников и project files двух внутренних слоёв.
+
+- `Messenger.Core`: проверены все 19 C#-файлов и `.csproj`. Прямых ссылок на EF Core, ASP.NET Core и Infrastructure не обнаружено; проект не имеет ProjectReference или PackageReference.
+- `Messenger.Application`: проверены DTO, interfaces, messages, files и единственная текущая service implementation (`BroadcastService`), а также `.csproj`. Прямых ссылок на EF Core, ASP.NET Core и Infrastructure не обнаружено. Единственная внешняя package dependency — `MassTransit.Abstractions`, используемая интеграционным контрактом `ChatMessageSent` для стабильного MessageUrn.
+- Application ссылается только на Core; Core не ссылается на другие проекты.
+- Контракты Application используют собственные DTO и нейтральный `IUploadedFile`, а не `IFormFile` или EF entities.
+
+Архитектурный guard `scripts/check-architecture.py` теперь проверяет не только прямые ProjectReference всех семи проектов, но и запрещённые EF Core / ASP.NET Core / Infrastructure package/source references в Core и Application. Проверка исходников — текстовая, не Roslyn-анализ; она не заменяет проверку compile-time символов, сборку и тесты.
+
+Ограничения:
+- Внешняя зависимость MassTransit.Abstractions в Application сохранена намеренно на этом шаге: атрибут `MessageUrn` является частью текущего интеграционного контракта. Её возможное отделение требует отдельного решения по стабильности сериализации/URN и совместимости producer/consumer.
+- `dotnet build`, `dotnet test` и запуск guard локально не выполнялись: в рабочей среде отсутствует .NET SDK; Python guard не запускался в этой сессии.
+- Следующий этап — аудит EF entities, конфигураций и persistence contracts в Infrastructure, с проверкой реальных consumers перед любым переносом типов.
