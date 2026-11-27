@@ -2,13 +2,13 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Messenger.Core.DTOs;
+using Messenger.Application.Files;
 using Messenger.Core.DTOs.Messages;
 using Messenger.Core.Interfaces;
 using Messenger.Core.Models;
 using MassTransit;
 using Messenger.Core.Messages;
 using Messenger.Infrastructure.Data;
-using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Messenger.Core.DTOs.Cache;
@@ -181,7 +181,7 @@ namespace Messenger.Infrastructure.Services
         }
 
         public async Task<ServiceResult<Message>> SendMessageAsync(Guid messageId, Guid chatId, Guid senderId,
-            string? content, bool hasAttachments, IFormFile[]? files = null, CancellationToken token = default)
+            string? content, bool hasAttachments, IUploadedFile[]? files = null, CancellationToken token = default)
         {
             try
             {

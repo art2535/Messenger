@@ -2,14 +2,14 @@ using Messenger.Core.DTOs;
 using Messenger.Core.DTOs.Messages;
 using Messenger.Core.Messages;
 using Messenger.Core.Models;
-using Microsoft.AspNetCore.Http;
+using Messenger.Application.Files;
 
 namespace Messenger.Core.Interfaces
 {
     public interface IMessageService
     {
         Task<ServiceResult<Message>> SendMessageAsync(Guid messageId, Guid chatId, Guid senderId,
-            string? content, bool hasAttachments, IFormFile[]? files = null, CancellationToken token = default);
+            string? content, bool hasAttachments, IUploadedFile[]? files = null, CancellationToken token = default);
         Task<IEnumerable<Message>> GetMessagesAsync(Guid chatId, CancellationToken token = default);
         Task<(IReadOnlyList<Message> Items, bool HasMore)> GetMessagesPagedAsync(Guid chatId, long? beforeSequence = null,
             int limit = 50, CancellationToken token = default);

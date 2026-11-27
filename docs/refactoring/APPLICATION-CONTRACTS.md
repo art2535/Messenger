@@ -29,3 +29,14 @@ DTO пока остаются в `Messenger.Core.DTOs`, а namespace интер�
 ## Проверки
 
 Проверены сигнатуры пяти интерфейсов и исходники соответствующих DTO. Файлы перемещены без изменения содержимого; реализации и DI-регистрация не менялись. `dotnet build` и тесты не запускались, успешная компиляция не подтверждена.
+
+
+## Подэтап 2.7.6 — контракты загрузки файлов
+
+`IUserService` и `IMessageService` физически перенесены в `Messenger.Application/Interfaces`. Их namespace пока оставлен `Messenger.Core.Interfaces`, чтобы не менять все существующие импорты потребителей в одном изменении.
+
+Введён `Messenger.Application.Files.IUploadedFile` с метаданными файла и методом `OpenReadStream()`. Application-контракты больше не принимают `Microsoft.AspNetCore.Http.IFormFile`.
+
+На границе API добавлен `FormFileUploadAdapter`, который оборачивает `IFormFile`. `UserService` открывает и асинхронно копирует поток внутри операции, затем освобождает его. Поток не сохраняется за пределами HTTP-запроса. `MessageService` принимает `IUploadedFile[]`; текущая реализация параметр файлов не использует, как и до изменения.
+
+Контракты по-прежнему возвращают Core-модели (`User`, `Role`, `Message` и `ServiceResult<Message>`). Это промежуточный перенос владельца интерфейсов, а не завершение миграции entity-based API.

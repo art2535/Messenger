@@ -1,7 +1,9 @@
 ﻿using System.ComponentModel;
 using Asp.Versioning;
 using Messenger.API.Extensions;
+using Messenger.API.Adapters;
 using Messenger.Core.DTOs.Users;
+using Messenger.Application.Interfaces;
 using Messenger.API.Hubs;
 using Messenger.Core.Interfaces;
 using Messenger.Core.Models;
@@ -331,7 +333,7 @@ namespace Messenger.API.Controllers
 
                 var user = await User.GetCurrentUserAsync(_userService);
 
-                var avatarUrl = await _userService.UploadAvatarAsync(user.UserId, avatarFile, ct);
+                var avatarUrl = await _userService.UploadAvatarAsync(user.UserId, new FormFileUploadAdapter(avatarFile), ct);
 
                 await SendProfileToPeersAsync(user.UserId, "AvatarUpdated", new
                 {

@@ -1,6 +1,6 @@
 ﻿using Messenger.Core.DTOs.Users;
 using Messenger.Core.Models;
-using Microsoft.AspNetCore.Http;
+using Messenger.Application.Files;
 
 namespace Messenger.Core.Interfaces
 {

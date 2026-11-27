@@ -14,7 +14,7 @@
 
 Их сигнатуры не принимают EF-сущности и не используют ASP.NET типы. DTO для пяти последних контрактов пока физически находятся в Core; их перенос и переименование namespace должны быть отдельным согласованным изменением с обновлением всех потребителей.
 
-В Core остаются десять сервисных интерфейсов, которые нельзя безопасно переместить одним файловым переносом.
+В Core остаются восемь сервисных интерфейсов, которые нельзя безопасно переместить одним файловым переносом. `IUserService` и `IMessageService` уже физически перенесены в Application вместе с нейтральным контрактом файла, но их сигнатуры всё ещё зависят от Core-моделей.
 
 ## Карта оставшихся зависимостей
 
@@ -23,21 +23,19 @@
 | `IAttachmentService` | `Attachment` | DTO/команды для создания и чтения вложений |
 | `IChatService` | `Chat`, `ChatParticipant` | Модели чтения и команды для чатов/участников |
 | `ILoginService` | `Login` | DTO сессии и команды управления сессиями |
-| `IMessageService` | `Message`, `ServiceResult<Message>`, `IFormFile`, `ChatMessageSent` | Результат операции без сущности, контракт загрузки файлов, независимый message contract |
+| `IMessageService` (уже в Application) | `Message`, `ServiceResult<Message>`, `IUploadedFile`, `ChatMessageSent` | Результат операции без сущности, независимый message contract |
 | `INotificationService` | `Notification` | DTO уведомления и команды чтения |
 | `IPushSubscriptionService` | `AccountSetting`, `PushSubscription` | DTO настроек и подписки |
 | `IReactionService` | `Reaction` | DTO реакции и команды |
 | `IScheduledMessageService` | `ScheduledMessage`, `AttachmentInfo` | DTO и команды расписания, отделённые от EF-сущности |
-| `IUserService` | `User`, `Role`, `IFormFile` | DTO пользователя/ролей и контракт загрузки файлов |
+| `IUserService` (уже в Application) | `User`, `Role`, `IUploadedFile` | DTO пользователя/ролей |
 | `IUserStatusService` | `UserStatus` | DTO статуса и команды обновления |
 
 ## Выявленные сквозные зависимости
 
 ### ASP.NET типы в Core-контрактах
 
-`IUserService.UploadAvatarAsync` и `IMessageService.SendMessageAsync` принимают `Microsoft.AspNetCore.Http.IFormFile`. Application не должен требовать ASP.NET HTTP abstraction ради передачи файла в прикладной сценарий.
-
-Перед миграцией этих методов следует ввести нейтральную модель входящего файла (имя, content type, длина и поток/способ чтения) в Application. Адаптацию `IFormFile` следует оставить на границе API. Нужно отдельно проверить жизненный цикл потока и асинхронное чтение, прежде чем менять сигнатуры.
+`IUserService.UploadAvatarAsync` и `IMessageService.SendMessageAsync` теперь принимают `Messenger.Application.Files.IUploadedFile`, содержащий имя, content type, длину и метод открытия потока. `FormFileUploadAdapter` в API адаптирует HTTP `IFormFile`; ASP.NET-типы больше не входят в эти Application-контракты. `UserService` открывает поток только на время копирования и освобождает его после завершения операции. `MessageService` пока не использует переданный массив файлов; это поведение существовало до миграции.
 
 ### Перечисление статуса доставки
 
@@ -50,7 +48,7 @@
 ## Безопасный порядок дальнейшей работы
 
 1. Выделить независимые типы: enum статуса доставки, file-upload abstraction, DTO событий и результатов. Не менять числовые значения enum и wire-format событий.
-2. Перевести `IUserService` и `IMessageService` с `IFormFile` на нейтральную абстракцию файла отдельным изменением; адаптеры разместить на границе API.
+2. (Выполнено в подэтапе 2.7.6) Перевести `IUserService` и `IMessageService` с `IFormFile` на нейтральную абстракцию файла; адаптеры оставить на границе API.
 3. Для каждого entity-based интерфейса создать прикладные request/response DTO и определить команды/запросы. Не копировать EF navigation properties в Application DTO.
 4. Обновить реализации Infrastructure, API controllers, Web consumers, фоновые службы и DI регистрации по одному вертикальному сценарию.
 5. Только после удаления ссылок на Core EF-сущности перемещать соответствующий интерфейс в Application и менять namespace.
@@ -58,7 +56,7 @@
 
 ## Ограничения текущего подэтапа
 
-На этом шаге сигнатуры десяти оставшихся интерфейсов и модели не менялись. Переносить их до подготовки независимых контрактов небезопасно: это создало бы обратные зависимости либо заставило Application ссылаться на persistence-модели.
+На этом шаге изменены только два контракта, связанные с загрузкой файлов. Их зависимости от EF-моделей Core сохраняются, поэтому остальные восемь entity-based интерфейсов пока остаются в Core.
 
 ## Проверки
 

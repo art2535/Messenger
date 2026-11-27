@@ -1,8 +1,8 @@
 ﻿using Messenger.Core.DTOs.Users;
+using Messenger.Application.Files;
 using Messenger.Core.Interfaces;
 using Messenger.Core.Models;
 using Messenger.Infrastructure.Data;
-using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 
@@ -112,7 +112,8 @@ namespace Messenger.Infrastructure.Services
 
             await using (var stream = new FileStream(filePath, FileMode.Create))
             {
-                await file.CopyToAsync(stream, token);
+                await using var sourceStream = file.OpenReadStream();
+                await sourceStream.CopyToAsync(stream, token);
             }
 
             var baseUrl = _configuration["URL:API:HTTPS"]
