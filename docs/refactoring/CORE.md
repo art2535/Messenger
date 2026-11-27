@@ -173,3 +173,8 @@ Model Snapshot и исторические миграции не редакти�
 Все предметные модели оставлены в Core; `Log`, `Login` и `PushSubscription` остаются в Infrastructure. Предметные свойства, CLR-типы, DbSet, навигации и `JsonIgnore` сохранены. ModelSnapshot и исторические миграции не менялись. Подробный реестр и ограничения проверки находятся в [ENTITY-AUDIT.md](ENTITY-AUDIT.md).
 
 Проверка всех 18 файлов моделей подтвердила отсутствие EF mapping attributes и EF-specific using. Ссылка `Microsoft.EntityFrameworkCore` в Core csproj пока оставлена до отдельного поиска EF-типов во всех исходниках Core. Сборка, тесты и автоматический EF model diff не запускались.
+
+
+### 2.7.29. Удаление EF Core dependency
+
+Выполнен аудит всех 57 C# исходников Core: DTO, enums, messages, metrics, models, responses и services. Прямых использований EF Core типов и API не обнаружено. Из `Messenger.Core.csproj` удалён PackageReference на `Microsoft.EntityFrameworkCore`. FrameworkReference на `Microsoft.AspNetCore.App` оставлен до отдельного аудита ASP.NET Core compile-time зависимостей. Сборка и тесты после изменения пока не запускались.

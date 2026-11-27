@@ -64,8 +64,12 @@
 - Для связей, индексов и SQL defaults сохранены текущие настройки из Fluent-конфигураций/ModelSnapshot; исторические миграции не менялись.
 - `Messenger.Core.csproj` пока всё ещё содержит ссылку на `Microsoft.EntityFrameworkCore`. Удаление PackageReference отложено до отдельного полного поиска EF-типов во всех исходниках Core. Это не означает, что в 18 моделях остались EF-аннотации: проверка файлов моделей подтвердила отсутствие EF attributes и EF-specific using.
 
+## Удаление зависимости EF Core из проекта Core (2.7.29)
+
+Проверены все 57 C# исходников Core (DTO, enums, messages, metrics, models, responses и services). Прямых использований EF Core API или типов не обнаружено. Из `Messenger.Core.csproj` удалён `PackageReference` на `Microsoft.EntityFrameworkCore` 10.0.13. `FrameworkReference` на `Microsoft.AspNetCore.App` оставлен, поскольку это независимая зависимость и её удаление требует отдельной проверки ASP.NET Core типов.
+
 ## Проверка
 
 Для всех 18 файлов `Messenger.Core/Models/*.cs` выполнена проверка: не обнаружены EF mapping attributes и using из `Microsoft.EntityFrameworkCore` / `System.ComponentModel.DataAnnotations`.
 
-Не запускались `dotnet build`, `dotnet test`, генерация пробной миграции или автоматическое сравнение EF model с snapshot. Поэтому компиляция и полная эквивалентность runtime EF-модели пока не подтверждены. Перед созданием миграций необходимо выполнить model diff и проверить схему на копии PostgreSQL базы.
+Не запускались `dotnet build`, `dotnet test`, генерация пробной миграции или автоматическое сравнение EF model с snapshot. Поэтому компиляция после удаления PackageReference и полная эквивалентность runtime EF-модели пока не подтверждены. Перед созданием миграций необходимо выполнить model diff и проверить схему на копии PostgreSQL базы.
