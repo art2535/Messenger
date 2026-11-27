@@ -1,6 +1,5 @@
 ﻿using Messenger.Core.Interfaces;
 using Messenger.Core.Metrics;
-using Messenger.Core.Models;
 using Messenger.Core.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
@@ -106,12 +105,7 @@ namespace Messenger.API.Hubs
 
                 await Groups.AddToGroupAsync(Context.ConnectionId, $"User_{userId}");
 
-                await _userStatusService.UpdateUserStatusAsync(new UserStatus
-                {
-                    UserId = userId,
-                    Online = true,
-                    LastActivity = DateTime.UtcNow
-                });
+                await _userStatusService.UpdateUserStatusAsync(userId, true);
 
                 var showOnline = true;
                 try
@@ -160,12 +154,7 @@ namespace Messenger.API.Hubs
                         MessengerMetrics.SignalRActiveConnections.Add(-1, 
                             new KeyValuePair<string, object?>("hub", "chat"));
 
-                        await _userStatusService.UpdateUserStatusAsync(new UserStatus
-                        {
-                            UserId = userId,
-                            Online = false,
-                            LastActivity = DateTime.UtcNow
-                        });
+                        await _userStatusService.UpdateUserStatusAsync(userId, false);
 
                         var statusData = new
                         {

@@ -1,5 +1,5 @@
-using Messenger.Core.DTOs.UserStatuses;
-using Messenger.Core.Hubs;
+using Messenger.Application.DTOs.UserStatuses;
+using Messenger.API.Hubs;
 using Messenger.Web.Helpers;
 using Messenger.Web.Services;
 using Microsoft.AspNetCore.Authentication;
@@ -68,7 +68,7 @@ namespace Messenger.Web.Pages
                         try { await api.PatchRawAsync("login", accessToken, sessionKey); } catch { }
                         try
                         {
-                            var statusResponse = await api.PutRawAsync("user-statuses", new UpdateStatusRequest { Online = false }, accessToken);
+                            var statusResponse = await api.PutRawAsync("user-statuses", new UpdateUserStatusDto { Online = false }, accessToken);
                             if (statusResponse.IsSuccessStatusCode && Guid.TryParse(userIdStr, out Guid userId))
                             {
                                 var payload = new { userId = userId.ToString(), isOnline = false, lastActivity = DateTime.UtcNow };

@@ -22,6 +22,7 @@
 
 `IUserService` и `UserService` больше не возвращают EF-сущности `User` и `Role`. Для чтения, поиска по external ID, регистрации и списка ролей используются `UserDto` и `RoleDto`, физически расположенные в Application и временно сохраняющие namespace `Messenger.Core.DTOs.Users`. EF-запросы и преобразование сущностей остаются внутри Infrastructure.
 
+
 ## Подэтап 2.7.9 — DTO-контракт сообщений
 
 Методы чтения `IMessageService` переведены на `MessageDto`, включая отправку, постраничное чтение, получение по ID, поиск и закреплённые сообщения. DTO формируется в Infrastructure из EF-сущностей; текст расшифровывается там же, EF-навигации не выходят за границу Persistence. Изменение текста и статуса доставки выполняется отдельными командами по идентификатору, а не передачей EF-сущности. API-контроллер и MassTransit consumer используют DTO и команды обновления.
@@ -40,11 +41,13 @@
 
 `IAttachmentService` физически перенесён в Application (namespace `Messenger.Core.Interfaces` сохранён для совместимости). Добавление принимает `CreateAttachmentDto` и идентификатор сообщения отдельно; чтение возвращает `AttachmentDto`. EF-сущность `Attachment` создаётся и преобразуется только внутри Infrastructure. API-контроллер и MassTransit consumer больше не создают и не передают EF-сущности в сервисный контракт.
 
+
 ## Единые пространства имён перенесённых контрактов
 
 Все файлы, физически перенесённые в `Messenger.Application`, используют пространства имён по новому проекту: `Messenger.Application.Interfaces`, `Messenger.Application.DTOs` (с соответствующими подпространствами) и `Messenger.Application.Messages`. Старые `using Messenger.Core.*` для этих контрактов заменены или дополнены новыми импортами там, где в Core остаются DTO/интерфейсы с тем же родительским пространством имён. Файлы перенесённых контрактов удалены из `Messenger.Core`; старые пространства имён больше не используются как алиасы совместимости.
 
 Для `ChatMessageSent` сохранён исходный MassTransit message URN `urn:message:Messenger.Core.Messages:ChatMessageSent` через `MessageUrnAttribute`. Это позволяет изменить CLR namespace без изменения идентификатора сообщения в брокере. `Messenger.Application` ссылается на `MassTransit.Abstractions` только ради атрибута контракта.
+
 
 ## Подэтап 2.7.13 — контракт сессий входа
 
@@ -52,14 +55,12 @@
 
 Дополнительно `AttachmentDto` перенесён из Core в `Messenger.Application/DTOs/Messages`; `IAttachmentService`, `MessageDto` и DTO запланированных сообщений теперь используют прикладной DTO вложения без ссылки на Core DTO.
 
+
 ## Подэтап 2.7.14 — уведомления
 
 `INotificationService` перенесён в `Messenger.Application.Interfaces`. Публичный контракт больше не использует EF-сущность `Notification`: чтение возвращает `NotificationDto`, а создание и отметка прочтения работают через прикладные аргументы. `CreateNotificationDto` и `NotificationDto` находятся в `Messenger.Application.DTOs.Notifications`. Infrastructure выполняет mapping между `Notification` и DTO, включая безопасную расшифровку текста. `NotificationsController` и `NotificationHub` больше не передают EF-сущность наружу.
 
+
 ## Подэтап 2.7.15 — реакции
 
 `IReactionService` перенесён в `Messenger.Application.Interfaces`. Добавлены `CreateReactionDto` и `ReactionDto` в `Messenger.Application.DTOs.Reactions`. Контракт не содержит EF-сущность `Reaction`; API получает и отправляет DTO.
-
-## Подэтап 2.7.16 — статусы пользователей
-
-`IUserStatusService` физически перенесён в `Messenger.Application.Interfaces`. Добавлены `UpdateUserStatusDto` и `UserStatusDto` в `Messenger.Application.DTOs.UserStatuses`. Контракт больше не принимает и не возвращает EF-сущность `UserStatus`: обновление выполняется по `userId` и признаку `online`, чтение возвращает DTO, а отдельная команда `UpdateActivityAsync` обновляет время активности. Infrastructure выполняет projection из EF-сущности и создаёт `UserStatus` только внутри persistence-реализации. API controller и SignalR hub используют только Application-контракт.

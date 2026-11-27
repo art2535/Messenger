@@ -1,8 +1,8 @@
 using Azure.Core;
 using Messenger.Core.DTOs.Auth;
 using Messenger.Core.DTOs.Logins;
-using Messenger.Core.DTOs.UserStatuses;
-using Messenger.Core.Hubs;
+using Messenger.Application.DTOs.UserStatuses;
+using Messenger.API.Hubs;
 using Messenger.Web.Helpers;
 using Messenger.Web.Services;
 using Microsoft.AspNetCore.Authentication;
@@ -74,7 +74,7 @@ namespace Messenger.Web.Pages.Login
                                 IpAddress = GetLocalIPv4()
                             };
                             await LoginAsync(loginRequest, tokenCopy);
-                            await SendToSignalRAsync(tokenCopy, new UpdateStatusRequest { Online = true }, userIdStr);
+                            await SendToSignalRAsync(tokenCopy, new UpdateUserStatusDto { Online = true }, userIdStr);
                         }
                         catch (Exception bgEx)
                         {
@@ -106,7 +106,7 @@ namespace Messenger.Web.Pages.Login
                         try
                         {
                             await LoginAsync(new CreateLoginRequest { Token = sessionKey, IpAddress = GetLocalIPv4() }, tokenCopy);
-                            await SendToSignalRAsync(tokenCopy, new UpdateStatusRequest { Online = true }, userIdStr);
+                            await SendToSignalRAsync(tokenCopy, new UpdateUserStatusDto { Online = true }, userIdStr);
                         }
                         catch (Exception bgEx)
                         {
@@ -186,7 +186,7 @@ namespace Messenger.Web.Pages.Login
                             IpAddress = GetLocalIPv4()
                         };
                         await LoginAsync(loginRequest, tokenCopy);
-                        await SendToSignalRAsync(tokenCopy, new UpdateStatusRequest { Online = true }, userIdStr);
+                        await SendToSignalRAsync(tokenCopy, new UpdateUserStatusDto { Online = true }, userIdStr);
                     }
                     catch (Exception bgEx)
                     {
@@ -247,7 +247,7 @@ namespace Messenger.Web.Pages.Login
             return await _api.PostRawAsync("login", request, accessToken, token);
         }
 
-        private async Task SendToSignalRAsync(string? accessToken, UpdateStatusRequest request, string? userIdStr = null)
+        private async Task SendToSignalRAsync(string? accessToken, UpdateUserStatusDto request, string? userIdStr = null)
         {
             var statusResponse = await _api.PutRawAsync("user-statuses", request, accessToken);
 
