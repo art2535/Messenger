@@ -1,5 +1,16 @@
 stages:
+  - validate
   - deploy
+
+validate-architecture:
+  stage: validate
+  tags:
+    - msg
+  script:
+    - python3 scripts/check-architecture.py
+  only:
+    - branches
+    - merge_requests
 
 deploy:
   stage: deploy
