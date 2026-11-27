@@ -51,6 +51,10 @@ namespace Messenger.Infrastructure.Services
                 _logger.LogDebug("DistributedLock: захвачен {Key} ttl={Ttl}s", key, (int)ttl.TotalSeconds);
                 return new RedisLockHandle(_db, key, token, _logger);
             }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "DistributedLock: ошибка захвата {Key} — пропускаем тик", key);

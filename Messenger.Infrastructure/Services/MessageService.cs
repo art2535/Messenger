@@ -206,6 +206,10 @@ namespace Messenger.Infrastructure.Services
                     ? ServiceResult<MessageDto>.Success(savedMessage)
                     : ServiceResult<MessageDto>.Failure("Не удалось сохранить сообщение");
             }
+            catch (OperationCanceledException) when (token.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 return ServiceResult<MessageDto>.Failure(ex.Message, ex.InnerException?.Message);

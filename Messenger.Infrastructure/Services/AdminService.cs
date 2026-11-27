@@ -54,6 +54,10 @@ namespace Messenger.Infrastructure.Services
                 pendingReports = await _context.Set<MessageReport>().AsNoTracking()
                     .CountAsync(r => r.Status == "pending", ct);
             }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger?.LogDebug(ex, "MessageReports n/a");
@@ -63,6 +67,10 @@ namespace Messenger.Infrastructure.Services
             {
                 activeMutes = await _context.Set<UserMute>().AsNoTracking()
                     .CountAsync(m => m.IsActive && m.MutedUntil > now, ct);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
