@@ -75,9 +75,11 @@ namespace Messenger.Infrastructure.Services
                 JoinDate = UtcDateTime.Now
             };
 
-            await _context.Chats.AddAsync(chat, token);
-            await _context.SaveChangesAsync(token);
-            await _context.ChatParticipants.AddAsync(participant, token);
+            _context.Chats.Add(chat);
+            _context.ChatParticipants.Add(participant);
+
+            // Чат и его владелец сохраняются одной операцией.
+            // Для реляционного провайдера EF Core SaveChanges выполняется транзакционно.
             await _context.SaveChangesAsync(token);
 
             await _cache.RemoveAsync(UserChatsCacheKey(creatorId), token);
@@ -113,45 +115,21 @@ namespace Messenger.Infrastructure.Services
 
             var chatIds = chats.Select(c => c.ChatId).ToList();
 
-            var lastMessagesRaw = await _context.Messages
+            // Получаем только последние сообщения каждого чата на стороне БД.
+            // Не загружаем всю историю сообщений в память.
+            var lastMessages = await _context.Messages
                 .AsNoTracking()
                 .Where(m => chatIds.Contains(m.ChatId))
-                .GroupBy(m => m.ChatId)
-                .Select(g => new
-                {
-                    ChatId = g.Key,
-                    MaxSeq = g.Max(x => x.SequenceNumber)
-                })
+                .Where(m => m.SequenceNumber == _context.Messages
+                    .Where(candidate => candidate.ChatId == m.ChatId)
+                    .Max(candidate => candidate.SequenceNumber))
+                .Include(m => m.Sender)
+                .Include(m => m.Attachments)
                 .ToListAsync(token);
 
-            var maxSeqByChat = lastMessagesRaw.ToDictionary(x => x.ChatId, x => x.MaxSeq);
-
-            List<Message> lastMessages = new();
-            if (maxSeqByChat.Count > 0)
-            {
-                var predicates = maxSeqByChat.Select(kv =>
-                    _context.Messages.AsNoTracking()
-                        .Where(m => m.ChatId == kv.Key && m.SequenceNumber == kv.Value)
-                        .Include(m => m.Sender)
-                        .Include(m => m.Attachments));
-
-                var chatIdSeqPairs = maxSeqByChat.Select(kv => (kv.Key, kv.Value)).ToList();
-
-                lastMessages = await _context.Messages
-                    .AsNoTracking()
-                    .Where(m => chatIds.Contains(m.ChatId))
-                    .Where(m => maxSeqByChat.Keys.Contains(m.ChatId)) // filter early
-                    .Include(m => m.Sender)
-                    .Include(m => m.Attachments)
-                    .ToListAsync(token);
-
-                lastMessages = lastMessages
-                    .GroupBy(m => m.ChatId)
-                    .Select(g => g.OrderByDescending(m => m.SequenceNumber).First())
-                    .ToList();
-            }
-
-            var lastMsgByChat = lastMessages.ToDictionary(m => m.ChatId);
+            var lastMsgByChat = lastMessages
+                .GroupBy(m => m.ChatId)
+                .ToDictionary(g => g.Key, g => g.OrderByDescending(m => m.SequenceNumber).First());
 
             var unreadCounts = await _context.Messages
                 .AsNoTracking()

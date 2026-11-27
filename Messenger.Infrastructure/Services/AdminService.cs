@@ -69,25 +69,20 @@ namespace Messenger.Infrastructure.Services
                 _logger?.LogDebug(ex, "UserMutes n/a");
             }
 
-            var sendTimes = await _context.Messages.AsNoTracking()
+            // Агрегируем статистику на стороне БД вместо загрузки всех дат сообщений.
+            var dailyCounts = await _context.Messages.AsNoTracking()
                 .Where(m => m.SendTime >= d7)
-                .Select(m => m.SendTime)
+                .GroupBy(m => m.SendTime.Date)
+                .Select(g => new { Date = g.Key, Count = g.Count() })
+                .OrderBy(x => x.Date)
                 .ToListAsync(ct);
 
-            var perDay = sendTimes
-                .Select(t =>
+            var perDay = dailyCounts
+                .Select(x => new DailyCountDto
                 {
-                    var utc = t.Kind switch
-                    {
-                        DateTimeKind.Utc => t,
-                        DateTimeKind.Local => t.ToUniversalTime(),
-                        _ => DateTime.SpecifyKind(t, DateTimeKind.Utc)
-                    };
-                    return DateOnly.FromDateTime(utc);
+                    Date = DateOnly.FromDateTime(DateTime.SpecifyKind(x.Date, DateTimeKind.Utc)),
+                    Count = x.Count
                 })
-                .GroupBy(d => d)
-                .Select(g => new DailyCountDto { Date = g.Key, Count = g.Count() })
-                .OrderBy(x => x.Date)
                 .ToList();
 
             var topRaw = await _context.Messages.AsNoTracking()

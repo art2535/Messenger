@@ -57,12 +57,12 @@ namespace Messenger.Infrastructure.Services
                 CreatedAt = UtcDateTime.Now
             };
             _db.ChatFolders.Add(folder);
-            await _db.SaveChangesAsync(ct);
 
-            if (request.ChatIds != null && request.ChatIds.Count > 0)
+            if (request.ChatIds is { Count: > 0 })
             {
                 var unique = request.ChatIds.Distinct().ToList();
                 var allowed = await _db.ChatParticipants
+                    .AsNoTracking()
                     .Where(p => p.UserId == userId && unique.Contains(p.ChatId))
                     .Select(p => p.ChatId)
                     .ToListAsync(ct);
@@ -76,8 +76,10 @@ namespace Messenger.Infrastructure.Services
                         ChatId = chatId
                     });
                 }
-                await _db.SaveChangesAsync(ct);
             }
+
+            // Папка и её первоначальный состав сохраняются атомарно.
+            await _db.SaveChangesAsync(ct);
 
             return (await GetFolderAsync(userId, folder.FolderId, ct))!;
         }
