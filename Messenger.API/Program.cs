@@ -24,6 +24,7 @@ public class Program
         var app = builder.Build();
 
         app.ApplyMessengerDatabaseMigrations();
+        app.UseMessengerApiRequestPipeline();
         app.MapMessengerDiagnosticsEndpoints();
         app.UseMessengerApiPipeline();
         app.MapMessengerApiEndpoints();
