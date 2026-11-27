@@ -1,6 +1,6 @@
 using Messenger.Core.Enums;
 
-namespace Messenger.Core.DTOs.Cache
+namespace Messenger.Infrastructure.Caching.Models
 {
     public sealed class CachedMessageItem
     {

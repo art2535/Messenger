@@ -1,20 +1,18 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Messenger.Application.DTOs;
-using Messenger.Application.Files;
-using Messenger.Core.DTOs.Messages;
-using Messenger.Application.DTOs.Messages;
-using Messenger.Application.Interfaces;
-using Messenger.Core.Models;
 using MassTransit;
-using Messenger.Core.Messages;
+using Messenger.Application.DTOs;
+using Messenger.Application.DTOs.Messages;
+using Messenger.Application.Files;
+using Messenger.Application.Interfaces;
 using Messenger.Application.Messages;
+using Messenger.Core.Enums;
+using Messenger.Core.Models;
+using Messenger.Infrastructure.Caching.Models;
 using Messenger.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Messenger.Core.DTOs.Cache;
-using Messenger.Core.Enums;
 
 namespace Messenger.Infrastructure.Services
 {
