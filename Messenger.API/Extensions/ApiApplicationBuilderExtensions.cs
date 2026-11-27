@@ -64,9 +64,9 @@ public static class ApiApplicationBuilderExtensions
     }
 
     /// <summary>
-    /// Настраивает middleware в том же порядке, в котором они выполнялись в исходном Program.cs.
+    /// Подключает request logging и извлечение SignalR access token до маршрутизации.
     /// </summary>
-    public static WebApplication UseMessengerApiPipeline(this WebApplication app)
+    public static WebApplication UseMessengerApiRequestPipeline(this WebApplication app)
     {
         app.UseSerilogRequestLogging(options =>
         {
@@ -75,6 +75,14 @@ public static class ApiApplicationBuilderExtensions
         });
 
         app.UseHubAccessToken();
+        return app;
+    }
+
+    /// <summary>
+    /// Подключает оставшиеся middleware в исходном порядке.
+    /// </summary>
+    public static WebApplication UseMessengerApiPipeline(this WebApplication app)
+    {
         app.UseStaticAssets();
         app.UseCors(ApiServiceCollectionExtensions.WebCorsPolicy);
         app.UseHttpsRedirection();
