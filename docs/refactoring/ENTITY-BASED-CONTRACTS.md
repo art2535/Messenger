@@ -1,8 +1,8 @@
 # Миграция сервисных контрактов, зависящих от моделей Core
 
-## Текущее состояние после этапа 2.7.7
+## Текущее состояние после этапа 2.7.8
 
-`IUserService` и `IMessageService` уже физически находятся в Application, но их сигнатуры всё ещё используют EF-модели `User`, `Role` и `Message`. В Application также перенесены независимые DTO: `UpdateUserProfileRequest`, `UserSearch`, `MessageDto`, `MessageSearchResponse`, `ChatExportResult` и `ServiceResult<T>`. Их прежние namespace сохранены для совместимости.
+`IUserService` и `IMessageService` физически находятся в Application. `IUserService` уже переведён с EF-моделей `User`/`Role` на `UserDto`/`RoleDto`; `IMessageService` пока сохраняет зависимость от EF-модели `Message`. В Application также перенесены независимые DTO: `UpdateUserProfileRequest`, `UserSearch`, `MessageDto`, `MessageSearchResponse`, `ChatExportResult` и `ServiceResult<T>`. Их прежние namespace сохранены для совместимости.
 
 `AttachmentDto` оставлен в Core, поскольку его использует `ScheduledMessageDto` в Core-контракте `IScheduledMessageService`. `MessageDto` из Application может ссылаться на него по направлению Application -> Core.
 
@@ -18,7 +18,7 @@
 | `IPushSubscriptionService` | `AccountSetting`, `PushSubscription` | DTO настроек и подписки |
 | `IReactionService` | `Reaction` | DTO реакции и команды |
 | `IScheduledMessageService` | `ScheduledMessage`, `AttachmentInfo` | DTO и команды расписания, отделённые от EF-сущности |
-| `IUserService` (Application) | `User`, `Role` | DTO пользователя/ролей и независимые команды чтения/изменения |
+| `IUserService` (Application) | `UserDto`, `RoleDto` (без EF-сущностей) | Контракт чтения/изменения уже отвязан от EF-моделей; проверить остальные методы и сериализацию |
 | `IUserStatusService` | `UserStatus` | DTO статуса и команды обновления |
 
 ## Сквозные зависимости
@@ -31,7 +31,7 @@
 
 ## Следующие безопасные шаги
 
-1. Создать response DTO для `User`, `Role` и `Message`, не копируя EF navigation properties.
+1. Создать response DTO для `Message` и оставшихся entity-based контрактов, не копируя EF navigation properties.
 2. Перевести реализации Infrastructure и потребителей API/Web на эти DTO вертикально, по одному сценарию.
 3. После удаления ссылок на EF-сущности переместить соответствующие интерфейсы и сменить namespace.
 4. Удалять временные EF/ASP.NET compile-time зависимости Core только после аудита оставшихся файлов и успешной сборки.
@@ -46,3 +46,8 @@
 `IUserService` переведён с `User`/`Role` на `UserDto`/`RoleDto`; реализация Infrastructure выполняет отображение EF-сущностей внутри `UserService`. Переведены методы получения пользователя по ID и external ID, список пользователей, список ролей и регистрация внешнего пользователя. `UserDto` содержит только scalar-поля, прикладное представление аккаунта и роли; EF navigation properties в контракт не протекают. API extension `GetCurrentUserAsync` также возвращает DTO.
 
 `IMessageService` и другие entity-based интерфейсы пока остаются отдельной задачей: их EF-зависимости будут устранены после проектирования и миграции соответствующих DTO.
+
+
+## Результат подэтапа 2.7.8
+
+`IUserService` возвращает `UserDto`/`RoleDto` вместо `User`/`Role`. `UserService` выполняет отображение EF-сущностей на DTO внутри Infrastructure; `ClaimsPrincipalExtension.GetCurrentUserAsync` возвращает `UserDto`. Переведены все методы интерфейса, ранее возвращавшие сущности: получение по ID/external ID, регистрация, список пользователей и список ролей. В Core по-прежнему остаются другие entity-based интерфейсы, а `IMessageService` требует отдельного перехода с `Message` на DTO.

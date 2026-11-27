@@ -28,7 +28,7 @@ Fluent-конфигурации всех сущностей вынесены в 
 
 ### 2.5. Первичное удаление зависимостей
 
-Из `Messenger.Core.csproj` ранее были удалены прямые ссылки на JwtBearer и EntityFrameworkCore. Последующий аудит показал, что это было преждевременно: Core всё ещё содержит EF-аннотации в моделях и ASP.NET `IFormFile` в контрактах `IUserService` и `IMessageService`.
+Из `Messenger.Core.csproj` ранее были удалены прямые ссылки на JwtBearer и EntityFrameworkCore. Последующий аудит показал, что это было преждевременно: Core всё ещё содержит EF-аннотации в моделях. Зависимость `IFormFile` была устранена при переносе `IUserService` и `IMessageService` в Application на подэтапе 2.7.6.
 
 ### 2.7. Аудит границы Domain / Persistence
 
@@ -46,9 +46,9 @@ Fluent-конфигурации всех сущностей вынесены в 
 
 ## Что осталось
 
-1. Перенести сервисные контракты из Core в Application и убрать из них ASP.NET типы, заменив загрузку файлов нейтральной абстракцией.
+1. Перенести оставшиеся сервисные контракты из Core в Application после замены EF-сущностей на прикладные DTO; загрузка файлов уже отвязана от ASP.NET через `IUploadedFile`.
 2. Создать persistence entities в Infrastructure и постепенно перевести DbContext и реализации сервисов на них.
-3. Перевести API/Web и SignalR с EF-моделей на DTO/Application contracts.
+3. Продолжить перевод API/Web и SignalR с EF-моделей на DTO/Application contracts; `IUserService` уже возвращает `UserDto`/`RoleDto`.
 4. После перевода всех потребителей удалить EF- и JSON-аннотации, а также EF-навигации из Core.
 5. Удалить временные EF Core и ASP.NET framework references из Core.
 6. Усилить архитектурную проверку: запретить EF Core/ASP.NET references и namespaces в Core.
@@ -63,3 +63,8 @@ Fluent-конфигурации всех сущностей вынесены в 
 ## Проверки
 
 Исходники проверены по GitHub. В этой среде не удалось выполнить `dotnet build`, `dotnet test` или сравнение EF model snapshot; поэтому компиляция и эквивалентность EF-модели пока не подтверждены.
+
+
+### 2.7.8. DTO-контракт IUserService
+
+`IUserService` и `UserService` больше не возвращают `User` и `Role`. Для чтения пользователей и ролей используются `UserDto` и `RoleDto`, расположенные в Application; EF-сущности преобразуются внутри Infrastructure. API extension `GetCurrentUserAsync` также возвращает `UserDto`. В DTO нет EF-навигаций; `Account` и `Roles` доступны прикладному коду, но исключены из JSON, чтобы сохранить прежнее поведение сериализации.
