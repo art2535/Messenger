@@ -1,6 +1,8 @@
 using MassTransit;
 using Messenger.Core.Interfaces;
+using Messenger.Application.Interfaces;
 using Messenger.Core.Messages;
+using Messenger.Application.Messages;
 using Messenger.Core.Models;
 using Microsoft.AspNetCore.SignalR;
 using Messenger.Core.Hubs;

@@ -1,5 +1,7 @@
 ﻿using Messenger.Core.Interfaces;
+using Messenger.Application.Interfaces;
 using Messenger.Core.DTOs.Users;
+using Messenger.Application.DTOs.Users;
 using System.Security.Claims;
 
 namespace Messenger.API.Extensions

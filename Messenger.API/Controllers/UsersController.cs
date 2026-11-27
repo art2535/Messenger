@@ -3,6 +3,7 @@ using Asp.Versioning;
 using Messenger.API.Extensions;
 using Messenger.API.Adapters;
 using Messenger.Core.DTOs.Users;
+using Messenger.Application.DTOs.Users;
 using Messenger.Application.Interfaces;
 using Messenger.API.Hubs;
 using Messenger.Core.Interfaces;

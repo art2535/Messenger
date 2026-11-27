@@ -1,6 +1,7 @@
 using Messenger.API.Options;
 using Messenger.Core.Hubs;
 using Messenger.Core.Interfaces;
+using Messenger.Application.Interfaces;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Options;
 using Messenger.Core.Models;
