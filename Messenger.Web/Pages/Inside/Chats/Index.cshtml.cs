@@ -1,4 +1,5 @@
 ﻿using Messenger.Core.DTOs.Users;
+using Messenger.Application.DTOs.Users;
 using Messenger.Web.Helpers;
 using Messenger.Core.Responses;
 using Microsoft.AspNetCore.Authentication;
