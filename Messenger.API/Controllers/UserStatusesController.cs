@@ -1,9 +1,7 @@
-﻿using Asp.Versioning;
+using Asp.Versioning;
 using Messenger.API.Extensions;
-using Messenger.Core.DTOs.UserStatuses;
-using Messenger.Core.Interfaces;
+using Messenger.Application.DTOs.UserStatuses;
 using Messenger.Application.Interfaces;
-using Messenger.Core.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel;
@@ -87,21 +85,14 @@ namespace Messenger.API.Controllers
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> PutUpdateStatusAsync(
-            [FromBody, Description("Новый статус пользователя")] UpdateStatusRequest request,
+            [FromBody, Description("Новый статус пользователя")] UpdateUserStatusDto request,
             CancellationToken ct = default)
         {
             try
             {
                 var userId = await User.GetCurrentUserIdAsync(_userService);
 
-                var userStatus = new UserStatus
-                {
-                    UserId = userId,
-                    Online = request.Online,
-                    LastActivity = DateTime.UtcNow
-                };
-
-                await _userStatusService.UpdateUserStatusAsync(userStatus, ct);
+                await _userStatusService.UpdateUserStatusAsync(userId, request.Online, ct);
 
                 return Ok(ApiResponse.Success(message: "Статус пользователя обновлен"));
             }

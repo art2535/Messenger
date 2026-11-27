@@ -1,5 +1,5 @@
-using Messenger.Core.Interfaces;
-using Messenger.Core.Models;
+using Messenger.Application.DTOs.UserStatuses;
+using Messenger.Application.Interfaces;
 using Messenger.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -14,15 +14,25 @@ namespace Messenger.Infrastructure.Services
             _context = context;
         }
 
-        public async Task<IReadOnlyList<UserStatus>> GetInactiveOnlineStatusesAsync(DateTime olderThan,
+        public async Task<IReadOnlyList<UserStatusDto>> GetInactiveOnlineStatusesAsync(
+            DateTime olderThan,
             CancellationToken cancellationToken = default)
         {
             return await _context.UserStatuses
+                .AsNoTracking()
                 .Where(us => us.Online && us.LastActivity != null && us.LastActivity < olderThan)
+                .Select(us => new UserStatusDto
+                {
+                    UserId = us.UserId,
+                    Online = us.Online,
+                    LastActivity = us.LastActivity
+                })
                 .ToListAsync(cancellationToken);
         }
 
-        public async Task SetOfflineBatchAsync(IEnumerable<Guid> userIds, CancellationToken cancellationToken = default)
+        public async Task SetOfflineBatchAsync(
+            IEnumerable<Guid> userIds,
+            CancellationToken cancellationToken = default)
         {
             var ids = userIds.ToList();
             if (ids.Count == 0)
@@ -36,22 +46,27 @@ namespace Messenger.Infrastructure.Services
                     cancellationToken);
         }
 
-        public async Task UpdateUserStatusAsync(UserStatus userStatus, CancellationToken cancellationToken = default)
+        public async Task UpdateUserStatusAsync(
+            Guid userId,
+            bool online,
+            CancellationToken cancellationToken = default)
         {
+            var now = UtcDateTime.Now;
+
             var rowsAffected = await _context.UserStatuses
-                .Where(us => us.UserId == userStatus.UserId)
+                .Where(us => us.UserId == userId)
                 .ExecuteUpdateAsync(s => s
-                    .SetProperty(us => us.Online, userStatus.Online)
-                    .SetProperty(us => us.LastActivity, UtcDateTime.Now),
+                    .SetProperty(us => us.Online, online)
+                    .SetProperty(us => us.LastActivity, now),
                     cancellationToken);
 
             if (rowsAffected == 0)
             {
-                var newStatus = new UserStatus
+                var newStatus = new Messenger.Core.Models.UserStatus
                 {
-                    UserId = userStatus.UserId,
-                    Online = userStatus.Online,
-                    LastActivity = UtcDateTime.Now
+                    UserId = userId,
+                    Online = online,
+                    LastActivity = now
                 };
 
                 _context.UserStatuses.Add(newStatus);
@@ -59,10 +74,31 @@ namespace Messenger.Infrastructure.Services
             }
         }
 
-        public async Task<UserStatus?> GetUserStatusByUserIdAsync(Guid userId, CancellationToken cancellationToken = default)
+        public async Task UpdateActivityAsync(
+            Guid userId,
+            CancellationToken cancellationToken = default)
+        {
+            await _context.UserStatuses
+                .Where(us => us.UserId == userId)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(us => us.LastActivity, UtcDateTime.Now),
+                    cancellationToken);
+        }
+
+        public async Task<UserStatusDto?> GetUserStatusByUserIdAsync(
+            Guid userId,
+            CancellationToken cancellationToken = default)
         {
             return await _context.UserStatuses
-                .FirstOrDefaultAsync(us => us.UserId == userId, cancellationToken);
+                .AsNoTracking()
+                .Where(us => us.UserId == userId)
+                .Select(us => new UserStatusDto
+                {
+                    UserId = us.UserId,
+                    Online = us.Online,
+                    LastActivity = us.LastActivity
+                })
+                .FirstOrDefaultAsync(cancellationToken);
         }
     }
 }
