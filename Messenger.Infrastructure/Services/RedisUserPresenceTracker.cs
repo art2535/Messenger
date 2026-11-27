@@ -38,7 +38,7 @@ public sealed class RedisUserPresenceTracker : IUserPresenceTracker
         local expiry = tonumber(ARGV[2])
         redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', now)
         for i = 3, #ARGV - 1 do
-            redis.call('ZADD', KEYS[1], 'XX', expiry, ARGV[i])
+            redis.call('ZADD', KEYS[1], expiry, ARGV[i])
         end
         if redis.call('ZCARD', KEYS[1]) > 0 then
             redis.call('PEXPIRE', KEYS[1], tonumber(ARGV[#ARGV]))
