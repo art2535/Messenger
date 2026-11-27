@@ -55,25 +55,16 @@ namespace Messenger.Infrastructure.Services
         {
             var now = UtcDateTime.Now;
 
-            var rowsAffected = await _context.UserStatuses
-                .Where(us => us.UserId == userId)
-                .ExecuteUpdateAsync(s => s
-                    .SetProperty(us => us.Online, online)
-                    .SetProperty(us => us.LastActivity, now),
-                    cancellationToken);
-
-            if (rowsAffected == 0)
-            {
-                var newStatus = new Messenger.Core.Models.UserStatus
-                {
-                    UserId = userId,
-                    Online = online,
-                    LastActivity = now
-                };
-
-                _context.UserStatuses.Add(newStatus);
-                await _context.SaveChangesAsync(cancellationToken);
-            }
+            // UPSERT атомарен: параллельные подключения одного пользователя
+            // не пытаются одновременно вставить одну и ту же строку статуса.
+            await _context.Database.ExecuteSqlInterpolatedAsync($@"
+                INSERT INTO ""User_Statuses"" (""User_ID"", ""Online"", ""Last_Activity"")
+                VALUES ({userId}, {online}, {now})
+                ON CONFLICT (""User_ID"")
+                DO UPDATE SET
+                    ""Online"" = EXCLUDED.""Online"",
+                    ""Last_Activity"" = EXCLUDED.""Last_Activity"";",
+                cancellationToken);
         }
 
         public async Task UpdateActivityAsync(
