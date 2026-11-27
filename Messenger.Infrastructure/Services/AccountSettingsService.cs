@@ -3,6 +3,7 @@ using Messenger.Application.Interfaces;
 using Messenger.Core.Models;
 using Messenger.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace Messenger.Infrastructure.Services
 {
@@ -24,7 +25,24 @@ namespace Messenger.Infrastructure.Services
             {
                 settings = new AccountSetting { AccountId = userId };
                 _context.AccountSettings.Add(settings);
-                await _context.SaveChangesAsync(cancellationToken);
+                try
+                {
+                    await _context.SaveChangesAsync(cancellationToken);
+                }
+                catch (DbUpdateException ex) when (
+                    ex.InnerException is PostgresException
+                    {
+                        SqlState: PostgresErrorCodes.UniqueViolation
+                    })
+                {
+                    // Другой запрос мог создать настройки между SELECT и INSERT.
+                    _context.Entry(settings).State = EntityState.Detached;
+                    settings = await _context.AccountSettings
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(x => x.AccountId == userId, cancellationToken)
+                        ?? throw new InvalidOperationException("Не удалось получить созданные настройки аккаунта");
+                }
+
                 return Map(settings);
             }
 
@@ -51,25 +69,49 @@ namespace Messenger.Infrastructure.Services
                 _context.AccountSettings.Add(settings);
             }
 
-            settings.PushEnabled = request.PushEnabled;
-            settings.NotifyMessages = request.NotifyMessages;
-            settings.NotifyGroupChats = request.NotifyGroupChats;
-            settings.NotifyMentions = request.NotifyMentions;
-            settings.NotifyReactions = request.NotifyReactions;
-            settings.NotifySystem = request.NotifySystem;
-            settings.NotifySound = request.NotifySound;
-            settings.SuppressOpenChat = request.SuppressOpenChat;
-            settings.NotifyPreview = request.NotifyPreview;
-            settings.Theme = NormalizeTheme(request.Theme);
-            settings.LargeFont = request.LargeFont;
-            settings.CompactList = request.CompactList;
-            settings.ShowOnline = request.ShowOnline;
-            settings.ShowTyping = request.ShowTyping;
-            settings.ReadReceipts = request.ReadReceipts;
-            settings.IdleLogout = request.IdleLogout;
+            ApplyUpdate(settings, request);
 
-            await _context.SaveChangesAsync(cancellationToken);
+            try
+            {
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateException ex) when (
+                ex.InnerException is PostgresException
+                {
+                    SqlState: PostgresErrorCodes.UniqueViolation
+                } && _context.Entry(settings).State == EntityState.Added)
+            {
+                // Параллельный запрос уже создал строку настроек.
+                _context.Entry(settings).State = EntityState.Detached;
+                settings = await _context.AccountSettings
+                    .FirstOrDefaultAsync(x => x.AccountId == userId, cancellationToken)
+                    ?? throw new InvalidOperationException("Не удалось получить созданные настройки аккаунта");
+
+                ApplyUpdate(settings, request);
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+
             return Map(settings);
+        }
+
+        private static void ApplyUpdate(AccountSetting settings, UpdateAccountSettingsRequest request)
+        {
+    settings.PushEnabled = request.PushEnabled;
+    settings.NotifyMessages = request.NotifyMessages;
+    settings.NotifyGroupChats = request.NotifyGroupChats;
+    settings.NotifyMentions = request.NotifyMentions;
+    settings.NotifyReactions = request.NotifyReactions;
+    settings.NotifySystem = request.NotifySystem;
+    settings.NotifySound = request.NotifySound;
+    settings.SuppressOpenChat = request.SuppressOpenChat;
+    settings.NotifyPreview = request.NotifyPreview;
+    settings.Theme = NormalizeTheme(request.Theme);
+    settings.LargeFont = request.LargeFont;
+    settings.CompactList = request.CompactList;
+    settings.ShowOnline = request.ShowOnline;
+    settings.ShowTyping = request.ShowTyping;
+    settings.ReadReceipts = request.ReadReceipts;
+    settings.IdleLogout = request.IdleLogout;
         }
 
         private static string NormalizeTheme(string? theme)

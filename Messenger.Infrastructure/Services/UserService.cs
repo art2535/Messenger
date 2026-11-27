@@ -44,7 +44,7 @@ namespace Messenger.Infrastructure.Services
 
         public async Task DeleteAccountAsync(Guid userId, CancellationToken token = default)
         {
-            var userToDelete = await _context.Users.FindAsync(userId);
+            var userToDelete = await _context.Users.FindAsync([userId], token);
             if (userToDelete != null)
             {
                 _context.Users.Remove(userToDelete);
@@ -209,20 +209,20 @@ namespace Messenger.Infrastructure.Services
             await _context.SaveChangesAsync(token);
         }
 
-        public async Task<UserDto?> GetUserByExternalIdAsync(string externalId)
+        public async Task<UserDto?> GetUserByExternalIdAsync(string externalId, CancellationToken token = default)
         {
             var user = await _context.Users
                 .AsNoTracking()
                 .Include(u => u.Account)
-                .FirstOrDefaultAsync(u => u.ExternalId == externalId);
+                .FirstOrDefaultAsync(u => u.ExternalId == externalId, token);
 
             return user == null ? null : MapToDto(user);
         }
 
         public async Task<UserDto> RegisterExternalUserAsync(string externalId, string email, string firstName,
-            string lastName, IEnumerable<string>? tokenRoles = null)
+            string lastName, IEnumerable<string>? tokenRoles = null, CancellationToken token = default)
         {
-            var existing = await GetUserByExternalIdAsync(externalId);
+            var existing = await GetUserByExternalIdAsync(externalId, token);
             if (existing != null)
                 return existing;
 
@@ -247,11 +247,11 @@ namespace Messenger.Infrastructure.Services
                 }
             };
 
-            user.Roles = await GetRolesFromTokenAsync(tokenRoles);
+            user.Roles = await GetRolesFromTokenAsync(tokenRoles, token);
 
             // Пользователь, настройки, статус и связи с ролями создаются одним сохранением.
             _context.Users.Add(user);
-            await _context.SaveChangesAsync();
+            await _context.SaveChangesAsync(token);
 
             return MapToDto(user);
         }
@@ -277,7 +277,7 @@ namespace Messenger.Infrastructure.Services
             }).ToList() ?? new List<RoleDto>()
         };
 
-        private async Task<List<Role>> GetRolesFromTokenAsync(IEnumerable<string>? tokenRoles)
+        private async Task<List<Role>> GetRolesFromTokenAsync(IEnumerable<string>? tokenRoles, CancellationToken token)
         {
             var roleNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -295,7 +295,7 @@ namespace Messenger.Infrastructure.Services
 
             return await _context.Roles
                 .Where(role => roleNames.Contains(role.Name))
-                .ToListAsync();
+                .ToListAsync(token);
         }
     }
 }

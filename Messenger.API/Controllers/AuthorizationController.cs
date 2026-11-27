@@ -45,14 +45,15 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var user = await _userService.GetUserByExternalIdAsync(request.ExternalId);
+                var user = await _userService.GetUserByExternalIdAsync(request.ExternalId, ct);
 
                 user ??= await _userService.RegisterExternalUserAsync(
                     request.ExternalId,
                     request.Email,
                     request.FirstName,
                     request.LastName,
-                    request.Roles);
+                    request.Roles,
+                    ct);
 
                 var fullName = string.Join(" ", new[] { user.FirstName, user.LastName }
                     .Where(s => !string.IsNullOrEmpty(s)));
