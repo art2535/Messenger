@@ -27,15 +27,15 @@
 
 ## Найденные проблемы и решения
 
-### Высокий приоритет: Broadcast Sender — required FK с SetNull
+### Исправлено: Broadcast Sender — nullable FK с SetNull
 
-Подтверждено одновременно в:
-- `Broadcast.SenderId`: тип `Guid`, не nullable; `Sender` не nullable;
-- `BroadcastConfiguration`: `OnDelete(DeleteBehavior.SetNull)` вместе с `.IsRequired()`;
-- исходной миграции `20260617210434_Init`: колонка `Sender_ID` создаётся `NOT NULL`, а FK имеет `ON DELETE SET NULL`;
-- `GuapMessengerContextModelSnapshot`: связь также помечена как required и SetNull.
+До исправления модель была противоречивой:
+- `Broadcast.SenderId` и навигация `Sender` были обязательными;
+- `BroadcastConfiguration` задавала `OnDelete(DeleteBehavior.SetNull)` вместе с `.IsRequired()`;
+- исходная миграция `20260617210434_Init` создавала `Sender_ID NOT NULL`, хотя FK имел `ON DELETE SET NULL`;
+- snapshot также описывал required-связь с SetNull.
 
-Это противоречивая модель данных: при удалении пользователя PostgreSQL попытается записать NULL в NOT NULL колонку, и удаление завершится ошибкой. Конфигурация и миграция не согласованы с выбранной семантикой сохранения рассылки после удаления автора.
+При удалении пользователя PostgreSQL не мог записать NULL в NOT NULL колонку.
 
 **Решение: сохранять рассылку без автора.** Проверка `UserService.DeleteAccountAsync` показала, что аккаунт удаляется напрямую; отдельного правила, запрещающего удаление автора рассылок, нет. Рассылка и её получатели являются самостоятельной исторической записью, поэтому удаление пользователя не должно удалять рассылку или блокировать удаление аккаунта.
 
