@@ -84,23 +84,6 @@ function escapeHtml(value) {
     }[ch]));
 }
 
-async function downloadAttachment(attachmentId, fileName) {
-    const response = await fetchWithAuth(`${API_BASE}/attachments/file/${encodeURIComponent(attachmentId)}`);
-    if (!response || !response.ok) {
-        throw new Error(`Не удалось скачать вложение (HTTP ${response?.status || 0})`);
-    }
-
-    const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = fileName || 'file';
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 60_000);
-}
-
 async function hydrateAttachments(container, attachments = []) {
     if (!container || !attachments?.length) return;
 
@@ -127,15 +110,9 @@ async function hydrateAttachments(container, attachments = []) {
 
             const link = container.querySelector(`a[data-attachment-id="${attachmentId}"]`);
             if (link) {
-                link.addEventListener('click', async event => {
-                    event.preventDefault();
-                    try {
-                        await downloadAttachment(attachmentId, fileName);
-                    } catch (error) {
-                        console.error('Ошибка скачивания вложения:', error);
-                        if (typeof showToast === 'function') showToast('Не удалось скачать файл', 'error');
-                    }
-                });
+                link.href = objectUrl;
+                link.download = fileName || 'file';
+                link.target = '_blank';
             }
         } catch (error) {
             console.error(`Ошибка загрузки вложения ${attachmentId}:`, error);
