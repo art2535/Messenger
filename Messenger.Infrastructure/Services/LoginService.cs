@@ -1,6 +1,7 @@
 using Messenger.Application.Interfaces;
 using Messenger.Application.DTOs.Logins;
 using Messenger.Core.Models;
+using Messenger.Infrastructure.Persistence.Entities;
 using Messenger.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Cryptography;

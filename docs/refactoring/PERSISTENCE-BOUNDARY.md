@@ -153,3 +153,10 @@ Messenger.Web
 ## Актуализация после подэтапа 2.7.19
 
 Изолированная техническая модель `Log` перенесена в Infrastructure. В Core осталось 21 файл в `Models`, из которых 20 типов являются EF entities и один (`UtcDateTime`) — вспомогательный тип. Все проверенные прикладные интерфейсы находятся в Application и используют DTO/команды; следующий безопасный срез persistence migration — `Login` или `PushSubscription`, после отдельного аудита навигаций `User` и текущего snapshot.
+
+
+## Подэтап 2.7.20 — перенос Login в Infrastructure
+
+Persistence-модель `Login` физически перенесена из `Messenger.Core.Models` в `Messenger.Infrastructure.Persistence.Entities`. `GuapMessengerContext`, `LoginConfiguration` и актуальный Model Snapshot используют новый CLR-тип. Прикладные контракты `ILoginService`, `CreateLoginDto` и `LoginDto` не менялись: токен/хеш остаётся внутренним полем persistence-модели.
+
+Связь с `User` сохранена как односторонняя навигация `Login.User`; неиспользуемая обратная коллекция `User.Logins` удалена из Core. Сохранены обязательный FK `User_ID`, индекс по `UserId`, каскадное удаление и имя ограничения `fk_login_user`. Таблица `Logins`, имена колонок, типы данных, PK `Logins_pkey` и исторические миграции не менялись. В актуальном snapshot изменены CLR-имя сущности и описание навигации без изменения реляционной схемы.

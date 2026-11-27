@@ -1,4 +1,5 @@
 using Messenger.Core.Models;
+using Messenger.Infrastructure.Persistence.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -14,7 +15,9 @@ public sealed class LoginConfiguration : IEntityTypeConfiguration<Login>
         builder.Property(e => e.LogoutTime).HasColumnType("timestamp with time zone");
 
         builder.HasOne(d => d.User)
-            .WithMany(p => p.Logins)
+            .WithMany()
+            .HasForeignKey(d => d.UserId)
+            .OnDelete(DeleteBehavior.Cascade)
             .HasConstraintName("fk_login_user");
     }
 }

@@ -40,10 +40,6 @@ public partial class User
     [JsonIgnore]
     public virtual ICollection<Chat> Chats { get; set; } = new List<Chat>();
 
-    [InverseProperty("User")]
-    [JsonIgnore]
-    public virtual ICollection<Login> Logins { get; set; } = new List<Login>();
-
     [InverseProperty("Sender")]
     [JsonIgnore]
     public virtual ICollection<Message> MessageSenders { get; set; } = new List<Message>();

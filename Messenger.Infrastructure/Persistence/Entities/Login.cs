@@ -2,7 +2,7 @@
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Text.Json.Serialization;
 
-namespace Messenger.Core.Models;
+namespace Messenger.Infrastructure.Persistence.Entities;
 
 public partial class Login
 {

@@ -575,7 +575,7 @@ namespace Messenger.Infrastructure.Migrations
                     b.ToTable("Logs", "logging");
                 });
 
-            modelBuilder.Entity("Messenger.Core.Models.Login", b =>
+            modelBuilder.Entity("Messenger.Infrastructure.Persistence.Entities.Login", b =>
                 {
                     b.Property<Guid>("LoginId")
                         .HasColumnType("uuid")
@@ -1272,10 +1272,10 @@ namespace Messenger.Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("Messenger.Core.Models.Login", b =>
+            modelBuilder.Entity("Messenger.Infrastructure.Persistence.Entities.Login", b =>
                 {
                     b.HasOne("Messenger.Core.Models.User", "User")
-                        .WithMany("Logins")
+                        .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
