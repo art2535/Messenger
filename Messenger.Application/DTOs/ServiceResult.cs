@@ -1,4 +1,4 @@
-using Messenger.Core.Responses;
+using Messenger.Application.DTOs.Responses;
 
 namespace Messenger.Application.DTOs
 {
