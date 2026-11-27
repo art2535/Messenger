@@ -68,6 +68,29 @@ public class AttachmentService : IAttachmentService
         }
     }
 
+    public async Task<(AttachmentDto? Attachment, Guid? MessageId)> GetAttachmentWithMessageIdAsync(
+        Guid attachmentId, CancellationToken cancellationToken = default)
+    {
+        var item = await _context.Attachments
+            .AsNoTracking()
+            .Where(a => a.AttachmentId == attachmentId)
+            .Select(a => new
+            {
+                a.MessageId,
+                Attachment = new AttachmentDto
+                {
+                    AttachmentId = a.AttachmentId,
+                    FileName = a.FileName,
+                    FileType = a.FileType ?? string.Empty,
+                    SizeInBytes = a.SizeInBytes ?? 0,
+                    Url = a.Url
+                }
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return item == null ? (null, null) : (item.Attachment, item.MessageId);
+    }
+
     public async Task<IEnumerable<AttachmentDto>> GetAttachmentsByMessageIdAsync(Guid messageId, CancellationToken cancellationToken = default)
     {
         return await _context.Attachments

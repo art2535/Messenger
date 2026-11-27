@@ -40,29 +40,31 @@ function renderAttachments(attachments = [], isMyMessage = false) {
     const files = [];
 
     attachments.forEach(att => {
-        const fileNameFromUrl = att.url ? att.url.split('/').pop() : (att.fileName || 'file');
-        const isImage = att.fileType?.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(fileNameFromUrl);
-        const displayUrl = att.url?.startsWith('http') ? att.url : `/uploads/${fileNameFromUrl}`;
-        const downloadUrl = `${displayUrl}?download=1`;
-        const size = att.sizeInBytes ? (att.sizeInBytes / 1024).toFixed(1) + ' КБ' : '';
+        const attachmentId = att.attachmentId || att.AttachmentId;
+        if (!attachmentId) return;
+
+        const fileName = String(att.fileName || att.FileName || 'file');
+        const isImage = String(att.fileType || att.FileType || '').startsWith('image/')
+            || /\.(jpg|jpeg|png|gif|webp|bmp|avif)$/i.test(fileName);
+        const sizeInBytes = Number(att.sizeInBytes ?? att.SizeInBytes ?? 0);
+        const size = sizeInBytes > 0 ? (sizeInBytes / 1024).toFixed(1) + ' КБ' : '';
+        const safeName = escapeHtml(fileName);
 
         if (isImage) {
             images.push(`
-                <img src="${displayUrl}"
-                        class="image-preview cursor-zoom-in rounded-xl object-cover"
-                        style="max-width: 220px; max-height: 220px;"
-                        alt="${att.fileName || 'Изображение'}"
-                        onclick="openLightbox('${displayUrl}')">
+                <img data-attachment-id="${attachmentId}"
+                     class="image-preview cursor-zoom-in rounded-xl object-cover attachment-loading"
+                     style="max-width: 220px; max-height: 220px;"
+                     alt="${safeName}">
             `);
         } else {
             files.push(`
                 <div class="file-attachment ${bgColor} mt-1">
                     <i data-feather="file" class="w-5 h-5 flex-shrink-0"></i>
-                    <a href="${downloadUrl}"
-                        target="_blank"
-                        class="${textColor} hover:underline font-medium truncate max-w-[180px]"
-                        title="${att.fileName || fileNameFromUrl}">
-                        ${att.fileName || fileNameFromUrl}
+                    <a href="#" data-attachment-id="${attachmentId}"
+                       class="${textColor} hover:underline font-medium truncate max-w-[180px]"
+                       title="${safeName}">
+                        ${safeName}
                         ${size ? `<span class="text-xs opacity-70 ml-1">(${size})</span>` : ''}
                     </a>
                 </div>
@@ -71,15 +73,80 @@ function renderAttachments(attachments = [], isMyMessage = false) {
     });
 
     let html = '';
-    if (images.length > 0) {
-        html += `<div class="flex flex-wrap gap-2 mt-2">${images.join('')}</div>`;
-    }
-    if (files.length > 0) {
-        html += `<div class="flex flex-col gap-1.5 mt-2">${files.join('')}</div>`;
-    }
+    if (images.length > 0) html += `<div class="flex flex-wrap gap-2 mt-2">${images.join('')}</div>`;
+    if (files.length > 0) html += `<div class="flex flex-col gap-1.5 mt-2">${files.join('')}</div>`;
     return html;
 }
 
+function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, ch => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[ch]));
+}
+
+async function downloadAttachment(attachmentId, fileName) {
+    const response = await fetchWithAuth(`${API_BASE}/attachments/file/${encodeURIComponent(attachmentId)}`);
+    if (!response || !response.ok) {
+        throw new Error(`Не удалось скачать вложение (HTTP ${response?.status || 0})`);
+    }
+
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = fileName || 'file';
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+async function hydrateAttachments(container, attachments = []) {
+    if (!container || !attachments?.length) return;
+
+    for (const att of attachments) {
+        const attachmentId = att.attachmentId || att.AttachmentId;
+        if (!attachmentId) continue;
+
+        const fileName = String(att.fileName || att.FileName || 'file');
+        try {
+            const response = await fetchWithAuth(`${API_BASE}/attachments/file/${encodeURIComponent(attachmentId)}`);
+            if (!response || !response.ok) {
+                throw new Error(`HTTP ${response?.status || 0}`);
+            }
+
+            const blob = await response.blob();
+            const objectUrl = URL.createObjectURL(blob);
+            const image = container.querySelector(`img[data-attachment-id="${attachmentId}"]`);
+            if (image) {
+                image.src = objectUrl;
+                image.classList.remove('attachment-loading');
+                image.addEventListener('click', () => openLightbox(objectUrl), { once: false });
+                continue;
+            }
+
+            const link = container.querySelector(`a[data-attachment-id="${attachmentId}"]`);
+            if (link) {
+                link.addEventListener('click', async event => {
+                    event.preventDefault();
+                    try {
+                        await downloadAttachment(attachmentId, fileName);
+                    } catch (error) {
+                        console.error('Ошибка скачивания вложения:', error);
+                        if (typeof showToast === 'function') showToast('Не удалось скачать файл', 'error');
+                    }
+                });
+            }
+        } catch (error) {
+            console.error(`Ошибка загрузки вложения ${attachmentId}:`, error);
+            const image = container.querySelector(`img[data-attachment-id="${attachmentId}"]`);
+            if (image) {
+                image.alt = 'Не удалось загрузить изображение';
+                image.classList.remove('attachment-loading');
+            }
+        }
+    }
+}
 function openLightbox(url) {
     lightboxImg.src = url;
     lightbox.classList.add('show');
@@ -272,6 +339,8 @@ function appendMessage(msg) {
     `;
 
     messagesContainer.appendChild(div);
+    hydrateAttachments(div, msg.attachments || msg.Attachments || []).catch(error =>
+        console.error('Ошибка подготовки вложений:', error));
     if (forwardMeta) {
         const nameEl = div.querySelector('.forward-label-name');
         const fl = div.querySelector('.forward-label');

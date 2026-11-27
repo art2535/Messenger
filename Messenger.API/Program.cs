@@ -191,7 +191,7 @@ namespace Messenger.API
 
             app.MapPrometheusScrapingEndpoint("/metrics");
 
-            app.UseUploads();
+            app.UseStaticAssets();
             app.UseCors(WebCorsPolicy);
             app.UseHttpsRedirection();
             app.UseAuthentication();

@@ -88,6 +88,118 @@ namespace Messenger.API.Controllers
         }
 
         /// <summary>
+        /// Защищённая выдача файла вложения.
+        /// </summary>
+        [HttpGet("file/{attachmentId:guid}")]
+        [EndpointName("DownloadAttachment")]
+        [EndpointSummary("Защищённая выдача файла вложения")]
+        [EndpointDescription("Возвращает файл только аутентифицированному участнику чата, которому принадлежит сообщение.")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> DownloadAttachmentAsync(
+            [FromRoute, Description("Уникальный идентификатор вложения (GUID)")] Guid attachmentId,
+            CancellationToken ct = default)
+        {
+            try
+            {
+                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var (attachment, messageId) = await _attachmentService.GetAttachmentWithMessageIdAsync(attachmentId, ct);
+                if (attachment == null || !messageId.HasValue)
+                    return NotFound(ApiResponse.Failure("Вложение не найдено", "NOT_FOUND"));
+
+                var message = await _messageService.GetMessageByIdGlobalAsync(messageId.Value, ct);
+                if (message == null)
+                    return NotFound(ApiResponse.Failure("Сообщение не найдено", "NOT_FOUND"));
+
+                var chat = await _chatService.GetChatByIdAsync(message.ChatId, userId, ct);
+                if (chat == null)
+                    return NotFound(ApiResponse.Failure("Чат не найден", "NOT_FOUND"));
+
+                if (!chat.Participants.Any(participant => participant.UserId == userId))
+                    return Forbid();
+
+                if (!Uri.TryCreate(_configuration["URL:API:HTTPS"], UriKind.Absolute, out var apiBaseUri)
+                    || !Uri.TryCreate(apiBaseUri, attachment.Url, out var fileUri)
+                    || !string.Equals(fileUri.Scheme, apiBaseUri.Scheme, StringComparison.OrdinalIgnoreCase)
+                    || !string.Equals(fileUri.Host, apiBaseUri.Host, StringComparison.OrdinalIgnoreCase)
+                    || fileUri.Port != apiBaseUri.Port)
+                {
+                    _logger.LogWarning("Вложение {AttachmentId} содержит URL вне API origin", attachmentId);
+                    return NotFound(ApiResponse.Failure("Файл вложения не найден", "NOT_FOUND"));
+                }
+
+                var normalizedPath = Uri.UnescapeDataString(fileUri.AbsolutePath).Replace('\\', '/');
+                const string uploadsPrefix = "/uploads/";
+                if (!normalizedPath.StartsWith(uploadsPrefix, StringComparison.OrdinalIgnoreCase))
+                    return NotFound(ApiResponse.Failure("Файл вложения не найден", "NOT_FOUND"));
+
+                var storedFileName = normalizedPath[uploadsPrefix.Length..];
+                if (string.IsNullOrWhiteSpace(storedFileName)
+                    || storedFileName.Contains('/')
+                    || storedFileName.Contains('\\')
+                    || storedFileName is "." or "..")
+                    return NotFound(ApiResponse.Failure("Файл вложения не найден", "NOT_FOUND"));
+
+                var uploadDirectory = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads"));
+                var storedFilePath = Path.GetFullPath(Path.Combine(uploadDirectory, storedFileName));
+                var uploadPrefixPath = uploadDirectory.EndsWith(Path.DirectorySeparatorChar)
+                    ? uploadDirectory
+                    : uploadDirectory + Path.DirectorySeparatorChar;
+                var pathComparison = OperatingSystem.IsWindows()
+                    ? StringComparison.OrdinalIgnoreCase
+                    : StringComparison.Ordinal;
+
+                if (!storedFilePath.StartsWith(uploadPrefixPath, pathComparison)
+                    || !System.IO.File.Exists(storedFilePath))
+                    return NotFound(ApiResponse.Failure("Файл вложения не найден", "NOT_FOUND"));
+
+                var contentType = attachment.FileType;
+                var extension = Path.GetExtension(storedFileName);
+                if (string.IsNullOrWhiteSpace(contentType)
+                    || !contentType.Contains('/', StringComparison.Ordinal)
+                    || contentType.Length > 100)
+                {
+                    contentType = "application/octet-stream";
+                }
+
+                // SVG/HTML/XML and unknown types are always downloaded. The browser only gets
+                // inline rendering for known safe raster image types.
+                var inlineExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".avif"
+                };
+                var fileName = Path.GetFileName(attachment.FileName);
+                if (string.IsNullOrWhiteSpace(fileName))
+                    fileName = storedFileName;
+
+                Response.Headers["X-Content-Type-Options"] = "nosniff";
+                if (!inlineExtensions.Contains(extension))
+                {
+                    Response.Headers.ContentDisposition =
+                        $"attachment; filename*=UTF-8''{Uri.EscapeDataString(fileName)}";
+                }
+
+                return File(
+                    new FileStream(storedFilePath, FileMode.Open, FileAccess.Read, FileShare.Read),
+                    contentType,
+                    inlineExtensions.Contains(extension) ? null : fileName,
+                    enableRangeProcessing: true);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка при выдаче вложения {AttachmentId}", attachmentId);
+                return StatusCode(StatusCodes.Status500InternalServerError,
+                    ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
+            }
+        }
+
+        /// <summary>
         /// Добавление нового вложения к сообщению.
         /// </summary>
         [HttpPost("{messageId:guid}")]
