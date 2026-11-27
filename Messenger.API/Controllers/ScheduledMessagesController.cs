@@ -73,7 +73,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var user = await User.GetCurrentUserAsync(_userService);
+                var user = await User.GetCurrentUserAsync(_userService, ct);
 
                 if (!scheduledAt.HasValue)
                 {
@@ -190,7 +190,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var user = await User.GetCurrentUserAsync(_userService);
+                var user = await User.GetCurrentUserAsync(_userService, ct);
 
                 var dtos = await _scheduledService.GetPendingByUserAsync(user.UserId, ct);
 
@@ -224,7 +224,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var user = await User.GetCurrentUserAsync(_userService);
+                var user = await User.GetCurrentUserAsync(_userService, ct);
 
                 var dtos = await _scheduledService.GetPendingByChatAsync(chatId, user.UserId, ct);
 
@@ -263,7 +263,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var user = await User.GetCurrentUserAsync(_userService);
+                var user = await User.GetCurrentUserAsync(_userService, ct);
 
                 string? encrypted = null;
                 if (request.MessageText != null)
@@ -335,7 +335,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var user = await User.GetCurrentUserAsync(_userService);
+                var user = await User.GetCurrentUserAsync(_userService, ct);
 
                 var ok = await _scheduledService.CancelAsync(scheduledMessageId, user.UserId, ct);
                 if (!ok)
