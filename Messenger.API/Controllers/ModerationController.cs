@@ -40,7 +40,7 @@ namespace Messenger.API.Controllers
 
         private async Task<Guid> EnsureAdminAsync(CancellationToken ct)
         {
-            var userId = await User.GetCurrentUserIdAsync(_userService);
+            var userId = await User.GetCurrentUserIdAsync(_userService, ct);
             var isAdmin = await _adminService.IsSystemAdminAsync(userId, ct);
             if (!isAdmin)
                 throw new ForbiddenAccessException("Нужна роль «Администратор»");
@@ -65,7 +65,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var userId = await User.GetCurrentUserIdAsync(_userService, ct);
                 var report = await _moderationService.ReportMessageAsync(userId, request, ct);
 
                 return Ok(ApiResponse.Success(report));
