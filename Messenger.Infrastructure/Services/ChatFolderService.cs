@@ -4,6 +4,7 @@ using Messenger.Application.Interfaces;
 using Messenger.Core.Models;
 using Messenger.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace Messenger.Infrastructure.Services
 {
@@ -174,13 +175,28 @@ namespace Messenger.Infrastructure.Services
                 .AnyAsync(c => c.FolderId == folderId && c.ChatId == chatId, ct);
             if (exists) return true;
 
-            _db.ChatFolderChats.Add(new ChatFolderChat
+            var folderChat = new ChatFolderChat
             {
                 Id = Guid.NewGuid(),
                 FolderId = folderId,
                 ChatId = chatId
-            });
-            await _db.SaveChangesAsync(ct);
+            };
+            _db.ChatFolderChats.Add(folderChat);
+
+            try
+            {
+                await _db.SaveChangesAsync(ct);
+            }
+            catch (DbUpdateException ex) when (
+                ex.InnerException is PostgresException
+                {
+                    SqlState: PostgresErrorCodes.UniqueViolation
+                })
+            {
+                // Параллельный запрос мог добавить ту же пару после проверки exists.
+                _db.Entry(folderChat).State = EntityState.Detached;
+            }
+
             return true;
         }
 
