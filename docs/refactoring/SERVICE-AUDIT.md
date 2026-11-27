@@ -199,3 +199,11 @@ Realtime rate limiter теперь принимает CancellationToken. HTTP о
 Найден пропуск в API boundary: `ClaimsPrincipalExtension.GetCurrentUserAsync` и `GetCurrentUserIdAsync` не принимали токен, из-за чего загрузка пользователя по externalId выполнялась без отмены даже в HTTP-запросе. Методы расширения теперь принимают `CancellationToken` и передают его в `IUserService.GetUserByExternalIdAsync`. Все вызовы этих helpers в API-контроллерах передают request `ct`. Дополнительно исправлен прямой вызов `UsersController.GetUserByExternalIdAsync`, который ранее игнорировал свой параметр `ct`.
 
 Это устраняет потерю отмены на общем пути разрешения текущего пользователя. Полный аудит всех вызовов Application-методов из каждого background/internal компонента и автоматизированная проверка отсутствующих аргументов токена остаются частью проверки сборкой/тестами; наличие параметра в интерфейсе само по себе не доказывает, что каждый caller его передаёт.
+
+### 13. Отмена HTTP-запросов в API-контроллерах
+
+В API-контроллерах общий `catch (Exception)` больше не должен превращать отмену клиентского HTTP-запроса в ответ 500. Перед общими обработчиками добавлен отдельный `catch (OperationCanceledException) when (ct.IsCancellationRequested)`, который повторно выбрасывает исключение и позволяет ASP.NET Core завершить отменённый запрос штатно.
+
+Проверены и обновлены контроллеры AccountSettings, Admin, Attachments, Authorization, Broadcasts, ChatFolders, Chats, Logins, Messages, Moderation, Notifications, OAuthProxy, Push, Reactions, ScheduledMessages, UserStatuses и Users. Вложенные best-effort SignalR-отправки в ScheduledMessagesController и MessagesController также не подавляют отмену самого HTTP-запроса. Отфильтрованные обработчики локальной очистки файлов, не относящиеся к HTTP-операциям, не менялись.
+
+Фильтр по `ct.IsCancellationRequested` намеренный: отмена внутренней операции по таймауту, не вызванная отменой входящего HTTP-запроса, остаётся обычной ошибкой и проходит в существующую обработку. Проверка не заменяет интеграционные тесты на disconnect/cancel во время DB, Redis, HTTP и файловых операций.
