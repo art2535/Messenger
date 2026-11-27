@@ -237,6 +237,6 @@ Realtime rate limiter теперь принимает CancellationToken. HTTP о
 
 Порядок регистрации зависимостей сохранён: API logging и shared development encryption key выполняются до остальных регистраций; hosted services, authentication/rate limiting, session/log cleanup, health checks и Redis metrics регистрируются в прежней последовательности.
 
-Порядок запуска сохранён: миграции выполняются до обработки запросов; Scalar/health/metrics endpoint'ы отображаются до middleware; затем подключаются request logging, SignalR query-token middleware, static assets, CORS, HTTPS, authentication/authorization, development Serilog UI и rate limiter; после этого публикуются controllers и SignalR hubs. Маршруты, CORS policy, API version fallback и настройки сериализации перенесены без изменения значений.
+Порядок запуска сохранён: миграции выполняются до обработки запросов; сначала подключаются request logging и SignalR query-token middleware, затем отображаются Scalar/health/metrics endpoint'ы; после этого подключаются static assets, CORS, HTTPS, authentication/authorization, development Serilog UI и rate limiter; в конце публикуются controllers и SignalR hubs. Маршруты, CORS policy, API version fallback и настройки сериализации перенесены без изменения значений.
 
 Это структурный рефакторинг точки композиции, а не перенос бизнес-логики или изменение поведения endpoints. Обязательная проверка сборкой и smoke/integration tests ещё не выполнена.
