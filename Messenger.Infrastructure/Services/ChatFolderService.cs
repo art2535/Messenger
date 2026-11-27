@@ -102,13 +102,15 @@ namespace Messenger.Infrastructure.Services
             if (request.SortOrder.HasValue)
                 folder.SortOrder = request.SortOrder.Value;
 
-            await _db.SaveChangesAsync(ct);
-
-            // Состав папки обновляем отдельно через ExecuteDelete — без concurrency на tracked collection
             if (request.ChatIds != null)
             {
+                // Удаление старого состава и сохранение нового вместе с полями папки —
+                // одна транзакция, чтобы при ошибке не оставить папку без чатов.
+                await using var transaction = await _db.Database.BeginTransactionAsync(ct);
+
                 var unique = request.ChatIds.Distinct().ToList();
                 var allowed = await _db.ChatParticipants
+                    .AsNoTracking()
                     .Where(p => p.UserId == userId && unique.Contains(p.ChatId))
                     .Select(p => p.ChatId)
                     .ToListAsync(ct);
@@ -117,19 +119,22 @@ namespace Messenger.Infrastructure.Services
                     .Where(c => c.FolderId == folderId)
                     .ExecuteDeleteAsync(ct);
 
-                if (allowed.Count > 0)
+                foreach (var chatId in allowed)
                 {
-                    foreach (var chatId in allowed)
+                    _db.ChatFolderChats.Add(new ChatFolderChat
                     {
-                        _db.ChatFolderChats.Add(new ChatFolderChat
-                        {
-                            Id = Guid.NewGuid(),
-                            FolderId = folderId,
-                            ChatId = chatId
-                        });
-                    }
-                    await _db.SaveChangesAsync(ct);
+                        Id = Guid.NewGuid(),
+                        FolderId = folderId,
+                        ChatId = chatId
+                    });
                 }
+
+                await _db.SaveChangesAsync(ct);
+                await transaction.CommitAsync(ct);
+            }
+            else
+            {
+                await _db.SaveChangesAsync(ct);
             }
 
             return await GetFolderAsync(userId, folderId, ct);
@@ -141,6 +146,8 @@ namespace Messenger.Infrastructure.Services
                 .AnyAsync(f => f.FolderId == folderId && f.UserId == userId, ct);
             if (!exists) return false;
 
+            await using var transaction = await _db.Database.BeginTransactionAsync(ct);
+
             await _db.ChatFolderChats
                 .Where(c => c.FolderId == folderId)
                 .ExecuteDeleteAsync(ct);
@@ -149,6 +156,7 @@ namespace Messenger.Infrastructure.Services
                 .Where(f => f.FolderId == folderId && f.UserId == userId)
                 .ExecuteDeleteAsync(ct);
 
+            await transaction.CommitAsync(ct);
             return true;
         }
 
