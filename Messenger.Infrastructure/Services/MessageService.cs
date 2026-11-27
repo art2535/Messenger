@@ -577,7 +577,17 @@ namespace Messenger.Infrastructure.Services
                 await _context.Messages.AddAsync(message, token);
                 await _context.SaveChangesAsync(token);
                 await transaction.CommitAsync(token);
+            }
+            catch
+            {
+                await transaction.RollbackAsync(token);
+                throw;
+            }
 
+            // Сохранение сообщения уже зафиксировано. Ошибка кеша не должна превращать
+            // успешную отправку в ошибку и провоцировать повторную отправку сообщения.
+            try
+            {
                 var forCache = await _context.Messages
                     .AsNoTracking()
                     .Include(m => m.Sender)
@@ -592,10 +602,11 @@ namespace Messenger.Infrastructure.Services
 
                 await InvalidateUserChatsCacheAsync(message.ChatId, token);
             }
-            catch
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                await transaction.RollbackAsync(token);
-                throw;
+                _logger.LogWarning(ex,
+                    "Сообщение {MessageId} сохранено, но обновить кеш чата {ChatId} не удалось",
+                    message.MessageId, message.ChatId);
             }
         }
 
