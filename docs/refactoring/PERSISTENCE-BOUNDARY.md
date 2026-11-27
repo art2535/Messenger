@@ -178,3 +178,12 @@ Persistence-модель `Login` физически перенесена из `M
 EF mapping удалён из атрибутов `AccountSetting` и перенесён в `AccountSettingConfiguration`: таблица `Account_Settings`, имена колонок, PK `Account_Settings_pkey`, уникальный индекс `Account_Settings_Account_ID_key`, связь one-to-one по общему ключу, FK `fk_account` и каскадное удаление заданы явно во Fluent API. Связь перенесена из `UserConfiguration` в конфигурацию самой `AccountSetting`. JSON-аннотация `JsonIgnore` сохранена для прежнего поведения сериализации.
 
 Актуальный Model Snapshot не изменён: CLR-тип остаётся `Messenger.Core.Models.AccountSetting`, а реляционная модель намеренно сохраняется без изменений. Исторические миграции не редактировались.
+
+
+## Подэтап 2.7.23 — аудит и очистка User
+
+User оставлена в Core как центральная доменная сущность. Проверены потребители её навигаций и конфигурации связанных сущностей. Infrastructure использует User.Account для настроек/аватара, User.ChatParticipants и User.Chats для чатов, User.MessageSenders для отправителя сообщений, а также связи с Notifications, Reactions, Roles, UserStatus, BroadcastsCreated и BroadcastRecipients. Эти навигации не удалялись.
+
+EF-аннотации Key, Column, StringLength, ForeignKey и InverseProperty удалены из User. Все scalar mapping details перенесены в UserConfiguration, включая имена таблицы/колонок, PK, длины строк и required для имени/фамилии. Fluent-конфигурации зависимых сущностей уже задают связи с User; many-to-many UserRole остаётся в UserConfiguration. JSON-аннотации JsonIgnore сохранены.
+
+GuapMessengerContext и CLR-тип Messenger.Core.Models.User в Model Snapshot не менялись; snapshot не редактировался, исторические миграции не изменялись. Очистка User не означает, что все остальные Core-модели уже свободны от EF-аннотаций.

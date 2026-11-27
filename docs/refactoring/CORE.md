@@ -10,7 +10,7 @@
 - навигационные свойства EF;
 - JSON-аннотации (`JsonIgnore`).
 
-Например, `User`, `Message`, `Chat` и связанные типы пока содержат EF mapping attributes и навигационные свойства. Для `AccountSetting` EF mapping attributes удалены и заменены Fluent-конфигурацией; её предметная связь с `User` сохранена, поскольку используется Infrastructure. Поэтому простое удаление атрибутов или перемещение файлов без перевода потребителей изменило бы EF-модель либо поведение сериализации.
+До подэтапа 2.7.23 `User`, `Message`, `Chat` и связанные типы содержали EF mapping attributes и навигационные свойства. В подэтапе 2.7.23 EF-аннотации удалены из `User`, а scalar mapping полностью перенесён в `UserConfiguration`; предметные свойства, навигации и `JsonIgnore` сохранены. Для `AccountSetting` аналогичная очистка выполнена на подэтапе 2.7.22. Остальные модели очищаются отдельно после проверки их конфигураций и потребителей.
 
 `GuapMessengerContext` содержит 21 DbSet и сейчас конфигурирует сущности через отдельные классы Infrastructure. В нём также есть MassTransit Inbox/Outbox entities.
 
@@ -146,3 +146,12 @@ Persistence-модель push-подписки перенесена в `Messenge
 `AccountSetting` оставлена в Core: настройки уведомлений, приватности, внешнего вида и поведения аккаунта являются предметными данными, а не технической записью хранения. `User.Account` и `AccountSetting.User` сохранены, так как `UserService` использует эту связь для загрузки/сохранения аватара и формирования пользовательского DTO; сервисы настроек, push и сессий также читают и изменяют `AccountSetting`.
 
 Из `AccountSetting` удалены EF mapping attributes. Полная конфигурация таблицы, колонок, PK, уникального индекса и one-to-one FK перенесена в `AccountSettingConfiguration`. JSON `JsonIgnore` сохранён; навигации не удалялись. Связь конфигурируется в одном месте — в `AccountSettingConfiguration`, а не дублируется в `UserConfiguration`. Схема БД и исторические миграции не менялись; Model Snapshot остаётся с CLR-типом `Messenger.Core.Models.AccountSetting`.
+
+
+### 2.7.23. Аудит и очистка User
+
+User подтверждена как центральная доменная сущность и остаётся в Messenger.Core.Models. Аудированы её потребители в Infrastructure и API, GuapMessengerContext, конфигурации связанных сущностей и актуальный Model Snapshot.
+
+Из User удалены EF-аннотации [Key], [Column], [StringLength], [ForeignKey] и [InverseProperty]. Скалярный mapping перенесён в UserConfiguration: таблица Users, PK Users_pkey, колонка User_ID, длины и обязательность FirstName/LastName, Login (50), ExternalId (255), Registration_Date и External_ID. Существующие связи с AccountSetting, Chat, ChatParticipant, Message, Notification, Reaction, Role, UserStatus, Broadcast и BroadcastRecipient оставлены и конфигурируются в соответствующих Fluent-конфигурациях.
+
+Все JsonIgnore сохранены, чтобы не менять существующее поведение сериализации. DbSet, CLR-имя сущности в Model Snapshot и схема БД не менялись; исторические миграции не редактировались.
