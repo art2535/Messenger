@@ -73,3 +73,11 @@
 Вынесены Fluent-конфигурации `Chat`, `ChatParticipant`, `Message`, `Notification`, `Reaction` и `User` в отдельные классы Infrastructure. Сохранены исходные ключи, имена индексов, SQL defaults, типы дат, фильтр индекса закреплённых сообщений, имена FK constraints и поведение удаления. Для `User` отдельно сохранена конфигурация связи один-к-одному с `AccountSetting` и join table `User_Roles` с прежними именами ключей и колонок.
 
 Конфигурации переносят только существующий Fluent API. EF-аннотации в Core-моделях остаются, поэтому этот шаг не завершает отделение домена от EF.
+
+### 2.6. Вынос оставшихся Fluent-конфигураций
+
+В отдельные `IEntityTypeConfiguration<T>` классы Infrastructure перенесены конфигурации `AccountSetting`, `Attachment`, `Login`, `Role`, `UserStatus`, `Broadcast`, `BroadcastRecipient`, `PushSubscription` и `ScheduledMessage`. В `RoleConfiguration` перенесены все шесть записей `HasData` с исходными GUID, названиями и описаниями.
+
+Сохранены заданные в контексте ключи и их имена, `ValueGeneratedNever`, индексы, имена FK constraints, правила удаления, SQL defaults (`gen_random_uuid()`, `now()`), имена/типы колонок, ограничения длины и таблица `Scheduled_Messages`. Аннотации моделей, включая `[Table]`, `[Column]`, `[ForeignKey]`, `[InverseProperty]` и `[JsonIgnore]`, пока не удалялись: они остаются частью действующей EF-модели.
+
+После переноса `OnModelCreating` содержит только настройки расширения PostgreSQL, MassTransit Inbox/Outbox и вызов `ApplyConfigurationsFromAssembly`, а также partial hook.
