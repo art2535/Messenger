@@ -164,3 +164,12 @@ Role остаётся доменной сущностью Core: роли опр�
 Связь User.Roles <-> Role.Users остаётся many-to-many и конфигурируется единообразно в UserConfiguration через join table User_Roles, с исходными именами колонок, PK и FK. Проверены потребители: UserService назначает роли и строит RoleDto, JwtService формирует role claims, AdminService проверяет административную роль, а Web использует claims для авторизации. Seed-данные шести ролей сохранены без изменений.
 
 Model Snapshot и исторические миграции не редактировались; схема и CLR-тип Messenger.Core.Models.Role не менялись.
+
+
+### 2.7.25–2.7.28. Полный аудит и очистка EF-аннотаций моделей
+
+Проведён полный аудит 18 EF-сущностей в `Messenger.Core/Models`, соответствующих Fluent-конфигураций и актуального ModelSnapshot. EF mapping attributes и EF/DataAnnotations imports удалены из всех 18 моделей. Fluent mapping дополнен явными именами таблиц и колонок, ограничениями строк, типами дат, ключами, индексами, defaults и связями в соответствии с текущей моделью хранения.
+
+Все предметные модели оставлены в Core; `Log`, `Login` и `PushSubscription` остаются в Infrastructure. Предметные свойства, CLR-типы, DbSet, навигации и `JsonIgnore` сохранены. ModelSnapshot и исторические миграции не менялись. Подробный реестр и ограничения проверки находятся в [ENTITY-AUDIT.md](ENTITY-AUDIT.md).
+
+Проверка всех 18 файлов моделей подтвердила отсутствие EF mapping attributes и EF-specific using. Ссылка `Microsoft.EntityFrameworkCore` в Core csproj пока оставлена до отдельного поиска EF-типов во всех исходниках Core. Сборка, тесты и автоматический EF model diff не запускались.

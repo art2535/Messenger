@@ -1,66 +1,44 @@
 # Аудит и очистка сущностей Core
 
-Актуально для ветки `refactor/architecture`, HEAD на момент аудита: `dec56375dd2ad30a5c7111b30cb89112bc17ea13`.
+Актуальное состояние ветки `refactor/architecture`. Аудит охватывает все 18 EF-сущностей из `Messenger.Core/Models`, их Fluent-конфигурации и актуальный ModelSnapshot.
 
-## Цель
+## Итог
 
-Убрать зависимость предметных моделей Core от EF Core mapping attributes. Схема БД, имена таблиц и колонок, ключи, индексы, ограничения, значения по умолчанию и поведение связей должны полностью задаваться Fluent API в Infrastructure.
+<badge>18 из 18 сущностей очищены от EF-аннотаций</badge>
 
-Не переносить предметные сущности в Infrastructure только из-за наличия FK или навигационных свойств. Не удалять навигации без отдельной проверки всех потребителей и сценариев сериализации.
-
-## Реестр сущностей
-
-| Сущность | Решение | Состояние / замечания |
+| Сущность | Размещение | Состояние |
 |---|---|---|
-| AccountSetting | Core | EF-аннотации уже удалены; mapping в AccountSettingConfiguration |
-| Attachment | Core | Требуется очистка атрибутов и полное описание колонок/таблицы в AttachmentConfiguration |
-| Broadcast | Core | Требуется очистка атрибутов; проверить nullable/required и DeleteBehavior для Sender |
-| BroadcastRecipient | Core | Требуется очистка атрибутов; сохранить составной ключ и обе связи |
-| Chat | Core | Требуется очистка атрибутов; явно описать Chats, колонки, creator FK и навигации |
-| ChatFolder | Core | Требуется очистка атрибутов; сохранить ChatFolders и связь с User |
-| ChatFolderChat | Core | Требуется очистка атрибутов; сохранить уникальный индекс FolderId + ChatId и обе связи |
-| ChatParticipant | Core | Требуется очистка атрибутов; сохранить составной PK, таблицу Chat_Participants и обе связи |
-| Message | Core | Требуется очистка атрибутов; явно описать Messages, все нестандартные колонки, индексы и связи |
-| MessageReport | Core | Требуется очистка атрибутов; проверить полное описание строковых ограничений и индексов |
-| ModerationLog | Core | Требуется очистка атрибутов; сохранить Moderation_Logs и строковые ограничения |
-| Notification | Core | Требуется очистка атрибутов; явно описать нестандартные имена колонок и значения по умолчанию |
-| Reaction | Core | Требуется очистка атрибутов; сохранить уникальный индекс MessageId + UserId и обе связи |
-| Role | Core | EF-аннотации уже удалены; mapping в RoleConfiguration |
-| ScheduledMessage | Core | Требуется очистка атрибутов; mapping уже содержит большую часть колонок, индексов и FK |
-| User | Core | EF-аннотации уже удалены; mapping в UserConfiguration |
-| UserMute | Core | Требуется очистка атрибутов; сохранить User_Mutes и все нестандартные имена колонок |
-| UserStatus | Core | Требуется очистка атрибутов; сохранить User_Statuses и one-to-one FK |
+| AccountSetting | Core | Очищена ранее, mapping в AccountSettingConfiguration |
+| Attachment | Core | Очищена, mapping в AttachmentConfiguration |
+| Broadcast | Core | Очищена, mapping в BroadcastConfiguration |
+| BroadcastRecipient | Core | Очищена, mapping в BroadcastRecipientConfiguration |
+| Chat | Core | Очищена, mapping в ChatConfiguration |
+| ChatFolder | Core | Очищена, mapping в ChatFolderConfiguration |
+| ChatFolderChat | Core | Очищена, mapping в ChatFolderChatConfiguration |
+| ChatParticipant | Core | Очищена, mapping в ChatParticipantConfiguration |
+| Message | Core | Очищена, mapping в MessageConfiguration |
+| MessageReport | Core | Очищена, mapping в MessageReportConfiguration |
+| ModerationLog | Core | Очищена, mapping в ModerationLogConfiguration |
+| Notification | Core | Очищена, mapping в NotificationConfiguration |
+| Reaction | Core | Очищена, mapping в ReactionConfiguration |
+| Role | Core | Очищена, mapping в RoleConfiguration |
+| ScheduledMessage | Core | Очищена, mapping в ScheduledMessageConfiguration |
+| User | Core | Очищена, mapping в UserConfiguration |
+| UserMute | Core | Очищена, mapping в UserMuteConfiguration |
+| UserStatus | Core | Очищена, mapping в UserStatusConfiguration |
 
-## Не являются предметными сущностями Core
+`UtcDateTime` — вспомогательный класс, не EF-сущность. Технические persistence-only сущности `Log`, `Login` и `PushSubscription` находятся в Infrastructure.
 
-Следующие persistence-only модели уже находятся в Infrastructure и должны там остаться:
+## Что сделано в ходе 2.7.25–2.7.28
 
-- `Log` — технические журналы.
-- `Login` — persistence-модель сессии/авторизации.
-- `PushSubscription` — техническая регистрация Web Push.
+- Проверены все 18 Core entities, их соответствующие конфигурации и актуальный `GuapMessengerContextModelSnapshot`.
+- Удалены EF mapping attributes и ненужные `System.ComponentModel.DataAnnotations*` / `Microsoft.EntityFrameworkCore` imports из всех 18 моделей.
+- Fluent-конфигурации дополнены явными именами таблиц и колонок, длинами строк, обязательностью, типами дат, ключами, индексами, SQL defaults и связями там, где это требовалось для замены атрибутов.
+- Сохранены предметные свойства, типы, значения и навигационные свойства. `JsonIgnore` не удалялся.
+- Сохранены существующие DbSet и CLR-типы `Messenger.Core.Models.*`; ModelSnapshot и исторические миграции не редактировались.
+- Вспомогательные сущности чатов, уведомления, статусы, рассылки и модерация очищены отдельными логическими наборами.
 
-`UtcDateTime` — доменный utility-класс, не EF entity и не часть очистки mapping.
-
-## Выявленные риски в текущем Fluent mapping
-
-Проверка текущих моделей, конфигураций и ModelSnapshot показала, что атрибуты пока не везде заменены эквивалентным Fluent API. Перед удалением атрибутов требуется дополнить конфигурации.
-
-- `AttachmentConfiguration`: явно указать таблицу Attachments и все колонки, включая File_Name, File_Type, Size_in_Bytes и URL.
-- `BroadcastConfiguration`: явно указать Message_Text и Title, ограничения Title, а также сверить обязательность SenderId с исторической моделью. В текущей конфигурации DeleteBehavior.SetNull сочетается с обязательным FK — это требует отдельной проверки и не должно молча корректироваться в рамках удаления атрибутов.
-- `ChatConfiguration`: явно указать таблицу Chats, Chat_ID, User_ID, Creation_Date, длины Name/Type и обязательность свойств.
-- `ChatParticipantConfiguration`: явно указать Chat_Participants и Chat_ID/User_ID/Join_Date, сохранив составной ключ и ограничения.
-- `MessageConfiguration`: явно указать Messages и все нестандартные колонки (Message_ID, Sender_ID, Chat_ID, Message_Text, Has_Attachments, Send_Time, Sequence_Number, Delivery_Status, Read_Time, Is_Pinned, Pinned_At).
-- `NotificationConfiguration`: явно указать Notification_ID, User_ID, Creation_Date, Read_At; Text и Read оставить с фактическими именами колонок.
-- `ReactionConfiguration`: явно указать Reactions, Reaction_ID, Message_ID, User_ID и Reaction_Type.
-- `ChatFolderConfiguration` / `ChatFolderChatConfiguration`: проверить полную явную настройку всех колонок, имена таблиц, ключи и индексы.
-- `MessageReportConfiguration`, `ModerationLogConfiguration`, `UserMuteConfiguration`, `UserStatusConfiguration`: проверить ограничения длины, типы timestamp with time zone, имена всех колонок и ключей.
-- `ScheduledMessageConfiguration`: mapping уже содержит основные имена колонок, но необходимо сверить его целиком с ModelSnapshot.
-
-## Навигации и связи
-
-На этапе очистки сохраняются существующие навигационные свойства. Это намеренное решение: текущие конфигурации и snapshot описывают связи, которые используются сервисами, контроллерами, SignalR и другими частями приложения. Удаление или замена навигации на scalar FK выполняется только отдельным изменением после проверки всех потребителей.
-
-Обязательные для сохранения связи:
+## Связи, которые сохранены
 
 - Chat — User (создатель), ChatParticipant, Message.
 - ChatParticipant — Chat и User.
@@ -76,25 +54,18 @@
 - UserStatus — User (one-to-one).
 - MessageReport — Message.
 - AccountSetting — User (one-to-one).
-- User — роли (many-to-many), а также остальные существующие предметные коллекции.
+- User — Role (many-to-many) и остальные существующие предметные коллекции.
 
-## ModelSnapshot и миграции
+Навигации не удалялись: в рамках очистки mapping это позволило не менять потребителей и поведение загрузки/сериализации. Их дальнейшее устранение — отдельная задача по переводу Infrastructure на persistence entities и DTO, а не механическая часть удаления атрибутов.
 
-ModelSnapshot подтверждает текущие имена таблиц/колонок, ключи, индексы, ограничения, значения по умолчанию и связи. Он должен оставаться согласованным с итоговой моделью. Исторические миграции не редактировать.
+## Особые замечания по mapping
 
-После каждого логического набора очистки требуется:
-1. Сверить Fluent mapping с текущим ModelSnapshot.
-2. Проверить, что EF model diff не предлагает неожиданных изменений схемы.
-3. Проверить отсутствие EF mapping attributes и ссылок на EF Core в очищенных Core-моделях.
-4. Запустить сборку и тесты, если доступна среда выполнения.
+- У `Broadcast.SenderId` сохранена текущая конфигурация `DeleteBehavior.SetNull` вместе с required FK, поскольку именно такое состояние отражено в текущем ModelSnapshot. Это потенциально противоречивая комбинация, требующая отдельного решения по бизнес-правилу и миграции; в рамках очистки она не исправлялась.
+- Для связей, индексов и SQL defaults сохранены текущие настройки из Fluent-конфигураций/ModelSnapshot; исторические миграции не менялись.
+- `Messenger.Core.csproj` пока всё ещё содержит ссылку на `Microsoft.EntityFrameworkCore`. Удаление PackageReference отложено до отдельного полного поиска EF-типов во всех исходниках Core. Это не означает, что в 18 моделях остались EF-аннотации: проверка файлов моделей подтвердила отсутствие EF attributes и EF-specific using.
 
-## Порядок реализации
+## Проверка
 
-1. Основные сущности чатов и сообщений: Chat, ChatParticipant, Message, Attachment, Reaction.
-2. Вспомогательные сущности чатов: ChatFolder, ChatFolderChat, ScheduledMessage.
-3. Уведомления и статусы: Notification, UserStatus.
-4. Рассылки: Broadcast, BroadcastRecipient.
-5. Модерация: MessageReport, ModerationLog, UserMute.
-6. Финальный аудит всех Core/Models и сверка snapshot.
+Для всех 18 файлов `Messenger.Core/Models/*.cs` выполнена проверка: не обнаружены EF mapping attributes и using из `Microsoft.EntityFrameworkCore` / `System.ComponentModel.DataAnnotations`.
 
-На момент создания документа сборка, тесты и EF model diff не запускались.
+Не запускались `dotnet build`, `dotnet test`, генерация пробной миграции или автоматическое сравнение EF model с snapshot. Поэтому компиляция и полная эквивалентность runtime EF-модели пока не подтверждены. Перед созданием миграций необходимо выполнить model diff и проверить схему на копии PostgreSQL базы.
