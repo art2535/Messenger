@@ -83,7 +83,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var userId = await User.GetCurrentUserIdAsync(_userService, ct);
 
                 if (string.IsNullOrWhiteSpace(query))
                 {
@@ -155,7 +155,7 @@ namespace Messenger.API.Controllers
                     return StatusCode(StatusCodes.Status429TooManyRequests, ApiResponse.Failure("Слишком много запросов. Подождите немного и попробуйте снова.", "RATE_LIMIT_EXCEEDED"));
                 }
 
-                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var userId = await User.GetCurrentUserIdAsync(_userService, ct);
                 var user = await _userService.GetUserByIdAsync(userId, ct);
                 if (user == null)
                 {
@@ -380,7 +380,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var userId = await User.GetCurrentUserIdAsync(_userService, ct);
                 var user = await _userService.GetUserByIdAsync(userId, ct);
                 if (user == null)
                 {
@@ -802,7 +802,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var userId = await User.GetCurrentUserIdAsync(_userService, ct);
 
                 var chat = await _chatService.GetChatByIdAsync(chatId, userId, ct);
                 if (chat == null)
@@ -881,7 +881,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var userId = await User.GetCurrentUserIdAsync(_userService, ct);
 
                 var (messages, hasMore) = await _messageService.GetMessagesPagedAsync(
                     chatId, userId, beforeSequence, limit, ct);
@@ -928,7 +928,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var userId = await User.GetCurrentUserIdAsync(_userService, ct);
 
                 var participants = await _chatService.GetChatParticipantsAsync(chatId, userId, ct);
                 if (!participants.Any(p => p.UserId == userId))
@@ -989,7 +989,7 @@ namespace Messenger.API.Controllers
 
             try
             {
-                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var userId = await User.GetCurrentUserIdAsync(_userService, ct);
 
                 var message = await _messageService.GetMessageByIdAsync(request.ChatId, messageId, userId, ct);
                 if (message == null)
@@ -1056,7 +1056,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var userId = await User.GetCurrentUserIdAsync(_userService, ct);
 
                 var message = await _messageService.GetMessageByIdAsync(chatId, messageId, userId, ct);
                 if (message == null)
@@ -1124,7 +1124,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var userId = await User.GetCurrentUserIdAsync(_userService, ct);
 
                 if (request == null || request.MessageIds == null || request.MessageIds.Count == 0)
                 {
@@ -1238,7 +1238,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var userId = await User.GetCurrentUserIdAsync(_userService, ct);
 
                 MessageDto? message;
                 try
@@ -1312,7 +1312,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var userId = await User.GetCurrentUserIdAsync(_userService, ct);
 
                 MessageDto? message;
                 try
@@ -1383,7 +1383,7 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var userId = await User.GetCurrentUserIdAsync(_userService);
+                var userId = await User.GetCurrentUserIdAsync(_userService, ct);
 
                 var chat = await _chatService.GetChatByIdAsync(chatId, userId, ct);
                 if (chat == null || !chat.Participants.Any(p => p.UserId == userId))
