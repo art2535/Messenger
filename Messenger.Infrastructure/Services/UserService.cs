@@ -123,10 +123,18 @@ namespace Messenger.Infrastructure.Services
 
             await using var sourceStream = file.OpenReadStream();
             using var memoryStream = new MemoryStream();
-            await sourceStream.CopyToAsync(memoryStream, token);
+            var buffer = new byte[81920];
+            int bytesRead;
+            while ((bytesRead = await sourceStream.ReadAsync(buffer.AsMemory(), token)) > 0)
+            {
+                if (memoryStream.Length + bytesRead > maxFileSize)
+                    throw new ArgumentException("Размер изображения не должен превышать 2 МБ");
 
-            if (memoryStream.Length == 0 || memoryStream.Length > maxFileSize)
-                throw new ArgumentException("Размер изображения должен быть больше 0 и не превышать 2 МБ");
+                await memoryStream.WriteAsync(buffer.AsMemory(0, bytesRead), token);
+            }
+
+            if (memoryStream.Length == 0)
+                throw new ArgumentException("Файл изображения пуст");
 
             var imageBytes = memoryStream.ToArray();
             if (!HasValidImageSignature(imageBytes, fileExtension))
