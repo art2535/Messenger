@@ -153,6 +153,10 @@ namespace Messenger.API.Controllers
                     await _hubContext.Clients.Group($"User_{user.UserId}")
                         .SendAsync("ScheduledMessageCreated", dto, ct);
                 }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
                 catch (Exception ex)
                 {
                     _logger.LogWarning(ex, "SignalR ScheduledMessageCreated failed");
@@ -168,6 +172,10 @@ namespace Messenger.API.Controllers
             catch (ArgumentException ex)
             {
                 return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -200,6 +208,10 @@ namespace Messenger.API.Controllers
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при получении списка запланированных сообщений");
                 return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -234,6 +246,10 @@ namespace Messenger.API.Controllers
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при получении запланированных сообщений чата {ChatId}", chatId);
                 return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -290,6 +306,10 @@ namespace Messenger.API.Controllers
                     await _hubContext.Clients.Group($"User_{user.UserId}")
                         .SendAsync("ScheduledMessageUpdated", dto, ct);
                 }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
                 catch (Exception ex)
                 {
                     _logger.LogWarning(ex, "SignalR ScheduledMessageUpdated failed");
@@ -309,6 +329,10 @@ namespace Messenger.API.Controllers
             catch (InvalidOperationException ex)
             {
                 return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -348,6 +372,10 @@ namespace Messenger.API.Controllers
                     await _hubContext.Clients.Group($"User_{user.UserId}")
                         .SendAsync("ScheduledMessageCancelled", new { ScheduledMessageId = scheduledMessageId }, ct);
                 }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
                 catch (Exception ex)
                 {
                     _logger.LogWarning(ex, "SignalR ScheduledMessageCancelled failed");
@@ -359,6 +387,10 @@ namespace Messenger.API.Controllers
             {
                 _logger.LogWarning(ex, "Ошибка авторизации при отмене запланированного сообщения {Id}", scheduledMessageId);
                 return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
