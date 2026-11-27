@@ -116,7 +116,7 @@ GitHub-изменения проверены чтением файлов и Git 
 
 Исправлена противоречивая связь Broadcast: автор теперь nullable, FK сохраняет `ON DELETE SET NULL`, а миграция `20261127200000_MakeBroadcastSenderOptional` переводит `Sender_ID` в nullable. Это позволяет удалять аккаунт, сохраняя рассылку и историю её получателей; просмотр сводки рассылки без автора остаётся доступен администраторам.
 
-Укреплена `GuapMessengerContextFactory`: путь к API-проекту ищется относительно cwd и каталога сборки, конфигурационные JSON-файлы необязательны, переменные окружения имеют приоритет. Identity NuGet packages остаются на проверку до завершения полного usage audit.
+Укреплена `GuapMessengerContextFactory`: путь к API-проекту ищется относительно cwd и каталога сборки, конфигурационные JSON-файлы необязательны, переменные окружения имеют приоритет. Полный usage audit Infrastructure не выявил использования ASP.NET Core Identity; пакеты `Microsoft.AspNetCore.Identity.EntityFrameworkCore` и `Microsoft.Extensions.Identity.Core` удалены. JWT packages и `MassTransit.EntityFrameworkCore` сохранены как используемые зависимости.
 
 Подробности, подтверждённые файлы и последовательность исправлений: [INFRASTRUCTURE-AUDIT.md](INFRASTRUCTURE-AUDIT.md).
 

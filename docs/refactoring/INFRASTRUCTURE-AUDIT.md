@@ -48,7 +48,7 @@
 
 Проверка consumers: создание рассылки по-прежнему требует существующий `senderId`; идентификатор используется в проверке владельца сводки, а UI не требует навигацию Sender. Получатели и их статусы чтения не зависят от наличия автора.
 
-### Средний приоритет: хрупкая design-time конфигурация DbContext
+### Исправлено: design-time конфигурация DbContext
 
 `GuapMessengerContextFactory` обновлена: каталог API-проекта ищется вверх от текущего рабочего каталога и `AppContext.BaseDirectory`, поэтому запуск из solution root, каталога Infrastructure или API не зависит от фиксированного `../Messenger.API`. Конфигурация загружает необязательные `appsettings.json` и `appsettings.{Environment}.json`, затем переменные окружения (включая `ConnectionStrings__DefaultConnection`). Окружение берётся из `DOTNET_ENVIRONMENT` / `ASPNETCORE_ENVIRONMENT`, по умолчанию — Development. Отсутствующая строка подключения приводит к понятной ошибке без вывода секрета.
 
@@ -58,9 +58,17 @@
 
 У `GuapMessengerContext` есть публичный parameterless constructor и пустой `OnConfiguring`. Контекст штатно получает `DbContextOptions` через DI, а для design-time существует отдельная factory. Проверить, нужен ли parameterless constructor каким-либо tooling/тестам; если нет — удалить его в отдельном безопасном изменении. Пустой `OnConfiguring` можно удалить без изменения конфигурации, но это следует объединить с проверкой design-time сценариев.
 
-### Требует отдельной проверки: NuGet dependencies
+### Удалены неиспользуемые Identity NuGet dependencies
 
-В `Messenger.Infrastructure.csproj` есть `Microsoft.AspNetCore.Identity.EntityFrameworkCore` и `Microsoft.Extensions.Identity.Core`. В просмотренных сервисах аутентификация/хеширование выполняются через собственные JWT/BCrypt-компоненты; явного использования Identity DbContext/PasswordHasher в проверенных файлах не обнаружено. Не удалять пакеты до полного поиска по всем исходникам, generated files и build targets. `MassTransit.EntityFrameworkCore` используется для регистрации Inbox/Outbox entities в DbContext и не является очевидно лишним.
+Проверены все 22 исходных файла сервисов Infrastructure, Fluent API configurations, DbContext, persistence entities и миграционный слой. Использований `IdentityDbContext`, `UserManager`, `SignInManager`, `PasswordHasher`, Identity user/role types или соответствующих extension methods не обнаружено. Аутентификация реализована собственными JWT-компонентами, хеширование паролей — BCrypt.
+
+Из `Messenger.Infrastructure.csproj` удалены:
+- `Microsoft.AspNetCore.Identity.EntityFrameworkCore`;
+- `Microsoft.Extensions.Identity.Core`.
+
+Пакеты `Microsoft.IdentityModel.Tokens` и `System.IdentityModel.Tokens.Jwt` оставлены: они относятся к используемой JWT-реализации. `MassTransit.EntityFrameworkCore` также оставлен для Inbox/Outbox entities.
+
+Ограничение: удаление пакетов требует подтверждения сборкой и restore в среде с .NET SDK; статический usage audit не заменяет проверку MSBuild targets и транзитивных package assets.
 
 ## Что не следует делать
 
