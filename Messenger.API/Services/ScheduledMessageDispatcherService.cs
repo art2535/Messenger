@@ -5,6 +5,7 @@ using Messenger.Application.Messages;
 using Messenger.Core.Models;
 using Microsoft.AspNetCore.SignalR;
 using Messenger.Realtime.Hubs;
+using Messenger.Infrastructure.Services;
 
 namespace Messenger.API.Services;
 
@@ -16,12 +17,18 @@ public class ScheduledMessageDispatcherService : BackgroundService
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<ScheduledMessageDispatcherService> _logger;
+    private readonly RedisDistributedLock _distributedLock;
+    private const string LockKey = "messenger:lock:scheduled-message-dispatcher";
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(5);
-public ScheduledMessageDispatcherService(IServiceScopeFactory scopeFactory,
-        ILogger<ScheduledMessageDispatcherService> logger)
+
+    public ScheduledMessageDispatcherService(
+        IServiceScopeFactory scopeFactory,
+        ILogger<ScheduledMessageDispatcherService> logger,
+        RedisDistributedLock distributedLock)
     {
         _scopeFactory = scopeFactory;
         _logger = logger;
+        _distributedLock = distributedLock;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -61,6 +68,15 @@ public ScheduledMessageDispatcherService(IServiceScopeFactory scopeFactory,
 
     private async Task ProcessDueAsync(CancellationToken ct)
     {
+        // Не допускаем параллельную отправку одной и той же очереди разными API-репликами.
+        await using var lockHandle = await _distributedLock.TryAcquireAsync(
+            LockKey, TimeSpan.FromMinutes(10), ct);
+        if (lockHandle is null)
+        {
+            _logger.LogDebug("ScheduledMessageDispatcher: тик пропущен — другая реплика держит lock");
+            return;
+        }
+
         using var scope = _scopeFactory.CreateScope();
         var scheduledService = scope.ServiceProvider.GetRequiredService<IScheduledMessageService>();
         var publishEndpoint = scope.ServiceProvider.GetRequiredService<IPublishEndpoint>();
@@ -136,6 +152,10 @@ public ScheduledMessageDispatcherService(IServiceScopeFactory scopeFactory,
                 _logger.LogInformation(
                     "Scheduled {ScheduledId} → Message {MessageId} published for chat {ChatId}",
                     item.ScheduledMessageId, messageId, item.ChatId);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                break;
             }
             catch (Exception ex)
             {
