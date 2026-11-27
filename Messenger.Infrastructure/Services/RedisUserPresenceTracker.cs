@@ -72,6 +72,7 @@ public sealed class RedisUserPresenceTracker : IUserPresenceTracker
 
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         var expiry = now + (long)LeaseDuration.TotalMilliseconds;
+        Task<RedisResult>? connectTask = null;
         try
         {
             bool becameOnline;
@@ -86,15 +87,23 @@ public sealed class RedisUserPresenceTracker : IUserPresenceTracker
             }
             else
             {
-                var previous = (long)await _database.ScriptEvaluateAsync(
+                connectTask = _database.ScriptEvaluateAsync(
                     ConnectScript,
                     new RedisKey[] { GetKey(userId) },
                     new RedisValue[] { now, expiry, connectionId, (long)(LeaseDuration.TotalMilliseconds * 2) });
+                var previous = (long)await connectTask.WaitAsync(cancellationToken);
                 becameOnline = previous == 0;
                 _localUsers.GetOrAdd(userId, _ => new ConcurrentDictionary<string, byte>()).TryAdd(connectionId, 0);
             }
 
             return becameOnline;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            _localConnections.TryRemove(connectionId, out _);
+            if (connectTask is not null)
+                _ = CleanupCancelledConnectAsync(connectTask, userId, connectionId);
+            throw;
         }
         catch
         {
@@ -133,7 +142,7 @@ public sealed class RedisUserPresenceTracker : IUserPresenceTracker
         var count = (long)await _database.ScriptEvaluateAsync(
             DisconnectScript,
             new RedisKey[] { GetKey(userId) },
-            new RedisValue[] { now, connectionId });
+            new RedisValue[] { now, connectionId }).WaitAsync(cancellationToken);
         return count == 0;
     }
 
@@ -148,7 +157,7 @@ public sealed class RedisUserPresenceTracker : IUserPresenceTracker
         var count = (long)await _database.ScriptEvaluateAsync(
             HasConnectionsScript,
             new RedisKey[] { GetKey(userId) },
-            new RedisValue[] { now });
+            new RedisValue[] { now }).WaitAsync(cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
         return count > 0;
     }
@@ -177,7 +186,33 @@ public sealed class RedisUserPresenceTracker : IUserPresenceTracker
                 args[i + 2] = connections[i];
             args[^1] = ttl;
 
-            await _database.ScriptEvaluateAsync(HeartbeatScript, new RedisKey[] { GetKey(user.Key) }, args);
+            await _database.ScriptEvaluateAsync(
+                HeartbeatScript,
+                new RedisKey[] { GetKey(user.Key) },
+                args).WaitAsync(cancellationToken);
+        }
+    }
+
+    private async Task CleanupCancelledConnectAsync(
+        Task<RedisResult> connectTask,
+        Guid userId,
+        string connectionId)
+    {
+        try
+        {
+            await connectTask.ConfigureAwait(false);
+
+            var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            await _database!.ScriptEvaluateAsync(
+                DisconnectScript,
+                new RedisKey[] { GetKey(userId) },
+                new RedisValue[] { now, connectionId }).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Не удалось компенсировать отменённый Presence connect для {ConnectionId}; lease истечёт автоматически",
+                connectionId);
         }
     }
 
