@@ -22,7 +22,7 @@ EXPECTED = {
     "Infrastructure": {"Core", "Application"},
     "Realtime": {"Application"},
     "API": {"Application", "Infrastructure", "Realtime"},
-    "Web": {"Core", "Application"},
+    "Web": {"Application", "Realtime"},
     "AppHost": set(),
 }
 
