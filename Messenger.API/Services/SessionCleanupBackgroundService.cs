@@ -4,7 +4,6 @@ using Messenger.Realtime.Hubs;
 using Messenger.Application.Interfaces;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Options;
-using Messenger.Core.Models;
 using Messenger.Infrastructure.Services;
 
 namespace Messenger.API.Services
