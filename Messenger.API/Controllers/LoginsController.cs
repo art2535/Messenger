@@ -2,7 +2,6 @@
 using Messenger.API.Extensions;
 using Messenger.Core.DTOs.Logins;
 using Messenger.Application.DTOs.Logins;
-using Messenger.Core.Interfaces;
 using Messenger.Application.Interfaces;
 using Messenger.Core.Models;
 using Messenger.Core.Responses;

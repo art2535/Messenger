@@ -5,7 +5,6 @@ using Messenger.Core.DTOs.Messages;
 using Messenger.Application.DTOs.Messages;
 using Messenger.Core.Enums;
 using Messenger.Realtime.Hubs;
-using Messenger.Core.Interfaces;
 using Messenger.Application.Interfaces;
 using Messenger.Core.Messages;
 using Messenger.Application.Messages;
