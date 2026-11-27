@@ -335,64 +335,6 @@ public partial class GuapMessengerContext : DbContext
                 .HasConstraintName("fk_push_subscription_user");
         });
 
-        modelBuilder.Entity<ChatFolder>(entity =>
-        {
-            entity.ToTable("ChatFolders");
-            entity.HasKey(e => e.FolderId);
-            entity.Property(e => e.Name).HasMaxLength(64).IsRequired();
-            entity.HasIndex(e => e.UserId);
-            entity.HasOne(e => e.User).WithMany().HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.Cascade);
-        });
-
-        modelBuilder.Entity<ChatFolderChat>(entity =>
-        {
-            entity.ToTable("ChatFolderChats");
-            entity.HasKey(e => e.Id);
-            entity.HasIndex(e => new { e.FolderId, e.ChatId }).IsUnique();
-            entity.HasOne(e => e.Folder).WithMany(f => f.Chats).HasForeignKey(e => e.FolderId).OnDelete(DeleteBehavior.Cascade);
-            entity.HasOne(e => e.Chat).WithMany().HasForeignKey(e => e.ChatId).OnDelete(DeleteBehavior.Cascade);
-        });
-
-        modelBuilder.Entity<MessageReport>(entity =>
-        {
-            entity.ToTable("Message_Reports");
-            entity.HasKey(e => e.ReportId);
-            entity.Property(e => e.ReportId).HasColumnName("Report_ID");
-            entity.Property(e => e.MessageId).HasColumnName("Message_ID");
-            entity.Property(e => e.ChatId).HasColumnName("Chat_ID");
-            entity.Property(e => e.ReporterId).HasColumnName("Reporter_ID");
-            entity.Property(e => e.CreatedAt).HasColumnName("Created_At");
-            entity.Property(e => e.ReviewedAt).HasColumnName("Reviewed_At");
-            entity.Property(e => e.ReviewedBy).HasColumnName("Reviewed_By");
-            entity.Property(e => e.AdminNote).HasColumnName("Admin_Note");
-            entity.HasIndex(e => e.Status);
-        });
-
-        modelBuilder.Entity<UserMute>(entity =>
-        {
-            entity.ToTable("User_Mutes");
-            entity.HasKey(e => e.MuteId);
-            entity.Property(e => e.MuteId).HasColumnName("Mute_ID");
-            entity.Property(e => e.UserId).HasColumnName("User_ID");
-            entity.Property(e => e.ChatId).HasColumnName("Chat_ID");
-            entity.Property(e => e.MutedBy).HasColumnName("Muted_By");
-            entity.Property(e => e.MutedUntil).HasColumnName("Muted_Until");
-            entity.Property(e => e.CreatedAt).HasColumnName("Created_At");
-            entity.Property(e => e.IsActive).HasColumnName("Is_Active");
-        });
-
-        modelBuilder.Entity<ModerationLog>(entity =>
-        {
-            entity.ToTable("Moderation_Logs");
-            entity.HasKey(e => e.LogId);
-            entity.Property(e => e.LogId).HasColumnName("Log_ID");
-            entity.Property(e => e.ActorId).HasColumnName("Actor_ID");
-            entity.Property(e => e.TargetUserId).HasColumnName("Target_User_ID");
-            entity.Property(e => e.ChatId).HasColumnName("Chat_ID");
-            entity.Property(e => e.MessageId).HasColumnName("Message_ID");
-            entity.Property(e => e.CreatedAt).HasColumnName("Created_At");
-        });
-
         modelBuilder.Entity<Core.Models.ScheduledMessage>(entity =>
         {
             entity.ToTable("Scheduled_Messages");
