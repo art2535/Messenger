@@ -19,7 +19,7 @@ EXPECTED = {
     "Application": {"Core"},
     "Infrastructure": {"Core", "Application"},
     "API": {"Application", "Infrastructure"},
-    "Web": {"Core"},
+    "Web": {"Core", "Application"},
 }
 
 

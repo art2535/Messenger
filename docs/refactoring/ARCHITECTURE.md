@@ -14,7 +14,7 @@ Baseline зафиксирован на commit `6524a3a322c8a745fb94f800a6dd0afc2
 | Messenger.Application | Messenger.Core |
 | Messenger.Infrastructure | Messenger.Core, Messenger.Application |
 | Messenger.API | Messenger.Application, Messenger.Infrastructure |
-| Messenger.Web | Messenger.Core |
+| Messenger.Web | Messenger.Core, Messenger.Application |
 | Messenger.AppHost | нет |
 
 API получает типы Core транзитивно через Infrastructure.
@@ -25,7 +25,7 @@ API получает типы Core транзитивно через Infrastruct
 - Application ссылается только на Core.
 - Infrastructure ссылается на Application и Core.
 - API ссылается на Application и Infrastructure.
-- Web ссылается только на Core.
+- Web может ссылаться на Application и Core; бизнес-логика и persistence остаются вне Web.
 - AppHost остаётся точкой композиции Aspire и не содержит бизнес-логики.
 
 Автоматическая проверка прямых ссылок: `python3 scripts/check-architecture.py`. Она также запускается в GitLab CI, но не заменяет сборку и тесты.
