@@ -60,7 +60,23 @@ namespace Messenger.Infrastructure.Services
 
         public async Task AddSubscriptionAsync(Guid userId, CreatePushSubscriptionDto subscription, CancellationToken ct = default)
         {
-            var entity = new PushSubscriptionEntity
+            ArgumentNullException.ThrowIfNull(subscription);
+            if (string.IsNullOrWhiteSpace(subscription.Endpoint)
+                || string.IsNullOrWhiteSpace(subscription.P256dh)
+                || string.IsNullOrWhiteSpace(subscription.Auth))
+                throw new ArgumentException("Push-подписка содержит пустые обязательные поля", nameof(subscription));
+
+            // Endpoint идентифицирует конкретную browser subscription. Сериализуем
+            // регистрацию одного endpoint и переносим его к текущему владельцу.
+            await using var transaction = await _context.Database.BeginTransactionAsync(ct);
+            await _context.Database.ExecuteSqlInterpolatedAsync(
+                $"SELECT pg_advisory_xact_lock(hashtextextended({subscription.Endpoint}, 0))", ct);
+
+            await _context.PushSubscriptions
+                .Where(s => s.Endpoint == subscription.Endpoint)
+                .ExecuteDeleteAsync(ct);
+
+            _context.PushSubscriptions.Add(new PushSubscriptionEntity
             {
                 UserId = userId,
                 Endpoint = subscription.Endpoint,
@@ -68,10 +84,9 @@ namespace Messenger.Infrastructure.Services
                 Auth = subscription.Auth,
                 CreatedAt = UtcDateTime.Now,
                 LastUsedAt = UtcDateTime.Now
-            };
-
-            _context.PushSubscriptions.Add(entity);
+            });
             await _context.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
         }
 
         public async Task EnsurePushEnabledAsync(Guid userId, CancellationToken token = default)
@@ -100,25 +115,23 @@ namespace Messenger.Infrastructure.Services
             }
         }
 
-        public async Task RemoveSubscriptionAsync(Guid id, CancellationToken ct = default)
+        public async Task RemoveSubscriptionAsync(Guid userId, Guid id, CancellationToken ct = default)
         {
             await _context.PushSubscriptions
-                .Where(s => s.Id == id)
+                .Where(s => s.Id == id && s.UserId == userId)
                 .ExecuteDeleteAsync(ct);
         }
 
-        public async Task UpdateSubscriptionAsync(UpdatePushSubscriptionDto subscription, CancellationToken ct = default)
+        public async Task UpdateSubscriptionAsync(Guid userId, UpdatePushSubscriptionDto subscription, CancellationToken ct = default)
         {
-            var entity = await _context.PushSubscriptions.FindAsync(new object[] { subscription.Id }, ct);
-            if (entity == null)
-                return;
-
-            entity.Endpoint = subscription.Endpoint;
-            entity.P256dh = subscription.P256dh;
-            entity.Auth = subscription.Auth;
-            entity.LastUsedAt = subscription.LastUsedAt;
-
-            await _context.SaveChangesAsync(ct);
+            ArgumentNullException.ThrowIfNull(subscription);
+            await _context.PushSubscriptions
+                .Where(s => s.Id == subscription.Id && s.UserId == userId)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(s => s.Endpoint, subscription.Endpoint)
+                    .SetProperty(s => s.P256dh, subscription.P256dh)
+                    .SetProperty(s => s.Auth, subscription.Auth)
+                    .SetProperty(s => s.LastUsedAt, UtcDateTime.Now), ct);
         }
 
         public async Task RemoveByEndpointAsync(Guid userId, string endpoint, CancellationToken ct = default)
@@ -322,7 +335,7 @@ namespace Messenger.Infrastructure.Services
                                 var subEntity = await _context.PushSubscriptions.FindAsync(new object[] { sub.Id }, cancellationToken);
                                 if (subEntity != null)
                                 {
-                                    subEntity.LastUsedAt = DateTime.UtcNow;
+                                    subEntity.LastUsedAt = UtcDateTime.Now;
                                     await _context.SaveChangesAsync(cancellationToken);
                                 }
                             }
@@ -331,14 +344,9 @@ namespace Messenger.Infrastructure.Services
                                                                  webEx.Message.Contains("expired"))
                             {
                                 _logger.LogWarning("Подписка пользователя {UserId} устарела. Удаляем...", participant.UserId);
-                                var toRemove = await _context.PushSubscriptions
-                                    .Where(s => s.Endpoint == sub.Endpoint)
-                                    .ToListAsync(cancellationToken);
-                                if (toRemove.Any())
-                                {
-                                    _context.PushSubscriptions.RemoveRange(toRemove);
-                                    await _context.SaveChangesAsync(cancellationToken);
-                                }
+                                await _context.PushSubscriptions
+                                    .Where(s => s.Id == sub.Id && s.UserId == participant.UserId)
+                                    .ExecuteDeleteAsync(cancellationToken);
                             }
                             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                             {

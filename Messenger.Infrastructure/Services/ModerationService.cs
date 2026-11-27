@@ -34,8 +34,14 @@ namespace Messenger.Infrastructure.Services
             if (!isParticipant)
                 throw new UnauthorizedAccessException("Пожаловаться можно только на сообщение из чата, участником которого вы являетесь");
 
-            if (string.IsNullOrWhiteSpace(request.Reason))
+            var reason = request.Reason?.Trim();
+            var comment = request.Comment?.Trim();
+            if (string.IsNullOrWhiteSpace(reason))
                 throw new ArgumentException("Причина жалобы обязательна");
+            if (reason.Length > 64)
+                throw new ArgumentException("Причина жалобы не должна превышать 64 символа");
+            if (comment?.Length > 1000)
+                throw new ArgumentException("Комментарий не должен превышать 1000 символов");
 
             var report = new MessageReport
             {
@@ -43,8 +49,8 @@ namespace Messenger.Infrastructure.Services
                 MessageId = msg.MessageId,
                 ChatId = msg.ChatId,
                 ReporterId = reporterId,
-                Reason = request.Reason.Trim(),
-                Comment = request.Comment?.Trim(),
+                Reason = reason,
+                Comment = comment,
                 Status = "pending",
                 CreatedAt = UtcDateTime.Now
             };
@@ -70,6 +76,8 @@ namespace Messenger.Infrastructure.Services
         {
             if (request.DurationMinutes <= 0 || request.DurationMinutes > 60 * 24 * 30)
                 throw new InvalidOperationException("Длительность mute: 1 мин — 30 дней");
+            if (request.Reason?.Length > 500)
+                throw new ArgumentException("Причина mute не должна превышать 500 символов");
 
             var mute = new UserMute
             {
@@ -188,6 +196,8 @@ namespace Messenger.Infrastructure.Services
             var normalizedStatus = status?.Trim().ToLowerInvariant();
             if (normalizedStatus is not ("resolved" or "dismissed"))
                 throw new ArgumentException("Статус жалобы должен быть resolved или dismissed");
+            if (note?.Length > 1000)
+                throw new ArgumentException("Примечание администратора не должно превышать 1000 символов");
 
             // Conditional UPDATE makes review single-winner under concurrent admin requests.
             // The status transition and its audit record commit in the same transaction.

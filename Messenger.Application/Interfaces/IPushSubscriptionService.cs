@@ -19,6 +19,7 @@ public interface IPushSubscriptionService
         CancellationToken cancellationToken = default);
 
     Task RemoveSubscriptionAsync(
+        Guid userId,
         Guid id,
         CancellationToken cancellationToken = default);
 
@@ -32,6 +33,7 @@ public interface IPushSubscriptionService
         CancellationToken cancellationToken = default);
 
     Task UpdateSubscriptionAsync(
+        Guid userId,
         UpdatePushSubscriptionDto subscription,
         CancellationToken cancellationToken = default);
 
