@@ -106,3 +106,18 @@ GitHub-изменения проверены чтением файлов и Git 
 - Внешняя зависимость MassTransit.Abstractions в Application сохранена намеренно на этом шаге: атрибут `MessageUrn` является частью текущего интеграционного контракта. Её возможное отделение требует отдельного решения по стабильности сериализации/URN и совместимости producer/consumer.
 - `dotnet build`, `dotnet test` и запуск guard локально не выполнялись: в рабочей среде отсутствует .NET SDK; Python guard не запускался в этой сессии.
 - Следующий этап — аудит EF entities, конфигураций и persistence contracts в Infrastructure, с проверкой реальных consumers перед любым переносом типов.
+
+
+## Подэтап backend: аудит Messenger.Infrastructure
+
+На ревизии `92e5052babf3dd69f8aecead0f41823c74b2bb34` проверены project dependencies, DbContext/design-time factory, Fluent API configurations, persistence-only entities, ключевые миграции и основные EF/Redis сервисы.
+
+Архитектурная граница выдержана: Infrastructure зависит только от Core и Application; EF Core/Npgsql/Redis/MassTransit EF находятся в Infrastructure; конфигурации EF, DbContext, миграции и persistence-only entities не протекают в Core/Application. Большинство прикладных сервисов реализуют Application-интерфейсы и работают с DbContext напрямую. Универсальный generic repository не вводится; специализированные persistence contracts выделяются по необходимости.
+
+Найдено противоречие схемы Broadcast: `SenderId` и связь обязательные, но FK настроен как `ON DELETE SET NULL`. Такое удаление пользователя не сможет завершиться при NOT NULL колонке. Требуется выбрать продуктовую семантику: nullable sender с новой миграцией или запрет удаления автора через Restrict/NoAction. До решения схему не меняли.
+
+Также отмечена хрупкость `GuapMessengerContextFactory`: путь к API appsettings зависит от cwd и безусловно использует Development config. Проверка лишних Identity NuGet packages оставлена отдельной задачей до полного usage audit.
+
+Подробности, подтверждённые файлы и последовательность исправлений: [INFRASTRUCTURE-AUDIT.md](INFRASTRUCTURE-AUDIT.md).
+
+Ограничения: аудит статический; build/test, EF migration generation и PostgreSQL integration checks не выполнялись из-за отсутствия .NET SDK/runtime в среде.
