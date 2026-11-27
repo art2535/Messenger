@@ -40,29 +40,18 @@ namespace Messenger.Infrastructure.Services
             if (ids.Count == 0)
                 return;
 
-            var withIdleOn = await _context.AccountSettings
-                .AsNoTracking()
-                .Where(s => ids.Contains(s.AccountId) && s.IdleLogout)
-                .Select(s => s.AccountId)
-                .ToListAsync(cancellationToken);
-
-            var hasSettings = await _context.AccountSettings
-                .AsNoTracking()
-                .Where(s => ids.Contains(s.AccountId))
-                .Select(s => s.AccountId)
-                .ToListAsync(cancellationToken);
-
-            var withoutSettings = ids.Except(hasSettings).ToList();
-            var toClose = withIdleOn.Concat(withoutSettings).Distinct().ToList();
-            if (toClose.Count == 0)
-                return;
-
+            // Закрываем сессии, если настройки отсутствуют или IdleLogout включён.
+            // Проверка через NOT EXISTS выполняется в одном SQL-запросе.
+            var now = UtcDateTime.Now;
             await _context.Logins
-                .Where(l => toClose.Contains(l.UserId) && l.Active)
+                .Where(l => ids.Contains(l.UserId)
+                    && l.Active
+                    && !_context.AccountSettings.Any(s =>
+                        s.AccountId == l.UserId && !s.IdleLogout))
                 .ExecuteUpdateAsync(s => s
                     .SetProperty(l => l.Active, false)
                     .SetProperty(l => l.Token, string.Empty)
-                    .SetProperty(l => l.LogoutTime, UtcDateTime.Now),
+                    .SetProperty(l => l.LogoutTime, now),
                     cancellationToken);
         }
 

@@ -43,6 +43,7 @@ namespace Messenger.Infrastructure.Services
         public async Task<IEnumerable<NotificationDto>> GetNotificationsAsync(Guid userId, CancellationToken token = default)
         {
             var notifications = await _context.Notifications
+                .AsNoTracking()
                 .Where(notification => notification.UserId == userId)
                 .OrderByDescending(n => n.CreationDate)
                 .ToListAsync(token);
@@ -76,6 +77,7 @@ namespace Messenger.Infrastructure.Services
         public async Task<NotificationDto?> GetNotificationAsync(Guid notificationId, CancellationToken token = default)
         {
             var notification = await _context.Notifications
+                .AsNoTracking()
                 .FirstOrDefaultAsync(n => n.NotificationId == notificationId, token);
             if (notification == null)
                 return null;
