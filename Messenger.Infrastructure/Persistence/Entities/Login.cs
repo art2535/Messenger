@@ -1,6 +1,5 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using System.Text.Json.Serialization;
 
 namespace Messenger.Infrastructure.Persistence.Entities;
 
@@ -29,7 +28,5 @@ public partial class Login
     public bool Active { get; set; }
 
     [ForeignKey("UserId")]
-    [InverseProperty("Logins")]
-    [JsonIgnore]
     public virtual User User { get; set; } = null!;
 }

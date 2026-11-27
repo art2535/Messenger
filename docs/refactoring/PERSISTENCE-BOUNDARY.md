@@ -4,7 +4,7 @@
 
 ## 1. Текущее состояние
 
-- В `Messenger.Core/Models` — 21 файл модели/вспомогательного типа; 20 типов зарегистрированы в `GuapMessengerContext` через `DbSet`. `UtcDateTime` — helper, а не EF-сущность. Техническая модель `Log` уже вынесена в `Messenger.Infrastructure/Persistence/Entities`.
+- В `Messenger.Core/Models` — 20 файлов модели/вспомогательного типа; 19 типов зарегистрированы в `GuapMessengerContext` через `DbSet`. `UtcDateTime` — helper, а не EF-сущность. Технические модели `Log` и `Login` уже вынесены в `Messenger.Infrastructure/Persistence/Entities`.
 - `GuapMessengerContext` находится в Infrastructure, но EF строит модель непосредственно на CLR-типах `Messenger.Core.Models.*`.
 - Все Fluent-конфигурации вынесены в `Messenger.Infrastructure/Data/Configurations`; `OnModelCreating` оставлен для PostgreSQL extension, MassTransit Inbox/Outbox и сканирования конфигураций.
 - `GuapMessengerContextModelSnapshot.cs` также описывает сущности под именами `Messenger.Core.Models.*`. Следовательно, замена CLR-типов на Infrastructure-типы затронет не только контекст, но и snapshot/историю миграций.
@@ -19,7 +19,7 @@
 | Основные предметные понятия | `User`, `Role`, `Chat`, `ChatParticipant`, `Message`, `Attachment`, `Reaction` | Оставить в Domain как независимые от EF модели. Связи выражать идентификаторами и методами/операциями предметной области; EF-навигации не переносить в Domain автоматически. |
 | Предметные функции вокруг аккаунта и общения | `AccountSetting`, `Notification`, `UserStatus`, `Broadcast`, `BroadcastRecipient`, `ChatFolder`, `ChatFolderChat`, `ScheduledMessage` | Оставить в Domain после уточнения инвариантов. Не копировать механически: определить, какие типы являются агрегатами, дочерними сущностями или настройками. |
 | Модерация | `MessageReport`, `UserMute`, `ModerationLog` | Разделить предметные данные и технические поля хранения; связи с User/Message в Domain — через ID, если они не нужны как агрегатные объекты. |
-| Инфраструктурные данные | `Log`, `Login`, `PushSubscription` | `Log` перенесён в Infrastructure. `Login` и `PushSubscription` остаются Core persistence-моделями до отдельного переноса; их прикладные контракты уже используют DTO. |
+| Инфраструктурные данные | `Log`, `Login`, `PushSubscription` | `Log` и `Login` перенесены в Infrastructure. `PushSubscription` остаётся Core persistence-моделью; её прикладной контракт уже использует DTO. |
 | Вспомогательные типы | `MessageDeliveryStatus`, `UtcDateTime` | Enum оставить в Domain, если статус является частью языка сообщений. `UtcDateTime` оценить отдельно: это helper времени, а не persistence entity. |
 
 Группировка предварительная. Перед переносом конкретного типа нужно проверить все его вызовы и JSON-контракты; таблица не является разрешением на массовое копирование классов.
@@ -96,7 +96,7 @@ Messenger.Web
 - Не менять схему БД и не создавать миграцию «на перенос типов».
 
 ### 2.7.2. Начать с изолированных сущностей
-Первый срез — `Log` — выполнен в подэтапе 2.7.19. Следующие кандидаты — `Login` и `PushSubscription`: их сервисные контракты уже отвязаны от EF-моделей, но сами классы ещё находятся в Core и имеют связи с `User`. До переноса каждого типа нужно проверить навигации, конфигурации, snapshot и все места создания/чтения.
+Переносы `Log` и `Login` выполнены в подэтапах 2.7.19 и 2.7.20. Следующий кандидат — `PushSubscription`: его сервисный контракт уже отвязан от EF-модели, но сам класс ещё находится в Core и имеет связь с `User`. До переноса нужно проверить навигации, конфигурацию, snapshot и все места создания/чтения.
 
 ### 2.7.3. Перевести контракты на Application
 - Интерфейсы, которые возвращают/принимают Core EF entities, заменить на DTO, domain objects или специализированные command/result contracts.
@@ -152,7 +152,7 @@ Messenger.Web
 
 ## Актуализация после подэтапа 2.7.19
 
-Изолированная техническая модель `Log` перенесена в Infrastructure. В Core осталось 21 файл в `Models`, из которых 20 типов являются EF entities и один (`UtcDateTime`) — вспомогательный тип. Все проверенные прикладные интерфейсы находятся в Application и используют DTO/команды; `Login` перенесён в Infrastructure; следующим кандидатом остаётся `PushSubscription`, для которого требуется отдельный аудит навигаций `User` и текущего snapshot.
+Технические модели `Log` и `Login` перенесены в Infrastructure. В Core осталось 20 файлов в `Models`, из которых 19 типов являются EF entities и один (`UtcDateTime`) — вспомогательный тип. Все проверенные прикладные интерфейсы находятся в Application и используют DTO/команды; следующим кандидатом остаётся `PushSubscription`, для которого требуется отдельный аудит навигаций `User` и текущего snapshot.
 
 
 ## Подэтап 2.7.20 — перенос Login в Infrastructure
