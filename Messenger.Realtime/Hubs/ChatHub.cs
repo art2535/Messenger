@@ -51,7 +51,7 @@ namespace Messenger.Realtime.Hubs
             var startTime = DateTime.UtcNow;
             try
             {
-                await Groups.AddToGroupAsync(Context.ConnectionId, chatId.ToString());
+                await Groups.AddToGroupAsync(Context.ConnectionId, chatId.ToString(), Context.ConnectionAborted);
             }
             finally
             {
@@ -66,7 +66,7 @@ namespace Messenger.Realtime.Hubs
             var startTime = DateTime.UtcNow;
             try
             {
-                await Groups.RemoveFromGroupAsync(Context.ConnectionId, chatId.ToString());
+                await Groups.RemoveFromGroupAsync(Context.ConnectionId, chatId.ToString(), Context.ConnectionAborted);
             }
             finally
             {
@@ -90,7 +90,7 @@ namespace Messenger.Realtime.Hubs
                     return;
                 }
 
-                var user = await _userService.GetUserByExternalIdAsync(externalId);
+                var user = await _userService.GetUserByExternalIdAsync(externalId, Context.ConnectionAborted);
                 if (user == null)
                 {
                     _logger.LogWarning("OnConnectedAsync: Пользователь с ExternalId {ExternalId} не найден", externalId);
@@ -106,7 +106,7 @@ namespace Messenger.Realtime.Hubs
                 MessengerMetrics.SignalRActiveConnections.Add(1, 
                     new KeyValuePair<string, object?>("hub", "chat"));
 
-                await Groups.AddToGroupAsync(Context.ConnectionId, $"User_{userId}");
+                await Groups.AddToGroupAsync(Context.ConnectionId, $"User_{userId}", Context.ConnectionAborted);
 
                 var becameOnline = await _presenceTracker.ConnectAsync(userId, Context.ConnectionId, Context.ConnectionAborted);
                 if (!becameOnline)
@@ -120,8 +120,12 @@ namespace Messenger.Realtime.Hubs
                 var showOnline = true;
                 try
                 {
-                    var settings = await _accountSettingsService.GetByUserIdAsync(userId);
+                    var settings = await _accountSettingsService.GetByUserIdAsync(userId, Context.ConnectionAborted);
                     showOnline = settings.ShowOnline;
+                }
+                catch (OperationCanceledException) when (Context.ConnectionAborted.IsCancellationRequested)
+                {
+                    throw;
                 }
                 catch (Exception ex)
                 {
@@ -136,8 +140,12 @@ namespace Messenger.Realtime.Hubs
                         isOnline = true,
                         lastActivity = DateTime.UtcNow
                     };
-                    await SendToPeersAsync(userId, "UserOnlineStatusChanged", statusData);
+                    await SendToPeersAsync(userId, "UserOnlineStatusChanged", statusData, Context.ConnectionAborted);
                 }
+            }
+            catch (OperationCanceledException) when (Context.ConnectionAborted.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -162,7 +170,7 @@ namespace Messenger.Realtime.Hubs
                                   ?? Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
                     if (!string.IsNullOrEmpty(externalId))
                     {
-                        var user = await _userService.GetUserByExternalIdAsync(externalId);
+                        var user = await _userService.GetUserByExternalIdAsync(externalId, Context.ConnectionAborted);
                         userId = user?.UserId;
                     }
                 }
@@ -171,10 +179,10 @@ namespace Messenger.Realtime.Hubs
                 {
                     MessengerMetrics.SignalRActiveConnections.Add(-1,
                         new KeyValuePair<string, object?>("hub", "chat"));
-                    var becameOffline = await _presenceTracker.DisconnectAsync(userId.Value, Context.ConnectionId);
+                    var becameOffline = await _presenceTracker.DisconnectAsync(userId.Value, Context.ConnectionId, Context.ConnectionAborted);
                     if (becameOffline)
                     {
-                        await _userStatusService.UpdateUserStatusAsync(userId.Value, false);
+                        await _userStatusService.UpdateUserStatusAsync(userId.Value, false, Context.ConnectionAborted);
 
                         var statusData = new
                         {
@@ -182,7 +190,7 @@ namespace Messenger.Realtime.Hubs
                             isOnline = false,
                             lastActivity = DateTime.UtcNow
                         };
-                        await SendToPeersAsync(userId.Value, "UserOnlineStatusChanged", statusData);
+                        await SendToPeersAsync(userId.Value, "UserOnlineStatusChanged", statusData, Context.ConnectionAborted);
                     }
                 }
 
@@ -192,6 +200,10 @@ namespace Messenger.Realtime.Hubs
                         new KeyValuePair<string, object?>("hub", "chat"),
                         new KeyValuePair<string, object?>("error_type", exception.GetType().Name));
                 }
+            }
+            catch (OperationCanceledException) when (Context.ConnectionAborted.IsCancellationRequested)
+            {
+                _logger.LogDebug("Операция OnDisconnectedAsync отменена закрытием соединения");
             }
             catch (Exception ex)
             {
@@ -207,9 +219,9 @@ namespace Messenger.Realtime.Hubs
             {
                 chatId = chatId,
                 userId = removedUserId
-            });
+            }, Context.ConnectionAborted);
 
-            await Clients.User(removedUserId.ToString()).SendAsync("YouWereRemovedFromChat", chatId);
+            await Clients.User(removedUserId.ToString()).SendAsync("YouWereRemovedFromChat", chatId, Context.ConnectionAborted);
         }
 
         public async Task NotifyParticipantAdded(Guid chatId, Guid addedUserId, object userInfo)
@@ -218,7 +230,7 @@ namespace Messenger.Realtime.Hubs
             {
                 chatId,
                 user = userInfo
-            });
+            }, Context.ConnectionAborted);
         }
 
         public async Task NotifyParticipantCountChanged(Guid chatId, int count)
@@ -227,7 +239,7 @@ namespace Messenger.Realtime.Hubs
             {
                 chatId = chatId,
                 count = count
-            });
+            }, Context.ConnectionAborted);
         }
 
         public async Task NewChat(object chatInfo)
@@ -237,7 +249,7 @@ namespace Messenger.Realtime.Hubs
 
         public async Task NotifyChatDeleted(Guid chatId)
         {
-            await Clients.Group(chatId.ToString()).SendAsync("ChatDeleted", chatId);
+            await Clients.Group(chatId.ToString()).SendAsync("ChatDeleted", chatId, Context.ConnectionAborted);
         }
 
         public async Task NotifyChatUpdated(Guid chatId, string newName)
@@ -246,37 +258,37 @@ namespace Messenger.Realtime.Hubs
             {
                 chatId,
                 name = newName
-            });
+            }, Context.ConnectionAborted);
         }
 
         public async Task NotifyAvatarUpdated(string userId, string newAvatarUrl)
         {
             if (!Guid.TryParse(userId, out var uid))
             {
-                await Clients.All.SendAsync("AvatarUpdated", new { userId, avatarUrl = newAvatarUrl });
+                await Clients.All.SendAsync("AvatarUpdated", new { userId, avatarUrl = newAvatarUrl }, Context.ConnectionAborted);
                 return;
             }
-            await SendToPeersAsync(uid, "AvatarUpdated", new { userId, avatarUrl = newAvatarUrl });
+            await SendToPeersAsync(uid, "AvatarUpdated", new { userId, avatarUrl = newAvatarUrl }, Context.ConnectionAborted);
         }
 
         public async Task NotifyProfileNameUpdated(string userId, string newDisplayName)
         {
             if (!Guid.TryParse(userId, out var uid))
             {
-                await Clients.All.SendAsync("ProfileNameUpdated", new { userId, displayName = newDisplayName });
+                await Clients.All.SendAsync("ProfileNameUpdated", new { userId, displayName = newDisplayName }, Context.ConnectionAborted);
                 return;
             }
-            await SendToPeersAsync(uid, "ProfileNameUpdated", new { userId, displayName = newDisplayName });
+            await SendToPeersAsync(uid, "ProfileNameUpdated", new { userId, displayName = newDisplayName }, Context.ConnectionAborted);
         }
 
         public async Task NotifyProfileUpdated(string userId, string? newAvatarUrl, string newDisplayName)
         {
             if (!Guid.TryParse(userId, out var uid))
             {
-                await Clients.All.SendAsync("ProfileUpdated", new { userId, avatarUrl = newAvatarUrl, displayName = newDisplayName });
+                await Clients.All.SendAsync("ProfileUpdated", new { userId, avatarUrl = newAvatarUrl, displayName = newDisplayName }, Context.ConnectionAborted);
                 return;
             }
-            await SendToPeersAsync(uid, "ProfileUpdated", new { userId, avatarUrl = newAvatarUrl, displayName = newDisplayName });
+            await SendToPeersAsync(uid, "ProfileUpdated", new { userId, avatarUrl = newAvatarUrl, displayName = newDisplayName }, Context.ConnectionAborted);
         }
 
         public async Task<bool> TryAcquireSendMessagePermit()
@@ -302,15 +314,19 @@ namespace Messenger.Realtime.Hubs
                 if (!await _typingLimiter.TryAcquireAsync(externalId, Context.ConnectionAborted))
                     return;
 
-                var user = await _userService.GetUserByExternalIdAsync(externalId);
+                var user = await _userService.GetUserByExternalIdAsync(externalId, Context.ConnectionAborted);
                 if (user == null)
                     return;
 
                 try
                 {
-                    var settings = await _accountSettingsService.GetByUserIdAsync(user.UserId);
+                    var settings = await _accountSettingsService.GetByUserIdAsync(user.UserId, Context.ConnectionAborted);
                     if (!settings.ShowTyping)
                         return;
+                }
+                catch (OperationCanceledException) when (Context.ConnectionAborted.IsCancellationRequested)
+                {
+                    throw;
                 }
                 catch { }
 
@@ -319,7 +335,7 @@ namespace Messenger.Realtime.Hubs
                     chatId,
                     userId = user.UserId.ToString(),
                     isTyping = true
-                });
+                }, Context.ConnectionAborted);
             }
             finally
             {
@@ -339,18 +355,22 @@ namespace Messenger.Realtime.Hubs
                 if (string.IsNullOrEmpty(externalId)) 
                     return;
 
-                if (!await _typingLimiter.TryAcquireAsync(externalId))
+                if (!await _typingLimiter.TryAcquireAsync(externalId, Context.ConnectionAborted))
                     return;
 
-                var user = await _userService.GetUserByExternalIdAsync(externalId);
+                var user = await _userService.GetUserByExternalIdAsync(externalId, Context.ConnectionAborted);
                 if (user == null) 
                     return;
 
                 try
                 {
-                    var settings = await _accountSettingsService.GetByUserIdAsync(user.UserId);
+                    var settings = await _accountSettingsService.GetByUserIdAsync(user.UserId, Context.ConnectionAborted);
                     if (!settings.ShowTyping)
                         return;
+                }
+                catch (OperationCanceledException) when (Context.ConnectionAborted.IsCancellationRequested)
+                {
+                    throw;
                 }
                 catch { }
 
@@ -359,7 +379,7 @@ namespace Messenger.Realtime.Hubs
                     chatId,
                     userId = user.UserId.ToString(),
                     isTyping = false
-                });
+                }, Context.ConnectionAborted);
             }
             finally
             {
@@ -373,15 +393,19 @@ namespace Messenger.Realtime.Hubs
         {
             try
             {
-                var status = await _userStatusService.GetUserStatusByUserIdAsync(userId);
+                var status = await _userStatusService.GetUserStatusByUserIdAsync(userId, Context.ConnectionAborted);
                 if (status == null) 
                     return;
 
                 var showOnline = true;
                 try
                 {
-                    var settings = await _accountSettingsService.GetByUserIdAsync(userId);
+                    var settings = await _accountSettingsService.GetByUserIdAsync(userId, Context.ConnectionAborted);
                     showOnline = settings.ShowOnline;
+                }
+                catch (OperationCanceledException) when (Context.ConnectionAborted.IsCancellationRequested)
+                {
+                    throw;
                 }
                 catch { }
 
@@ -392,7 +416,7 @@ namespace Messenger.Realtime.Hubs
                     lastActivity = status.LastActivity ?? DateTime.UtcNow
                 };
 
-                await SendToPeersAsync(userId, "UserOnlineStatusChanged", statusData);
+                await SendToPeersAsync(userId, "UserOnlineStatusChanged", statusData, Context.ConnectionAborted);
 
                 _logger.LogInformation("RequestAndBroadcastUserStatus: отправлен статус для {UserId}", userId);
             }
