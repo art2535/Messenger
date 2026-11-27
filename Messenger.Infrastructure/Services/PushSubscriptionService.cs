@@ -102,12 +102,9 @@ namespace Messenger.Infrastructure.Services
 
         public async Task RemoveSubscriptionAsync(Guid id, CancellationToken ct = default)
         {
-            var sub = await _context.PushSubscriptions.FindAsync(new object[] { id }, ct);
-            if (sub != null)
-            {
-                _context.PushSubscriptions.Remove(sub);
-                await _context.SaveChangesAsync(ct);
-            }
+            await _context.PushSubscriptions
+                .Where(s => s.Id == id)
+                .ExecuteDeleteAsync(ct);
         }
 
         public async Task UpdateSubscriptionAsync(UpdatePushSubscriptionDto subscription, CancellationToken ct = default)
@@ -126,14 +123,9 @@ namespace Messenger.Infrastructure.Services
 
         public async Task RemoveByEndpointAsync(string endpoint, CancellationToken ct = default)
         {
-            var subscriptions = await _context.PushSubscriptions
+            await _context.PushSubscriptions
                 .Where(s => s.Endpoint == endpoint)
-                .ToListAsync(ct);
-            if (subscriptions.Any())
-            {
-                _context.PushSubscriptions.RemoveRange(subscriptions);
-                await _context.SaveChangesAsync(ct);
-            }
+                .ExecuteDeleteAsync(ct);
         }
 
         public async Task<PushSettingsDto?> GetPushSettingsAsync(Guid userId, CancellationToken token = default)
@@ -174,20 +166,19 @@ namespace Messenger.Infrastructure.Services
                 settings.NotifyGroupChats = request.NotifyGroupChats;
                 settings.NotifyMentions = request.NotifyMentions;
             }
+            await using var transaction = await _context.Database.BeginTransactionAsync(token);
             await _context.SaveChangesAsync(token);
 
             if (!request.PushEnabled)
             {
-                var allSubs = await _context.PushSubscriptions
+                await _context.PushSubscriptions
                     .Where(s => s.UserId == userId)
-                    .ToListAsync(token);
-                if (allSubs.Any())
-                {
-                    _context.PushSubscriptions.RemoveRange(allSubs);
-                    await _context.SaveChangesAsync(token);
-                }
+                    .ExecuteDeleteAsync(token);
+
                 _logger.LogInformation("Все push-подписки удалены для пользователя {UserId}", userId);
             }
+
+            await transaction.CommitAsync(token);
         }
 
         public async Task SendPushToOfflineUsersAsync(Guid chatId, Guid senderId, string senderName,
