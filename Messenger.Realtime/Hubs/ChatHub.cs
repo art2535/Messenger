@@ -326,7 +326,7 @@ namespace Messenger.Realtime.Hubs
                 }
                 catch { }
 
-                await Clients.Group(chatId).SendAsync("UserIsTyping", new
+                await Clients.Group(parsedChatId.ToString()).SendAsync("UserIsTyping", new
                 {
                     chatId,
                     userId = user.UserId.ToString(),

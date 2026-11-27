@@ -36,14 +36,19 @@ namespace Messenger.API.Hubs
         {
             if (Context.Items.TryGetValue("NotificationUserId", out var value) && value is Guid userId)
             {
-                await Groups.RemoveFromGroupAsync(
-                    Context.ConnectionId,
-                    $"Notifications_{userId}",
-                    CancellationToken.None);
-
-                MessengerMetrics.SignalRActiveConnections.Add(
-                    -1,
-                    new KeyValuePair<string, object?>("hub", "notification"));
+                try
+                {
+                    await Groups.RemoveFromGroupAsync(
+                        Context.ConnectionId,
+                        $"Notifications_{userId}",
+                        CancellationToken.None);
+                }
+                finally
+                {
+                    MessengerMetrics.SignalRActiveConnections.Add(
+                        -1,
+                        new KeyValuePair<string, object?>("hub", "notification"));
+                }
             }
 
             if (exception != null)
