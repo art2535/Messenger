@@ -41,7 +41,7 @@ namespace Messenger.Infrastructure.Services
                 CreatedAt = UtcDateTime.Now
             };
             _context.MessageReports.Add(report);
-            await LogAsync("report", reporterId, msg.SenderId, msg.ChatId, msg.MessageId, request.Reason, ct);
+            AddLog("report", reporterId, msg.SenderId, msg.ChatId, msg.MessageId, request.Reason);
             await _context.SaveChangesAsync(ct);
 
             return new MessageReportDto
@@ -75,8 +75,8 @@ namespace Messenger.Infrastructure.Services
                 IsActive = true
             };
             _context.UserMutes.Add(mute);
-            await LogAsync("mute", actorId, request.UserId, request.ChatId, null,
-                $"until={mute.MutedUntil:o}; {request.Reason}", ct);
+            AddLog("mute", actorId, request.UserId, request.ChatId, null,
+                $"until={mute.MutedUntil:o}; {request.Reason}");
             await _context.SaveChangesAsync(ct);
 
             return new UserMuteDto
@@ -95,7 +95,7 @@ namespace Messenger.Infrastructure.Services
             var mute = await _context.UserMutes.FirstOrDefaultAsync(m => m.MuteId == muteId, ct);
             if (mute == null) return;
             mute.IsActive = false;
-            await LogAsync("unmute", actorId, mute.UserId, mute.ChatId, null, null, ct);
+            AddLog("unmute", actorId, mute.UserId, mute.ChatId, null, null);
             await _context.SaveChangesAsync(ct);
         }
 
@@ -135,6 +135,12 @@ namespace Messenger.Infrastructure.Services
 
         public async Task LogAsync(string action, Guid? actorId, Guid? targetUserId, Guid? chatId, Guid? messageId, string? details, CancellationToken ct = default)
         {
+            AddLog(action, actorId, targetUserId, chatId, messageId, details);
+            await _context.SaveChangesAsync(ct);
+        }
+
+        private void AddLog(string action, Guid? actorId, Guid? targetUserId, Guid? chatId, Guid? messageId, string? details)
+        {
             _context.ModerationLogs.Add(new ModerationLog
             {
                 LogId = Guid.NewGuid(),
@@ -146,7 +152,6 @@ namespace Messenger.Infrastructure.Services
                 Details = details,
                 CreatedAt = UtcDateTime.Now
             });
-            await _context.SaveChangesAsync(ct);
         }
 
         public async Task<List<MessageReportDto>> GetPendingReportsAsync(int take = 50, CancellationToken ct = default)
@@ -177,7 +182,7 @@ namespace Messenger.Infrastructure.Services
             report.ReviewedAt = UtcDateTime.Now;
             report.ReviewedBy = adminId;
             report.AdminNote = note;
-            await LogAsync(status == "dismissed" ? "dismiss_report" : "review_report", adminId, null, report.ChatId, report.MessageId, note, ct);
+            AddLog(status == "dismissed" ? "dismiss_report" : "review_report", adminId, null, report.ChatId, report.MessageId, note);
             await _context.SaveChangesAsync(ct);
         }
 
@@ -228,7 +233,7 @@ namespace Messenger.Infrastructure.Services
         {
             var report = await _context.MessageReports.FirstOrDefaultAsync(r => r.ReportId == reportId, ct);
             if (report == null) return;
-            await LogAsync("delete_report", adminId, report.ReporterId, report.ChatId, report.MessageId, "report removed", ct);
+            AddLog("delete_report", adminId, report.ReporterId, report.ChatId, report.MessageId, "report removed");
             _context.MessageReports.Remove(report);
             await _context.SaveChangesAsync(ct);
         }
