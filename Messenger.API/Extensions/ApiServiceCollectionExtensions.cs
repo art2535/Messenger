@@ -43,9 +43,9 @@ public static class ApiServiceCollectionExtensions
         builder.Services.AddOptions<VapidOptions>()
             .Bind(builder.Configuration.GetSection(VapidOptions.SectionName))
             .ValidateDataAnnotations()
-            .Validate(options => options.Subject.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase)
+            .Validate(options => !string.IsNullOrWhiteSpace(options.Subject) && (options.Subject.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase)
                 || (Uri.TryCreate(options.Subject, UriKind.Absolute, out var subjectUri)
-                    && subjectUri.Scheme == Uri.UriSchemeHttps),
+                    && subjectUri.Scheme == Uri.UriSchemeHttps)),
                 "Vapid:Subject должен быть mailto: или HTTPS URL.")
             .ValidateOnStart();
         builder.Services.AddServices();
