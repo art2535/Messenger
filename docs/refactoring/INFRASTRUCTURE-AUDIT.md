@@ -129,6 +129,14 @@
 5. API-уровень, не включённый в текущие Infrastructure-коммиты: POST /notifications позволяет аутентифицированному клиенту передать произвольный UserId; требуется отдельная авторизация/перенос endpoint во внутренний flow. POST /push/send также требует отдельной проверки, что payload соответствует реально созданному сообщению, а не только членству отправителя в чате.
 6. RedisDistributedLock при отсутствии Redis использует no-op lock; это допустимо только для single-instance режима. Для multi-instance deployment Redis должен быть обязательным или нужен другой distributed lock provider.
 
+### Добавлено: интеграционные тесты ChatFolder и Reaction concurrency
+
+Создан `ChatFolderAndReactionTests` на PostgreSQL Testcontainers:
+- два независимых DbContext одновременно добавляют один чат в одну папку; проверяется успешная идемпотентная обработка и наличие ровно одной связи `ChatFolderChat`;
+- два независимых DbContext одновременно создают разные реакции одного пользователя на одно сообщение; проверяется уникальность пары `MessageId + UserId` и наличие одной итоговой реакции.
+
+Сценарии покрывают гонку между предварительной проверкой существования и записью, где окончательную целостность обеспечивают уникальные индексы PostgreSQL.
+
 ### Добавлено: интеграционные тесты ScheduledMessage dispatcher
 
 Создан `ScheduledMessageServiceTests` на PostgreSQL Testcontainers:
