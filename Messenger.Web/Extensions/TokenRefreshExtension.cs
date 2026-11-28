@@ -10,7 +10,10 @@ namespace Messenger.Web.Extensions
         {
             public IServiceCollection AddBackgroundTokenRefresh(IConfiguration configuration)
             {
-                services.Configure<TokenRefreshOptions>(configuration.GetSection("TokenRefresh"));
+                services.AddOptions<TokenRefreshOptions>()
+                    .Bind(configuration.GetSection("TokenRefresh"))
+                    .ValidateDataAnnotations()
+                    .ValidateOnStart();
                 services.AddHttpClient();
                 services.AddSingleton<UserTokenStore>();
                 services.AddSingleton<TokenRefresher>();
