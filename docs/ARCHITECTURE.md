@@ -181,7 +181,7 @@ npx web-push generate-vapid-keys
 | **Reactions** | `GET/POST/DELETE /reactions/{messageId}` | реакции на сообщение |
 | **Attachments** | `GET/POST /attachments/{messageId}` | вложения |
 | **Broadcasts** | `POST /broadcasts/create` · `GET /broadcasts/my` · `GET /broadcasts/{id}` · `POST /broadcasts/{id}/read` | рассылки |
-| **Push** | `POST /push/subscribe` · `DELETE /push/unsubscribe` · `POST /push/send` · `GET /push/vapid-public-key` | web-push |
+| **Push** | `POST /push/subscribe` · `DELETE /push/unsubscribe` · `GET /push/vapid-public-key` | web-push |
 | | `GET/POST /push/settings` · `POST /push/{notificationId}/read` | настройки / прочтение |
 | **Users** | `GET /users` · `GET /users/search` · `GET /users/info` · `GET /users/{externalId}` | пользователи |
 | | `PUT /users/update-profile` · `POST /users/upload-avatar` · `DELETE /users/delete-avatar` | профиль / аватар |
