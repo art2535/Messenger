@@ -252,3 +252,16 @@ Testcontainers требует доступный Docker. Тестовый про
 - В рабочей среде нет .NET SDK (dotnet: command not found), поэтому dotnet build и dotnet test не запускались. Наличие Docker runtime для Testcontainers также не подтверждено.
 - Миграции и SQL не запускались на PostgreSQL. Статические проверки подтверждают изменения исходников, но не заменяют restore, compilation, integration tests и migration rehearsal.
 - Аудит покрывает все основные Infrastructure-сервисы, EF mappings и persistence paths, но не является доказательством отсутствия любых дефектов. Перечисленные выше продуктовые и API-level вопросы оставлены явно, а не скрыты под отметкой «всё исправлено».
+
+
+### Добавлены Redis integration tests
+
+Добавлен отдельный Testcontainers.Redis fixture на Redis 7. Интеграционные тесты используют настоящий Redis и проверяют:
+- сериализацию/десериализацию RedisCacheService, TTL, удаление одиночных и пакетных ключей;
+- конкурентный захват одного distributed lock двумя экземплярами сервиса;
+- защиту от освобождения новой lease устаревшим владельцем после истечения TTL;
+- общий presence между двумя экземплярами RedisUserPresenceTracker;
+- переход Online → Offline только после отключения последнего connection;
+- продление lease через heartbeat и очистку истёкших записей.
+
+Тесты требуют доступный Docker daemon. Проверка запуска контейнера и выполнение тестов должны быть подтверждены в среде разработки; в текущей среде .NET SDK недоступен.
