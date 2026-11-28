@@ -5,7 +5,7 @@ namespace Messenger.Tests.Shared.Fixtures;
 
 public sealed class RabbitMqFixture : IAsyncLifetime
 {
-    private readonly RabbitMqContainer _container = new RabbitMqBuilder("rabbitmq:4.4.1-management-alpine")
+    private readonly RabbitMqContainer _container = new RabbitMqBuilder("rabbitmq:4.3-management")
         .Build();
 
     public string ConnectionString => _container.GetConnectionString();
