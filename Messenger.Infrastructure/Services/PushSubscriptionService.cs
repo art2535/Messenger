@@ -448,7 +448,7 @@ namespace Messenger.Infrastructure.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Общая ошибка при отправке push для чата {ChatId}", chatId);
+                _logger.LogError(ex, "Общая ошибка при отправке push для сообщения {MessageId}", messageId);
                 throw;
             }
         }
