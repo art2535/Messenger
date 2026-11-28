@@ -184,6 +184,12 @@
 
 Тесты проверяют конкурентный захват и транзакционную границу ScheduledMessage. Они не подменяют отдельную проверку фактической доставки MassTransit Bus Outbox: для неё потребуется запуск зарегистрированного outbox dispatcher и проверка OutboxMessages в PostgreSQL.
 
+### Добавлено: тесты Application и Realtime services
+
+Добавлены unit tests для `BroadcastService`: проверка полного набора получателей перед созданием рассылки, owner/admin authorization для сводки, запрет чтения чужой рассылки и передача фильтра unread inbox.
+
+Добавлены rate-limiter tests для `TypingRateLimiterService` и `SendMessageRateLimiterService`: лимиты на пользователя, независимые partition и отмена ожидающего запроса при заполненной очереди. `Messenger.Tests` теперь ссылается на `Messenger.Realtime`.
+
 ## Ограничения проверки
 
 - В рабочей среде нет .NET SDK (dotnet: command not found), поэтому dotnet build и dotnet test не запускались. Наличие Docker runtime для Testcontainers также не подтверждено.
