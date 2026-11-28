@@ -371,7 +371,7 @@
                             danger: true
                         });
                     } else {
-                        ok = window.confirm('Завершить эту сессию?');
+                        ok = false;
                     }
                     if (!ok) return;
                     btn.disabled = true;
@@ -387,11 +387,9 @@
                         }
                         var body = '';
                         try { body = await (r && r.text ? r.text() : Promise.resolve('')); } catch (_) {}
-                        console.warn('Revoke session failed', r && r.status, body);
                         if (typeof showAlert === 'function') await showAlert('Не удалось завершить сессию');
                         else alert('Не удалось завершить сессию' + (r && r.status ? (' (' + r.status + ')') : ''));
                     } catch (e) {
-                        console.warn('Revoke session error', e);
                         if (typeof showAlert === 'function') await showAlert('Ошибка при завершении сессии');
                         else alert('Ошибка при завершении сессии');
                     }
@@ -400,7 +398,6 @@
                 });
             });
         } catch (e) {
-            console.warn('sessions', e);
             listEl.innerHTML = '<p class="text-sm text-red-500 py-2">Не удалось загрузить сессии</p>';
         }
     };

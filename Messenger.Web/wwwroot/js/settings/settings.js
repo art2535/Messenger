@@ -109,7 +109,6 @@ async function ensureFreshToken() {
 async function apiFetch(endpoint, options = {}, retried = false) {
     const base = getApiUrl();
     if (!base) {
-        console.warn('API_BASE_URL не задан, запрос пропущен:', endpoint);
         throw new Error('API_BASE_URL не задан');
     }
     await ensureFreshToken();
@@ -530,7 +529,6 @@ async function subscribeToPush() {
         const errText = await res.text().catch(() => '');
         throw new Error(errText || `Не удалось сохранить подписку (${res.status})`);
     } catch (err) {
-        console.error(err);
         if (pushToggle) pushToggle.checked = false;
         currentSubscription = null;
         const msg = (err && err.message) ? String(err.message) : 'Не удалось включить push-уведомления';
@@ -555,7 +553,6 @@ async function unsubscribeFromPush() {
             try {
                 await currentSubscription.unsubscribe();
             } catch (e) {
-                console.warn('Browser unsubscribe:', e);
             }
             const token = getAuthToken();
             if (token && endpoint) {
@@ -569,7 +566,6 @@ async function unsubscribeFromPush() {
                         body: JSON.stringify(endpoint)
                     });
                 } catch (e) {
-                    console.warn('Server unsubscribe:', e);
                 }
             }
             currentSubscription = null;
@@ -694,7 +690,6 @@ async function loadPushSettings() {
         if (ng) ng.checked = !!settings.notifyGroupChats;
         if (nmen) nmen.checked = !!settings.notifyMentions;
     } catch (e) {
-        console.error('Не удалось загрузить настройки push:', e);
         setNotificationTypesVisible(!!document.getElementById('push-toggle')?.checked);
     }
 }
@@ -772,7 +767,6 @@ async function saveNotificationSettings() {
             });
         }
     } catch (err) {
-        console.error('Ошибка сохранения настроек:', err);
         if (typeof showToast === 'function') {
             showToast('Не удалось сохранить настройки уведомлений', 'error');
         }

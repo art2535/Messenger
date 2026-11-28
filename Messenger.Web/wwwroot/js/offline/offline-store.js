@@ -232,7 +232,6 @@
             await reg.sync.register('sync-offline-messages');
             return true;
         } catch (e) {
-            console.warn('[OfflineStore] Background Sync unavailable:', e);
             return false;
         }
     }

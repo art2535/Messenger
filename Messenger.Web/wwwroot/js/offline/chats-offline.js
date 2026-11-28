@@ -2,7 +2,6 @@
     'use strict';
     const Store = window.OfflineStore || window.OfflineQueue;
     if (!Store) {
-        console.warn('[chats-offline] OfflineStore not found');
         return;
     }
 
@@ -64,7 +63,6 @@
             }
             refreshQueueBadge();
         } catch (e) {
-            console.warn('[chats-offline] flush', e);
         }
     }
 

@@ -149,7 +149,6 @@
   global.confirm = function (msg) {
     // Синхронный confirm недоступен с кастомным UI — всегда false.
     // Используйте: const ok = await showConfirm(...)
-    console.warn('[ui-dialogs] Use await showConfirm(...) instead of confirm()');
     return false;
   };
 })(typeof window !== 'undefined' ? window : globalThis);
