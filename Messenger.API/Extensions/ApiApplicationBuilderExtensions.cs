@@ -69,6 +69,8 @@ public static class ApiApplicationBuilderExtensions
     /// </summary>
     public static WebApplication UseMessengerApiRequestPipeline(this WebApplication app)
     {
+        app.UseMessengerSecurityHeaders(!app.Environment.IsDevelopment());
+
         app.UseSerilogRequestLogging(options =>
         {
             options.MessageTemplate =

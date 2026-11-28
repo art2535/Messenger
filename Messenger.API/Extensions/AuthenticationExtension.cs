@@ -21,10 +21,13 @@ namespace Messenger.API.Extensions
                             ValidIssuer = $"{configuration["AzureAd:Instance"]?.TrimEnd('/')}/{configuration["AzureAd:TenantId"]}",
 
                             ValidateAudience = true,
-                            ValidAudiences = ["messager", "account"],
+                            ValidAudiences = [
+                                configuration["AzureAd:Audience"] ?? "messager",
+                                "account"
+                            ],
 
                             ValidateLifetime = true,
-                            ClockSkew = TimeSpan.FromMinutes(10),
+                            ClockSkew = TimeSpan.FromMinutes(2),
 
                             NameClaimType = "sub",
                             RoleClaimType = "role",
@@ -33,6 +36,19 @@ namespace Messenger.API.Extensions
                         };
 
                         options.MapInboundClaims = false;
+                        options.Events = new JwtBearerEvents
+                        {
+                            OnTokenValidated = context =>
+                            {
+                                var subject = context.Principal?.FindFirst("sub")?.Value;
+                                if (string.IsNullOrWhiteSpace(subject))
+                                {
+                                    context.Fail("Access token does not contain a subject.");
+                                }
+
+                                return Task.CompletedTask;
+                            }
+                        };
                     });
 
                 return services;

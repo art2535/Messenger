@@ -74,6 +74,8 @@ namespace Messenger.Web
                 options.Cookie.HttpOnly = true;
                 options.Cookie.IsEssential = true;
                 options.Cookie.SameSite = SameSiteMode.Lax;
+                options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+                options.Cookie.Name = ".Messenger.Session";
             });
 
             builder.Services.AddResponseCompression(options =>
@@ -101,6 +103,7 @@ namespace Messenger.Web
 
             var app = builder.Build();
 
+            app.UseMessengerWebSecurityHeaders(!app.Environment.IsDevelopment());
             app.UseSerilogRequestLogging();
 
             if (!app.Environment.IsDevelopment())
