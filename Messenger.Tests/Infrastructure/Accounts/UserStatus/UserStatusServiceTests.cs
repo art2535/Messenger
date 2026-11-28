@@ -53,8 +53,8 @@ public sealed class UserStatusServiceTests
             seed.Users.AddRange(CreateUser(onlineId), CreateUser(offlineId), CreateUser(untouchedId));
             seed.UserStatuses.AddRange(
                 new UserStatusModel { UserId = onlineId, Online = false },
-                new UserStatus { UserId = offlineId, Online = true },
-                new UserStatus { UserId = untouchedId, Online = false });
+                new UserStatusModel { UserId = offlineId, Online = true },
+                new UserStatusModel { UserId = untouchedId, Online = false });
             await seed.SaveChangesAsync();
         }
 

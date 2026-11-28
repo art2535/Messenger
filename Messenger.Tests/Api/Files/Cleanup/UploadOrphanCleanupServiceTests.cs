@@ -1,9 +1,9 @@
 using System.Text.Json;
 using Messenger.API.Services;
 using Messenger.Application.Files;
+using Messenger.Application.Messages;
 using Messenger.Core.Enums;
 using Messenger.Core.Models;
-using Messenger.Core.Messages;
 using Messenger.Infrastructure.Data;
 using Messenger.Infrastructure.Files;
 using Messenger.Tests.Shared.Fixtures;
