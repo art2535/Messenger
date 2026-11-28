@@ -67,8 +67,8 @@ public sealed class RedisRateLimitService : IRateLimitService
         catch (Exception exception)
         {
             _logger.LogError(exception,
-                "Redis rate limiter недоступен; запрос отклонён (fail-closed). Partition: {Partition}",
-                partitionKey);
+                "Redis rate limiter недоступен; запрос отклонён (fail-closed). Partition hash: {PartitionHash}",
+                key);
             return false;
         }
     }

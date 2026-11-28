@@ -63,7 +63,7 @@ Health checks больше не возвращают exception messages и вн�
 - Program.cs уже является компактным composition root. Регистрация, middleware и endpoint mapping разнесены по extension methods; дальнейшее дробление без новой ответственности не даст пользы.
 - Контроллеры в основном зависят от Application interfaces, но часть из них содержит повторяющиеся try/catch и transport mapping. Следующий шаг — единый exception-to-HTTP mapping/ProblemDetails и выделение use cases для сложных сценариев.
 - В ApiServiceCollectionExtensions CORS whitelist зафиксирован в коде: localhost и *.dev.localhost.
-- HTTP rate limiter и SignalR rate limiter используют локальные in-memory partitions; при нескольких репликах лимиты не общие.
+- HTTP и SignalR используют общий IRateLimitService с атомарным Redis fixed-window counter: HTTP API — 120 запросов/минуту на пользователя (или IP для анонимных запросов), SignalR send-message — 30/минуту, typing — 60/минуту. Лимиты общие для всех API-реплик.
 - В production Docker Compose API не публикуется на публичном интерфейсе хоста: порт 5245 привязан к 127.0.0.1, а публичный Nginx явно возвращает 404 для /metrics. Nginx продолжает проксировать штатные API и SignalR маршруты к контейнеру API по внутренней Docker-сети.
 - Prometheus на Docker-хосте может скрейпить http://127.0.0.1:5245/metrics. Prometheus в той же Docker-сети должен обращаться к http://api:8080/metrics. Для Prometheus на отдельном хосте loopback-порт недоступен: потребуется отдельный защищённый канал (например, VPN/SSH tunnel) или отдельная allowlist/аутентификация на reverse proxy; не следует открывать API порт всему интернету.
 - Локальный Aspire AppHost и его Prometheus scrape-конфигурация не меняются: локальный мониторинг продолжает использовать Aspire endpoints.
@@ -75,7 +75,7 @@ Health checks больше не возвращают exception messages и вн�
 1. **SignalR stale group membership — исправлено на уровне приложения:** при удалении участника активные connection ID извлекаются из Redis presence tracker и удаляются из chat group; `JoinChat` повторно проверяет членство после вступления, закрывая гонку. Операция не атомарна с транзакцией БД, поэтому уже отправленные события не отзываются; необходимо runtime-тестирование с несколькими соединениями и API-репликами.
 2. Если production Prometheus расположен вне Docker-хоста, настроить для него защищённый канал до loopback scrape target либо отдельный ограниченный proxy endpoint.
 3. Перенести CORS origins в конфигурацию с безопасной валидацией.
-4. Решить вопрос распределённого rate limiting для нескольких API instances.
+4. Проверить rate limiting под нагрузкой на нескольких API instances; Redis outage должен оставаться fail-closed, пока Redis настроен.
 5. Перенести применение EF migrations из каждого API startup в deployment workflow.
 6. Добавить отдельные API/Realtime unit и integration tests; в репозитории на момент аудита отдельного test project не обнаружено.
 
@@ -116,3 +116,15 @@ Push теперь запускается только внутренним `Chat
 
 - Решить вопрос распределённого rate limiting для нескольких API instances: HTTP и SignalR partitions пока хранятся в памяти каждого процесса.
 - Добавить runtime/integration tests для диагностических endpoint'ов и SignalR connections/reconnect.
+
+
+### 9. Распределённый rate limiting
+
+HTTP controller endpoints и SignalR ChatHub используют единый IRateLimitService. Реализация RedisRateLimitService выполняет атомарный INCR + PEXPIRE через Lua script, поэтому реплики делят один счётчик:
+- HTTP API: 120 запросов в минуту на пользователя; для анонимных запросов partition строится по IP.
+- SignalR send-message permit: 30 в минуту на внешний идентификатор пользователя.
+- SignalR typing: 60 в минуту на внешний идентификатор пользователя.
+
+Redis ключи содержат SHA-256 от partition key, а не исходный идентификатор. При отсутствии Redis-конфигурации используется локальный fallback (он не распределён и подходит только для single-instance/local режима). Если Redis сконфигурирован, но недоступен, запросы отклоняются (fail-closed), чтобы временный сбой Redis не отключал защиту и не позволял обходить лимиты. HTTP middleware возвращает 429; SignalR методы сохраняют прежний контракт (false для send permit и пропуск typing event).
+
+Интеграционные Redis tests проверяют общий лимит между двумя экземплярами сервиса, изоляцию partition и истечение окна. Нагрузочное и multi-replica runtime тестирование остаётся отдельной проверкой.
