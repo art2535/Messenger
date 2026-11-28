@@ -1,6 +1,7 @@
 using Messenger.Core.Enums;
 using Messenger.Core.Models;
 using Messenger.Infrastructure.Services;
+using ChatServiceImplementation = Messenger.Infrastructure.Services.ChatService;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -46,11 +47,11 @@ public sealed class ChatServiceTests
             });
 
         await using var readContext = _database.CreateContext();
-        var service = new ChatService(
+        var service = new ChatServiceImplementation(
             readContext,
             CreateEncryptionService(),
             staleCache.Object,
-            NullLogger<ChatService>.Instance);
+            NullLogger<ChatServiceImplementation>.Instance);
 
         var chats = await service.GetUserChatsWithLastMessageAsync(memberId, CancellationToken.None);
 
@@ -132,7 +133,7 @@ public sealed class ChatServiceTests
 
 
 
-    private ChatService CreateChatService(Messenger.Infrastructure.Data.GuapMessengerContext context) =>
+    private ChatServiceImplementation CreateChatService(Messenger.Infrastructure.Data.GuapMessengerContext context) =>
         new(context, CreateEncryptionService(), new NoOpCacheService(), NullLogger<ChatService>.Instance);
 
 
