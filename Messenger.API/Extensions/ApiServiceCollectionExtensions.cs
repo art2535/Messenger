@@ -102,7 +102,6 @@ public static class ApiServiceCollectionExtensions
             builder.Configuration,
             !builder.Environment.IsDevelopment());
 
-        builder.Services.AddMessengerRateLimiting();
     }
 
     private static void ConfigureCors(IServiceCollection services)

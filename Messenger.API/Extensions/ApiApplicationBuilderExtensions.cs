@@ -84,6 +84,7 @@ public static class ApiApplicationBuilderExtensions
     /// </summary>
     public static WebApplication UseMessengerApiPipeline(this WebApplication app)
     {
+        app.UseRouting();
         app.UseStaticAssets();
         app.UseCors(ApiServiceCollectionExtensions.WebCorsPolicy);
         app.UseHttpsRedirection();
@@ -95,7 +96,7 @@ public static class ApiApplicationBuilderExtensions
             app.UseSerilogUi(options => options.WithRoutePrefix("serilog-ui"));
         }
 
-        app.UseRateLimiter();
+        app.UseMessengerRateLimiting();
 
         return app;
     }
@@ -120,7 +121,7 @@ public static class ApiApplicationBuilderExtensions
 
     public static WebApplication MapMessengerApiEndpoints(this WebApplication app)
     {
-        app.MapControllers().RequireRateLimiting("api");
+        app.MapControllers();
 
         var apiVersion = app.Configuration["URL:API:Version"] ?? "1.0";
 

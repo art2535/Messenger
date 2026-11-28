@@ -1,73 +1,53 @@
-﻿using System.Security.Claims;
-using System.Threading.RateLimiting;
+using System.Security.Claims;
+using Messenger.Application.Interfaces;
+using Microsoft.AspNetCore.Mvc.Controllers;
 
-namespace Messenger.API.Extensions
+namespace Messenger.API.Extensions;
+
+public static class RateLimitingExtension
 {
-    public static class RateLimitingExtension
+    private const int ApiPermitLimit = 120;
+    private static readonly TimeSpan ApiWindow = TimeSpan.FromMinutes(1);
+
+    /// <summary>
+    /// Applies a distributed per-user fixed-window limit to MVC controller endpoints.
+    /// Must run after routing and authentication.
+    /// </summary>
+    public static WebApplication UseMessengerRateLimiting(this WebApplication app)
     {
-        extension(IServiceCollection services)
+        app.Use(async (context, next) =>
         {
-            public IServiceCollection AddMessengerRateLimiting()
+            if (context.GetEndpoint()?.Metadata.GetMetadata<ControllerActionDescriptor>() is null)
             {
-                services.AddRateLimiter(options =>
-                {
-                    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-
-                    options.AddPolicy("api", httpContext =>
-                    {
-                        var userId = GetUserId(httpContext);
-                        return RateLimitPartition.GetFixedWindowLimiter(userId, _ => new FixedWindowRateLimiterOptions
-                        {
-                            PermitLimit = 120,
-                            Window = TimeSpan.FromMinutes(1),
-                            QueueLimit = 20,
-                            QueueProcessingOrder = QueueProcessingOrder.OldestFirst
-                        });
-                    });
-
-                    options.AddPolicy("send-message", httpContext =>
-                    {
-                        var userId = GetUserId(httpContext);
-                        return RateLimitPartition.GetFixedWindowLimiter(userId, _ => new FixedWindowRateLimiterOptions
-                        {
-                            PermitLimit = 30,
-                            Window = TimeSpan.FromMinutes(1),
-                            QueueLimit = 0
-                        });
-                    });
-
-                    options.AddPolicy("typing", httpContext =>
-                    {
-                        var userId = GetUserId(httpContext);
-                        return RateLimitPartition.GetFixedWindowLimiter(userId, _ => new FixedWindowRateLimiterOptions
-                        {
-                            PermitLimit = 60,
-                            Window = TimeSpan.FromMinutes(1),
-                            QueueLimit = 0
-                        });
-                    });
-
-                    options.OnRejected = async (context, ct) =>
-                    {
-                        context.HttpContext.Response.ContentType = "application/json; charset=utf-8";
-                        await context.HttpContext.Response.WriteAsync(
-                            """{"isSuccess":false,"error":"Слишком много запросов. Подождите немного и попробуйте снова."}""", ct);
-                    };
-                });
-
-                return services;
+                await next(context);
+                return;
             }
-        }
 
-        private static string GetUserId(HttpContext httpContext)
-        {
-            var sub = httpContext.User.FindFirst("sub")?.Value
-                   ?? httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var userId = context.User.FindFirst("sub")?.Value
+                ?? context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                ?? context.Connection.RemoteIpAddress?.ToString()
+                ?? "anonymous";
 
-            if (!string.IsNullOrEmpty(sub))
-                return sub;
+            var limiter = context.RequestServices.GetRequiredService<IRateLimitService>();
+            var acquired = await limiter.TryAcquireAsync(
+                "http:api:" + userId,
+                ApiPermitLimit,
+                ApiWindow,
+                context.RequestAborted);
 
-            return httpContext.Connection.RemoteIpAddress?.ToString() ?? "anonymous";
-        }
+            if (!acquired)
+            {
+                context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+                context.Response.ContentType = "application/json; charset=utf-8";
+                await context.Response.WriteAsync(
+                    """{"isSuccess":false,"error":"Слишком много запросов. Подождите немного и попробуйте снова."}""",
+                    context.RequestAborted);
+                return;
+            }
+
+            await next(context);
+        });
+
+        return app;
     }
 }
