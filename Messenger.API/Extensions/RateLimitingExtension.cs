@@ -19,7 +19,7 @@ public static class RateLimitingExtension
         {
             if (context.GetEndpoint()?.Metadata.GetMetadata<ControllerActionDescriptor>() is null)
             {
-                await next(context);
+                await next();
                 return;
             }
 
