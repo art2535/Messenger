@@ -36,6 +36,9 @@ namespace Messenger.API.Extensions
                 services.AddScoped<IMessageService, MessageService>();
                 services.AddScoped<IAdminService, AdminService>();
                 services.AddScoped<IModerationService, ModerationService>();
+                services.AddSingleton<IRateLimitService>(sp => new RedisRateLimitService(
+                    sp.GetService<IConnectionMultiplexer>(),
+                    sp.GetRequiredService<ILogger<RedisRateLimitService>>()));
                 services.AddSingleton<WebPushClient>();
                 services.AddScoped<IPushSubscriptionService, PushSubscriptionService>();
                 services.AddScoped<IScheduledMessageService, ScheduledMessageService>();
