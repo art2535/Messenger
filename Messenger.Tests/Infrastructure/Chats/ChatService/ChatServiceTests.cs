@@ -134,7 +134,7 @@ public sealed class ChatServiceTests
 
 
     private ChatServiceImplementation CreateChatService(Messenger.Infrastructure.Data.GuapMessengerContext context) =>
-        new(context, CreateEncryptionService(), new NoOpCacheService(), NullLogger<ChatService>.Instance);
+        new(context, CreateEncryptionService(), new NoOpCacheService(), NullLogger<ChatServiceImplementation>.Instance);
 
 
 
