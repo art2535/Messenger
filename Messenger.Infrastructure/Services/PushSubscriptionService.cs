@@ -305,7 +305,7 @@ namespace Messenger.Infrastructure.Services
                 var participants = (await _chatService.GetChatParticipantsAsync(chatId, senderId, cancellationToken)).ToList();
                 var sender = participants.FirstOrDefault(participant => participant.UserId == senderId)
                     ?? throw new UnauthorizedAccessException("Отправитель не является участником чата");
-                senderName = $"{sender.FirstName} {sender.LastName}".Trim();
+                var senderName = $"{sender.FirstName} {sender.LastName}".Trim();
                 if (string.IsNullOrWhiteSpace(senderName))
                     senderName = "Пользователь";
 
@@ -363,14 +363,11 @@ namespace Messenger.Infrastructure.Services
                                 : $"{pushTitle}: {body}")
                             : pushTitle;
 
-                        var notificationId = messageId.HasValue
-                            ? await _notificationService.CreateNotificationAsync(
-                                participant.UserId,
-                                notificationText,
-                                $"chat-message:{messageId.Value:N}:recipient:{participant.UserId:N}",
-                                cancellationToken)
-                            : await _notificationService.CreateNotificationAsync(
-                                participant.UserId, notificationText, cancellationToken);
+                        var notificationId = await _notificationService.CreateNotificationAsync(
+                            participant.UserId,
+                            notificationText,
+                            $"chat-message:{messageId:N}:recipient:{participant.UserId:N}",
+                            cancellationToken);
 
                         var subscriptions = await _context.PushSubscriptions
                             .Where(s => s.UserId == participant.UserId)
