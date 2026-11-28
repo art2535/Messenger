@@ -178,12 +178,12 @@ public sealed class RedisFixture : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
-        await Connection.DisposeAsync();
+        Connection.Dispose();
         await _container.DisposeAsync();
     }
 }
 
-[CollectionDefinition(Name)]
+[CollectionDefinition("Redis integration")]
 public sealed class RedisCollection : ICollectionFixture<RedisFixture>
 {
     public const string Name = "Redis integration";
