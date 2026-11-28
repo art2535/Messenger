@@ -1,4 +1,6 @@
 using Messenger.Application.DTOs.Responses;
+using Messenger.Application.Files;
+using Messenger.API.Adapters;
 ﻿using Asp.Versioning;
 using Messenger.Application.DTOs.Attachments;
 using Messenger.Application.Interfaces;
@@ -26,6 +28,8 @@ namespace Messenger.API.Controllers
         private readonly IChatService _chatService;
         private readonly IUserService _userService;
         private readonly IConfiguration _configuration;
+        private readonly IFileStorage _fileStorage;
+        private readonly IFileValidationService _fileValidationService;
         private readonly ILogger<AttachmentsController> _logger;
 
         public AttachmentsController(
@@ -34,6 +38,8 @@ namespace Messenger.API.Controllers
             IChatService chatService,
             IUserService userService,
             IConfiguration configuration,
+            IFileStorage fileStorage,
+            IFileValidationService fileValidationService,
             ILogger<AttachmentsController> logger)
         {
             _attachmentService = attachmentService;
@@ -41,6 +47,8 @@ namespace Messenger.API.Controllers
             _chatService = chatService;
             _userService = userService;
             _configuration = configuration;
+            _fileStorage = fileStorage;
+            _fileValidationService = fileValidationService;
             _logger = logger;
         }
 
@@ -146,21 +154,38 @@ namespace Messenger.API.Controllers
                     || storedFileName is "." or "..")
                     return NotFound(ApiResponse.Failure("Файл вложения не найден", "NOT_FOUND"));
 
-                var uploadDirectory = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads"));
-                var storedFilePath = Path.GetFullPath(Path.Combine(uploadDirectory, storedFileName));
-                var uploadPrefixPath = uploadDirectory.EndsWith(Path.DirectorySeparatorChar)
-                    ? uploadDirectory
-                    : uploadDirectory + Path.DirectorySeparatorChar;
-                var pathComparison = OperatingSystem.IsWindows()
-                    ? StringComparison.OrdinalIgnoreCase
-                    : StringComparison.Ordinal;
+                var displayFileName = Path.GetFileName(
+                    (request.FileName ?? string.Empty).Replace('\\', '/')).Trim();
+                if (string.IsNullOrWhiteSpace(displayFileName)
+                    || displayFileName.Length > 255
+                    || displayFileName.Any(char.IsControl))
+                    return BadRequest(ApiResponse.Failure("Некорректное имя файла", "INVALID_REQUEST"));
 
-                if (!storedFilePath.StartsWith(uploadPrefixPath, pathComparison)
-                    || !System.IO.File.Exists(storedFilePath))
+                var storedFileInfo = await _fileStorage.GetInfoAsync(
+                    FileStorageArea.Uploads, storedFileName, ct);
+                if (storedFileInfo == null)
                     return NotFound(ApiResponse.Failure("Файл вложения не найден", "NOT_FOUND"));
 
-                var contentType = attachment.FileType;
-                var extension = Path.GetExtension(storedFileName);
+                ValidatedFile validated;
+                await using (var validationStream = await _fileStorage.OpenReadAsync(
+                    FileStorageArea.Uploads, storedFileName, ct))
+                {
+                    if (validationStream == null)
+                        return NotFound(ApiResponse.Failure("Файл вложения не найден", "NOT_FOUND"));
+
+                    validated = await _fileValidationService.ValidateAsync(
+                        new StoredFileUploadAdapter(storedFileName, storedFileInfo.Length, validationStream),
+                        FileUploadPurpose.Attachment,
+                        ct);
+                }
+
+                var fileStream = await _fileStorage.OpenReadAsync(
+                    FileStorageArea.Uploads, storedFileName, ct);
+                if (fileStream == null)
+                    return NotFound(ApiResponse.Failure("Файл вложения не найден", "NOT_FOUND"));
+
+                var contentType = validated.ContentType;
+                var extension = validated.Extension;
                 if (string.IsNullOrWhiteSpace(contentType)
                     || !contentType.Contains('/', StringComparison.Ordinal)
                     || contentType.Length > 100)
@@ -174,11 +199,15 @@ namespace Messenger.API.Controllers
                 {
                     ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".avif"
                 };
-                var fileName = Path.GetFileName(attachment.FileName);
+                var fileName = new string(Path.GetFileName(attachment.FileName.Replace('\\', '/'))
+                    .Where(character => !char.IsControl(character)).ToArray());
+                if (string.IsNullOrWhiteSpace(fileName))
+                    fileName = storedFileName;
                 if (string.IsNullOrWhiteSpace(fileName))
                     fileName = storedFileName;
 
                 Response.Headers["X-Content-Type-Options"] = "nosniff";
+                Response.Headers["Cache-Control"] = "private, no-store";
                 if (!inlineExtensions.Contains(extension))
                 {
                     Response.Headers.ContentDisposition =
@@ -186,7 +215,7 @@ namespace Messenger.API.Controllers
                 }
 
                 return File(
-                    new FileStream(storedFilePath, FileMode.Open, FileAccess.Read, FileShare.Read),
+                    fileStream,
                     contentType,
                     inlineExtensions.Contains(extension) ? null : fileName,
                     enableRangeProcessing: true);
@@ -194,6 +223,11 @@ namespace Messenger.API.Controllers
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
                 throw;
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogWarning(ex, "Вложение {AttachmentId} не прошло проверку содержимого", attachmentId);
+                return NotFound(ApiResponse.Failure("Файл вложения не найден", "NOT_FOUND"));
             }
             catch (Exception ex)
             {
@@ -227,8 +261,6 @@ namespace Messenger.API.Controllers
                 if (request == null
                     || string.IsNullOrWhiteSpace(request.FileName)
                     || request.FileName.Length > 255
-                    || string.IsNullOrWhiteSpace(request.FileType)
-                    || request.FileType.Length > 100
                     || request.SizeInBytes <= 0
                     || request.SizeInBytes > 10 * 1024 * 1024
                     || string.IsNullOrWhiteSpace(request.Url)
@@ -273,26 +305,28 @@ namespace Messenger.API.Controllers
                     return BadRequest(ApiResponse.Failure("Некорректный путь вложения", "INVALID_REQUEST"));
                 }
 
-                var uploadDirectory = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads"));
-                var storedFilePath = Path.GetFullPath(Path.Combine(uploadDirectory, storedFileName));
-                var uploadPrefix = uploadDirectory.EndsWith(Path.DirectorySeparatorChar)
-                    ? uploadDirectory
-                    : uploadDirectory + Path.DirectorySeparatorChar;
-                var pathComparison = OperatingSystem.IsWindows()
-                    ? StringComparison.OrdinalIgnoreCase
-                    : StringComparison.Ordinal;
-                if (!storedFilePath.StartsWith(uploadPrefix, pathComparison)
-                    || !System.IO.File.Exists(storedFilePath)
-                    || new FileInfo(storedFilePath).Length != request.SizeInBytes)
+                var storedFileInfo = await _fileStorage.GetInfoAsync(
+                    FileStorageArea.Uploads, storedFileName, ct);
+                if (storedFileInfo == null || storedFileInfo.Length != request.SizeInBytes)
                 {
                     return BadRequest(ApiResponse.Failure("Файл вложения не найден или его размер не совпадает с метаданными", "INVALID_REQUEST"));
                 }
 
+                await using var storedStream = await _fileStorage.OpenReadAsync(
+                    FileStorageArea.Uploads, storedFileName, ct);
+                if (storedStream == null)
+                    return BadRequest(ApiResponse.Failure("Файл вложения не найден", "INVALID_REQUEST"));
+
+                var validated = await _fileValidationService.ValidateAsync(
+                    new StoredFileUploadAdapter(storedFileName, storedFileInfo.Length, storedStream),
+                    FileUploadPurpose.Attachment,
+                    ct);
+
                 var attachment = new CreateAttachmentDto
                 {
-                    FileName = Path.GetFileName(request.FileName.Replace('\\', '/')),
-                    FileType = request.FileType,
-                    SizeInBytes = request.SizeInBytes,
+                    FileName = displayFileName,
+                    FileType = validated.ContentType,
+                    SizeInBytes = checked((int)storedFileInfo.Length),
                     Url = fileUri.ToString()
                 };
 

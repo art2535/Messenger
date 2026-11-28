@@ -315,14 +315,13 @@ namespace Messenger.API.Controllers
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> PutUpdateProfileAsync(
             [FromBody, Description("Новые данные профиля")] UpdateUserProfileRequest request,
-            [FromQuery, Description("Опциональный URL аватара")] string? avatarUrl = null,
             CancellationToken ct = default)
         {
             try
             {
                 var user = await User.GetCurrentUserAsync(_userService, ct);
 
-                await _userService.UpdateProfileAsync(user.UserId, request, avatarUrl, ct);
+                await _userService.UpdateProfileAsync(user.UserId, request, ct);
 
                 var updatedUser = await _userService.GetUserByIdAsync(user.UserId, ct);
                 if (updatedUser == null)
@@ -363,6 +362,8 @@ namespace Messenger.API.Controllers
         /// </summary>
         [HttpPost("upload-avatar")]
         [Consumes("multipart/form-data")]
+        [RequestSizeLimit(3 * 1024 * 1024)]
+        [RequestFormLimits(MultipartBodyLengthLimit = 3 * 1024 * 1024)]
         [EndpointName("UploadAvatar")]
         [EndpointSummary("Загрузить аватар пользователя")]
         [EndpointDescription("Загружает изображение аватара для текущего пользователя (макс. 2 МБ). Возвращает URL загруженного аватара.")]
@@ -404,6 +405,10 @@ namespace Messenger.API.Controllers
                 return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (ArgumentException ex)
+            {
+                return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
+            }
+            catch (InvalidDataException ex)
             {
                 return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
             }

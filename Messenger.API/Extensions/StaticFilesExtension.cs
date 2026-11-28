@@ -12,7 +12,7 @@ namespace Messenger.API.Extensions
             /// </summary>
             public IApplicationBuilder UseStaticAssets()
             {
-                var avatarsPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "avatars");
+                var avatarsPath = Path.Combine(app.Environment.ContentRootPath, "wwwroot", "avatars");
 
                 if (!Directory.Exists(avatarsPath))
                 {

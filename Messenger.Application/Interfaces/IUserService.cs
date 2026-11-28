@@ -7,7 +7,7 @@ namespace Messenger.Application.Interfaces
     {
         Task<UserDto?> GetUserByIdAsync(Guid id, CancellationToken token = default);
         Task<IEnumerable<UserDto>> GetAllUsersAsync(CancellationToken token = default);
-        Task UpdateProfileAsync(Guid userId, UpdateUserProfileRequest request, string? avatarUrl = null, 
+        Task UpdateProfileAsync(Guid userId, UpdateUserProfileRequest request,
             CancellationToken token = default);
         Task<string> UploadAvatarAsync(Guid userId, IUploadedFile file, CancellationToken token = default);
         Task DeleteAvatarAsync(Guid userId, CancellationToken token = default);

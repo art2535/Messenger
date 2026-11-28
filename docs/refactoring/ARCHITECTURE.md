@@ -121,3 +121,15 @@ GitHub-изменения проверены чтением файлов и Git 
 Подробности, подтверждённые файлы и последовательность исправлений: [INFRASTRUCTURE-AUDIT.md](INFRASTRUCTURE-AUDIT.md).
 
 Ограничения: аудит статический; build/test, EF migration generation и PostgreSQL integration checks не выполнялись из-за отсутствия .NET SDK/runtime в среде.
+
+
+## Граница файлового хранилища
+
+Файловое хранилище подключено через Application port:
+
+- **Messenger.Application.Files.IFileStorage** описывает сохранение, чтение, проверку существования, получение метаданных, перечисление и удаление файлов.
+- **Messenger.Infrastructure.Files.LocalFileStorage** реализует локальное хранилище и изолирует области **uploads** и **avatars**.
+- **IFileValidationService** проверяет имя, размер, расширение и сигнатуру содержимого; MIME, присланный клиентом, не считается доверенным.
+- API регистрирует реализацию IFileStorage относительно IWebHostEnvironment.ContentRootPath; Application и сервисы Infrastructure не зависят от физического пути.
+
+Вложения не публикуются через static files: выдача проходит через AttachmentsController после проверки членства пользователя в чате и повторной проверки содержимого. Статически публикуются только аватары. Подробности и ограничения: [FILE-STORAGE.md](FILE-STORAGE.md).

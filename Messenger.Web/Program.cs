@@ -4,7 +4,6 @@ using Microsoft.AspNetCore.ResponseCompression;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using System.IO.Compression;
-using System.Net.Http.Headers;
 using System.Text;
 using Serilog;
 
@@ -138,23 +137,6 @@ namespace Messenger.Web
             };
 
             app.UseStaticFiles(staticFileOptions);
-
-            app.Map("/uploads/{**path}", async (string path, HttpContext ctx, IHttpClientFactory httpClientFactory) =>
-            {
-                var apiBase = builder.Configuration["URL:API:HTTPS"]?.TrimEnd('/');
-                if (string.IsNullOrEmpty(apiBase))
-                    return Results.Problem("URL:API:HTTPS не настроен");
-
-                var targetUrl = $"{apiBase}/uploads/{path}{ctx.Request.QueryString}";
-                var client = httpClientFactory.CreateClient("Api");
-                using var response = await client.GetAsync(targetUrl, HttpCompletionOption.ResponseHeadersRead, ctx.RequestAborted);
-                if (!response.IsSuccessStatusCode)
-                    return Results.StatusCode((int)response.StatusCode);
-
-                var contentType = response.Content.Headers.ContentType?.ToString() ?? "application/octet-stream";
-                var stream = await response.Content.ReadAsStreamAsync(ctx.RequestAborted);
-                return Results.Stream(stream, contentType, enableRangeProcessing: true);
-            });
 
             app.UseSession();
             app.UseRouting();

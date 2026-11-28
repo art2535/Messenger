@@ -1,6 +1,9 @@
+using Messenger.Application.Files;
+using Messenger.Core.Models;
 using Messenger.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using System.Data;
+using System.Text;
 using System.Text.Json;
 
 namespace Messenger.API.Services;
@@ -15,15 +18,18 @@ public sealed class UploadOrphanCleanupService : BackgroundService
 
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IConfiguration _configuration;
+    private readonly IFileStorage _fileStorage;
     private readonly ILogger<UploadOrphanCleanupService> _logger;
 
     public UploadOrphanCleanupService(
         IServiceScopeFactory scopeFactory,
         IConfiguration configuration,
+        IFileStorage fileStorage,
         ILogger<UploadOrphanCleanupService> logger)
     {
         _scopeFactory = scopeFactory;
         _configuration = configuration;
+        _fileStorage = fileStorage;
         _logger = logger;
     }
 
@@ -57,6 +63,10 @@ public sealed class UploadOrphanCleanupService : BackgroundService
         }
     }
 
+    /// <summary>Запускает один цикл очистки; используется для управляемого запуска и интеграционных тестов.</summary>
+    public Task CleanupNowAsync(CancellationToken cancellationToken = default) =>
+        CleanupAsync(cancellationToken);
+
     private async Task CleanupAsync(CancellationToken cancellationToken)
     {
         if (!Uri.TryCreate(_configuration["URL:API:HTTPS"], UriKind.Absolute, out _))
@@ -79,21 +89,27 @@ public sealed class UploadOrphanCleanupService : BackgroundService
             .Select(account => account.Avatar!)
             .ToListAsync(cancellationToken);
 
-        // Сообщение может ещё находиться в transactional Bus Outbox и не иметь строки Attachment.
-        // Пока outbox payload существует, соответствующие файлы считаются занятыми.
+        var scheduledAttachmentPayloads = await context.ScheduledMessages
+            .AsNoTracking()
+            .Where(message => message.Status == ScheduledMessageStatus.Pending
+                && message.AttachmentsJson != null)
+            .Select(message => message.AttachmentsJson!)
+            .ToListAsync(cancellationToken);
+
+        // Сообщение может находиться в transactional outbox до создания Attachment.
         var outboxBodies = await GetOutboxBodiesAsync(context, cancellationToken);
-        var outboxUrls = new List<string?>();
-        foreach (var body in outboxBodies)
+        var pendingUrls = new List<string?>();
+        foreach (var body in outboxBodies.Concat(scheduledAttachmentPayloads))
         {
             try
             {
                 using var document = JsonDocument.Parse(body);
-                CollectStringValues(document.RootElement, outboxUrls);
+                CollectStringValues(document.RootElement, pendingUrls);
             }
             catch (JsonException)
             {
-                // Неизвестный формат outbox payload делает безопасную очистку невозможной.
-                _logger.LogWarning("Не удалось разобрать outbox payload; очистка файлов пропущена");
+                // Неизвестный payload делает безопасную очистку невозможной.
+                _logger.LogWarning("Не удалось разобрать payload очереди или запланированного сообщения; очистка пропущена");
                 return;
             }
         }
@@ -103,20 +119,13 @@ public sealed class UploadOrphanCleanupService : BackgroundService
             : StringComparer.Ordinal;
 
         var referencedUploads = CollectReferencedFileNames(
-            attachmentUrls.Concat(outboxUrls), "uploads/", comparison);
+            attachmentUrls.Concat(pendingUrls), "uploads/", comparison);
         var referencedAvatars = CollectReferencedFileNames(avatarUrls, "avatars/", comparison);
 
-        var webRoot = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
-        var deletedUploads = CleanupDirectory(
-            Path.Combine(webRoot, "uploads"),
-            referencedUploads,
-            _logger,
-            cancellationToken);
-        var deletedAvatars = CleanupDirectory(
-            Path.Combine(webRoot, "avatars"),
-            referencedAvatars,
-            _logger,
-            cancellationToken);
+        var deletedUploads = await CleanupDirectoryAsync(
+            FileStorageArea.Uploads, referencedUploads, cancellationToken);
+        var deletedAvatars = await CleanupDirectoryAsync(
+            FileStorageArea.Avatars, referencedAvatars, cancellationToken);
 
         if (deletedUploads > 0 || deletedAvatars > 0)
         {
@@ -145,8 +154,14 @@ public sealed class UploadOrphanCleanupService : BackgroundService
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
             {
-                if (!reader.IsDBNull(0))
-                    bodies.Add(reader.GetString(0));
+                if (reader.IsDBNull(0))
+                    continue;
+
+                var bodyValue = reader.GetValue(0);
+                if (bodyValue is string body)
+                    bodies.Add(body);
+                else if (bodyValue is byte[] bodyBytes)
+                    bodies.Add(Encoding.UTF8.GetString(bodyBytes));
             }
 
             return bodies;
@@ -225,37 +240,30 @@ public sealed class UploadOrphanCleanupService : BackgroundService
         return fileNames;
     }
 
-    private static int CleanupDirectory(
-        string directory,
+    private async Task<int> CleanupDirectoryAsync(
+        FileStorageArea area,
         HashSet<string> referencedFileNames,
-        ILogger logger,
         CancellationToken cancellationToken)
     {
-        if (!Directory.Exists(directory))
-            return 0;
-
         var cutoff = DateTime.UtcNow - OrphanGracePeriod;
         var deletedCount = 0;
+        var files = await _fileStorage.ListAsync(area, cancellationToken);
 
-        foreach (var filePath in Directory.EnumerateFiles(directory, "*", SearchOption.TopDirectoryOnly))
+        foreach (var file in files)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var fileName = Path.GetFileName(filePath);
-            if (referencedFileNames.Contains(fileName))
+            if (referencedFileNames.Contains(file.FileName) || file.LastModifiedUtc > cutoff)
                 continue;
 
             try
             {
-                if (File.GetLastWriteTimeUtc(filePath) > cutoff)
-                    continue;
-
-                File.Delete(filePath);
+                await _fileStorage.DeleteAsync(area, file.FileName, cancellationToken);
                 deletedCount++;
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                logger.LogWarning(ex, "Не удалось удалить неиспользуемый файл {FilePath}", filePath);
+                _logger.LogWarning(ex, "Не удалось удалить неиспользуемый файл {FileName}", file.FileName);
             }
         }
 

@@ -115,13 +115,15 @@ namespace Messenger.Web.Pages.Inside.Settings.Profile
 
             try
             {
-                string? newAvatarUrl = null;
-
                 if (DeleteAvatar)
                 {
                     var deleteRes = await Api.DeleteRawAsync("users/delete-avatar", AccessToken);
                     if (!deleteRes.IsSuccessStatusCode)
+                    {
                         ModelState.AddModelError("", "Не удалось удалить аватар");
+                        await LoadProfileAsync();
+                        return Page();
+                    }
                 }
                 else if (AvatarFile != null && AvatarFile.Length > 0)
                 {
@@ -141,17 +143,13 @@ namespace Messenger.Web.Pages.Inside.Settings.Profile
                     var uploadRes = await Api.PostMultipartRawAsync(
                         "users/upload-avatar", content, AccessToken);
 
-                    if (uploadRes.IsSuccessStatusCode)
-                    {
-                        var json = await uploadRes.Content.ReadAsStringAsync();
-                        var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-                        var result = JsonSerializer.Deserialize<ApiResponse<AvatarUploadResponse>>(json, options);
-                        newAvatarUrl = result?.Data?.AvatarUrl;
-                    }
-                    else
+                    if (!uploadRes.IsSuccessStatusCode)
                     {
                         ModelState.AddModelError("", "Ошибка загрузки аватара");
+                        await LoadProfileAsync();
+                        return Page();
                     }
+
                 }
 
                 var payload = new
@@ -162,11 +160,7 @@ namespace Messenger.Web.Pages.Inside.Settings.Profile
                     Profile.Theme
                 };
 
-                var updatePath = "users/update-profile";
-                if (!string.IsNullOrEmpty(newAvatarUrl))
-                    updatePath += $"?avatarUrl={Uri.EscapeDataString(newAvatarUrl)}";
-
-                var response = await Api.PutRawAsync(updatePath, payload, AccessToken);
+                var response = await Api.PutRawAsync("users/update-profile", payload, AccessToken);
 
                 if (response.IsSuccessStatusCode)
                 {

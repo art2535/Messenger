@@ -5,11 +5,11 @@
 
 ## Текущее покрытие
 
-В проекте уже есть отдельные наборы unit- и integration-тестов:
+В проекте уже есть отдельные наборы unit- и integration-тестов. Каждый тестовый класс находится в отдельном файле, namespaces соответствуют тематическим каталогам:
 
 - **PostgreSQL:** миграции на чистой БД, соответствие EF snapshot, создание схемы; интеграционные проверки сервисов пользователей, чатов, сообщений, уведомлений, Push-подписок и других инфраструктурных компонентов.
 - **Redis:** общий rate limit между экземплярами сервиса, изоляция partition, кэш и TTL, распределённые блокировки, Presence между двумя tracker-инстансами, параллельные connect/disconnect и гонка heartbeat/disconnect.
-- **Background services:** очистка сессий, heartbeat Presence, обработка запланированных сообщений и очистка файлов.
+- **Background services:** очистка сессий, heartbeat Presence, обработка запланированных сообщений и очистка файлов; для orphan cleanup добавлен PostgreSQL integration test с реальным локальным хранилищем.
 - **Web:** обновление токенов и хранение пользовательских токенов.
 
 Redis-тесты используют Testcontainers.Redis, PostgreSQL-тесты — Testcontainers.PostgreSql. Это реальные интеграционные тесты с контейнерами, а не только моки.
@@ -18,21 +18,21 @@ Redis-тесты используют Testcontainers.Redis, PostgreSQL-тест�
 
 ### 1. HTTP API
 
-- В тестовом проекте нет `Microsoft.AspNetCore.Mvc.Testing`, `WebApplicationFactory` или `TestServer`.
-- Не проверяется полный HTTP pipeline: authentication/authorization, маршрутизация, middleware rate limiting, формат ответов 401/403/429.
-- Нет сквозных проверок, что пользователь не может читать или изменять ресурсы другого пользователя через реальные HTTP endpoints.
+- Есть компонентные HTTP integration tests на TestServer для middleware rate limiting (429 и bypass для non-controller endpoint).
+- Полный API host через WebApplicationFactory не поднимается; authentication/authorization, маршрутизация и error contract не проверяются сквозным набором по всем endpoint-ам.
+- IDOR и права доступа проверяются в сервисных и отдельных HTTP/Hub тестах, но полного набора сквозных HTTP-проверок пока нет.
 
 ### 2. SignalR
 
-- Нет отдельного набора тестов для `ChatHub`.
-- Не проверены на уровне Hub: запрет JoinChat для постороннего пользователя, повторная проверка членства после добавления в группу, StartTyping/StopTyping для неучастника, ограничения частоты вызовов и доступ к статусу другого пользователя.
-- Presence-хранилище протестировано отдельно, но жизненный цикл SignalR-соединения не проверен через настоящий Hub/test host.
+- Есть `ChatHubAuthorizationTests`: пользователь, не состоящий в чате, не может присоединиться к группе.
+- Полный SignalR transport/test host, reconnect и lifecycle соединения ещё не покрыты.
+- Проверки StartTyping/StopTyping, повторной проверки членства, rate limiting и доступа к статусу покрывают не все комбинации; Presence-хранилище протестировано отдельно.
 
 ### 3. Отказоустойчивость Redis
 
-- Есть проверки локального fallback rate limiter при отсутствии Redis и распределённого поведения при доступном Redis.
-- Не хватает тестов поведения при настроенном, но недоступном Redis: rate limiter должен fail-closed; Presence должен корректно обрабатывать ошибку хранилища и не оставлять неконсистентное локальное состояние.
-- Не проверено восстановление после временной потери Redis.
+- Проверены локальный fallback при отсутствии Redis и распределённое поведение при доступном Redis.
+- Добавлены outage/recovery tests: rate limiter fail-closed при настроенном, но недоступном Redis и восстанавливает работу после возврата Redis; Presence heartbeat обновляет локальные lease после восстановления.
+- Остаются дополнительные гонки connect/disconnect/heartbeat при длительной недоступности Redis и межпроцессная конкуренция.
 
 ### 4. Push и доставка событий
 
@@ -42,7 +42,7 @@ Redis-тесты используют Testcontainers.Redis, PostgreSQL-тест�
 
 ### 5. CI
 
-Текущий `.gitlab-ci.yml` запускает `scripts/check-architecture.py`, но не выполняет `dotnet test`. Таким образом, существующие тесты не являются обязательной проверкой каждой ветки в этом pipeline.
+`.gitlab-ci.yml` содержит test-dotnet job, который запускает полный solution test suite на .NET 10 SDK container. Job требует runner с Docker socket для Testcontainers; фактическое выполнение зависит от доступности такого runner.
 
 ## Реализовано в рамках этапа 13.5
 
@@ -54,7 +54,7 @@ Redis-тесты используют Testcontainers.Redis, PostgreSQL-тест�
 
 ## Остаточные проверки
 
-- Нужен запуск pipeline на runner с Docker socket и доступом к Docker Hub/NuGet. Без результата pipeline этап нельзя считать подтверждённым по сборке.
+- Нужен успешный запуск pipeline на runner с Docker socket и доступом к Docker Hub/NuGet. Без результата pipeline этап нельзя считать подтверждённым по сборке.
 - Consumer проверяется напрямую через MassTransit ConsumeContext mock; реальный RabbitMQ transport и broker redelivery не поднимаются. Проверка транспортного retry остаётся инфраструктурной ответственностью MassTransit.
 - Тесты требуют Docker на GitLab runner; если runner не предоставляет Docker socket, job должен быть настроен на соответствующий runner.
 
@@ -68,3 +68,25 @@ Redis-тесты используют Testcontainers.Redis, PostgreSQL-тест�
 - Для критических сценариев проверять наблюдаемый результат и отсутствие побочных эффектов, а не только вызов метода.
 - Не считать тесты пройденными без фактического запуска.
 - CI test job выполняется на runner с Docker Engine и доступным `/var/run/docker.sock`; при смене runner эти требования необходимо сохранить.
+
+
+## Структура тестового проекта
+
+Тесты сгруппированы по слоям и предметным областям:
+
+- Api/ — BackgroundServices, Files, Messaging, RateLimiting.
+- Application/ — Broadcasts, Files.
+- Infrastructure/ — Accounts, Administration, Attachments, Authentication, Caching, Chats, Database/Migrations, Files, Moderation, Notifications, Push, Redis, Scheduling, Security, Users.
+- Realtime/ — Authorization, RateLimiting.
+- Web/ — Authentication.
+- Shared/Fixtures — PostgreSQL/Redis fixtures и xUnit collections.
+- Shared/TestDoubles — FakeUploadedFile, StubHandler, NoOpCacheService и вспомогательные типы.
+
+Namespaces повторяют структуру каталогов (например, Messenger.Tests.Infrastructure.Redis). Фикстуры и test doubles вынесены из тестовых классов в отдельные файлы. При переносе тестовые сценарии и атрибуты коллекций сохранены.
+
+## Дополнительные тесты файлового хранилища
+
+- Application/Files/FileValidationServiceTests проверяет MIME, сигнатуры, допустимые расширения, ограничения и очистку имени.
+- Infrastructure/Files/LocalFileStorageTests проверяет запись, чтение, удаление, изоляцию областей, path traversal, превышение лимита и защиту существующего файла при конфликте имени.
+- Api/Files/UploadOrphanCleanupServiceTests проверяет удаление старых orphan-файлов и сохранение ссылок из вложений, аватаров и pending scheduled messages.
+

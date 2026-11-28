@@ -1,4 +1,6 @@
 using Messenger.API.Services;
+using Messenger.Application.Files;
+using Messenger.Infrastructure.Files;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using System.Text.Json;
@@ -28,6 +30,9 @@ public static class ApiServiceCollectionExtensions
     public static WebApplicationBuilder AddMessengerApiServices(this WebApplicationBuilder builder)
     {
         ConfigureJson(builder.Services);
+        builder.Services.AddSingleton<IFileStorage>(_ =>
+            new LocalFileStorage(Path.Combine(builder.Environment.ContentRootPath, "wwwroot")));
+        builder.Services.AddSingleton<IFileValidationService, FileValidationService>();
 
         builder.Services.AddValidation();
         builder.Services.AddSignalRService(builder.Configuration);

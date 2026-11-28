@@ -13,6 +13,8 @@ namespace Messenger.Infrastructure.Services
     {
         private readonly GuapMessengerContext _context;
         private readonly IConfiguration _configuration;
+        private readonly IFileStorage _fileStorage;
+        private readonly IFileValidationService _fileValidationService;
 
         private static readonly Dictionary<string, string> RoleDisplayNames = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -24,11 +26,16 @@ namespace Messenger.Infrastructure.Services
             ["ROLE_USER"] = "Пользователь"
         };
 
-        public UserService(GuapMessengerContext context,
-            IConfiguration configuration)
+        public UserService(
+            GuapMessengerContext context,
+            IConfiguration configuration,
+            IFileStorage fileStorage,
+            IFileValidationService fileValidationService)
         {
             _context = context;
             _configuration = configuration;
+            _fileStorage = fileStorage;
+            _fileValidationService = fileValidationService;
         }
 
         public async Task AssignRoleAsync(Guid userId, Guid roleId, CancellationToken token = default)
@@ -98,20 +105,12 @@ namespace Messenger.Infrastructure.Services
 
         public async Task<string> UploadAvatarAsync(Guid userId, IUploadedFile file, CancellationToken token = default)
         {
-            ArgumentNullException.ThrowIfNull(file);
-
+            var validated = await _fileValidationService.ValidateAsync(file, FileUploadPurpose.Avatar, token);
             const long maxFileSize = 2 * 1024 * 1024;
-            if (file.Length <= 0 || file.Length > maxFileSize)
-                throw new ArgumentException("Размер изображения должен быть больше 0 и не превышать 2 МБ");
-
-            var fileExtension = Path.GetExtension(file.FileName).ToLowerInvariant();
-            var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
-            if (!allowedExtensions.Contains(fileExtension))
-                throw new ArgumentException("Неподдерживаемый формат изображения");
 
             var baseUrl = _configuration["URL:API:HTTPS"]
                 ?? throw new InvalidOperationException("URL API не указан в конфигурационном файле");
-            if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var apiBaseUri))
+            if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out _))
                 throw new InvalidOperationException("URL API имеет некорректный формат");
 
             var user = await _context.Users
@@ -121,40 +120,16 @@ namespace Messenger.Infrastructure.Services
             if (user == null)
                 throw new UnauthorizedAccessException("Пользователь не найден");
 
-            await using var sourceStream = file.OpenReadStream();
-            using var memoryStream = new MemoryStream();
-            var buffer = new byte[81920];
-            int bytesRead;
-            while ((bytesRead = await sourceStream.ReadAsync(buffer.AsMemory(), token)) > 0)
-            {
-                if (memoryStream.Length + bytesRead > maxFileSize)
-                    throw new ArgumentException("Размер изображения не должен превышать 2 МБ");
-
-                await memoryStream.WriteAsync(buffer.AsMemory(0, bytesRead), token);
-            }
-
-            if (memoryStream.Length == 0)
-                throw new ArgumentException("Файл изображения пуст");
-
-            var imageBytes = memoryStream.ToArray();
-            if (!HasValidImageSignature(imageBytes, fileExtension))
-                throw new ArgumentException("Содержимое файла не соответствует формату изображения");
-
-            var webRoot = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
-            var uploadsFolder = Path.Combine(webRoot, "avatars");
-            Directory.CreateDirectory(uploadsFolder);
-
-            var oldFilePath = user.Account == null
-                ? null
-                : TryGetAvatarFilePath(user.Account.Avatar, apiBaseUri, webRoot);
-
-            var fileName = $"{userId}_{Guid.NewGuid():N}{fileExtension}";
-            var filePath = Path.Combine(uploadsFolder, fileName);
+            var fileName = $"{userId}_{Guid.NewGuid():N}{validated.Extension}";
             var avatarUrl = $"{baseUrl.TrimEnd('/')}/avatars/{fileName}";
 
             try
             {
-                await File.WriteAllBytesAsync(filePath, imageBytes, token);
+                await using var sourceStream = file.OpenReadStream();
+                var storedLength = await _fileStorage.SaveAsync(
+                    FileStorageArea.Avatars, fileName, sourceStream, maxFileSize, token);
+                if (storedLength != validated.Length)
+                    throw new InvalidDataException("Размер загруженного аватара не совпадает с заявленным размером");
 
                 if (user.Account == null)
                 {
@@ -167,13 +142,10 @@ namespace Messenger.Infrastructure.Services
             }
             catch
             {
-                TryDeleteFile(filePath);
+                await TryDeleteStoredFileAsync(FileStorageArea.Avatars, fileName);
                 throw;
             }
 
-            // Старый файл удаляется только после фиксации новой ссылки в БД.
-            if (oldFilePath != null && !string.Equals(oldFilePath, filePath, StringComparison.Ordinal))
-                TryDeleteFile(oldFilePath);
 
             return avatarUrl;
         }
@@ -187,22 +159,10 @@ namespace Messenger.Infrastructure.Services
             if (user?.Account == null || string.IsNullOrWhiteSpace(user.Account.Avatar))
                 return;
 
-            var baseUrl = _configuration["URL:API:HTTPS"];
-            Uri? apiBaseUri = Uri.TryCreate(baseUrl, UriKind.Absolute, out var parsedBaseUri)
-                ? parsedBaseUri
-                : null;
-            var webRoot = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
-            var oldFilePath = apiBaseUri == null
-                ? null
-                : TryGetAvatarFilePath(user.Account.Avatar, apiBaseUri, webRoot);
 
             user.Account.Avatar = null;
             await _context.SaveChangesAsync(token);
 
-            // После успешного обновления БД ошибка удаления оставит только orphan-файл,
-            // но не сломанную ссылку на изображение.
-            if (oldFilePath != null)
-                TryDeleteFile(oldFilePath);
         }
 
         public async Task<IEnumerable<UserSearch>> SearchUsersAsync(string search, CancellationToken token = default)
@@ -239,7 +199,7 @@ namespace Messenger.Infrastructure.Services
         }
 
         public async Task UpdateProfileAsync(Guid userId, UpdateUserProfileRequest request,
-            string? avatarUrl = null, CancellationToken token = default)
+            CancellationToken token = default)
         {
             var user = await _context.Users
                 .Include(u => u.Account)
@@ -252,8 +212,6 @@ namespace Messenger.Infrastructure.Services
             user.LastName = request.LastName;
             user.Login = request.Login;
 
-            if (!string.IsNullOrEmpty(avatarUrl) && user.Account != null)
-                user.Account.Avatar = avatarUrl;
 
             _context.Users.Update(user);
             await _context.SaveChangesAsync(token);
@@ -349,74 +307,15 @@ namespace Messenger.Infrastructure.Services
             }
         }
 
-        private static bool HasValidImageSignature(byte[] bytes, string extension)
-        {
-            return extension switch
-            {
-                ".jpg" or ".jpeg" => bytes.Length >= 3
-                    && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF,
-                ".png" => bytes.Length >= 8
-                    && bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47
-                    && bytes[4] == 0x0D && bytes[5] == 0x0A && bytes[6] == 0x1A && bytes[7] == 0x0A,
-                ".gif" => bytes.Length >= 6
-                    && bytes[0] == 0x47 && bytes[1] == 0x49 && bytes[2] == 0x46
-                    && bytes[3] == 0x38 && (bytes[4] == 0x37 || bytes[4] == 0x39) && bytes[5] == 0x61,
-                ".webp" => bytes.Length >= 12
-                    && bytes[0] == 0x52 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x46
-                    && bytes[8] == 0x57 && bytes[9] == 0x45 && bytes[10] == 0x42 && bytes[11] == 0x50,
-                _ => false
-            };
-        }
-
-        private static string? TryGetAvatarFilePath(string? avatar, Uri apiBaseUri, string webRoot)
-        {
-            if (string.IsNullOrWhiteSpace(avatar) || avatar.Contains("default", StringComparison.OrdinalIgnoreCase))
-                return null;
-
-            string path;
-            if (Uri.TryCreate(avatar, UriKind.Absolute, out var avatarUri))
-            {
-                if (!string.Equals(avatarUri.Scheme, apiBaseUri.Scheme, StringComparison.OrdinalIgnoreCase)
-                    || !string.Equals(avatarUri.Host, apiBaseUri.Host, StringComparison.OrdinalIgnoreCase)
-                    || avatarUri.Port != apiBaseUri.Port)
-                    return null;
-
-                path = avatarUri.AbsolutePath;
-            }
-            else
-            {
-                path = avatar;
-            }
-
-            path = Uri.UnescapeDataString(path).Replace('\\', '/').TrimStart('/');
-            if (!path.StartsWith("avatars/", StringComparison.OrdinalIgnoreCase))
-                return null;
-
-            var fileName = Path.GetFileName(path);
-            if (string.IsNullOrWhiteSpace(fileName) || fileName is "." or "..")
-                return null;
-
-            var uploadsFolder = Path.GetFullPath(Path.Combine(webRoot, "avatars"));
-            var filePath = Path.GetFullPath(Path.Combine(uploadsFolder, fileName));
-            return filePath.StartsWith(uploadsFolder + Path.DirectorySeparatorChar, StringComparison.Ordinal)
-                ? filePath
-                : null;
-        }
-
-        private static void TryDeleteFile(string filePath)
+        private async Task TryDeleteStoredFileAsync(FileStorageArea area, string fileName)
         {
             try
             {
-                if (File.Exists(filePath))
-                    File.Delete(filePath);
+                await _fileStorage.DeleteAsync(area, fileName, CancellationToken.None);
             }
-            catch (IOException)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                // Cleanup failure leaves an orphan file; the database reference stays consistent.
-            }
-            catch (UnauthorizedAccessException)
-            {
-                // Cleanup failure leaves an orphan file; the database reference stays consistent.
+                // Неуспешная очистка оставляет orphan-файл; ссылку в БД уже не восстанавливаем.
             }
         }
 

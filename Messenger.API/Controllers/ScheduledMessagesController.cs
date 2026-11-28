@@ -1,5 +1,7 @@
 using Asp.Versioning;
 using Messenger.API.Extensions;
+using Messenger.API.Adapters;
+using Messenger.Application.Files;
 using Messenger.Application.DTOs.Messages;
 using Messenger.Realtime.Hubs;
 using Messenger.Application.Interfaces;
@@ -30,6 +32,8 @@ namespace Messenger.API.Controllers
         private readonly IConfiguration _configuration;
         private readonly IHubContext<ChatHub> _hubContext;
         private readonly ILogger<ScheduledMessagesController> _logger;
+        private readonly IFileStorage _fileStorage;
+        private readonly IFileValidationService _fileValidationService;
 
         public ScheduledMessagesController(
             IScheduledMessageService scheduledService,
@@ -38,7 +42,9 @@ namespace Messenger.API.Controllers
             IEncryptionService encryption,
             IConfiguration configuration,
             IHubContext<ChatHub> hubContext,
-            ILogger<ScheduledMessagesController> logger)
+            ILogger<ScheduledMessagesController> logger,
+            IFileStorage fileStorage,
+            IFileValidationService fileValidationService)
         {
             _scheduledService = scheduledService;
             _chatService = chatService;
@@ -47,6 +53,8 @@ namespace Messenger.API.Controllers
             _configuration = configuration;
             _hubContext = hubContext;
             _logger = logger;
+            _fileStorage = fileStorage;
+            _fileValidationService = fileValidationService;
         }
 
         /// <summary>
@@ -63,6 +71,8 @@ namespace Messenger.API.Controllers
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        [RequestSizeLimit(60 * 1024 * 1024)]
+        [RequestFormLimits(MultipartBodyLengthLimit = 60 * 1024 * 1024)]
         public async Task<IActionResult> PostScheduleAsync(
             [Description("Идентификатор чата")] Guid chatId,
             [FromForm] string? messageText,
@@ -71,6 +81,8 @@ namespace Messenger.API.Controllers
             [FromForm] IFormFile[]? files,
             CancellationToken ct = default)
         {
+            var savedFileNames = new List<string>();
+            var scheduledMessageCreated = false;
             try
             {
                 var user = await User.GetCurrentUserAsync(_userService, ct);
@@ -97,39 +109,43 @@ namespace Messenger.API.Controllers
                     return StatusCode(StatusCodes.Status403Forbidden, ApiResponse.Failure("Доступ запрещён", "FORBIDDEN"));
                 }
 
-                const long MAX_FILE_SIZE = 10 * 1024 * 1024;
+                var apiBaseUrl = _configuration["URL:API:HTTPS"];
+                if (files is { Length: > 0 } && !Uri.TryCreate(apiBaseUrl, UriKind.Absolute, out _))
+                    throw new InvalidOperationException("URL:API:HTTPS не задан или имеет некорректный формат");
+
+                const long maxFileSize = 10 * 1024 * 1024;
+                const long maxTotalFileSize = 50 * 1024 * 1024;
+                const int maxFileCount = 20;
+                if (files is { Length: > maxFileCount })
+                    return BadRequest(ApiResponse.Failure($"Можно прикрепить не более {maxFileCount} файлов", "INVALID_REQUEST"));
+
+                if (files != null && files.Sum(file => file.Length) > maxTotalFileSize)
+                    return BadRequest(ApiResponse.Failure("Суммарный размер вложений не должен превышать 50 МБ", "INVALID_REQUEST"));
+
+                var attachmentsInfo = new List<AttachmentInfo>();
                 if (files != null)
                 {
                     foreach (var file in files)
                     {
-                        if (file.Length > MAX_FILE_SIZE)
-                        {
-                            return BadRequest(ApiResponse.Failure($"Файл '{file.FileName}' превышает 10 МБ", "INVALID_REQUEST"));
-                        }
-                    }
-                }
+                        var validated = await _fileValidationService.ValidateAsync(
+                            new FormFileUploadAdapter(file), FileUploadPurpose.Attachment, ct);
+                        var fileName = $"{Guid.NewGuid():N}{validated.Extension}";
+                        var fileUrl = $"{apiBaseUrl!.TrimEnd('/')}/uploads/{fileName}";
 
-                var attachmentsInfo = new List<AttachmentInfo>();
-                if (files != null && files.Length > 0)
-                {
-                    var uploadPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads");
-                    Directory.CreateDirectory(uploadPath);
+                        await using var stream = file.OpenReadStream();
+                        var storedSize = await _fileStorage.SaveAsync(
+                            FileStorageArea.Uploads, fileName, stream, maxFileSize, ct);
+                        savedFileNames.Add(fileName);
 
-                    foreach (var file in files.Where(f => f.Length > 0))
-                    {
-                        var fileName = Guid.NewGuid() + Path.GetExtension(file.FileName);
-                        var filePath = Path.Combine(uploadPath, fileName);
-                        var fileUrl = $"{_configuration["URL:API:HTTPS"]}/uploads/{fileName}";
-
-                        await using var stream = new FileStream(filePath, FileMode.Create);
-                        await file.CopyToAsync(stream, ct);
+                        if (storedSize != validated.Length)
+                            throw new InvalidDataException("Размер загруженного файла не совпадает с заявленным размером");
 
                         attachmentsInfo.Add(new AttachmentInfo
                         {
                             AttachmentId = Guid.NewGuid(),
-                            FileName = file.FileName,
-                            FileType = file.ContentType ?? "application/octet-stream",
-                            SizeInBytes = file.Length,
+                            FileName = validated.FileName,
+                            FileType = validated.ContentType,
+                            SizeInBytes = storedSize,
                             Url = fileUrl
                         });
                     }
@@ -146,6 +162,7 @@ namespace Messenger.API.Controllers
 
                 var dto = await _scheduledService.CreateAsync(chatId, user.UserId, encrypted,
                     attachmentsInfo.Count > 0, attachmentsInfo, scheduledUtc, replyToMessageId, ct);
+                scheduledMessageCreated = true;
 
 
                 try
@@ -166,21 +183,51 @@ namespace Messenger.API.Controllers
             }
             catch (UnauthorizedAccessException ex)
             {
+                if (!scheduledMessageCreated)
+                    await CleanupUploadedFilesAsync(savedFileNames);
                 _logger.LogWarning(ex, "Ошибка авторизации при планировании сообщения");
                 return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
             catch (ArgumentException ex)
             {
+                if (!scheduledMessageCreated)
+                    await CleanupUploadedFilesAsync(savedFileNames);
+                return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
+            }
+            catch (InvalidDataException ex)
+            {
+                if (!scheduledMessageCreated)
+                    await CleanupUploadedFilesAsync(savedFileNames);
                 return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
+                if (!scheduledMessageCreated)
+                    await CleanupUploadedFilesAsync(savedFileNames);
                 throw;
             }
             catch (Exception ex)
             {
+                if (!scheduledMessageCreated)
+                    await CleanupUploadedFilesAsync(savedFileNames);
                 _logger.LogError(ex, "Schedule message failed for chat {ChatId}", chatId);
                 return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
+            }
+        }
+
+        private async Task CleanupUploadedFilesAsync(IEnumerable<string> fileNames)
+        {
+            foreach (var fileName in fileNames)
+            {
+                try
+                {
+                    await _fileStorage.DeleteAsync(
+                        FileStorageArea.Uploads, fileName, CancellationToken.None);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    _logger.LogWarning(ex, "Не удалось удалить временный файл запланированного сообщения {FileName}", fileName);
+                }
             }
         }
 

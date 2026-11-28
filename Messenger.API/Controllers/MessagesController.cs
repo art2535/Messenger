@@ -1,6 +1,8 @@
 using Messenger.Application.Common;
 using Asp.Versioning;
 using Messenger.API.Extensions;
+using Messenger.API.Adapters;
+using Messenger.Application.Files;
 using MassTransit;
 using Messenger.Application.DTOs.Messages;
 using Messenger.Application.DTOs.Chats;
@@ -38,6 +40,8 @@ namespace Messenger.API.Controllers
         private readonly IAccountSettingsService _accountSettingsService;
         private readonly ILogger<MessagesController> _logger;
         private readonly IRateLimitService _rateLimitService;
+        private readonly IFileStorage _fileStorage;
+        private readonly IFileValidationService _fileValidationService;
 
         public MessagesController(
             IMessageService messageService,
@@ -49,7 +53,9 @@ namespace Messenger.API.Controllers
             IAttachmentService attachmentService,
             IAccountSettingsService accountSettingsService,
             ILogger<MessagesController> logger,
-            IRateLimitService rateLimitService)
+            IRateLimitService rateLimitService,
+            IFileStorage fileStorage,
+            IFileValidationService fileValidationService)
         {
             _messageService = messageService;
             _configuration = configuration;
@@ -61,6 +67,8 @@ namespace Messenger.API.Controllers
             _accountSettingsService = accountSettingsService;
             _logger = logger;
             _rateLimitService = rateLimitService;
+            _fileStorage = fileStorage;
+            _fileValidationService = fileValidationService;
         }
 
         /// <summary>
@@ -141,7 +149,7 @@ namespace Messenger.API.Controllers
             [FromForm, Description("Файлы-вложения (опционально, несколько файлов)")] IFormFile[]? files,
             CancellationToken ct = default)
         {
-            var uploadedFilePaths = new List<string>();
+            var uploadedFileNames = new List<string>();
             var messagePublished = false;
             try
             {
@@ -167,6 +175,10 @@ namespace Messenger.API.Controllers
                     return Unauthorized(ApiResponse.Failure("Пользователь не найден"
                     , "UNAUTHORIZED"));
                 }
+
+                var apiBaseUrl = _configuration["URL:API:HTTPS"];
+                if (files is { Length: > 0 } && !Uri.TryCreate(apiBaseUrl, UriKind.Absolute, out _))
+                    throw new InvalidOperationException("URL:API:HTTPS не задан или имеет некорректный формат");
 
                 const long maxFileSize = 10 * 1024 * 1024;
                 const long maxTotalFileSize = 50 * 1024 * 1024;
@@ -224,38 +236,31 @@ namespace Messenger.API.Controllers
 
                 if (files != null && files.Length > 0)
                 {
-                    var uploadPath = GetUploadDirectory();
-
                     foreach (var file in files)
                     {
-                        var fileName = CreateStoredFileName(file.FileName);
-                        var filePath = GetUploadFilePath(uploadPath, fileName);
-                        var fileUrl = $"{_configuration["URL:API:HTTPS"]?.TrimEnd('/')}/uploads/{fileName}";
-                        var displayFileName = SanitizeDisplayFileName(file.FileName);
+                        var validated = await _fileValidationService.ValidateAsync(
+                            new FormFileUploadAdapter(file), FileUploadPurpose.Attachment, ct);
+                        var fileName = CreateStoredFileName(validated.FileName);
+                        var fileUrl = $"{apiBaseUrl!.TrimEnd('/')}/uploads/{fileName}";
+                        var displayFileName = validated.FileName;
 
-                        await using (var stream = new FileStream(
-                            filePath,
-                            FileMode.CreateNew,
-                            FileAccess.Write,
-                            FileShare.None,
-                            81920,
-                            FileOptions.Asynchronous | FileOptions.SequentialScan))
-                        {
-                            uploadedFilePaths.Add(filePath);
-                            await file.CopyToAsync(stream, ct);
-                        }
+                        await using var stream = file.OpenReadStream();
+                        var storedSize = await _fileStorage.SaveAsync(
+                            FileStorageArea.Uploads, fileName, stream, maxFileSize, ct);
+                        uploadedFileNames.Add(fileName);
+
+                        if (storedSize != validated.Length)
+                            throw new InvalidDataException("Размер загруженного файла не совпадает с заявленным размером");
 
                         var attachmentId = Guid.NewGuid();
-                        var fileType = string.IsNullOrWhiteSpace(file.ContentType)
-                            ? "application/octet-stream"
-                            : file.ContentType;
+                        var fileType = validated.ContentType;
 
                         attachmentsInfo.Add(new AttachmentInfo
                         {
                             AttachmentId = attachmentId,
                             FileName = displayFileName,
                             FileType = fileType,
-                            SizeInBytes = file.Length,
+                            SizeInBytes = storedSize,
                             Url = fileUrl
                         });
 
@@ -264,7 +269,7 @@ namespace Messenger.API.Controllers
                             AttachmentId = attachmentId,
                             FileName = displayFileName,
                             FileType = fileType,
-                            SizeInBytes = (int)file.Length,
+                            SizeInBytes = checked((int)storedSize),
                             Url = fileUrl
                         });
                     }
@@ -292,12 +297,12 @@ namespace Messenger.API.Controllers
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested)
                 {
-                    CleanupUploadedFiles(uploadedFilePaths);
+                    await CleanupUploadedFilesAsync(uploadedFileNames);
                     throw;
                 }
                 catch (Exception ex)
                 {
-                    CleanupUploadedFiles(uploadedFilePaths);
+                    await CleanupUploadedFilesAsync(uploadedFileNames);
                     _logger.LogError(ex, "Ошибка при публикации сообщения в чат {ChatId}", chatId);
                     return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure("Внутренняя ошибка сервера при отправке сообщения", "INTERNAL_ERROR"));
                 }
@@ -350,16 +355,26 @@ namespace Messenger.API.Controllers
                 _logger.LogWarning(ex, "Ошибка авторизации при отправке сообщения в чат {ChatId}", chatId);
                 return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
             }
+            catch (ArgumentException ex)
+            {
+                await CleanupUploadedFilesAsync(uploadedFileNames);
+                return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
+            }
+            catch (InvalidDataException ex)
+            {
+                await CleanupUploadedFilesAsync(uploadedFileNames);
+                return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
+            }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
                 if (!messagePublished)
-                    CleanupUploadedFiles(uploadedFilePaths);
+                    await CleanupUploadedFilesAsync(uploadedFileNames);
                 throw;
             }
             catch (Exception ex)
             {
                 if (!messagePublished)
-                    CleanupUploadedFiles(uploadedFilePaths);
+                    await CleanupUploadedFilesAsync(uploadedFileNames);
                 _logger.LogError(ex, "Ошибка при отправке сообщения в чат {ChatId}", chatId);
                 return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
             }
@@ -471,8 +486,11 @@ namespace Messenger.API.Controllers
                     targetChats.Add(chat);
                 }
 
-                var uploadPath = GetUploadDirectory();
-                var apiBase = (_configuration["URL:API:HTTPS"] ?? "").TrimEnd('/');
+                var apiBaseUrl = _configuration["URL:API:HTTPS"];
+                if (sourceMessages.Any(source => source.attachments.Count > 0)
+                    && !Uri.TryCreate(apiBaseUrl, UriKind.Absolute, out _))
+                    throw new InvalidOperationException("URL:API:HTTPS не задан или имеет некорректный формат");
+                var apiBase = apiBaseUrl?.TrimEnd('/') ?? "";
 
                 int published = 0;
                 var errors = new List<string>();
@@ -481,7 +499,7 @@ namespace Messenger.API.Controllers
                 {
                     foreach (var (srcMsg, plainText, attachments) in sourceMessages)
                     {
-                        var copiedFilePaths = new List<string>();
+                        var copiedFileNames = new List<string>();
                         var forwardPublished = false;
                         try
                         {
@@ -502,28 +520,47 @@ namespace Messenger.API.Controllers
                             foreach (var att in attachments)
                             {
                                 var diskName = ExtractUploadFileName(att.Url, att.FileName);
-                                var srcPath = GetUploadFilePath(uploadPath, diskName);
-                                if (!System.IO.File.Exists(srcPath))
+                                var sourceInfo = await _fileStorage.GetInfoAsync(
+                                    FileStorageArea.Uploads, diskName, ct);
+                                if (sourceInfo == null)
                                 {
-                                    _logger.LogWarning("Файл вложения не найден: {Path}", srcPath);
+                                    _logger.LogWarning("Файл вложения не найден: {FileName}", diskName);
                                     continue;
                                 }
 
+                                ValidatedFile validatedSource;
+                                await using (var validationStream = await _fileStorage.OpenReadAsync(
+                                    FileStorageArea.Uploads, diskName, ct))
+                                {
+                                    if (validationStream == null)
+                                        continue;
+
+                                    validatedSource = await _fileValidationService.ValidateAsync(
+                                        new StoredFileUploadAdapter(diskName, sourceInfo.Length, validationStream),
+                                        FileUploadPurpose.Attachment,
+                                        ct);
+                                }
+
+                                await using var sourceStream = await _fileStorage.OpenReadAsync(
+                                    FileStorageArea.Uploads, diskName, ct);
+                                if (sourceStream == null)
+                                    continue;
+
                                 var ext = GetSafeExtension(diskName);
                                 var newFileName = $"{Guid.NewGuid():N}{ext}";
-                                var destPath = GetUploadFilePath(uploadPath, newFileName);
-                                copiedFilePaths.Add(destPath);
-                                System.IO.File.Copy(srcPath, destPath, overwrite: false);
+                                var copiedSize = await _fileStorage.SaveAsync(
+                                    FileStorageArea.Uploads, newFileName, sourceStream, 10 * 1024 * 1024, ct);
+                                copiedFileNames.Add(newFileName);
 
                                 var newAttId = Guid.NewGuid();
                                 var fileUrl = $"{apiBase}/uploads/{newFileName}";
-                                var size = att.SizeInBytes > 0 ? att.SizeInBytes : (int)new FileInfo(destPath).Length;
+                                var size = checked((int)copiedSize);
 
                                 attachmentsInfo.Add(new AttachmentInfo
                                 {
                                     AttachmentId = newAttId,
                                     FileName = SanitizeDisplayFileName(att.FileName),
-                                    FileType = string.IsNullOrWhiteSpace(att.FileType) ? "application/octet-stream" : att.FileType,
+                                    FileType = validatedSource.ContentType,
                                     SizeInBytes = size,
                                     Url = fileUrl
                                 });
@@ -598,7 +635,7 @@ namespace Messenger.API.Controllers
                         catch (OperationCanceledException) when (ct.IsCancellationRequested)
                         {
                             if (!forwardPublished)
-                                CleanupUploadedFiles(copiedFilePaths);
+                                await CleanupUploadedFilesAsync(copiedFileNames);
                             throw;
                         }
                         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -608,7 +645,7 @@ namespace Messenger.API.Controllers
                         catch (Exception ex)
                         {
                             if (!forwardPublished)
-                                CleanupUploadedFiles(copiedFilePaths);
+                                await CleanupUploadedFilesAsync(copiedFileNames);
                             _logger.LogError(ex, "Ошибка пересылки сообщения {MessageId} в чат {ChatId}", srcMsg.MessageId, target.ChatId);
                             errors.Add(ex.Message);
                         }
@@ -670,35 +707,6 @@ namespace Messenger.API.Controllers
             throw new InvalidOperationException("Не удалось определить безопасное имя файла вложения");
         }
 
-        private static string GetUploadDirectory()
-        {
-            var path = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads"));
-            Directory.CreateDirectory(path);
-            return path;
-        }
-
-        private static string GetUploadFilePath(string uploadDirectory, string fileName)
-        {
-            if (string.IsNullOrWhiteSpace(fileName)
-                || fileName is "." or ".."
-                || fileName.Contains('/') || fileName.Contains('\\'))
-                throw new InvalidOperationException("Некорректное имя файла вложения");
-
-            var root = Path.GetFullPath(uploadDirectory);
-            var fullPath = Path.GetFullPath(Path.Combine(root, fileName));
-            var rootPrefix = root.EndsWith(Path.DirectorySeparatorChar)
-                ? root
-                : root + Path.DirectorySeparatorChar;
-            var comparison = OperatingSystem.IsWindows()
-                ? StringComparison.OrdinalIgnoreCase
-                : StringComparison.Ordinal;
-
-            if (!fullPath.StartsWith(rootPrefix, comparison))
-                throw new InvalidOperationException("Путь вложения выходит за пределы каталога загрузок");
-
-            return fullPath;
-        }
-
         private static string GetSafeExtension(string fileName)
         {
             var normalizedName = fileName.Replace('\\', '/');
@@ -737,7 +745,7 @@ namespace Messenger.API.Controllers
             return safeName.Length > 255 ? safeName[..255] : safeName;
         }
 
-        private void DeleteStoredAttachmentFiles(IEnumerable<AttachmentDto>? attachments)
+        private async Task DeleteStoredAttachmentFilesAsync(IEnumerable<AttachmentDto>? attachments)
         {
             if (attachments == null)
                 return;
@@ -773,9 +781,8 @@ namespace Messenger.API.Controllers
                         || fileName is "." or "..")
                         continue;
 
-                    var filePath = GetUploadFilePath(GetUploadDirectory(), fileName);
-                    if (System.IO.File.Exists(filePath))
-                        System.IO.File.Delete(filePath);
+                    await _fileStorage.DeleteAsync(
+                        FileStorageArea.Uploads, fileName, CancellationToken.None);
                 }
                 catch (Exception ex)
                 {
@@ -784,18 +791,18 @@ namespace Messenger.API.Controllers
             }
         }
 
-        private void CleanupUploadedFiles(IEnumerable<string> filePaths)
+        private async Task CleanupUploadedFilesAsync(IEnumerable<string> fileNames)
         {
-            foreach (var filePath in filePaths)
+            foreach (var fileName in fileNames)
             {
                 try
                 {
-                    if (System.IO.File.Exists(filePath))
-                        System.IO.File.Delete(filePath);
+                    await _fileStorage.DeleteAsync(
+                        FileStorageArea.Uploads, fileName, CancellationToken.None);
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
-                    _logger.LogWarning(ex, "Не удалось удалить временный файл вложения {FilePath}", filePath);
+                    _logger.LogWarning(ex, "Не удалось удалить временный файл вложения {FileName}", fileName);
                 }
             }
         }
@@ -1107,7 +1114,7 @@ namespace Messenger.API.Controllers
                     return Forbid();
 
                 await _messageService.DeleteMessageAsync(messageId, userId, ct);
-                DeleteStoredAttachmentFiles(message.Attachments);
+                await DeleteStoredAttachmentFilesAsync(message.Attachments);
 
                 var deletedPayload = new
                 {
@@ -1205,7 +1212,7 @@ namespace Messenger.API.Controllers
 
                 var deleted = await _messageService.DeleteMessagesAsync(allowed, chatId, userId, ct);
                 if (deleted > 0)
-                    DeleteStoredAttachmentFiles(attachmentsToDelete);
+                    await DeleteStoredAttachmentFilesAsync(attachmentsToDelete);
 
                 var bulkChat = await _chatService.GetChatByIdAsync(chatId, userId, ct);
                 var participants = bulkChat?.Participants?.ToList()
