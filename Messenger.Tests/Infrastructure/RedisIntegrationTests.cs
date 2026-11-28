@@ -183,6 +183,30 @@ public sealed class RedisIntegrationTests(RedisFixture fixture)
     }
 
     [Fact]
+    public async Task PresenceTracker_ConcurrentConnectionsProduceSingleOnlineAndOfflineTransitions()
+    {
+        var tracker = CreatePresenceTracker();
+        var userId = Guid.NewGuid();
+        var connectionIds = Enumerable.Range(0, 12)
+            .Select(index => $"parallel-connection-{index}")
+            .ToArray();
+
+        var onlineTransitions = await Task.WhenAll(connectionIds.Select(connectionId =>
+            tracker.ConnectAsync(userId, connectionId)));
+
+        Assert.Single(onlineTransitions.Where(becameOnline => becameOnline));
+        Assert.Equal(
+            connectionIds.OrderBy(value => value),
+            (await tracker.GetActiveConnectionIdsAsync(userId)).OrderBy(value => value));
+
+        var offlineTransitions = await Task.WhenAll(connectionIds.Select(connectionId =>
+            tracker.DisconnectAsync(userId, connectionId)));
+
+        Assert.Single(offlineTransitions.Where(becameOffline => becameOffline));
+        Assert.False(await tracker.HasActiveConnectionsAsync(userId));
+    }
+
+    [Fact]
     public async Task PresenceTracker_HeartbeatCannotResurrectDisconnectedConnection()
     {
         var tracker = CreatePresenceTracker();
