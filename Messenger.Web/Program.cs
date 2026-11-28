@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.ResponseCompression;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using System.IO.Compression;
+using System.Net.Http.Headers;
 using System.Text;
 using Serilog;
 
