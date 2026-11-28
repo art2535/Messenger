@@ -1,4 +1,6 @@
-﻿namespace Messenger.Web.Services
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace Messenger.Web.Services
 {
     public sealed class TokenRefreshOptions
     {
