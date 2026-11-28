@@ -28,12 +28,13 @@
 | FileValidationService | Проверка имени, размера, расширения и magic bytes |
 | Messenger.Infrastructure.Files.LocalFileStorage | Локальная запись, чтение, удаление и перечисление |
 | UploadOrphanCleanupService | Фоновая очистка старых файлов без ссылок |
+| Messenger.API.Files.StoredFileNameGenerator | Генерация owner-prefixed имён и проверка владельца файла |
 
 API регистрирует LocalFileStorage с корнем `{ContentRootPath}/wwwroot`. Файлы разделяются по каталогам:
 - `wwwroot/uploads` — вложения сообщений;
 - `wwwroot/avatars` — аватары.
 
-Общий static-file provider не публикует uploads: отдельный middleware раздаёт только avatars. Имена новых вложений генерируются сервером на основе ID владельца, случайного GUID и проверенного расширения. Клиентское имя сохраняется только как отображаемое имя. LocalFileStorage дополнительно отклоняет traversal, управляющие символы и имена длиннее 255 символов.
+Общий static-file provider не публикует uploads: отдельный middleware раздаёт только avatars. Имена новых вложений генерируются общим StoredFileNameGenerator на основе ID владельца, случайного GUID и проверенного расширения. Он используется для обычных сообщений, запланированных сообщений и копий вложений при пересылке. Клиентское имя сохраняется только как отображаемое имя. LocalFileStorage дополнительно отклоняет traversal, управляющие символы и имена длиннее 255 символов.
 
 ## Валидация
 

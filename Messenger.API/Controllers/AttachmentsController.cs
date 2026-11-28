@@ -2,7 +2,7 @@ using Messenger.Application.DTOs.Responses;
 using Messenger.Application.Files;
 using Messenger.API.Adapters;
 using Messenger.API.Files;
-﻿using Asp.Versioning;
+using Asp.Versioning;
 using Messenger.Application.DTOs.Attachments;
 using Messenger.Application.Interfaces;
 using Messenger.API.Extensions;
