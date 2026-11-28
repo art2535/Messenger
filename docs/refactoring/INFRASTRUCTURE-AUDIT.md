@@ -201,6 +201,8 @@
 
 ### Добавлено: тесты Web token refresh
 
+Дополнительно добавлен `UserTokenStoreTests`: конкурентный `GetOrAdd`, compare-and-remove для устаревшей записи, отзыв всех сессий с общим refresh token и tombstones. Проверен пустой цикл `TokenRefreshBackgroundService` без обращения к API.
+
 Добавлены тесты `TokenRefresher`:
 - успешная ротация access/refresh token и обновление срока действия;
 - окончательный отказ SSO отзывает сессию и создаёт tombstone;
