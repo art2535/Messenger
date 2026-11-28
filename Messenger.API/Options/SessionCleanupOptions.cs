@@ -1,4 +1,6 @@
-﻿namespace Messenger.API.Options
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace Messenger.API.Options
 {
     public class SessionCleanupOptions
     {
