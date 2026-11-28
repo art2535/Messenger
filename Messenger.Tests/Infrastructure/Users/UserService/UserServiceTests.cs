@@ -12,14 +12,14 @@ using Messenger.Tests.Shared.Fixtures;
 
 using Messenger.Tests.Shared.TestDoubles;
 
-namespace Messenger.Tests.Infrastructure.Users;
+namespace Messenger.Tests.Infrastructure.Users.UserService;
 
 [Collection(PostgreSqlCollection.Name)]
-public sealed class UserAndBroadcastServiceTests
+public sealed class UserServiceTests
 {
     private readonly PostgreSqlFixture _database;
 
-    public UserAndBroadcastServiceTests(PostgreSqlFixture database) => _database = database;
+    public UserServiceTests(PostgreSqlFixture database) => _database = database;
 
     [Fact]
     public async Task RegisterExternalUserAsync_ConcurrentCalls_ReturnOnePersistedIdentity()
@@ -89,50 +89,7 @@ public sealed class UserAndBroadcastServiceTests
             .CountAsync(x => (Guid)x["UserId"] == userId && (Guid)x["RoleId"] == roleId));
     }
 
-    [Fact]
-    public async Task BroadcastRepository_CreatesRecipientRowsAndEnforcesRecipientOwnership()
-    {
-        var senderId = Guid.NewGuid();
-        var recipientId = Guid.NewGuid();
-        var otherId = Guid.NewGuid();
-        await SeedUserAsync(senderId);
-        await SeedUserAsync(recipientId);
-        await SeedUserAsync(otherId);
 
-        await using var context = _database.CreateContext();
-        var repository = new EfBroadcastRepository(context);
-        var existing = await repository.GetExistingRecipientIdsAsync(new[] { recipientId, otherId, Guid.NewGuid() });
-        Assert.Equal(2, existing.Count);
-
-        var created = await repository.CreateBroadcastAsync(new CreateBroadcastRequest
-        {
-            Title = "Maintenance",
-            MessageText = "Service window",
-            RecipientIds = new List<Guid> { recipientId, otherId }
-        }, senderId, new[] { recipientId, otherId });
-
-        Assert.Equal(2, created.TotalRecipients);
-        Assert.NotEqual(Guid.Empty, created.BroadcastId);
-
-        Assert.Null(await repository.MarkAsReadAsync(created.BroadcastId, senderId));
-        var marked = await repository.MarkAsReadAsync(created.BroadcastId, recipientId);
-        Assert.NotNull(marked);
-        Assert.True(marked.Success);
-        Assert.NotNull(marked.ReadAt);
-
-        var originalReadAt = marked.ReadAt;
-        await Task.Delay(20);
-        var markedAgain = await repository.MarkAsReadAsync(created.BroadcastId, recipientId);
-        Assert.Equal(originalReadAt, markedAgain?.ReadAt);
-
-        var unread = await repository.GetMyBroadcastsAsync(recipientId, unreadOnly: true);
-        Assert.DoesNotContain(unread, item => item.BroadcastId == created.BroadcastId);
-
-        var summary = await repository.GetBroadcastSummaryAsync(created.BroadcastId);
-        Assert.NotNull(summary);
-        Assert.Equal(1, summary.ReadCount);
-        Assert.Equal(2, summary.TotalRecipients);
-    }
 
     [Fact]
     public async Task UpdateProfileAsync_UpdatesProfileButDoesNotOverwriteAvatarWithoutExplicitAvatarUrl()
