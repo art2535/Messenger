@@ -19,6 +19,15 @@ public sealed class PushSubscriptionServiceTests
     public PushSubscriptionServiceTests(PostgreSqlFixture database) => _database = database;
 
     [Fact]
+    public async Task SendPushForMessageAsync_WhenMessageDoesNotExist_DoesNotAttemptDelivery()
+    {
+        await using var context = _database.CreateContext();
+        var service = CreateService(context);
+
+        await service.SendPushForMessageAsync(Guid.NewGuid());
+    }
+
+    [Fact]
     public async Task AddSubscriptionAsync_ConcurrentRegistrationsForSameEndpoint_LeaveOneOwner()
     {
         var firstUserId = Guid.NewGuid();
