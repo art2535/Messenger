@@ -146,6 +146,10 @@
 - отметка прочтения только входящих сообщений и запрет операции неучастнику;
 - поиск и закрепление сообщения недоступны постороннему пользователю.
 
+### Добавлено: тесты CacheMetrics
+
+Добавлен `CacheMetricsTests`: `MeterListener` проверяет публикацию hit/miss/error counters и извлечение prefix из cache key, включая fallback `unknown`.
+
 ### Добавлено: тесты Admin и Redis fallback
 
 Добавлены тесты для `AdminService`, `RedisUserPresenceTracker`, `RedisCacheService` и `RedisDistributedLock`:
