@@ -206,7 +206,7 @@
 ### Тесты
 
 ```bash
-dotnet test --project Messenger.Tests
+dotnet test Messenger.Tests/Messenger.Tests.csproj --configuration Debug
 ```
 
 Покрытие: сервисы, контроллеры API, Core, Web, AppHost.
@@ -282,7 +282,9 @@ Messenger/
 
 ## Документация
 
-- [**Архитектура и эксплуатация**](docs/ARCHITECTURE.md) — схема системы, конфигурация, API, деплой
+- [**Локальная разработка**](docs/LOCAL-DEVELOPMENT.md) — настройка окружения, запуск через IDE и тестирование
+- [**Архитектура и эксплуатация**](docs/ARCHITECTURE.md) — схема системы, конфигурация и API
+- [**Итоговый отчёт рефакторинга**](docs/refactoring/FINAL-REFACTORING-REPORT.md) — выполненные этапы, проверки и известные ограничения
 - [**Дорожная карта по производительности**](docs/PERFORMANCE_ROADMAP.md) — анализ узких мест, приоритеты P0–P3, порядок релизов
 - [**GitHub Wiki**](https://github.com/art2535/Messenger/wiki) — полная документация проекта
 
