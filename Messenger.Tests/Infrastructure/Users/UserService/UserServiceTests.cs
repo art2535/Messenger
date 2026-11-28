@@ -198,7 +198,7 @@ public sealed class UserServiceTests
         try
         {
             await using var context = _database.CreateContext();
-            var service = new UserService(context, configuration, storage, new FileValidationService());
+            var service = new UserServiceImplementation(context, configuration, storage, new FileValidationService());
             var png = new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
 
             var firstUrl = await service.UploadAvatarAsync(
