@@ -15,7 +15,8 @@ public sealed class BroadcastServiceTests
         var recipients = new[] { Guid.NewGuid(), Guid.NewGuid() };
         var repository = new Mock<IBroadcastRepository>();
         var created = new BroadcastCreatedResponse { BroadcastId = Guid.NewGuid(), TotalRecipients = 2 };
-        repository.Setup(x => x.GetExistingRecipientIdsAsync(recipients, It.IsAny<CancellationToken>()))
+        repository.Setup(x => x.GetExistingRecipientIdsAsync(
+                It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((IReadOnlyList<Guid>)recipients);
         repository.Setup(x => x.CreateBroadcastAsync(
                 It.IsAny<CreateBroadcastRequest>(), senderId, recipients, It.IsAny<CancellationToken>()))
