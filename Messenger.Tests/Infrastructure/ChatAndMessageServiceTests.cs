@@ -145,15 +145,21 @@ public sealed class ChatAndMessageServiceTests
     }
 
     private ChatService CreateChatService(Messenger.Infrastructure.Data.GuapMessengerContext context) =>
-        new(context, CreateEncryptionService(),
-            Mock.Of<Messenger.Application.Interfaces.ICacheService>(),
-            NullLogger<ChatService>.Instance);
+        new(context, CreateEncryptionService(), CreateCacheMock().Object, NullLogger<ChatService>.Instance);
 
     private MessageService CreateMessageService(Messenger.Infrastructure.Data.GuapMessengerContext context) =>
-        new(context, CreateEncryptionService(),
-            Mock.Of<MassTransit.IPublishEndpoint>(),
-            Mock.Of<Messenger.Application.Interfaces.ICacheService>(),
-            NullLogger<MessageService>.Instance);
+        new(context, CreateEncryptionService(), Mock.Of<MassTransit.IPublishEndpoint>(),
+            CreateCacheMock().Object, NullLogger<MessageService>.Instance);
+
+    private static Mock<Messenger.Application.Interfaces.ICacheService> CreateCacheMock()
+    {
+        var cache = new Mock<Messenger.Application.Interfaces.ICacheService>();
+        cache.Setup(x => x.RemoveAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        cache.Setup(x => x.RemoveAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        return cache;
+    }
 
     private async Task SeedChatAsync(Guid chatId, Guid ownerId, params Guid[] otherUserIds)
     {
