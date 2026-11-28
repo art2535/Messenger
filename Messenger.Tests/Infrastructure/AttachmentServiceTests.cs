@@ -67,8 +67,8 @@ public sealed class AttachmentServiceTests
         var secondService = new AttachmentService(secondContext);
 
         await Task.WhenAll(
-            firstService.AddAttachmentAsync(messageId, attachmentId, attachment),
-            secondService.AddAttachmentAsync(messageId, attachmentId, attachment));
+            firstService.AddAttachmentAsync(messageId, attachmentId, attachment, CancellationToken.None),
+            secondService.AddAttachmentAsync(messageId, attachmentId, attachment, CancellationToken.None));
 
         await using var verify = _database.CreateContext();
         Assert.Equal(1, await verify.Attachments.CountAsync(item => item.AttachmentId == attachmentId));
@@ -132,6 +132,7 @@ public sealed class AttachmentServiceTests
                 FileType = "application/pdf",
                 SizeInBytes = 100,
                 Url = "/uploads/original.pdf"
-            }));
+            },
+            CancellationToken.None));
     }
 }

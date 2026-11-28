@@ -166,14 +166,38 @@ public class ScheduledMessageService : IScheduledMessageService
         }
 
         // Условный UPDATE не перезапишет запись, если диспетчер уже перевёл её в Sent.
-        var updated = await _context.ScheduledMessages
+        // В ExecuteUpdate значение второго аргумента не имеет доступа к параметру x
+        // из первого lambda, поэтому варианты обновления ветвятся явно.
+        var pendingQuery = _context.ScheduledMessages
             .Where(x => x.ScheduledMessageId == scheduledMessageId
                 && x.SenderId == userId
-                && x.Status == ScheduledMessageStatus.Pending)
-            .ExecuteUpdateAsync(setters => setters
-                .SetProperty(x => x.MessageText, encryptedText ?? x.MessageText)
-                .SetProperty(x => x.ScheduledAt, scheduledAt ?? x.ScheduledAt)
+                && x.Status == ScheduledMessageStatus.Pending);
+
+        int updated;
+        if (encryptedText is not null && scheduledAt.HasValue)
+        {
+            updated = await pendingQuery.ExecuteUpdateAsync(setters => setters
+                .SetProperty(x => x.MessageText, encryptedText)
+                .SetProperty(x => x.ScheduledAt, scheduledAt.Value)
                 .SetProperty(x => x.UpdatedAt, DateTime.UtcNow), ct);
+        }
+        else if (encryptedText is not null)
+        {
+            updated = await pendingQuery.ExecuteUpdateAsync(setters => setters
+                .SetProperty(x => x.MessageText, encryptedText)
+                .SetProperty(x => x.UpdatedAt, DateTime.UtcNow), ct);
+        }
+        else if (scheduledAt.HasValue)
+        {
+            updated = await pendingQuery.ExecuteUpdateAsync(setters => setters
+                .SetProperty(x => x.ScheduledAt, scheduledAt.Value)
+                .SetProperty(x => x.UpdatedAt, DateTime.UtcNow), ct);
+        }
+        else
+        {
+            updated = await pendingQuery.ExecuteUpdateAsync(setters => setters
+                .SetProperty(x => x.UpdatedAt, DateTime.UtcNow), ct);
+        }
 
         if (updated == 0)
             throw new InvalidOperationException("Можно редактировать только ожидающие отправки сообщения");

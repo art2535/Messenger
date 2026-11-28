@@ -94,7 +94,7 @@ public sealed class PushSubscriptionServiceTests
         {
             seed.Users.Add(CreateUser(ownerId));
             seed.Users.Add(CreateUser(otherUserId));
-            seed.PushSubscriptions.Add(new PushSubscription
+            seed.PushSubscriptions.Add(new Messenger.Infrastructure.Persistence.Entities.PushSubscription
             {
                 Id = ownSubscriptionId,
                 UserId = ownerId,

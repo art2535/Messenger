@@ -683,7 +683,7 @@ namespace Messenger.Infrastructure.Services
                 {
                     AttachmentId = a.AttachmentId,
                     FileName = a.FileName,
-                    FileType = a.FileType,
+                    FileType = a.FileType ?? string.Empty,
                     SizeInBytes = a.SizeInBytes ?? 0,
                     Url = a.Url
                 }).ToList() ?? new List<AttachmentDto>(),

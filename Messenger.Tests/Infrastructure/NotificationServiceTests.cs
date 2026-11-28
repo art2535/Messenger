@@ -1,6 +1,7 @@
 using Messenger.Application.Interfaces;
 using Messenger.Core.Models;
 using Messenger.Infrastructure.Services;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -40,13 +41,13 @@ public sealed class NotificationServiceTests
         await using (var context = _database.CreateContext())
         {
             var service = new NotificationService(context, encryption, NullLogger<NotificationService>.Instance);
-            await service.MarkAsReadAsync(otherUserId, notificationId);
+            await service.MarkAsReadAsync(otherUserId, notificationId, CancellationToken.None);
         }
 
         DateTime firstReadAt;
         await using (var verify = _database.CreateContext())
         {
-            var notification = await verify.Notifications.FindAsync(notificationId);
+            var notification = await verify.Notifications.FindAsync(new object[] { notificationId }, CancellationToken.None);
             Assert.NotNull(notification);
             Assert.False(notification.Read);
             Assert.Null(notification.ReadAt);
@@ -55,12 +56,12 @@ public sealed class NotificationServiceTests
         await using (var context = _database.CreateContext())
         {
             var service = new NotificationService(context, encryption, NullLogger<NotificationService>.Instance);
-            await service.MarkAsReadAsync(ownerId, notificationId);
+            await service.MarkAsReadAsync(ownerId, notificationId, CancellationToken.None);
         }
 
         await using (var verify = _database.CreateContext())
         {
-            var notification = await verify.Notifications.FindAsync(notificationId);
+            var notification = await verify.Notifications.FindAsync(new object[] { notificationId }, CancellationToken.None);
             Assert.NotNull(notification);
             Assert.True(notification.Read);
             Assert.NotNull(notification.ReadAt);
@@ -68,15 +69,16 @@ public sealed class NotificationServiceTests
         }
 
         await Task.Delay(20);
+
         await using (var context = _database.CreateContext())
         {
             var service = new NotificationService(context, encryption, NullLogger<NotificationService>.Instance);
-            await service.MarkAsReadAsync(ownerId, notificationId);
+            await service.MarkAsReadAsync(ownerId, notificationId, CancellationToken.None);
         }
 
         await using (var verify = _database.CreateContext())
         {
-            var notification = await verify.Notifications.FindAsync(notificationId);
+            var notification = await verify.Notifications.FindAsync(new object[] { notificationId }, CancellationToken.None);
             Assert.NotNull(notification);
             Assert.Equal(firstReadAt, notification.ReadAt);
         }
@@ -99,13 +101,13 @@ public sealed class NotificationServiceTests
         var secondService = new NotificationService(secondContext, encryption, NullLogger<NotificationService>.Instance);
 
         var results = await Task.WhenAll(
-            firstService.CreateNotificationAsync(userId, "hello", "same-event-key"),
-            secondService.CreateNotificationAsync(userId, "hello", "same-event-key"));
+            firstService.CreateNotificationAsync(userId, "hello", "same-event-key", CancellationToken.None),
+            secondService.CreateNotificationAsync(userId, "hello", "same-event-key", CancellationToken.None));
 
         Assert.Equal(results[0], results[1]);
 
         await using var verify = _database.CreateContext();
-        Assert.Equal(1, await verify.Notifications.CountAsync(n => n.DeduplicationKey == "same-event-key"));
+        Assert.Equal(1, await verify.Notifications.CountAsync(n => n.DeduplicationKey == "same-event-key", CancellationToken.None));
     }
 
     [Fact]
@@ -125,17 +127,19 @@ public sealed class NotificationServiceTests
         await using (var context = _database.CreateContext())
         {
             var service = new NotificationService(context, encryption, NullLogger<NotificationService>.Instance);
-            originalId = await service.CreateNotificationAsync(ownerId, "hello", "cross-user-key");
+            originalId = await service.CreateNotificationAsync(ownerId, "hello", "cross-user-key", CancellationToken.None);
         }
 
         await using var otherContext = _database.CreateContext();
         var otherService = new NotificationService(otherContext, encryption, NullLogger<NotificationService>.Instance);
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => otherService.CreateNotificationAsync(otherUserId, "hello", "cross-user-key"));
+            () => otherService.CreateNotificationAsync(otherUserId, "hello", "cross-user-key", CancellationToken.None));
 
         await using var verify = _database.CreateContext();
-        Assert.Equal(1, await verify.Notifications.CountAsync(n => n.DeduplicationKey == "cross-user-key"));
-        Assert.True(await verify.Notifications.AnyAsync(n => n.NotificationId == originalId && n.UserId == ownerId));
+        Assert.Equal(1, await verify.Notifications.CountAsync(n => n.DeduplicationKey == "cross-user-key", CancellationToken.None));
+        Assert.True(await verify.Notifications.AnyAsync(
+            n => n.NotificationId == originalId && n.UserId == ownerId,
+            CancellationToken.None));
     }
 
     private static User CreateUser(Guid userId) => new()
