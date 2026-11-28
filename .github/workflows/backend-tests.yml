@@ -1,0 +1,53 @@
+name: Backend tests
+
+on:
+  push:
+    branches:
+      - main
+      - refactor/architecture
+  pull_request:
+    branches:
+      - main
+      - refactor/architecture
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend-tests:
+    name: Build and test backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Получить исходный код
+        uses: actions/checkout@v4
+
+      - name: Установить .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Восстановить зависимости
+        run: dotnet restore Messenger.Tests/Messenger.Tests.csproj
+
+      - name: Собрать и выполнить тесты
+        run: >-
+          dotnet test Messenger.Tests/Messenger.Tests.csproj
+          --configuration Release
+          --no-restore
+          --collect:"XPlat Code Coverage"
+          --settings Messenger.Tests/coverlet.runsettings
+          --logger "trx;LogFileName=backend-tests.trx"
+
+      - name: Сохранить отчёт покрытия и результаты
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-results
+          path: |
+            Messenger.Tests/TestResults/**/*.trx
+            Messenger.Tests/TestResults/**/coverage.cobertura.xml
+          if-no-files-found: warn
+          retention-days: 14
