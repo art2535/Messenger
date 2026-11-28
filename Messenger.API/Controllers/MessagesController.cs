@@ -240,7 +240,7 @@ namespace Messenger.API.Controllers
                     {
                         var validated = await _fileValidationService.ValidateAsync(
                             new FormFileUploadAdapter(file), FileUploadPurpose.Attachment, ct);
-                        var fileName = CreateStoredFileName(validated.FileName);
+                        var fileName = CreateStoredFileName(userId, validated.FileName);
                         var fileUrl = $"{apiBaseUrl!.TrimEnd('/')}/uploads/{fileName}";
                         var displayFileName = validated.FileName;
 
@@ -725,8 +725,8 @@ namespace Messenger.API.Controllers
             return extension.ToLowerInvariant();
         }
 
-        private static string CreateStoredFileName(string originalFileName)
-            => $"{Guid.NewGuid():N}{GetSafeExtension(originalFileName)}";
+        private static string CreateStoredFileName(Guid ownerId, string originalFileName)
+            => $"{ownerId:N}_{Guid.NewGuid():N}{GetSafeExtension(originalFileName)}";
 
         private static string SanitizeDisplayFileName(string? fileName)
         {

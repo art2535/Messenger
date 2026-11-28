@@ -307,6 +307,12 @@ namespace Messenger.API.Controllers
                     return BadRequest(ApiResponse.Failure("Некорректный путь вложения", "INVALID_REQUEST"));
                 }
 
+                // Новые имена файлов формируются сервером с префиксом ID владельца.
+                // Это не позволяет прикрепить к своему сообщению файл другого пользователя,
+                // даже если его URL/имя стало известно.
+                if (!storedFileName.StartsWith($"{userId:N}_", StringComparison.OrdinalIgnoreCase))
+                    return Forbid();
+
                 var storedFileInfo = await _fileStorage.GetInfoAsync(
                     FileStorageArea.Uploads, storedFileName, ct);
                 if (storedFileInfo == null || storedFileInfo.Length != request.SizeInBytes)
