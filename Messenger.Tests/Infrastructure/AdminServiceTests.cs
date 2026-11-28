@@ -64,27 +64,16 @@ public sealed class AdminServiceTests
                 UserId = userId,
                 CreationDate = DateTime.UtcNow
             });
-            seed.Messages.AddRange(
-                new Message
-                {
-                    MessageId = Guid.NewGuid(),
-                    ChatId = chatId,
-                    SenderId = userId,
-                    MessageText = "first",
-                    SendTime = DateTime.UtcNow,
-                    SequenceNumber = 1,
-                    DeliveryStatus = MessageDeliveryStatus.Sent
-                },
-                new Message
-                {
-                    MessageId = Guid.NewGuid(),
-                    ChatId = chatId,
-                    SenderId = userId,
-                    MessageText = "second",
-                    SendTime = DateTime.UtcNow,
-                    SequenceNumber = 2,
-                    DeliveryStatus = MessageDeliveryStatus.Sent
-                });
+            seed.Messages.AddRange(Enumerable.Range(1, 20).Select(sequence => new Message
+            {
+                MessageId = Guid.NewGuid(),
+                ChatId = chatId,
+                SenderId = userId,
+                MessageText = $"message-{sequence}",
+                SendTime = DateTime.UtcNow,
+                SequenceNumber = sequence,
+                DeliveryStatus = MessageDeliveryStatus.Sent
+            }));
             await seed.SaveChangesAsync();
         }
 
@@ -93,10 +82,10 @@ public sealed class AdminServiceTests
 
         Assert.Equal(before.TotalUsers + 1, after.TotalUsers);
         Assert.Equal(before.OnlineUsers + 1, after.OnlineUsers);
-        Assert.Equal(before.MessagesLast24h + 2, after.MessagesLast24h);
-        Assert.Equal(before.MessagesLast7d + 2, after.MessagesLast7d);
+        Assert.Equal(before.MessagesLast24h + 20, after.MessagesLast24h);
+        Assert.Equal(before.MessagesLast7d + 20, after.MessagesLast7d);
         Assert.Equal(before.ActiveChatsLast24h + 1, after.ActiveChatsLast24h);
-        Assert.Contains(after.TopChats, chat => chat.ChatId == chatId && chat.MessageCount == 2);
+        Assert.Contains(after.TopChats, chat => chat.ChatId == chatId && chat.MessageCount == 20);
     }
 
     private static User CreateUser(Guid userId) => new()
