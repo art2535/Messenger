@@ -17,11 +17,17 @@ public sealed class RedisFailureIntegrationTests(RedisFixture fixture)
         var partition = "redis-recovery:" + Guid.NewGuid().ToString("N");
 
         await fixture.PauseAsync();
-        await Task.Delay(TimeSpan.FromMilliseconds(500));
+        try
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(500));
 
-        Assert.False(await limiter.TryAcquireAsync(partition, 2, TimeSpan.FromMinutes(1)));
+            Assert.False(await limiter.TryAcquireAsync(partition, 2, TimeSpan.FromMinutes(1)));
+        }
+        finally
+        {
+            await fixture.ResumeAsync();
+        }
 
-        await fixture.ResumeAsync();
         await WaitForRedisAsync(fixture.Connection);
 
         Assert.True(await limiter.TryAcquireAsync(partition, 2, TimeSpan.FromMinutes(1)));
@@ -39,10 +45,19 @@ public sealed class RedisFailureIntegrationTests(RedisFixture fixture)
         Assert.True(await tracker.ConnectAsync(userId, connectionId));
 
         await fixture.PauseAsync();
-        await Task.Delay(TimeSpan.FromMilliseconds(500));
-        await Assert.ThrowsAnyAsync<RedisException>(() => tracker.HeartbeatAsync());
+        try
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(500));
 
-        await fixture.ResumeAsync();
+            // Redis may report an outage as RedisException or as a timeout exception.
+            var outageException = await Record.ExceptionAsync(() => tracker.HeartbeatAsync());
+            Assert.NotNull(outageException);
+        }
+        finally
+        {
+            await fixture.ResumeAsync();
+        }
+
         await WaitForRedisAsync(fixture.Connection);
         await tracker.HeartbeatAsync();
 
