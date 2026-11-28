@@ -16,12 +16,12 @@ public sealed class RedisFailureIntegrationTests(RedisFixture fixture)
             NullLogger<RedisRateLimitService>.Instance);
         var partition = "redis-recovery:" + Guid.NewGuid().ToString("N");
 
-        await fixture.StopAsync();
+        await fixture.PauseAsync();
         await Task.Delay(TimeSpan.FromMilliseconds(500));
 
         Assert.False(await limiter.TryAcquireAsync(partition, 2, TimeSpan.FromMinutes(1)));
 
-        await fixture.StartAsync();
+        await fixture.ResumeAsync();
         await WaitForRedisAsync(fixture.Connection);
 
         Assert.True(await limiter.TryAcquireAsync(partition, 2, TimeSpan.FromMinutes(1)));
@@ -38,11 +38,11 @@ public sealed class RedisFailureIntegrationTests(RedisFixture fixture)
 
         Assert.True(await tracker.ConnectAsync(userId, connectionId));
 
-        await fixture.StopAsync();
+        await fixture.PauseAsync();
         await Task.Delay(TimeSpan.FromMilliseconds(500));
         await Assert.ThrowsAnyAsync<RedisException>(() => tracker.HeartbeatAsync());
 
-        await fixture.StartAsync();
+        await fixture.ResumeAsync();
         await WaitForRedisAsync(fixture.Connection);
         await tracker.HeartbeatAsync();
 
