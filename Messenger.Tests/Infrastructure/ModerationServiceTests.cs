@@ -1,8 +1,10 @@
+using Messenger.Application.Interfaces;
 using Messenger.Core.Enums;
 using Messenger.Core.Models;
 using Messenger.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
+using Moq;
 
 namespace Messenger.Tests.Infrastructure;
 
@@ -66,8 +68,8 @@ public sealed class ModerationServiceTests
 
         await using var firstContext = _database.CreateContext();
         await using var secondContext = _database.CreateContext();
-        var firstService = new ModerationService(firstContext);
-        var secondService = new ModerationService(secondContext);
+        var firstService = new ModerationService(firstContext, CreateAdminService(true).Object);
+        var secondService = new ModerationService(secondContext, CreateAdminService(true).Object);
 
         await Task.WhenAll(
             firstService.ReviewReportAsync(reportId, firstAdminId, "resolved", "first"),
@@ -78,6 +80,32 @@ public sealed class ModerationServiceTests
         Assert.Contains(report.Status, new[] { "resolved", "dismissed" });
         Assert.Contains(report.ReviewedBy, new Guid?[] { firstAdminId, secondAdminId });
         Assert.Equal(1, await verify.ModerationLogs.CountAsync(log => log.MessageId == messageId));
+    }
+
+    [Fact]
+    public async Task MuteUserAsync_RejectsCallerWithoutSystemAdminRole()
+    {
+        await using var context = _database.CreateContext();
+        var service = new ModerationService(context, CreateAdminService(false).Object);
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+            service.MuteUserAsync(Guid.NewGuid(), new Messenger.Application.DTOs.Moderation.MuteUserRequest
+            {
+                UserId = Guid.NewGuid(),
+                DurationMinutes = 15,
+                Reason = "policy violation"
+            }, CancellationToken.None));
+
+        Assert.Empty(await context.UserMutes.ToListAsync());
+    }
+
+    private static Mock<IAdminService> CreateAdminService(bool isAdmin)
+    {
+        var service = new Mock<IAdminService>();
+        service.Setup(admin => admin.IsSystemAdminAsync(
+                It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(isAdmin);
+        return service;
     }
 
     private static User CreateUser(Guid userId) => new()

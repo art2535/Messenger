@@ -11,6 +11,7 @@ namespace Messenger.Infrastructure.Services
     public class ModerationService : IModerationService
     {
         private readonly GuapMessengerContext _context;
+        private readonly IAdminService _adminService;
 
         private static readonly Regex SuspiciousUrl = new(
             @"https?://[^\s]+",
@@ -21,7 +22,17 @@ namespace Messenger.Infrastructure.Services
             ".exe", ".bat", ".cmd", ".ps1", ".msi", ".scr", ".js", ".vbs", ".com"
         };
 
-        public ModerationService(GuapMessengerContext context) => _context = context;
+        public ModerationService(GuapMessengerContext context, IAdminService adminService)
+        {
+            _context = context;
+            _adminService = adminService;
+        }
+
+        private async Task EnsureAdminAsync(Guid actorId, CancellationToken ct)
+        {
+            if (actorId == Guid.Empty || !await _adminService.IsSystemAdminAsync(actorId, ct))
+                throw new UnauthorizedAccessException("Нужна роль «Администратор»");
+        }
 
         public async Task<MessageReportDto> ReportMessageAsync(Guid reporterId, ReportMessageRequest request, CancellationToken ct = default)
         {
@@ -74,6 +85,7 @@ namespace Messenger.Infrastructure.Services
 
         public async Task<UserMuteDto> MuteUserAsync(Guid actorId, MuteUserRequest request, CancellationToken ct = default)
         {
+            await EnsureAdminAsync(actorId, ct);
             if (request.DurationMinutes <= 0 || request.DurationMinutes > 60 * 24 * 30)
                 throw new InvalidOperationException("Длительность mute: 1 мин — 30 дней");
             if (request.Reason?.Length > 500)
@@ -108,6 +120,7 @@ namespace Messenger.Infrastructure.Services
 
         public async Task UnmuteAsync(Guid actorId, Guid muteId, CancellationToken ct = default)
         {
+            await EnsureAdminAsync(actorId, ct);
             var mute = await _context.UserMutes.FirstOrDefaultAsync(m => m.MuteId == muteId, ct);
             if (mute == null) return;
             mute.IsActive = false;
@@ -170,8 +183,9 @@ namespace Messenger.Infrastructure.Services
             });
         }
 
-        public async Task<List<MessageReportDto>> GetPendingReportsAsync(int take = 50, CancellationToken ct = default)
+        public async Task<List<MessageReportDto>> GetPendingReportsAsync(Guid adminId, int take = 50, CancellationToken ct = default)
         {
+            await EnsureAdminAsync(adminId, ct);
             take = Math.Clamp(take, 1, 200);
             return await _context.MessageReports.AsNoTracking()
                 .Where(r => r.Status == "pending")
@@ -193,6 +207,7 @@ namespace Messenger.Infrastructure.Services
 
         public async Task ReviewReportAsync(Guid reportId, Guid adminId, string status, string? note, CancellationToken ct = default)
         {
+            await EnsureAdminAsync(adminId, ct);
             var normalizedStatus = status?.Trim().ToLowerInvariant();
             if (normalizedStatus is not ("resolved" or "dismissed"))
                 throw new ArgumentException("Статус жалобы должен быть resolved или dismissed");
@@ -234,8 +249,9 @@ namespace Messenger.Infrastructure.Services
             await transaction.CommitAsync(ct);
         }
 
-        public async Task<List<ModerationLogDto>> GetLogsAsync(int take = 100, CancellationToken ct = default)
+        public async Task<List<ModerationLogDto>> GetLogsAsync(Guid adminId, int take = 100, CancellationToken ct = default)
         {
+            await EnsureAdminAsync(adminId, ct);
             take = Math.Clamp(take, 1, 500);
             return await _context.ModerationLogs.AsNoTracking()
                 .OrderByDescending(l => l.CreatedAt)
@@ -254,8 +270,9 @@ namespace Messenger.Infrastructure.Services
                 .ToListAsync(ct);
         }
 
-        public async Task<List<UserMuteDto>> GetActiveMutesAsync(CancellationToken ct = default)
+        public async Task<List<UserMuteDto>> GetActiveMutesAsync(Guid adminId, CancellationToken ct = default)
         {
+            await EnsureAdminAsync(adminId, ct);
             var now = UtcDateTime.Now;
             return await _context.UserMutes.AsNoTracking()
                 .Where(m => m.IsActive && m.MutedUntil > now)
@@ -271,8 +288,9 @@ namespace Messenger.Infrastructure.Services
                 })
                 .ToListAsync(ct);
         }
-        public async Task DeleteLogAsync(Guid logId, CancellationToken ct = default)
+        public async Task DeleteLogAsync(Guid adminId, Guid logId, CancellationToken ct = default)
         {
+            await EnsureAdminAsync(adminId, ct);
             var log = await _context.ModerationLogs.FirstOrDefaultAsync(l => l.LogId == logId, ct);
             if (log == null) return;
             _context.ModerationLogs.Remove(log);
@@ -280,6 +298,7 @@ namespace Messenger.Infrastructure.Services
         }
         public async Task DeleteReportAsync(Guid reportId, Guid adminId, CancellationToken ct = default)
         {
+            await EnsureAdminAsync(adminId, ct);
             var report = await _context.MessageReports.FirstOrDefaultAsync(r => r.ReportId == reportId, ct);
             if (report == null) return;
             AddLog("delete_report", adminId, report.ReporterId, report.ChatId, report.MessageId, "report removed");
