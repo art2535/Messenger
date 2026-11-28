@@ -1,7 +1,6 @@
 using System.Reflection;
 using Messenger.API.Options;
 using Messenger.API.Services;
-using Messenger.API.Services;
 using Messenger.Application.DTOs.UserStatuses;
 using Messenger.Application.DTOs.Users;
 using Messenger.Application.Messages;
@@ -232,7 +231,7 @@ public sealed class BackgroundServiceTests
         var method = typeof(RedisMetricsCollectorService).GetMethod(
             "ParseLong", BindingFlags.Static | BindingFlags.NonPublic);
         Assert.NotNull(method);
-        Assert.Equal(expected, method!.Invoke(null, new object?[] { value }));
+        Assert.Equal(expected, (long)method!.Invoke(null, new object?[] { value })!);
     }
 
     [Theory]
@@ -245,7 +244,7 @@ public sealed class BackgroundServiceTests
         var method = typeof(RedisMetricsCollectorService).GetMethod(
             "ParseKeyspaceKeys", BindingFlags.Static | BindingFlags.NonPublic);
         Assert.NotNull(method);
-        Assert.Equal(expected, method!.Invoke(null, new object[] { value }));
+        Assert.Equal(expected, (long)method!.Invoke(null, new object[] { value })!);
     }
 
     [Fact]
