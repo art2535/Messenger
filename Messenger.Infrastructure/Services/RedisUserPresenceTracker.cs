@@ -15,7 +15,8 @@ public sealed class RedisUserPresenceTracker : IUserPresenceTracker
     private readonly ILogger<RedisUserPresenceTracker> _logger;
     private readonly ConcurrentDictionary<string, Guid> _localConnections = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<Guid, ConcurrentDictionary<string, byte>> _localUsers = new();
-    private readonly ConcurrentDictionary<Guid, SemaphoreSlim> _userOperationLocks = new();
+    private readonly object _userOperationLocksSync = new();
+    private readonly Dictionary<Guid, UserOperationLockEntry> _userOperationLocks = new();
 
     private const string ConnectScript = """
         local now = tonumber(ARGV[1])
@@ -68,8 +69,7 @@ public sealed class RedisUserPresenceTracker : IUserPresenceTracker
     public async Task<bool> ConnectAsync(Guid userId, string connectionId, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var operationLock = GetUserOperationLock(userId);
-        await operationLock.WaitAsync(cancellationToken);
+        using var operationLock = await AcquireUserOperationLockAsync(userId, cancellationToken);
         try
         {
             if (!_localConnections.TryAdd(connectionId, userId))
@@ -128,8 +128,7 @@ public sealed class RedisUserPresenceTracker : IUserPresenceTracker
         if (!_localConnections.TryGetValue(connectionId, out var trackedUserId))
             return false;
 
-        var operationLock = GetUserOperationLock(trackedUserId);
-        await operationLock.WaitAsync(cancellationToken);
+        using var operationLock = await AcquireUserOperationLockAsync(trackedUserId, cancellationToken);
         try
         {
             if (!_localConnections.TryRemove(connectionId, out trackedUserId))
@@ -216,8 +215,7 @@ public sealed class RedisUserPresenceTracker : IUserPresenceTracker
         foreach (var user in _localUsers)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var operationLock = GetUserOperationLock(user.Key);
-            await operationLock.WaitAsync(cancellationToken);
+            using var operationLock = await AcquireUserOperationLockAsync(user.Key, cancellationToken);
             try
             {
                 // Снимок и продление lease сериализованы с DisconnectAsync:
@@ -245,8 +243,68 @@ public sealed class RedisUserPresenceTracker : IUserPresenceTracker
         }
     }
 
-    private SemaphoreSlim GetUserOperationLock(Guid userId) =>
-        _userOperationLocks.GetOrAdd(userId, _ => new SemaphoreSlim(1, 1));
+    private async ValueTask<UserOperationLockLease> AcquireUserOperationLockAsync(
+        Guid userId,
+        CancellationToken cancellationToken)
+    {
+        UserOperationLockEntry entry;
+        lock (_userOperationLocksSync)
+        {
+            if (!_userOperationLocks.TryGetValue(userId, out entry!))
+            {
+                entry = new UserOperationLockEntry();
+                _userOperationLocks.Add(userId, entry);
+            }
+
+            // Учитываем и выполняющуюся операцию, и ожидающие операции,
+            // чтобы запись нельзя было удалить, пока её семафор используется.
+            entry.ReferenceCount++;
+        }
+
+        try
+        {
+            await entry.Semaphore.WaitAsync(cancellationToken);
+            return new UserOperationLockLease(this, userId, entry);
+        }
+        catch
+        {
+            ReleaseUserOperationLockReference(userId, entry);
+            throw;
+        }
+    }
+
+    private void ReleaseUserOperationLockReference(Guid userId, UserOperationLockEntry entry)
+    {
+        lock (_userOperationLocksSync)
+        {
+            entry.ReferenceCount--;
+            if (entry.ReferenceCount == 0)
+                _userOperationLocks.Remove(userId);
+        }
+    }
+
+    private sealed class UserOperationLockEntry
+    {
+        public SemaphoreSlim Semaphore { get; } = new(1, 1);
+        public int ReferenceCount { get; set; }
+    }
+
+    private sealed class UserOperationLockLease(
+        RedisUserPresenceTracker owner,
+        Guid userId,
+        UserOperationLockEntry entry) : IDisposable
+    {
+        private int _disposed;
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) != 0)
+                return;
+
+            entry.Semaphore.Release();
+            owner.ReleaseUserOperationLockReference(userId, entry);
+        }
+    }
 
     private async Task CleanupCancelledConnectAsync(
         Task<RedisResult> connectTask,
