@@ -35,14 +35,12 @@ public sealed class UserAndBroadcastServiceTests
         Assert.Single(users);
         Assert.True(await verify.AccountSettings.AnyAsync(x => x.AccountId == users[0].UserId));
         Assert.True(await verify.UserStatuses.AnyAsync(x => x.UserId == users[0].UserId));
-        Assert.Contains(users[0].UserId,
-            await verify.Users.Where(x => x.ExternalId == externalId).Select(x => x.UserId).ToListAsync());
+        Assert.Equal(1, await verify.Users.CountAsync(x => x.ExternalId == externalId));
     }
 
     [Fact]
     public async Task RegisterExternalUserAsync_NormalizesExternalIdAndAssignsDefaultRole()
     {
-        var userId = Guid.NewGuid();
         await using var context = _database.CreateContext();
         var service = CreateUserService(context);
 
@@ -52,7 +50,7 @@ public sealed class UserAndBroadcastServiceTests
         Assert.Equal("provider|subject-42", user.ExternalId);
         Assert.Contains(user.Roles, role => role.Name == "Пользователь");
         Assert.Equal(user.UserId, (await service.GetUserByExternalIdAsync("provider|subject-42"))?.UserId);
-        Assert.NotEqual(userId, user.UserId);
+
     }
 
     [Fact]
@@ -81,7 +79,7 @@ public sealed class UserAndBroadcastServiceTests
         await service.AssignRoleAsync(userId, roleId);
 
         Assert.Equal(1, await context.Set<Dictionary<string, object>>("UserRole")
-            .CountAsync(x => EF.Property<Guid>(x, "UserId") == userId && EF.Property<Guid>(x, "RoleId") == roleId));
+            .CountAsync(x => (Guid)x["UserId"] == userId && (Guid)x["RoleId"] == roleId));
     }
 
     [Fact]
