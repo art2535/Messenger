@@ -2,7 +2,7 @@ using Messenger.Application.Files;
 using Messenger.Infrastructure.Files;
 using Xunit;
 
-namespace Messenger.Tests.Infrastructure.Files;
+namespace Messenger.Tests.Infrastructure.Files.Local;
 
 public sealed class LocalFileStorageTests : IDisposable
 {
@@ -108,4 +108,32 @@ public sealed class LocalFileStorageTests : IDisposable
         if (Directory.Exists(_rootPath))
             Directory.Delete(_rootPath, recursive: true);
     }
+    [Fact]
+    public async Task SaveAsync_RejectsEmptyStream()
+    {
+        await Assert.ThrowsAsync<InvalidDataException>(() => _storage.SaveAsync(
+            FileStorageArea.Uploads,
+            "empty.bin",
+            Stream.Null,
+            maxSizeBytes: 10));
+
+        Assert.False(await _storage.ExistsAsync(FileStorageArea.Uploads, "empty.bin"));
+    }
+
+    [Fact]
+    public async Task SaveAsync_ObservesCancellationBeforeWriting()
+    {
+        using var cancellation = new CancellationTokenSource();
+        await cancellation.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => _storage.SaveAsync(
+            FileStorageArea.Uploads,
+            "cancelled.bin",
+            new MemoryStream([1, 2, 3]),
+            maxSizeBytes: 10,
+            cancellationToken: cancellation.Token));
+
+        Assert.False(await _storage.ExistsAsync(FileStorageArea.Uploads, "cancelled.bin"));
+    }
+
 }

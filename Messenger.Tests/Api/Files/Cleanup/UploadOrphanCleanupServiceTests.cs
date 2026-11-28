@@ -12,7 +12,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
-namespace Messenger.Tests.Api.Files;
+namespace Messenger.Tests.Api.Files.Cleanup;
 
 [Collection(PostgreSqlCollection.Name)]
 public sealed class UploadOrphanCleanupServiceTests : IDisposable

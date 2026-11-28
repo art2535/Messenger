@@ -2,7 +2,7 @@ using Messenger.Application.Files;
 using Messenger.Tests.Shared.TestDoubles;
 using Xunit;
 
-namespace Messenger.Tests.Application.Files;
+namespace Messenger.Tests.Application.Files.Validation;
 
 public sealed class FileValidationServiceTests
 {
@@ -71,4 +71,37 @@ public sealed class FileValidationServiceTests
 
         Assert.Equal("photo.png", result.FileName);
     }
+    [Fact]
+    public async Task ValidateAsync_RejectsEmptyFiles()
+    {
+        var file = new FakeUploadedFile("empty.png", "image/png", []);
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            _validator.ValidateAsync(file, FileUploadPurpose.Attachment));
+    }
+
+    [Fact]
+    public async Task ValidateAsync_RejectsAvatarLargerThanAvatarLimit()
+    {
+        var file = new FakeUploadedFile(
+            "large.png",
+            "image/png",
+            [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, .. new byte[2 * 1024 * 1024]]);
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            _validator.ValidateAsync(file, FileUploadPurpose.Avatar));
+    }
+
+    [Fact]
+    public async Task ValidateAsync_RejectsControlCharactersInFileName()
+    {
+        var file = new FakeUploadedFile(
+            "photo\n.png",
+            "image/png",
+            [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            _validator.ValidateAsync(file, FileUploadPurpose.Attachment));
+    }
+
 }
