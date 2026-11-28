@@ -21,5 +21,6 @@
     <ProjectReference Include="..\Messenger.Infrastructure\Messenger.Infrastructure.csproj" />
     <ProjectReference Include="..\Messenger.Realtime\Messenger.Realtime.csproj" />
     <ProjectReference Include="..\Messenger.API\Messenger.API.csproj" />
+    <ProjectReference Include="..\Messenger.Web\Messenger.Web.csproj" />
   </ItemGroup>
 </Project>

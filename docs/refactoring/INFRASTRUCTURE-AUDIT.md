@@ -199,6 +199,16 @@
 
 `Messenger.Tests` теперь ссылается на `Messenger.API` для тестирования фоновых служб.
 
+### Добавлено: тесты Web token refresh
+
+Добавлены тесты `TokenRefresher`:
+- успешная ротация access/refresh token и обновление срока действия;
+- окончательный отказ SSO отзывает сессию и создаёт tombstone;
+- уже отозванный tombstone блокирует сетевой запрос;
+- конкурентные refresh-запросы одной сессии сериализуются и выполняют ровно один HTTP вызов.
+
+`Messenger.Tests` теперь ссылается на `Messenger.Web`.
+
 ## Ограничения проверки
 
 - В рабочей среде нет .NET SDK (dotnet: command not found), поэтому dotnet build и dotnet test не запускались. Наличие Docker runtime для Testcontainers также не подтверждено.
