@@ -1,27 +1,37 @@
 using Microsoft.Extensions.Configuration;
 
 var builder = DistributedApplication.CreateBuilder(args);
-
 builder.AddDockerComposeEnvironment("compose");
 
 var ports = builder.Configuration.GetSection("Ports");
 var credentials = builder.Configuration.GetSection("Credentials");
 
+static string Required(IConfiguration configuration, string key)
+{
+    var value = configuration[key];
+    return !string.IsNullOrWhiteSpace(value)
+        ? value
+        : throw new InvalidOperationException($"Не задан обязательный параметр '{key}'. Используйте appsettings.Development.json или User Secrets.");
+}
+
+static int Port(IConfiguration configuration, string key, int defaultValue)
+{
+    var value = configuration.GetValue(key, defaultValue);
+    return value is >= 1 and <= 65535
+        ? value
+        : throw new InvalidOperationException($"Параметр '{key}' должен быть в диапазоне 1..65535.");
+}
+
 var postgresPassword = builder.AddParameter("postgres-password",
-    credentials["Postgres:Password"] ?? "postgres",
-    secret: true);
-
+    Required(credentials, "Postgres:Password"), secret: true);
 var rabbitUser = builder.AddParameter("rabbitmq-username",
-    credentials["RabbitMQ:Username"] ?? "guest");
-
+    Required(credentials, "RabbitMQ:Username"));
 var rabbitPassword = builder.AddParameter("rabbitmq-password",
-    credentials["RabbitMQ:Password"] ?? "guest",
-    secret: true);
-
-var grafanaAdminUser = credentials["Grafana:AdminUser"] ?? "admin";
-var grafanaAdminPassword = credentials["Grafana:AdminPassword"] ?? "admin";
-
-var dbName = builder.Configuration["Database:Name"] ?? "GUAP_Messenger";
+    Required(credentials, "RabbitMQ:Password"), secret: true);
+var grafanaAdminUser = Required(credentials, "Grafana:AdminUser");
+var grafanaAdminPassword = builder.AddParameter("grafana-admin-password",
+    Required(credentials, "Grafana:AdminPassword"), secret: true);
+var dbName = Required(builder.Configuration, "Database:Name");
 
 var postgres = builder.AddPostgres("postgres", password: postgresPassword)
     .WithImage("postgres:17")
@@ -39,7 +49,7 @@ var messengerDb = postgres.AddDatabase("DefaultConnection", dbName);
 var rabbitmq = builder.AddRabbitMQ("RabbitMQ", rabbitUser, rabbitPassword)
     .WithContainerName("messenger-rabbitmq")
     .WithDataVolume()
-    .WithManagementPlugin(ports.GetValue("RabbitMQManagement", 15672))
+    .WithManagementPlugin(Port(ports, "RabbitMQManagement", 15672))
     .WithUrlForEndpoint("management", u => u.DisplayText = "RabbitMQ Management");
 
 var redis = builder.AddRedis("Redis")
@@ -49,7 +59,7 @@ var redis = builder.AddRedis("Redis")
 
 var rabbitmqExporter = builder.AddContainer("rabbitmq-exporter", "kbudde/rabbitmq-exporter", "latest")
     .WithContainerName("messenger-rabbitmq-exporter")
-    .WithHttpEndpoint(port: ports.GetValue("RabbitMQExporter", 9419), targetPort: 9419, name: "metrics")
+    .WithHttpEndpoint(port: Port(ports, "RabbitMQExporter", 9419), targetPort: 9419, name: "metrics")
     .WithUrlForEndpoint("metrics", u => u.DisplayText = "RabbitMQ Metrics")
     .WithEnvironment("RABBIT_URL", "http://RabbitMQ:15672")
     .WithEnvironment("RABBIT_USER", rabbitUser)
@@ -61,28 +71,23 @@ var rabbitmqExporter = builder.AddContainer("rabbitmq-exporter", "kbudde/rabbitm
 
 var redisExporter = builder.AddContainer("redis-exporter", "oliver006/redis_exporter", "latest")
     .WithContainerName("messenger-redis-exporter")
-    .WithHttpEndpoint(port: ports.GetValue("RedisExporter", 9121), targetPort: 9121, name: "metrics")
+    .WithHttpEndpoint(port: Port(ports, "RedisExporter", 9121), targetPort: 9121, name: "metrics")
     .WithUrlForEndpoint("metrics", u => u.DisplayText = "Redis Metrics")
     .WithEnvironment("REDIS_ADDR", "redis://Redis:6379")
     .WaitFor(redis);
 
 var monitoringPath = Path.Combine(builder.AppHostDirectory, "monitoring");
-
 var prometheus = builder.AddDockerfile("prometheus", monitoringPath)
     .WithImage("messenger-prometheus", "local")
     .WithContainerName("messenger-prometheus")
     .WithVolume("prometheus-data", "/prometheus")
-    .WithArgs(
-        "--config.file=/etc/prometheus/prometheus.yml",
-        "--storage.tsdb.path=/prometheus",
-        "--storage.tsdb.retention.time=15d")
-    .WithHttpEndpoint(port: ports.GetValue("Prometheus", 9090), targetPort: 9090, name: "http")
+    .WithArgs("--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus", "--storage.tsdb.retention.time=15d")
+    .WithHttpEndpoint(port: Port(ports, "Prometheus", 9090), targetPort: 9090, name: "http")
     .WithUrlForEndpoint("http", u => u.DisplayText = "Prometheus")
     .WaitFor(rabbitmqExporter)
     .WaitFor(redisExporter);
 
 var grafanaPath = Path.Combine(monitoringPath, "grafana");
-
 var grafana = builder.AddDockerfile("grafana", grafanaPath)
     .WithImage("messenger-grafana", "local")
     .WithContainerName("messenger-grafana")
@@ -90,15 +95,14 @@ var grafana = builder.AddDockerfile("grafana", grafanaPath)
     .WithEnvironment("GF_SECURITY_ADMIN_USER", grafanaAdminUser)
     .WithEnvironment("GF_SECURITY_ADMIN_PASSWORD", grafanaAdminPassword)
     .WithEnvironment("GF_USERS_ALLOW_SIGN_UP", "false")
-    .WithHttpEndpoint(port: ports.GetValue("Grafana", 3000), targetPort: 3000, name: "http")
+    .WithHttpEndpoint(port: Port(ports, "Grafana", 3000), targetPort: 3000, name: "http")
     .WithUrlForEndpoint("http", u => u.DisplayText = "Grafana")
     .WaitFor(prometheus);
 
 var apiPorts = ports.GetSection("API");
-
 var api = builder.AddDotnetProject("messenger-api", "../Messenger.API/Messenger.API.csproj")
-    .WithHttpsEndpoint(port: apiPorts.GetValue("HTTPS", 7001), isProxied: false)
-    .WithEndpoint("http", e => e.Port = apiPorts.GetValue("HTTP", 5245))
+    .WithHttpsEndpoint(port: Port(apiPorts, "HTTPS", 7001), isProxied: false)
+    .WithEndpoint("http", e => e.Port = Port(apiPorts, "HTTP", 5245))
     .WithUrlForEndpoint("https", url =>
     {
         url.DisplayText = "Scalar API Docs";
@@ -110,10 +114,9 @@ var api = builder.AddDotnetProject("messenger-api", "../Messenger.API/Messenger.
     .WithReference(redis).WaitFor(redis);
 
 var webPorts = ports.GetSection("Web");
-
 var web = builder.AddDotnetProject("messenger-web", "../Messenger.Web/Messenger.Web.csproj")
-    .WithHttpsEndpoint(port: webPorts.GetValue("HTTPS", 7010), isProxied: false)
-    .WithEndpoint("http", e => e.Port = webPorts.GetValue("HTTP", 5207))
+    .WithHttpsEndpoint(port: Port(webPorts, "HTTPS", 7010), isProxied: false)
+    .WithEndpoint("http", e => e.Port = Port(webPorts, "HTTP", 5207))
     .WithUrlForEndpoint("https", url => url.DisplayText = "Messenger Web")
     .WithUrlForEndpoint("http", url => url.DisplayText = "Web HTTP")
     .WithReference(api).WaitFor(api)
@@ -122,5 +125,4 @@ var web = builder.AddDotnetProject("messenger-web", "../Messenger.Web/Messenger.
 
 prometheus.WithReference(api.GetEndpoint("https"));
 prometheus.WithReference(web.GetEndpoint("https"));
-
 builder.Build().Run();
