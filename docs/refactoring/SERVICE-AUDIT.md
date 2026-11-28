@@ -25,7 +25,7 @@
 | Реакции и вложения | `ReactionService`, `AttachmentService`, `MessagesController`, `AttachmentsController`, `UploadOrphanCleanupService` | Конкурентное добавление реакции обработано; лимиты загрузки, безопасные имена/пути, cleanup при ошибках публикации и удалении, авторизация metadata endpoint внесены; `/uploads` закрыт для публичной раздачи; фоновая уборка orphan-файлов добавлена |
 | Уведомления | `NotificationService`, `PushSubscriptionService`, `ChatMessageSentConsumer` | Добавлен стабильный ключ уведомления на пару MessageId/получатель, повторная доставка возвращает прежний NotificationId; временные ошибки push теперь пробрасываются для retry |
 | Рассылки | `BroadcastService`, `EfBroadcastRepository`, `BroadcastsController` | Контракты, реализация и HTTP-вызовы передают CancellationToken; проверка сборкой ещё не выполнена |
-| Модерация и администрирование | `ModerationService`, `AdminService` | Частично проверены; продолжить проверку атомарности операций и обработки ошибок |
+| Модерация и администрирование | `ModerationService`, `AdminService` | Проверены; административные операции повторно проверяют системную роль в сервисном слое, review report атомарен и создаёт один audit event |
 | Статусы и realtime | `UserStatusService`, `RedisUserPresenceTracker`, rate limiter | Presence хранится в Redis lease; cleanup проверяет активные подключения и восстанавливает Online при гонке повторного подключения |
 | Кэш и шифрование | `RedisCacheService`, `RedisDistributedLock`, `AesGcmEncryptionService`, `CacheMetrics` | Частично проверены; отмена ожидания распределённой блокировки исправлена |
 | Фоновые задачи API | `LogRetentionService`, `RedisMetricsCollectorService`, `SessionCleanupBackgroundService`, `PresenceHeartbeatBackgroundService` | Cancellation при shutdown проверена; startup-delay не маскирует остановку; требуется проверка сборкой и интеграционными сценариями |
@@ -92,7 +92,7 @@ Idle cleanup по-прежнему учитывает пользовательс
 
 - Проверить файловые операции `AttachmentService`: ограничения размера, имена и пути, очистка orphan-файлов, согласованность БД и файлового хранилища.
 - Проверить `MessageService` и `ChatService`: права доступа, атомарность удаления/изменения, cache invalidation и поведение при частичном отказе.
-- Проверить `ModerationService`: конкурентные mute/report-операции, проверку прав и аудит действий.
+- `ModerationService`: проверены границы системной роли, атомарность review report и запись audit log; сервисная авторизация добавлена для административных операций. Конкурентные mute/unmute сценарии остаются кандидатом на отдельные тесты при развитии moderation workflow.
 - Проверить `NotificationService` и `PushSubscriptionService`: идемпотентность, очистку недействительных endpoint и границы обработки ошибок.
 - Проверить `RedisCacheService` и rate limiter: TTL, отмену, деградацию Redis и корректность ключей.
 - Проверить фоновые службы: остановку приложения, retry/backoff, отсутствие бесконечных циклов и корректную обработку отмены.
