@@ -337,10 +337,6 @@ namespace Messenger.API.Controllers
                             .SendAsync("ReceiveMessage", finalMessageDto, ct);
                     }
                 }
-                catch (OperationCanceledException) when (ct.IsCancellationRequested)
-                {
-                    throw;
-                }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Сообщение {MessageId} сохранено, но SignalR-рассылка не удалась", messageId);

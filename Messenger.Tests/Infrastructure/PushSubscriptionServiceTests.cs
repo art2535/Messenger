@@ -1,7 +1,6 @@
 using Messenger.Application.Interfaces;
 using Messenger.Core.Models;
 using Messenger.Infrastructure.Data;
-using Messenger.Infrastructure.Persistence.Entities;
 using Messenger.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -103,7 +102,7 @@ public sealed class PushSubscriptionServiceTests
                 Auth = "auth-own",
                 CreatedAt = DateTime.UtcNow
             });
-            seed.PushSubscriptions.Add(new PushSubscription
+            seed.PushSubscriptions.Add(new Messenger.Infrastructure.Persistence.Entities.PushSubscription
             {
                 Id = Guid.NewGuid(),
                 UserId = otherUserId,

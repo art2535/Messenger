@@ -7,8 +7,7 @@ namespace Messenger.Tests.Infrastructure;
 
 public sealed class PostgreSqlFixture : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder()
-        .WithImage("postgres:17-alpine")
+    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:17-alpine")
         .Build();
 
     public DbContextOptions<GuapMessengerContext> Options { get; private set; } = null!;
