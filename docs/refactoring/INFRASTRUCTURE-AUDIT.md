@@ -129,6 +129,15 @@
 5. API-уровень, не включённый в текущие Infrastructure-коммиты: POST /notifications позволяет аутентифицированному клиенту передать произвольный UserId; требуется отдельная авторизация/перенос endpoint во внутренний flow. POST /push/send также требует отдельной проверки, что payload соответствует реально созданному сообщению, а не только членству отправителя в чате.
 6. RedisDistributedLock при отсутствии Redis использует no-op lock; это допустимо только для single-instance режима. Для multi-instance deployment Redis должен быть обязательным или нужен другой distributed lock provider.
 
+### Добавлено: тесты аккаунтов, сессий, статусов и security utilities
+
+Добавлены тесты для `AccountSettingsService`, `UserStatusService`, `LoginService`, `AesGcmEncryptionService` и `ValidationService`:
+- нормализация темы и сохранение пользовательских privacy-настроек;
+- конкурентный UPSERT статуса, пакетное обновление только выбранных пользователей;
+- хеширование session key, истечение сессии, owner-scoped revoke и учёт `IdleLogout`;
+- AES-GCM round-trip, случайный nonce, повреждение ciphertext и некорректные ключи;
+- правила пароля, email, даты рождения и проверка BCrypt-хеша.
+
 ### Добавлено: интеграционные тесты ChatFolder и Reaction concurrency
 
 Создан `ChatFolderAndReactionTests` на PostgreSQL Testcontainers:
