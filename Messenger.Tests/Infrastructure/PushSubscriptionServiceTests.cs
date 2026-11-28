@@ -87,7 +87,8 @@ public sealed class PushSubscriptionServiceTests
         var ownerId = Guid.NewGuid();
         var otherUserId = Guid.NewGuid();
         var ownSubscriptionId = Guid.NewGuid();
-        const string otherEndpoint = "https://push.example.test/subscription/other";
+        var otherSubscriptionId = Guid.NewGuid();
+        var otherEndpoint = $"https://push.example.test/subscription/{Guid.NewGuid():N}/other";
 
         await using (var seed = _database.CreateContext())
         {
@@ -104,7 +105,7 @@ public sealed class PushSubscriptionServiceTests
             });
             seed.PushSubscriptions.Add(new Messenger.Infrastructure.Persistence.Entities.PushSubscription
             {
-                Id = Guid.NewGuid(),
+                Id = otherSubscriptionId,
                 UserId = otherUserId,
                 Endpoint = otherEndpoint,
                 P256dh = "p256dh-other",
@@ -129,11 +130,20 @@ public sealed class PushSubscriptionServiceTests
         }
 
         await using var verify = _database.CreateContext();
-        Assert.Equal(2, await verify.PushSubscriptions.CountAsync());
-        Assert.True(await verify.PushSubscriptions.AnyAsync(subscription =>
-            subscription.Id == ownSubscriptionId && subscription.UserId == ownerId));
-        Assert.True(await verify.PushSubscriptions.AnyAsync(subscription =>
-            subscription.Endpoint == otherEndpoint && subscription.UserId == otherUserId));
+        var affectedSubscriptions = await verify.PushSubscriptions
+            .Where(subscription => subscription.Id == ownSubscriptionId
+                || subscription.Id == otherSubscriptionId)
+            .ToListAsync();
+
+        Assert.Equal(2, affectedSubscriptions.Count);
+        Assert.Contains(affectedSubscriptions, subscription =>
+            subscription.Id == ownSubscriptionId
+            && subscription.UserId == ownerId
+            && subscription.Endpoint == "https://push.example.test/subscription/own");
+        Assert.Contains(affectedSubscriptions, subscription =>
+            subscription.Id == otherSubscriptionId
+            && subscription.UserId == otherUserId
+            && subscription.Endpoint == otherEndpoint);
     }
 
     private static User CreateUser(Guid userId) => new()
