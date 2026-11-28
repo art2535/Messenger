@@ -22,6 +22,8 @@ static int Port(IConfiguration configuration, string key, int defaultValue)
         : throw new InvalidOperationException($"Параметр '{key}' должен быть в диапазоне 1..65535.");
 }
 
+var postgresUser = builder.AddParameter("postgres-username",
+    Required(credentials, "Postgres:Username"));
 var postgresPassword = builder.AddParameter("postgres-password",
     Required(credentials, "Postgres:Password"), secret: true);
 var rabbitUser = builder.AddParameter("rabbitmq-username",
@@ -33,7 +35,7 @@ var grafanaAdminPassword = builder.AddParameter("grafana-admin-password",
     Required(credentials, "Grafana:AdminPassword"), secret: true);
 var dbName = Required(builder.Configuration, "Database:Name");
 
-var postgres = builder.AddPostgres("postgres", password: postgresPassword)
+var postgres = builder.AddPostgres("postgres", userName: postgresUser, password: postgresPassword)
     .WithImage("postgres:17")
     .WithContainerName("messenger-postgres")
     .WithDataVolume()
