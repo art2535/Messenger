@@ -240,7 +240,7 @@ namespace Messenger.API.Controllers
                     {
                         var validated = await _fileValidationService.ValidateAsync(
                             new FormFileUploadAdapter(file), FileUploadPurpose.Attachment, ct);
-                        var fileName = CreateStoredFileName(userId, validated.FileName);
+                        var fileName = CreateStoredFileName(userId, validated.Extension);
                         var fileUrl = $"{apiBaseUrl!.TrimEnd('/')}/uploads/{fileName}";
                         var displayFileName = validated.FileName;
 
@@ -546,8 +546,7 @@ namespace Messenger.API.Controllers
                                 if (sourceStream == null)
                                     continue;
 
-                                var ext = GetSafeExtension(diskName);
-                                var newFileName = $"{Guid.NewGuid():N}{ext}";
+                                var newFileName = CreateStoredFileName(userId, validatedSource.Extension);
                                 var copiedSize = await _fileStorage.SaveAsync(
                                     FileStorageArea.Uploads, newFileName, sourceStream, 10 * 1024 * 1024, ct);
                                 copiedFileNames.Add(newFileName);
@@ -707,26 +706,8 @@ namespace Messenger.API.Controllers
             throw new InvalidOperationException("Не удалось определить безопасное имя файла вложения");
         }
 
-        private static string GetSafeExtension(string fileName)
-        {
-            var normalizedName = fileName.Replace('\\', '/');
-            var extension = Path.GetExtension(Path.GetFileName(normalizedName));
-            if (extension.Length is < 2 or > 16)
-                return ".bin";
-
-            foreach (var character in extension.AsSpan(1))
-            {
-                var isAsciiLetter = character is >= 'a' and <= 'z' or >= 'A' and <= 'Z';
-                var isDigit = character is >= '0' and <= '9';
-                if (!isAsciiLetter && !isDigit)
-                    return ".bin";
-            }
-
-            return extension.ToLowerInvariant();
-        }
-
-        private static string CreateStoredFileName(Guid ownerId, string originalFileName)
-            => $"{ownerId:N}_{Guid.NewGuid():N}{GetSafeExtension(originalFileName)}";
+        private static string CreateStoredFileName(Guid ownerId, string validatedExtension)
+            => $"{ownerId:N}_{Guid.NewGuid():N}{validatedExtension}";
 
         private static string SanitizeDisplayFileName(string? fileName)
         {

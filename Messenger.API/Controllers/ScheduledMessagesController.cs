@@ -129,7 +129,7 @@ namespace Messenger.API.Controllers
                     {
                         var validated = await _fileValidationService.ValidateAsync(
                             new FormFileUploadAdapter(file), FileUploadPurpose.Attachment, ct);
-                        var fileName = $"{Guid.NewGuid():N}{validated.Extension}";
+                        var fileName = $"{user.UserId:N}_{Guid.NewGuid():N}{validated.Extension}";
                         var fileUrl = $"{apiBaseUrl!.TrimEnd('/')}/uploads/{fileName}";
 
                         await using var stream = file.OpenReadStream();

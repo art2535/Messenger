@@ -16,7 +16,7 @@ public sealed class StoredFileNameTests
 
         Assert.NotNull(method);
 
-        var fileName = (string)method!.Invoke(null, new object[] { ownerId, "report.pdf" })!;
+        var fileName = (string)method!.Invoke(null, new object[] { ownerId, ".pdf" })!;
 
         Assert.True(fileName.StartsWith($"{ownerId:N}_", StringComparison.OrdinalIgnoreCase));
         Assert.True(fileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase));
