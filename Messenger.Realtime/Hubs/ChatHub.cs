@@ -313,7 +313,7 @@ namespace Messenger.Realtime.Hubs
                 if (string.IsNullOrEmpty(externalId))
                     return;
 
-                if (!await _typingLimiter.TryAcquireAsync(externalId, Context.ConnectionAborted))
+                if (!await _rateLimiter.TryAcquireAsync($"signalr:typing:{externalId}", 60, TimeSpan.FromMinutes(1), Context.ConnectionAborted))
                     return;
 
                 var user = await _userService.GetUserByExternalIdAsync(externalId, Context.ConnectionAborted);
