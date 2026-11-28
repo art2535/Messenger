@@ -10,7 +10,7 @@ public static class SecurityHeadersExtension
         {
             context.Response.Headers.XContentTypeOptions = "nosniff";
             context.Response.Headers.XFrameOptions = "DENY";
-            context.Response.Headers.ReferrerPolicy = "no-referrer";
+            context.Response.Headers["Referrer-Policy"] = "no-referrer";
             context.Response.Headers["Permissions-Policy"] =
                 "camera=(), microphone=(), geolocation=(), payment=(), usb=()";
 
