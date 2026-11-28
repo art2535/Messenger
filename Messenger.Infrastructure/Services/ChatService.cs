@@ -92,7 +92,7 @@ namespace Messenger.Infrastructure.Services
             // Для реляционного провайдера EF Core SaveChanges выполняется транзакционно.
             await _context.SaveChangesAsync(token);
 
-            await _cache.RemoveAsync(UserChatsCacheKey(creatorId), token);
+            await InvalidateUserChatsCacheBestEffortAsync(creatorId, token);
 
             return new ChatDto { ChatId = chat.ChatId, Name = chat.Name, Type = chat.Type, UserId = chat.UserId, CreationDate = chat.CreationDate };
         }
@@ -103,8 +103,25 @@ namespace Messenger.Infrastructure.Services
             var cached = await _cache.GetAsync<List<ChatListItemDto>>(cacheKey, token);
             if (cached is { Count: > 0 })
             {
-                _logger.LogInformation("GetUserChats: source=Redis userId={UserId} chats={Count}", userId, cached.Count);
-                return cached;
+                // Cache invalidation is best-effort. Revalidate membership before returning
+                // cached chat metadata so a stale key cannot expose a removed chat.
+                var currentChatIds = await _context.ChatParticipants
+                    .AsNoTracking()
+                    .Where(participant => participant.UserId == userId)
+                    .Select(participant => participant.ChatId)
+                    .ToHashSetAsync(token);
+
+                if (cached.Count == currentChatIds.Count
+                    && cached.All(item => currentChatIds.Contains(item.ChatId)))
+                {
+                    _logger.LogInformation("GetUserChats: source=Redis userId={UserId} chats={Count}", userId, cached.Count);
+                    return cached;
+                }
+
+                _logger.LogWarning(
+                    "GetUserChats: stale cache detected userId={UserId}; rebuilding from PostgreSQL",
+                    userId);
+                await _cache.RemoveAsync(cacheKey, token);
             }
 
             _logger.LogInformation("GetUserChats: source=PostgreSQL userId={UserId} (cache miss)", userId);

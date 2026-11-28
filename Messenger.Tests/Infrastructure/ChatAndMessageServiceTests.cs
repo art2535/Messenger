@@ -17,6 +17,45 @@ public sealed class ChatAndMessageServiceTests
     public ChatAndMessageServiceTests(PostgreSqlFixture database) => _database = database;
 
     [Fact]
+    public async Task ChatService_GetUserChatsWithLastMessageAsync_RevalidatesCachedMembership()
+    {
+        var ownerId = Guid.NewGuid();
+        var memberId = Guid.NewGuid();
+        var chatId = Guid.NewGuid();
+        await SeedChatAsync(chatId, ownerId, memberId);
+
+        await using (var context = _database.CreateContext())
+        {
+            context.ChatParticipants.RemoveRange(
+                context.ChatParticipants.Where(participant =>
+                    participant.ChatId == chatId && participant.UserId == memberId));
+            await context.SaveChangesAsync();
+        }
+
+        var staleCache = new Mock<Messenger.Application.Interfaces.ICacheService>();
+        staleCache
+            .Setup(cache => cache.GetAsync<List<Messenger.Application.DTOs.Chats.ChatListItemDto>>(
+                It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<Messenger.Application.DTOs.Chats.ChatListItemDto>
+            {
+                new() { ChatId = chatId, Name = "Private chat", Type = "group" }
+            });
+
+        await using var readContext = _database.CreateContext();
+        var service = new ChatService(
+            readContext,
+            CreateEncryptionService(),
+            staleCache.Object,
+            NullLogger<ChatService>.Instance);
+
+        var chats = await service.GetUserChatsWithLastMessageAsync(memberId, CancellationToken.None);
+
+        Assert.Empty(chats);
+        staleCache.Verify(cache => cache.RemoveAsync(
+            It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
     public async Task ChatService_GetChatByIdAsync_EnforcesMembershipForActorAwareOverload()
     {
         var ownerId = Guid.NewGuid();
