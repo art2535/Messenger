@@ -27,7 +27,7 @@ public sealed class ConfigurationOptionsTests
     [Fact]
     public void ApiEndpointOptions_RequiresAbsoluteApiUrlsAndVersion()
     {
-        var errors = Validate(new ApiEndpointOptions { Https = "not-a-url", Http = "", Version = "" });
+        var errors = Validate(new ApiEndpointOptions { HTTPS = "not-a-url", HTTP = "", Version = "" });
         Assert.NotEmpty(errors);
     }
 

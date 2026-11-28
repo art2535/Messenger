@@ -1,6 +1,6 @@
 using System.Reflection;
 using Messenger.Web.Services;
-using Microsoft.Extensions.Configuration;
+using Messenger.Core.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -61,7 +61,13 @@ public sealed class UserTokenStoreTests
         var factory = new Mock<IHttpClientFactory>();
         var refresher = new TokenRefresher(
             factory.Object,
-            new ConfigurationBuilder().Build(),
+            Options.Create(new IdentityProviderOptions
+            {
+                Instance = "https://sso.example.test/realms/",
+                TenantId = "test",
+                ClientId = "messenger-tests",
+                ClientSecret = "test-secret"
+            }),
             Options.Create(new TokenRefreshOptions()),
             store,
             NullLogger<TokenRefresher>.Instance);
