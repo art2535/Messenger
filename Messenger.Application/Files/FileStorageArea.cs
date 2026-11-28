@@ -1,7 +1,7 @@
 namespace Messenger.Application.Files;
 
 /// <summary>
-/// Изолированные области локального файлового хранилища.
+/// Изолированные логические области хранения файлов.
 /// </summary>
 public enum FileStorageArea
 {

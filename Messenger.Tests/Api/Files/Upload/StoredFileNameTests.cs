@@ -18,8 +18,8 @@ public sealed class StoredFileNameTests
 
         var fileName = (string)method!.Invoke(null, new object[] { ownerId, "report.pdf" })!;
 
-        Assert.StartsWith($"{ownerId:N}_", fileName, StringComparison.OrdinalIgnoreCase);
-        Assert.EndsWith(".pdf", fileName, StringComparison.OrdinalIgnoreCase);
+        Assert.True(fileName.StartsWith($"{ownerId:N}_", StringComparison.OrdinalIgnoreCase));
+        Assert.True(fileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain("/", fileName);
         Assert.DoesNotContain("\\", fileName);
     }

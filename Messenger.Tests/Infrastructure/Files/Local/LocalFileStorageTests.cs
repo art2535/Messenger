@@ -136,4 +136,39 @@ public sealed class LocalFileStorageTests : IDisposable
         Assert.False(await _storage.ExistsAsync(FileStorageArea.Uploads, "cancelled.bin"));
     }
 
+    [Fact]
+    public async Task SaveAsync_RejectsControlCharactersInFileName()
+    {
+        await Assert.ThrowsAsync<ArgumentException>(() => _storage.SaveAsync(
+            FileStorageArea.Uploads,
+            "bad\nname.txt",
+            new MemoryStream([1]),
+            maxSizeBytes: 10));
+    }
+
+    [Fact]
+    public async Task SaveAsync_RejectsFileNamesLongerThan255Characters()
+    {
+        await Assert.ThrowsAsync<ArgumentException>(() => _storage.SaveAsync(
+            FileStorageArea.Uploads,
+            new string('a', 256),
+            new MemoryStream([1]),
+            maxSizeBytes: 10));
+    }
+
+    [Fact]
+    public async Task ListAsync_ReturnsOnlyFilesFromRequestedArea()
+    {
+        await _storage.SaveAsync(FileStorageArea.Uploads, "upload.bin", new MemoryStream([1]), 10);
+        await _storage.SaveAsync(FileStorageArea.Avatars, "avatar.bin", new MemoryStream([2]), 10);
+
+        var uploads = await _storage.ListAsync(FileStorageArea.Uploads);
+        var avatars = await _storage.ListAsync(FileStorageArea.Avatars);
+
+        Assert.Single(uploads);
+        Assert.Equal("upload.bin", uploads[0].FileName);
+        Assert.Single(avatars);
+        Assert.Equal("avatar.bin", avatars[0].FileName);
+    }
+
 }

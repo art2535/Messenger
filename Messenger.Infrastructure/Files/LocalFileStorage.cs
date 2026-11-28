@@ -153,6 +153,8 @@ public sealed class LocalFileStorage : IFileStorage
     private string GetFilePath(FileStorageArea area, string fileName)
     {
         if (string.IsNullOrWhiteSpace(fileName)
+            || fileName.Length > 255
+            || fileName.Any(char.IsControl)
             || fileName is "." or ".."
             || Path.IsPathRooted(fileName)
             || fileName.Contains('/')
