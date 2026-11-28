@@ -1,4 +1,5 @@
-using Messenger.Realtime.Services;
+using Messenger.Infrastructure.Services;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace Messenger.Tests.Realtime;
@@ -6,30 +7,23 @@ namespace Messenger.Tests.Realtime;
 public sealed class RateLimiterServiceTests
 {
     [Fact]
-    public async Task TypingRateLimiter_EnforcesPerUserWindowAndSeparatesUsers()
+    public async Task LocalFallback_EnforcesLimitAndSeparatesPartitions()
     {
-        using var limiter = new TypingRateLimiterService();
+        var limiter = new RedisRateLimitService(null, NullLogger<RedisRateLimitService>.Instance);
 
-        for (var i = 0; i < 60; i++)
-            Assert.True(await limiter.TryAcquireAsync("user-a"));
+        for (var i = 0; i < 3; i++)
+            Assert.True(await limiter.TryAcquireAsync("typing:user-a", 3, TimeSpan.FromMinutes(1)));
 
-        Assert.False(await limiter.TryAcquireAsync("user-a"));
-        Assert.True(await limiter.TryAcquireAsync("user-b"));
+        Assert.False(await limiter.TryAcquireAsync("typing:user-a", 3, TimeSpan.FromMinutes(1)));
+        Assert.True(await limiter.TryAcquireAsync("typing:user-b", 3, TimeSpan.FromMinutes(1)));
     }
 
     [Fact]
-    public async Task SendMessageRateLimiter_SeparatesUsersAndSupportsCancellationWhenQueueIsFull()
+    public async Task LocalFallback_ValidatesArguments()
     {
-        using var limiter = new SendMessageRateLimiterService();
+        var limiter = new RedisRateLimitService(null, NullLogger<RedisRateLimitService>.Instance);
 
-        for (var i = 0; i < 30; i++)
-            Assert.True(await limiter.TryAcquireAsync("user-a"));
-
-        Assert.True(await limiter.TryAcquireAsync("user-b"));
-
-        using var cancellation = new CancellationTokenSource();
-        cancellation.Cancel();
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
-            await limiter.TryAcquireAsync("user-a", cancellation.Token));
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
+            await limiter.TryAcquireAsync("key", 0, TimeSpan.FromMinutes(1)));
     }
 }

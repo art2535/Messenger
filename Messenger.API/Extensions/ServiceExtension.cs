@@ -1,7 +1,6 @@
 using Messenger.API.Options;
 using Messenger.API.Providers;
 using Messenger.API.Services;
-using Messenger.Realtime.Services;
 using Messenger.Application.Interfaces;
 using Messenger.Application.Services;
 using Messenger.Infrastructure.Services;
@@ -39,8 +38,6 @@ namespace Messenger.API.Extensions
                 services.AddScoped<IModerationService, ModerationService>();
                 services.AddSingleton<WebPushClient>();
                 services.AddScoped<IPushSubscriptionService, PushSubscriptionService>();
-                services.AddSingleton<TypingRateLimiterService>();
-                services.AddSingleton<SendMessageRateLimiterService>();
                 services.AddScoped<IScheduledMessageService, ScheduledMessageService>();
 
                 return services;

@@ -9,6 +9,36 @@ namespace Messenger.Tests.Infrastructure;
 [Collection(RedisCollection.Name)]
 public sealed class RedisIntegrationTests(RedisFixture fixture)
 {
+
+    [Fact]
+    public async Task RateLimiter_SharesFixedWindowAcrossInstances()
+    {
+        var firstInstance = new RedisRateLimitService(fixture.Connection, NullLogger<RedisRateLimitService>.Instance);
+        var secondInstance = new RedisRateLimitService(fixture.Connection, NullLogger<RedisRateLimitService>.Instance);
+        var partition = "integration:shared:" + Guid.NewGuid().ToString("N");
+
+        Assert.True(await firstInstance.TryAcquireAsync(partition, 3, TimeSpan.FromSeconds(2)));
+        Assert.True(await secondInstance.TryAcquireAsync(partition, 3, TimeSpan.FromSeconds(2)));
+        Assert.True(await firstInstance.TryAcquireAsync(partition, 3, TimeSpan.FromSeconds(2)));
+        Assert.False(await secondInstance.TryAcquireAsync(partition, 3, TimeSpan.FromSeconds(2)));
+
+        await Task.Delay(TimeSpan.FromMilliseconds(2200));
+
+        Assert.True(await secondInstance.TryAcquireAsync(partition, 3, TimeSpan.FromSeconds(2)));
+    }
+
+    [Fact]
+    public async Task RateLimiter_IsolatesPartitions()
+    {
+        var limiter = new RedisRateLimitService(fixture.Connection, NullLogger<RedisRateLimitService>.Instance);
+        var firstPartition = "integration:first:" + Guid.NewGuid().ToString("N");
+        var secondPartition = "integration:second:" + Guid.NewGuid().ToString("N");
+
+        Assert.True(await limiter.TryAcquireAsync(firstPartition, 1, TimeSpan.FromMinutes(1)));
+        Assert.False(await limiter.TryAcquireAsync(firstPartition, 1, TimeSpan.FromMinutes(1)));
+        Assert.True(await limiter.TryAcquireAsync(secondPartition, 1, TimeSpan.FromMinutes(1)));
+    }
+
     [Fact]
     public async Task CacheService_RoundTripsValues_AndExpiresKeys()
     {

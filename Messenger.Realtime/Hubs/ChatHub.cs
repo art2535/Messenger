@@ -1,6 +1,5 @@
 ﻿using Messenger.Application.Interfaces;
 using Messenger.Realtime.Metrics;
-using Messenger.Realtime.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
@@ -17,12 +16,11 @@ namespace Messenger.Realtime.Hubs
         private readonly IChatService _chatService;
         private readonly IAccountSettingsService _accountSettingsService;
         private readonly ILogger<ChatHub> _logger;
-        private readonly TypingRateLimiterService _typingLimiter;
-        private readonly SendMessageRateLimiterService _sendMessageLimiter;
+        private readonly IRateLimitService _rateLimiter;
 
         public ChatHub(IUserService userService, IUserStatusService userStatusService, IUserPresenceTracker presenceTracker, IChatService chatService,
             IAccountSettingsService accountSettingsService,
-            ILogger<ChatHub> logger, TypingRateLimiterService typingLimiter, SendMessageRateLimiterService sendMessageLimiter)
+            ILogger<ChatHub> logger, IRateLimitService rateLimiter)
         {
             _userService = userService;
             _userStatusService = userStatusService;
@@ -30,8 +28,7 @@ namespace Messenger.Realtime.Hubs
             _chatService = chatService;
             _accountSettingsService = accountSettingsService;
             _logger = logger;
-            _typingLimiter = typingLimiter;
-            _sendMessageLimiter = sendMessageLimiter;
+            _rateLimiter = rateLimiter;
         }
 
         private async Task SendToPeersAsync(Guid userId, string method, object payload, CancellationToken ct = default)
@@ -251,7 +248,7 @@ namespace Messenger.Realtime.Hubs
             if (string.IsNullOrEmpty(externalId))
                 return false;
 
-            return await _sendMessageLimiter.TryAcquireAsync(externalId, Context.ConnectionAborted);
+            return await _rateLimiter.TryAcquireAsync($"signalr:send-message:{externalId}", 30, TimeSpan.FromMinutes(1), Context.ConnectionAborted);
         }
 
         public async Task StartTyping(string chatId)
@@ -267,7 +264,7 @@ namespace Messenger.Realtime.Hubs
                 if (string.IsNullOrEmpty(externalId))
                     return;
 
-                if (!await _typingLimiter.TryAcquireAsync(externalId, Context.ConnectionAborted))
+                if (!await _rateLimiter.TryAcquireAsync($"signalr:typing:{externalId}", 60, TimeSpan.FromMinutes(1), Context.ConnectionAborted))
                     return;
 
                 var user = await _userService.GetUserByExternalIdAsync(externalId, Context.ConnectionAborted);
