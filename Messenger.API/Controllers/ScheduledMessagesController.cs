@@ -1,6 +1,7 @@
 using Asp.Versioning;
 using Messenger.API.Extensions;
 using Messenger.API.Adapters;
+using Messenger.API.Files;
 using Messenger.Application.Files;
 using Messenger.Application.DTOs.Messages;
 using Messenger.Realtime.Hubs;
@@ -129,7 +130,7 @@ namespace Messenger.API.Controllers
                     {
                         var validated = await _fileValidationService.ValidateAsync(
                             new FormFileUploadAdapter(file), FileUploadPurpose.Attachment, ct);
-                        var fileName = $"{user.UserId:N}_{Guid.NewGuid():N}{validated.Extension}";
+                        var fileName = StoredFileNameGenerator.Create(user.UserId, validated.Extension);
                         var fileUrl = $"{apiBaseUrl!.TrimEnd('/')}/uploads/{fileName}";
 
                         await using var stream = file.OpenReadStream();

@@ -2,6 +2,7 @@ using Messenger.Application.Common;
 using Asp.Versioning;
 using Messenger.API.Extensions;
 using Messenger.API.Adapters;
+using Messenger.API.Files;
 using Messenger.Application.Files;
 using MassTransit;
 using Messenger.Application.DTOs.Messages;
@@ -240,7 +241,7 @@ namespace Messenger.API.Controllers
                     {
                         var validated = await _fileValidationService.ValidateAsync(
                             new FormFileUploadAdapter(file), FileUploadPurpose.Attachment, ct);
-                        var fileName = CreateStoredFileName(userId, validated.Extension);
+                        var fileName = StoredFileNameGenerator.Create(userId, validated.Extension);
                         var fileUrl = $"{apiBaseUrl!.TrimEnd('/')}/uploads/{fileName}";
                         var displayFileName = validated.FileName;
 
@@ -546,7 +547,7 @@ namespace Messenger.API.Controllers
                                 if (sourceStream == null)
                                     continue;
 
-                                var newFileName = CreateStoredFileName(userId, validatedSource.Extension);
+                                var newFileName = StoredFileNameGenerator.Create(userId, validatedSource.Extension);
                                 var copiedSize = await _fileStorage.SaveAsync(
                                     FileStorageArea.Uploads, newFileName, sourceStream, 10 * 1024 * 1024, ct);
                                 copiedFileNames.Add(newFileName);
@@ -706,8 +707,7 @@ namespace Messenger.API.Controllers
             throw new InvalidOperationException("Не удалось определить безопасное имя файла вложения");
         }
 
-        private static string CreateStoredFileName(Guid ownerId, string validatedExtension)
-            => $"{ownerId:N}_{Guid.NewGuid():N}{validatedExtension}";
+
 
         private static string SanitizeDisplayFileName(string? fileName)
         {

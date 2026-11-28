@@ -1,6 +1,7 @@
 using Messenger.Application.DTOs.Responses;
 using Messenger.Application.Files;
 using Messenger.API.Adapters;
+using Messenger.API.Files;
 ﻿using Asp.Versioning;
 using Messenger.Application.DTOs.Attachments;
 using Messenger.Application.Interfaces;
@@ -315,7 +316,7 @@ namespace Messenger.API.Controllers
                 // Новые имена файлов формируются сервером с префиксом ID владельца.
                 // Это не позволяет прикрепить к своему сообщению файл другого пользователя,
                 // даже если его URL/имя стало известно.
-                if (!storedFileName.StartsWith($"{userId:N}_", StringComparison.OrdinalIgnoreCase))
+                if (!StoredFileNameGenerator.IsOwnedBy(userId, storedFileName))
                     return Forbid();
 
                 var storedFileInfo = await _fileStorage.GetInfoAsync(
