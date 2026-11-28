@@ -16,8 +16,8 @@ public static class SecurityHeadersExtension
 
             if (includeContentSecurityPolicy)
             {
-                context.Response.Headers.ContentSecurityPolicy =
-                    "default-src 'self'; frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'";
+                context.Response.Headers["Content-Security-Policy"] =
+                    "frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'";
             }
 
             await next();
