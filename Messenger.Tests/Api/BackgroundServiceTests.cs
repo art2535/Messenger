@@ -204,7 +204,8 @@ public sealed class BackgroundServiceTests
         await service.StartAsync(CancellationToken.None);
 
         Assert.NotNull(service.ExecuteTask);
-        Assert.True(service.ExecuteTask!.IsCompleted);
+        await service.ExecuteTask!.WaitAsync(TimeSpan.FromSeconds(1));
+        Assert.True(service.ExecuteTask.IsCompletedSuccessfully);
     }
 
     [Fact]
