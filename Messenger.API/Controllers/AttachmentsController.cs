@@ -226,6 +226,11 @@ namespace Messenger.API.Controllers
             {
                 throw;
             }
+            catch (UriFormatException ex)
+            {
+                _logger.LogWarning(ex, "Вложение {AttachmentId} содержит некорректный URL", attachmentId);
+                return NotFound(ApiResponse.Failure("Файл вложения не найден", "NOT_FOUND"));
+            }
             catch (ArgumentException ex)
             {
                 _logger.LogWarning(ex, "Вложение {AttachmentId} не прошло проверку содержимого", attachmentId);
@@ -343,6 +348,11 @@ namespace Messenger.API.Controllers
 
                 await _attachmentService.AddAttachmentAsync(messageId, attachment, ct);
                 return Ok(ApiResponse.Success(message: "Вложение успешно добавлено"));
+            }
+            catch (UriFormatException ex)
+            {
+                _logger.LogWarning(ex, "Некорректный URL файла при создании вложения для сообщения {MessageId}", messageId);
+                return BadRequest(ApiResponse.Failure("Некорректный URL вложения", "INVALID_REQUEST"));
             }
             catch (InvalidOperationException ex)
             {
