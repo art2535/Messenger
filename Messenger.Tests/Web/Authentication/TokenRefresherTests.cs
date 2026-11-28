@@ -1,12 +1,10 @@
 using System.Net;
-using System.Text;
+using Messenger.Core.Configuration;
 using Messenger.Web.Services;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Xunit;
-
 using Messenger.Tests.Shared.TestDoubles;
 
 namespace Messenger.Tests.Web.Authentication;
@@ -107,20 +105,20 @@ public sealed class TokenRefresherTests
     private static TokenRefresher CreateRefresher(UserTokenStore store, HttpMessageHandler handler)
     {
         var factory = new Mock<IHttpClientFactory>();
-        factory.Setup(x => x.CreateClient(It.IsAny<string>())).Returns(() => new HttpClient(handler, disposeHandler: false));
-        var configuration = new ConfigurationBuilder().AddInMemoryCollection(
-            new Dictionary<string, string?>
-            {
-                ["AzureAd:ClientId"] = "messenger-tests",
-                ["AzureAd:ClientSecret"] = "test-secret"
-            }).Build();
+        factory.Setup(x => x.CreateClient(It.IsAny<string>()))
+            .Returns(() => new HttpClient(handler, disposeHandler: false));
 
         return new TokenRefresher(
             factory.Object,
-            configuration,
+            Options.Create(new IdentityProviderOptions
+            {
+                Instance = "https://sso.example.test/realms/",
+                TenantId = "test",
+                ClientId = "messenger-tests",
+                ClientSecret = "test-secret"
+            }),
             Options.Create(new TokenRefreshOptions { RefreshBeforeExpirySeconds = 90 }),
             store,
             NullLogger<TokenRefresher>.Instance);
     }
-
 }

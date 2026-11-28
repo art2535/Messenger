@@ -11,16 +11,13 @@ namespace Messenger.Web.Extensions;
 public static class SerilogExtension
 {
     private static string? GetConnectionString(IConfiguration configuration) =>
-        configuration.GetConnectionString("DefaultConnection")
-        ?? configuration["ConnectionStrings:DefaultConnection"]
-        ?? configuration["PostgresConnectionString"];
+        configuration.GetConnectionString("DefaultConnection");
 
     extension(WebApplicationBuilder builder)
     {
         public void AddMessengerSerilog(string applicationName)
         {
             var connectionString = GetConnectionString(builder.Configuration);
-
             SelfLog.Enable(msg => Debug.WriteLine(msg));
 
             var columnOptions = new Dictionary<string, ColumnWriterBase>
@@ -37,7 +34,6 @@ public static class SerilogExtension
             };
 
             var hasDb = !string.IsNullOrWhiteSpace(connectionString);
-
             builder.Host.UseSerilog((context, services, configuration) =>
             {
                 configuration
@@ -66,13 +62,10 @@ public static class SerilogExtension
                         period: TimeSpan.FromSeconds(5),
                         batchSizeLimit: 50);
                 }
-            },
-            writeToProviders: true);
+            }, writeToProviders: true);
 
             if (!hasDb)
-            {
-                Console.WriteLine($"[WARN] {applicationName}: строка подключения PostgreSQL не найдена — sink PostgreSQL отключён");
-            }
+                Console.WriteLine($"[WARN] {applicationName}: ConnectionStrings:DefaultConnection отсутствует — sink PostgreSQL отключён.");
         }
     }
 }

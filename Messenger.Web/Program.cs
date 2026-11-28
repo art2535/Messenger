@@ -1,5 +1,6 @@
 using Messenger.Web.Extensions;
 using Messenger.Web.Helpers;
+using Messenger.Web.Services;
 using Microsoft.AspNetCore.ResponseCompression;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
@@ -15,15 +16,12 @@ namespace Messenger.Web
         public static void Main(string[] args)
         {
             if (Console.IsOutputRedirected)
-            {
                 Console.OutputEncoding = Encoding.UTF8;
-            }
 
             var builder = WebApplication.CreateBuilder(args);
-
             builder.ConfigureDevelopmentCertificate();
-
             builder.AddMessengerSerilog("Messenger.Web");
+
             builder.Services.AddLogging(logging =>
             {
                 logging.ClearProviders();
@@ -65,12 +63,18 @@ namespace Messenger.Web
                 client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             });
             builder.Services.AddDistributedMemoryCache();
-
             builder.Services.AddBackgroundTokenRefresh(builder.Configuration);
+
+            var sessionOptions = builder.Configuration.GetSection(WebSessionOptions.SectionName)
+                .Get<WebSessionOptions>() ?? new WebSessionOptions();
+            builder.Services.AddOptions<WebSessionOptions>()
+                .Bind(builder.Configuration.GetSection(WebSessionOptions.SectionName))
+                .ValidateDataAnnotations()
+                .ValidateOnStart();
 
             builder.Services.AddSession(options =>
             {
-                options.IdleTimeout = TimeSpan.FromHours(1);
+                options.IdleTimeout = TimeSpan.FromMinutes(sessionOptions.IdleTimeoutMinutes);
                 options.Cookie.HttpOnly = true;
                 options.Cookie.IsEssential = true;
                 options.Cookie.SameSite = SameSiteMode.Lax;
@@ -102,7 +106,6 @@ namespace Messenger.Web
             builder.Services.Configure<GzipCompressionProviderOptions>(o => o.Level = CompressionLevel.Fastest);
 
             var app = builder.Build();
-
             app.UseMessengerWebSecurityHeaders(!app.Environment.IsDevelopment());
             app.UseSerilogRequestLogging();
 
@@ -113,7 +116,6 @@ namespace Messenger.Web
             }
 
             app.UseHttpsRedirection();
-
             app.UseResponseCompression();
 
             var staticFileOptions = new StaticFileOptions
@@ -141,17 +143,13 @@ namespace Messenger.Web
             };
 
             app.UseStaticFiles(staticFileOptions);
-
             app.UseSession();
             app.UseRouting();
-
             app.UseAuthentication();
             app.UseAuthorization();
-
             app.MapRazorPages();
             app.MapStaticAssets();
             app.MapControllers();
-
             app.MapPrometheusScrapingEndpoint("/metrics");
 
             try
