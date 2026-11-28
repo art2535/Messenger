@@ -218,6 +218,35 @@
 
 `Messenger.Tests` теперь ссылается на `Messenger.Web`.
 
+## Матрица покрытия сервисов
+
+По состоянию на 2026-11-28 в тестовый проект добавлены сценарии для всех 32 классов-сервисов, найденных в проектах Infrastructure, Application, Realtime, API и Web:
+
+- **Infrastructure — 22/22:** AccountSettings, Admin, AES-GCM encryption, Attachment, CacheMetrics, ChatFolder, Chat, EF Broadcast repository, JWT, Login, Message, Moderation, Notification, PushSubscription, Reaction, RedisCache, RedisDistributedLock, RedisUserPresenceTracker, ScheduledMessage, User, UserStatus и Validation.
+- **Application — 1/1:** BroadcastService.
+- **Realtime — 2/2:** SendMessageRateLimiterService и TypingRateLimiterService.
+- **API — 6/6:** LogRetentionService, PresenceHeartbeatBackgroundService, RedisMetricsCollectorService, ScheduledMessageDispatcherService, SessionCleanupBackgroundService и UploadOrphanCleanupService.
+- **Web — 1/1:** TokenRefreshBackgroundService; дополнительно покрыты TokenRefresher и UserTokenStore.
+
+Всего создано 22 тестовых файла в Messenger.Tests. Покрытие означает наличие целевых сценариев для каждого сервиса, а не исчерпывающую проверку каждого публичного метода.
+
+### Известные ограничения нового покрытия
+
+- RedisCacheService, RedisDistributedLock и RedisUserPresenceTracker пока проверяются в режиме Redis fallback; полноценный сценарий с работающим Redis и несколькими экземплярами приложения остаётся отдельной задачей.
+- RedisMetricsCollectorService проверяет парсинг Redis INFO, но не полный цикл сбора метрик с реальным сервером.
+- LogRetentionService проверяет отключённый режим; реальное пакетное удаление из logging."Logs" ещё требует PostgreSQL fixture с отдельной logging-схемой.
+- PresenceHeartbeatBackgroundService проверяет корректное завершение до первого heartbeat.
+- TokenRefreshBackgroundService проверяет пустой цикл; HTTP-обновление, отказ SSO, tombstone и конкурентная ротация покрыты отдельно тестами TokenRefresher.
+- Успешная запись avatar-файла, а также некоторые редко используемые ветви ChatService и MessageService требуют дополнительных сценариев.
+
+**Запуск полного набора в среде разработки:**
+
+```bash
+dotnet test Messenger.Tests/Messenger.Tests.csproj
+```
+
+Testcontainers требует доступный Docker. Тестовый проект ссылается на Infrastructure, Realtime, API и Web, поэтому полный прогон также проверит сборку этих проектов.
+
 ## Ограничения проверки
 
 - В рабочей среде нет .NET SDK (dotnet: command not found), поэтому dotnet build и dotnet test не запускались. Наличие Docker runtime для Testcontainers также не подтверждено.
