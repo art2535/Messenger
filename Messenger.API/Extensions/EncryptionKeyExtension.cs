@@ -1,80 +1,41 @@
-﻿using System.Security.Cryptography;
-using System.Text.Json;
+using System.Security.Cryptography;
 
 namespace Messenger.API.Extensions
 {
+    /// <summary>Создаёт общий локальный ключ разработки, не изменяя appsettings.</summary>
     public static class EncryptionKeyExtension
     {
         extension(WebApplicationBuilder builder)
         {
             public WebApplicationBuilder EnsureSharedDevelopmentEncryptionKey()
             {
-                if (!builder.Environment.IsDevelopment())
+                if (!builder.Environment.IsDevelopment() ||
+                    !string.IsNullOrWhiteSpace(builder.Configuration["Encryption:MasterKeyBase64"]))
                     return builder;
 
                 var currentDir = new DirectoryInfo(Directory.GetCurrentDirectory());
-                while (currentDir != null && !currentDir.GetFiles("*.sln").Any())
-                {
+                while (currentDir is not null && !currentDir.GetFiles("*.sln").Any())
                     currentDir = currentDir.Parent;
-                }
 
-                if (currentDir == null)
+                if (currentDir is null)
                 {
-                    Console.WriteLine("Корень решения не найден, использую локальный ключ.");
+                    Console.WriteLine("[Encryption] Корень решения не найден. Задайте ключ через конфигурацию.");
                     return builder;
                 }
 
                 var sharedKeyPath = Path.Combine(currentDir.FullName, "shared-dev.key");
-                string masterKey;
+                var masterKey = File.Exists(sharedKeyPath)
+                    ? File.ReadAllText(sharedKeyPath).Trim()
+                    : Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
 
-                if (File.Exists(sharedKeyPath))
+                if (!File.Exists(sharedKeyPath))
                 {
-                    masterKey = File.ReadAllText(sharedKeyPath);
-                }
-                else
-                {
-                    masterKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
                     File.WriteAllText(sharedKeyPath, masterKey);
-                    Console.WriteLine(">>> Сгенерирован НОВЫЙ общий ключ для всей разработки.");
+                    Console.WriteLine("[Encryption] Создан локальный общий ключ разработки (shared-dev.key).");
                 }
-
-                UpdateProjectSettings(masterKey);
 
                 builder.Configuration["Encryption:MasterKeyBase64"] = masterKey;
-
                 return builder;
-            }
-        }        
-
-        private static void UpdateProjectSettings(string key)
-        {
-            var devSettingsPath = Path.Combine(Directory.GetCurrentDirectory(), "appsettings.Development.json");
-            if (!File.Exists(devSettingsPath))
-                return;
-
-            try
-            {
-                var json = File.ReadAllText(devSettingsPath);
-                var config = JsonSerializer.Deserialize<Dictionary<string, object>>(json) ?? new();
-
-                var currentKeyInJson = "";
-                if (config.TryGetValue("Encryption", out var encObj) && encObj is JsonElement encElem)
-                {
-                    if (encElem.TryGetProperty("MasterKeyBase64", out var keyProp))
-                        currentKeyInJson = keyProp.GetString();
-                }
-
-                if (currentKeyInJson != key)
-                {
-                    config["Encryption"] = new { MasterKeyBase64 = key };
-                    var options = new JsonSerializerOptions { WriteIndented = true };
-                    File.WriteAllText(devSettingsPath, JsonSerializer.Serialize(config, options));
-                    Console.WriteLine($"[Encryption] Ключ ОБНОВЛЕН в {Path.GetFileName(devSettingsPath)}");
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Ошибка синхронизации ключа: {ex.Message}");
             }
         }
     }

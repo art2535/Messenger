@@ -4,6 +4,7 @@ using Messenger.API.Services;
 using Messenger.Application.Interfaces;
 using Messenger.Application.Services;
 using Messenger.Infrastructure.Services;
+using Messenger.Core.Configuration;
 using Microsoft.AspNetCore.SignalR;
 using StackExchange.Redis;
 using WebPush;
@@ -13,7 +14,7 @@ namespace Messenger.API.Extensions
     public static class ServiceExtension
     {
         private static string? GetRedisConnectionString(IConfiguration configuration) =>
-            configuration.GetConnectionString("Redis") ?? configuration["ConnectionStrings:Redis"];
+            configuration.GetConnectionString("Redis");
 
         extension(IServiceCollection services)
         {
@@ -42,14 +43,12 @@ namespace Messenger.API.Extensions
                 services.AddSingleton<WebPushClient>();
                 services.AddScoped<IPushSubscriptionService, PushSubscriptionService>();
                 services.AddScoped<IScheduledMessageService, ScheduledMessageService>();
-
                 return services;
             }
 
             public IServiceCollection AddRedisCache(IConfiguration configuration)
             {
                 var redisCs = GetRedisConnectionString(configuration);
-
                 if (!string.IsNullOrWhiteSpace(redisCs))
                 {
                     services.AddSingleton<IConnectionMultiplexer>(_ =>
@@ -59,36 +58,20 @@ namespace Messenger.API.Extensions
                         options.AllowAdmin = true;
                         return ConnectionMultiplexer.Connect(options);
                     });
-
                     services.AddSingleton<ICacheService>(sp =>
-                    {
-                        var mux = sp.GetRequiredService<IConnectionMultiplexer>();
-                        var logger = sp.GetRequiredService<ILogger<RedisCacheService>>();
-                        return new RedisCacheService(mux, logger);
-                    });
-
+                        new RedisCacheService(sp.GetRequiredService<IConnectionMultiplexer>(),
+                            sp.GetRequiredService<ILogger<RedisCacheService>>()));
                     services.AddSingleton<RedisDistributedLock>(sp =>
-                    {
-                        var mux = sp.GetRequiredService<IConnectionMultiplexer>();
-                        var logger = sp.GetRequiredService<ILogger<RedisDistributedLock>>();
-                        return new RedisDistributedLock(mux, logger);
-                    });
+                        new RedisDistributedLock(sp.GetRequiredService<IConnectionMultiplexer>(),
+                            sp.GetRequiredService<ILogger<RedisDistributedLock>>()));
                 }
                 else
                 {
                     services.AddSingleton<ICacheService>(sp =>
-                    {
-                        var logger = sp.GetRequiredService<ILogger<RedisCacheService>>();
-                        return new RedisCacheService(null, logger);
-                    });
-
+                        new RedisCacheService(null, sp.GetRequiredService<ILogger<RedisCacheService>>()));
                     services.AddSingleton<RedisDistributedLock>(sp =>
-                    {
-                        var logger = sp.GetRequiredService<ILogger<RedisDistributedLock>>();
-                        return new RedisDistributedLock(null, logger);
-                    });
+                        new RedisDistributedLock(null, sp.GetRequiredService<ILogger<RedisDistributedLock>>()));
                 }
-
                 return services;
             }
 
@@ -105,35 +88,45 @@ namespace Messenger.API.Extensions
 
             public IServiceCollection AddSignalRService(IConfiguration configuration)
             {
-                var redisCs = GetRedisConnectionString(configuration);
-                var channelPrefix = configuration["SignalR:ChannelPrefix"] ?? "Messenger";
+                var signalROptions = configuration.GetSection(SignalROptions.SectionName)
+                    .Get<SignalROptions>() ?? new SignalROptions();
 
+                services.AddOptions<SignalROptions>()
+                    .Bind(configuration.GetSection(SignalROptions.SectionName))
+                    .ValidateDataAnnotations()
+                    .ValidateOnStart();
+
+                var redisCs = GetRedisConnectionString(configuration);
                 var signalR = services.AddSignalR(options =>
                 {
-                    options.MaximumReceiveMessageSize = 64 * 1024;
-                    options.EnableDetailedErrors = configuration.GetValue("SignalR:EnableDetailedErrors", false);
-                    options.ClientTimeoutInterval = TimeSpan.FromSeconds(30);
-                    options.KeepAliveInterval = TimeSpan.FromSeconds(15);
+                    options.MaximumReceiveMessageSize = signalROptions.MaximumReceiveMessageSize;
+                    options.EnableDetailedErrors = signalROptions.EnableDetailedErrors;
+                    options.ClientTimeoutInterval = TimeSpan.FromSeconds(signalROptions.ClientTimeoutSeconds);
+                    options.KeepAliveInterval = TimeSpan.FromSeconds(signalROptions.KeepAliveSeconds);
                 });
 
                 if (!string.IsNullOrWhiteSpace(redisCs))
-                {
                     signalR.AddStackExchangeRedis(redisCs, options =>
-                    {
-                        options.Configuration.ChannelPrefix = RedisChannel.Literal(channelPrefix);
-                    });
-                }
+                        options.Configuration.ChannelPrefix = RedisChannel.Literal(signalROptions.ChannelPrefix));
 
                 services.AddSingleton<IUserIdProvider, NameUserIdProvider>();
-
                 return services;
             }
 
             public IServiceCollection AddEncryption(IConfiguration configuration)
             {
-                services.Configure<AesGcmEncryptionOptions>(configuration.GetSection("Encryption"));
-                services.AddSingleton<IEncryptionService, AesGcmEncryptionService>();
+                services.AddOptions<AesGcmEncryptionOptions>()
+                    .Bind(configuration.GetSection("Encryption"))
+                    .Validate(options =>
+                    {
+                        if (string.IsNullOrWhiteSpace(options.MasterKeyBase64))
+                            return false;
+                        try { return Convert.FromBase64String(options.MasterKeyBase64.Trim()).Length == 32; }
+                        catch (FormatException) { return false; }
+                    }, "Encryption:MasterKeyBase64 должен быть валидным Base64-ключом длиной ровно 32 байта.")
+                    .ValidateOnStart();
 
+                services.AddSingleton<IEncryptionService, AesGcmEncryptionService>();
                 return services;
             }
         }

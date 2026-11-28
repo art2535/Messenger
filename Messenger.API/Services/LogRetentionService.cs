@@ -1,4 +1,4 @@
-﻿using Messenger.Infrastructure.Data;
+using Messenger.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations;
 using Microsoft.Extensions.Options;
@@ -17,7 +17,9 @@ namespace Messenger.API.Services
         public int BatchSize { get; set; } = 5000;
     }
 
-    public sealed class LogRetentionService(IServiceScopeFactory scopeFactory, IOptions<LogRetentionOptions> options,
+    public sealed class LogRetentionService(
+        IServiceScopeFactory scopeFactory,
+        IOptions<LogRetentionOptions> options,
         ILogger<LogRetentionService> logger) : BackgroundService
     {
         private readonly LogRetentionOptions _options = options.Value;
@@ -30,51 +32,31 @@ namespace Messenger.API.Services
                 return;
             }
 
-            logger.LogInformation($"Фоновый процесс очистки Logs запущен: каждые {_options.RetentionDays} дней");
+            logger.LogInformation("Фоновая очистка Logs запущена: интервал {Interval} ч., срок хранения {Retention} дн.",
+                _options.RunIntervalHours, _options.RetentionDays);
 
-            var days = Math.Max(1, _options.RetentionDays);
-            var interval = TimeSpan.FromHours(Math.Max(1, _options.RunIntervalHours));
+            try { await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken); }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { return; }
 
-            try
-            {
-                await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
-            }
-            catch (OperationCanceledException)
-            {
-                return;
-            }
-
-            using var timer = new PeriodicTimer(interval);
-            do
-            {
-                await CleanupAsync(days, stoppingToken);
-            }
+            using var timer = new PeriodicTimer(TimeSpan.FromHours(_options.RunIntervalHours));
+            do { await CleanupAsync(stoppingToken); }
             while (await WaitNextAsync(timer, stoppingToken));
         }
 
         private static async Task<bool> WaitNextAsync(PeriodicTimer timer, CancellationToken ct)
         {
-            try
-            {
-                return await timer.WaitForNextTickAsync(ct);
-            }
-            catch (OperationCanceledException)
-            {
-                return false;
-            }
+            try { return await timer.WaitForNextTickAsync(ct); }
+            catch (OperationCanceledException) { return false; }
         }
 
-        private async Task CleanupAsync(int retentionDays, CancellationToken ct)
+        private async Task CleanupAsync(CancellationToken ct)
         {
-            var threshold = DateTime.UtcNow.AddDays(-retentionDays);
-            var batchSize = Math.Max(100, _options.BatchSize);
+            var threshold = DateTime.UtcNow.AddDays(-_options.RetentionDays);
             var total = 0L;
-
             try
             {
                 using var scope = scopeFactory.CreateScope();
                 var db = scope.ServiceProvider.GetRequiredService<GuapMessengerContext>();
-
                 int deleted;
                 do
                 {
@@ -84,30 +66,19 @@ namespace Messenger.API.Services
                     WHERE "Id" IN (
                         SELECT "Id" FROM logging."Logs"
                         WHERE "Timestamp" < {threshold}
-                        LIMIT {batchSize})
+                        LIMIT {_options.BatchSize})
                     """, ct);
-
                     total += deleted;
-
-                    if (deleted == batchSize)
-                    {
+                    if (deleted == _options.BatchSize)
                         await Task.Delay(TimeSpan.FromMilliseconds(200), ct);
-                    }
                 }
-                while (deleted == batchSize && !ct.IsCancellationRequested);
+                while (deleted == _options.BatchSize && !ct.IsCancellationRequested);
 
-                logger.LogInformation(
-                    "Очистка логов: удалено {Count} записей старше {Threshold:u} ({Days} дн.)",
-                    total, threshold, retentionDays);
+                logger.LogInformation("Очистка логов завершена: удалено {Count} записей старше {Threshold:u} ({Days} дн.)",
+                    total, threshold, _options.RetentionDays);
             }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Ошибка очистки логов (удалено до ошибки: {Count})", total);
-            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex) { logger.LogError(ex, "Ошибка очистки логов (удалено до ошибки: {Count})", total); }
         }
     }
 }

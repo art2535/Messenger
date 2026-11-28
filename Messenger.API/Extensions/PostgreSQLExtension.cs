@@ -10,45 +10,21 @@ namespace Messenger.API.Extensions
         {
             public IServiceCollection AddPostgreSQL(IConfiguration? configuration = null)
             {
-                var connectionString = Environment.GetEnvironmentVariable("PostgresConnectionString",
-                    EnvironmentVariableTarget.Machine) ?? string.Empty;
-
-                if (string.IsNullOrEmpty(connectionString))
-                {
-                    if (configuration is null)
-                    {
-                        throw new InvalidOperationException(
-                            "Не указана строка подключения к PostgreSQL. " +
-                            "Добавьте переменную окружения 'PostgresConnectionString' " +
-                            "или настройте 'DefaultConnection' в appsettings.json."
-                        );
-                    }
-
-                    connectionString = configuration.GetConnectionString("DefaultConnection");
-                }
+                var connectionString = configuration?.GetConnectionString("DefaultConnection")
+                    ?? configuration?["PostgresConnectionString"];
 
                 if (string.IsNullOrWhiteSpace(connectionString))
-                {
                     throw new InvalidOperationException(
-                        "Строка подключения PostgreSQL пуста после всех попыток чтения.");
-                }
+                        "Не задана строка подключения PostgreSQL. Настройте ConnectionStrings:DefaultConnection через appsettings, User Secrets или ConnectionStrings__DefaultConnection.");
 
-                connectionString = EnsurePoolSettings(connectionString);
-
-                var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
+                var dataSourceBuilder = new NpgsqlDataSourceBuilder(EnsurePoolSettings(connectionString));
                 var dataSource = dataSourceBuilder.Build();
-
                 services.AddSingleton(dataSource);
-
                 services.AddDbContext<GuapMessengerContext>((sp, options) =>
                 {
                     var ds = sp.GetRequiredService<NpgsqlDataSource>();
-                    options.UseNpgsql(ds, npgsql =>
-                    {
-                        npgsql.CommandTimeout(15);
-                    });
+                    options.UseNpgsql(ds, npgsql => npgsql.CommandTimeout(15));
                 });
-
                 return services;
             }
         }
@@ -61,7 +37,6 @@ namespace Messenger.API.Extensions
             if (!connectionString.Contains("Minimum Pool Size", StringComparison.OrdinalIgnoreCase) &&
                 !connectionString.Contains("Min Pool Size", StringComparison.OrdinalIgnoreCase))
                 csb.MinPoolSize = 5;
-
             return csb.ConnectionString;
         }
 
@@ -69,21 +44,13 @@ namespace Messenger.API.Extensions
         {
             var configuration = new ConfigurationBuilder()
                 .SetBasePath(Directory.GetCurrentDirectory())
-                .AddJsonFile("appsettings.Development.json", true)
+                .AddJsonFile("appsettings.Development.json", optional: true)
                 .AddEnvironmentVariables()
                 .Build();
-
             var connectionString = configuration.GetConnectionString("DefaultConnection");
-
             if (string.IsNullOrWhiteSpace(connectionString))
-            {
-                throw new InvalidOperationException(
-                    "Не удалось найти строку подключения 'DefaultConnection' в appsettings.Development.json!"
-                );
-            }
-
+                throw new InvalidOperationException("Не найдена ConnectionStrings:DefaultConnection.");
             var target = forMachine ? EnvironmentVariableTarget.Machine : EnvironmentVariableTarget.User;
-
             Environment.SetEnvironmentVariable("PostgresConnectionString", connectionString, target);
         }
     }
