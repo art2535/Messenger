@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
 using Messenger.Application.Interfaces;
@@ -23,7 +22,8 @@ public sealed class RedisRateLimitService : IRateLimitService
 
     private readonly IDatabase? _database;
     private readonly ILogger<RedisRateLimitService> _logger;
-    private readonly ConcurrentDictionary<string, LocalWindow> _localWindows = new();
+    private readonly object _localSync = new();
+    private readonly Dictionary<string, LocalWindow> _localWindows = new();
     private long _operations;
 
     public RedisRateLimitService(
@@ -41,8 +41,10 @@ public sealed class RedisRateLimitService : IRateLimitService
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(partitionKey);
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(permitLimit);
-        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(window, TimeSpan.Zero);
+        if (permitLimit <= 0)
+            throw new ArgumentOutOfRangeException(nameof(permitLimit));
+        if (window <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(window));
         cancellationToken.ThrowIfCancellationRequested();
 
         var key = CreateKey(partitionKey);
@@ -76,10 +78,17 @@ public sealed class RedisRateLimitService : IRateLimitService
     private bool TryAcquireLocally(string key, int permitLimit, long windowMilliseconds)
     {
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        var counter = _localWindows.GetOrAdd(key, static _ => new LocalWindow());
 
-        lock (counter.Sync)
+        // This path is used only when Redis is not configured (local/single-instance mode).
+        // A single lock also makes idle-entry cleanup safe against concurrent GetOrAdd races.
+        lock (_localSync)
         {
+            if (!_localWindows.TryGetValue(key, out var counter))
+            {
+                counter = new LocalWindow();
+                _localWindows.Add(key, counter);
+            }
+
             if (now - counter.WindowStartedAt >= windowMilliseconds || now < counter.WindowStartedAt)
             {
                 counter.WindowStartedAt = now;
@@ -89,15 +98,14 @@ public sealed class RedisRateLimitService : IRateLimitService
             counter.Count++;
             var acquired = counter.Count <= permitLimit;
 
-            if ((Interlocked.Increment(ref _operations) & 1023) == 0)
+            if ((++_operations & 1023) == 0)
             {
-                foreach (var item in _localWindows)
+                foreach (var staleKey in _localWindows
+                    .Where(item => now - item.Value.WindowStartedAt >= windowMilliseconds * 2)
+                    .Select(item => item.Key)
+                    .ToArray())
                 {
-                    lock (item.Value.Sync)
-                    {
-                        if (now - item.Value.WindowStartedAt >= windowMilliseconds * 2)
-                            _localWindows.TryRemove(item.Key, out _);
-                    }
+                    _localWindows.Remove(staleKey);
                 }
             }
 
@@ -113,7 +121,6 @@ public sealed class RedisRateLimitService : IRateLimitService
 
     private sealed class LocalWindow
     {
-        public object Sync { get; } = new();
         public long WindowStartedAt { get; set; }
         public int Count { get; set; }
     }
