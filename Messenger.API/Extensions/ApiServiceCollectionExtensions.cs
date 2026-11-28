@@ -1,4 +1,5 @@
 using Messenger.API.Services;
+using Messenger.Core.Configuration;
 using Messenger.Application.Files;
 using Messenger.Infrastructure.Files;
 using OpenTelemetry.Metrics;
@@ -39,6 +40,14 @@ public static class ApiServiceCollectionExtensions
         builder.Services.AddRedisCache(builder.Configuration);
         builder.Services.AddScalarApi(builder.Configuration);
         builder.Services.AddPostgreSQL(builder.Configuration);
+        builder.Services.AddOptions<VapidOptions>()
+            .Bind(builder.Configuration.GetSection(VapidOptions.SectionName))
+            .ValidateDataAnnotations()
+            .Validate(options => options.Subject.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase)
+                || (Uri.TryCreate(options.Subject, UriKind.Absolute, out var subjectUri)
+                    && subjectUri.Scheme == Uri.UriSchemeHttps),
+                "Vapid:Subject должен быть mailto: или HTTPS URL.")
+            .ValidateOnStart();
         builder.Services.AddServices();
         builder.Services.AddEncryption(builder.Configuration);
         builder.Services.AddRabbitMQ(builder.Configuration);
