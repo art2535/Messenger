@@ -325,6 +325,11 @@ namespace Messenger.API.Controllers
                 await _userService.UpdateProfileAsync(user.UserId, request, avatarUrl, ct);
 
                 var updatedUser = await _userService.GetUserByIdAsync(user.UserId, ct);
+                if (updatedUser == null)
+                {
+                    return NotFound(ApiResponse.Failure("Пользователь не найден", "NOT_FOUND"));
+                }
+
                 var newDisplayName = $"{updatedUser.FirstName} {updatedUser.LastName}".Trim();
                 var currentAvatar = updatedUser.Account?.Avatar;
 

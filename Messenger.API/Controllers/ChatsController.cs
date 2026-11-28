@@ -202,9 +202,10 @@ namespace Messenger.API.Controllers
             try
             {
                 var currentUserId = await User.GetCurrentUserIdAsync(_userService, ct);
+                var groupName = request.Name?.Trim();
 
                 string chatNameForDb = request.Type == "group"
-                    ? request.Name.Trim()
+                    ? groupName!
                     : "Приватный чат";
 
                 var chat = await _chatService.CreateChatAsync(
@@ -222,7 +223,7 @@ namespace Messenger.API.Controllers
                 }
 
                 string displayName = request.Type == "group"
-                    ? request.Name.Trim()
+                    ? groupName!
                     : await GetPrivateChatDisplayNameAsync(chat.ChatId, currentUserId, ct);
 
                 foreach (var participantId in request.UserIds.Distinct())
@@ -232,7 +233,7 @@ namespace Messenger.API.Controllers
                         continue;
 
                     string individualizedName = request.Type == "group"
-                        ? request.Name.Trim()
+                        ? groupName!
                         : await GetPrivateChatDisplayNameAsync(chat.ChatId, participantId, ct);
 
                     string? individualizedAvatar = null;
@@ -597,70 +598,3 @@ namespace Messenger.API.Controllers
 
                 var updatedChat = await _chatService.GetChatByIdAsync(chatId, currentUserId, ct);
                 var updatedCount = updatedChat?.Participants?.Count ?? 0;
-
-                await _hubContext.Clients.Group(chatId.ToString())
-                    .SendAsync("ParticipantCountChanged", new
-                    {
-                        ChatId = chatId,
-                        Count = updatedCount
-                    }, ct);
-
-                if (!string.IsNullOrEmpty(userToDelete.ExternalId))
-                {
-                    var signalRId = userToDelete.ExternalId.ToLowerInvariant();
-
-                    await _hubContext.Clients.User(signalRId)
-                        .SendAsync("YouWereRemovedFromChat", chatId, ct);
-                }
-
-                return Ok(ApiResponse.Success(message: $"Пользователь {userId} успешно удален из чата"));
-            }
-            catch (UnauthorizedAccessException ex)
-            {
-                _logger.LogWarning(ex, "Ошибка авторизации при удалении участника {UserId} из чата {ChatId}", userId, chatId);
-                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
-            }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Ошибка при выполнении DELETE /chats/{ChatId}/{UserId}", chatId, userId);
-                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
-            }
-        }
-
-        private static string NormalizeChatRole(string? role) =>
-            string.IsNullOrWhiteSpace(role) ? "участник" : role.Trim().ToLowerInvariant();
-
-        private static bool IsChatOwner(string? role) =>
-            NormalizeChatRole(role) is "владелец" or "owner";
-
-        private static bool IsChatAdministrator(string? role) =>
-            IsChatOwner(role) || NormalizeChatRole(role) is
-                "admin" or "админ" or "administrator" or "модератор" or "moderator";
-
-        private static bool IsRegularParticipantRole(string? role) =>
-            NormalizeChatRole(role) is "участник" or "member";
-
-        private async Task<string> GetPrivateChatDisplayNameAsync(Guid chatId, Guid currentUserId, CancellationToken ct)
-        {
-            var participants = await _chatService.GetChatParticipantsAsync(chatId, currentUserId, ct);
-
-            var otherParticipant = participants
-                .FirstOrDefault(p => p.UserId != currentUserId);
-
-            if (otherParticipant == null)
-                return "Удалённый пользователь";
-
-            return $"{otherParticipant.FirstName} {otherParticipant.LastName}".Trim();
-        }
-
-        private async Task<string?> GetOtherUserAvatarAsync(Guid userId, CancellationToken ct)
-        {
-            var user = await _userService.GetUserByIdAsync(userId, ct);
-            return user?.Account?.Avatar;
-        }
-    }
-}
