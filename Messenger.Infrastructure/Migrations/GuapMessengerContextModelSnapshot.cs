@@ -1460,13 +1460,11 @@ namespace Messenger.Infrastructure.Migrations
 
                     b.Navigation("Chats");
 
-                    b.Navigation("Logins");
 
                     b.Navigation("MessageSenders");
 
                     b.Navigation("Notifications");
 
-                    b.Navigation("PushSubscriptions");
 
                     b.Navigation("Reactions");
 
