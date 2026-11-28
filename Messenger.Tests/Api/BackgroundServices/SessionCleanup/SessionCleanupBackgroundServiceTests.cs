@@ -109,14 +109,6 @@ public sealed class SessionCleanupBackgroundServiceTests
 
 
 
-    private static async Task<List<(ScheduledMessageDispatchDto Message, Guid ResultMessageId)>> DispatchOneAsync(
-        Func<ScheduledMessageDispatchDto, CancellationToken, Task<Guid>> publish,
-        ScheduledMessageDispatchDto item,
-        CancellationToken cancellationToken)
-    {
-        var resultId = await publish(item, cancellationToken);
-        return new List<(ScheduledMessageDispatchDto Message, Guid ResultMessageId)> { (item, resultId) };
-    }
 
 
 

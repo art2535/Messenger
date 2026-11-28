@@ -126,50 +126,7 @@ public sealed class ScheduledMessageDispatcherServiceTests
 
 
 
-    private static Mock<IHubContext<ChatHub>> CreateHubContext()
-    {
-        var proxy = new Mock<IClientProxy>();
-        proxy.Setup(x => x.SendCoreAsync(
-                It.IsAny<string>(), It.IsAny<object?[]>(), It.IsAny<CancellationToken>()))
-            .Returns(Task.CompletedTask);
 
-        var clients = new Mock<IHubClients>();
-        clients.Setup(x => x.Groups(It.IsAny<IReadOnlyList<string>>())).Returns(proxy.Object);
 
-        var hub = new Mock<IHubContext<ChatHub>>();
-        hub.SetupGet(x => x.Clients).Returns(clients.Object);
-        return hub;
-    }
 
-    private static ServiceProvider CreateScopeProvider(
-        IUserStatusService status,
-        ILoginService logins,
-        IChatService chat) =>
-        new ServiceCollection()
-            .AddSingleton(status)
-            .AddSingleton(logins)
-            .AddSingleton(chat)
-            .BuildServiceProvider();
-
-    private static SessionCleanupBackgroundService CreateSessionCleanupService(
-        IServiceProvider provider,
-        IHubContext<ChatHub> hub,
-        IUserPresenceTracker presence) =>
-        new(
-            provider.GetRequiredService<IServiceScopeFactory>(),
-            hub,
-            Options.Create(new SessionCleanupOptions { IdleMinutes = 30, IntervalMinutes = 1 }),
-            NullLogger<SessionCleanupBackgroundService>.Instance,
-            new RedisDistributedLock(null, NullLogger<RedisDistributedLock>.Instance),
-            presence);
-
-    private static async Task InvokeCleanupOnceAsync(SessionCleanupBackgroundService service)
-    {
-        var method = typeof(SessionCleanupBackgroundService).GetMethod(
-            "CleanupOnceAsync", BindingFlags.Instance | BindingFlags.NonPublic);
-        Assert.NotNull(method);
-        var task = (Task)method!.Invoke(service,
-            new object[] { TimeSpan.FromMinutes(30), CancellationToken.None })!;
-        await task;
-    }
 }
