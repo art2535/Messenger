@@ -286,9 +286,8 @@ async function markNotificationAsRead(notificationId) {
             }
         });
 
-        if (response.ok) {
-        } else {
-        }
-    } catch (err) {
+        return response.ok;
+    } catch {
+        return false;
     }
 }

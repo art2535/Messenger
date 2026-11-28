@@ -371,6 +371,9 @@
                             danger: true
                         });
                     } else {
+                        if (typeof showAlert === 'function') {
+                            await showAlert('Диалог подтверждения недоступен. Обновите страницу и повторите попытку.');
+                        }
                         ok = false;
                     }
                     if (!ok) return;
