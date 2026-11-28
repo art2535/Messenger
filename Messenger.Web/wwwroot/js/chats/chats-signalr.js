@@ -556,7 +556,7 @@ async function startSignalR() {
         users.forEach(user => {
             const userId = String(user?.id ?? user?.userId ?? '');
             const fullName = String(user?.fullName ?? user?.name ?? 'Пользователь');
-            const rawAvatarPath = String(user?.avatarPath || 'default.png').replace(/^\\/+/, '');
+            const rawAvatarPath = String(user?.avatarPath || 'default.png').replace(/^\/+/, '');
             const avatarPath = /^[a-zA-Z0-9._/-]+$/.test(rawAvatarPath) && !rawAvatarPath.split('/').includes('..')
                 ? rawAvatarPath
                 : 'default.png';
