@@ -129,6 +129,14 @@
 5. API-уровень, не включённый в текущие Infrastructure-коммиты: POST /notifications позволяет аутентифицированному клиенту передать произвольный UserId; требуется отдельная авторизация/перенос endpoint во внутренний flow. POST /push/send также требует отдельной проверки, что payload соответствует реально созданному сообщению, а не только членству отправителя в чате.
 6. RedisDistributedLock при отсутствии Redis использует no-op lock; это допустимо только для single-instance режима. Для multi-instance deployment Redis должен быть обязательным или нужен другой distributed lock provider.
 
+### Добавлено: тесты UserService и EfBroadcastRepository
+
+Добавлены PostgreSQL integration tests:
+- конкурентная регистрация одного ExternalId из двух независимых DbContext должна вернуть один UserId и создать одну учётную запись с настройками и статусом;
+- нормализация ExternalId, назначение стандартной роли и проверка ограничений входных данных;
+- повторное назначение роли не создаёт дубликат связи;
+- создание рассылки и получателей, запрет отметки прочтения не-получателем, идемпотентность ReadAt, unread inbox и агрегированная сводка.
+
 ### Добавлено: тесты ChatService и MessageService
 
 Добавлены PostgreSQL integration tests для ключевых security-sensitive операций:
