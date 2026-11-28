@@ -1,6 +1,7 @@
 using System.Reflection;
 using Messenger.API.Options;
 using Messenger.API.Services;
+using Messenger.API.Services;
 using Messenger.Application.DTOs.UserStatuses;
 using Messenger.Application.DTOs.Users;
 using Messenger.Application.Messages;
@@ -189,6 +190,62 @@ public sealed class BackgroundServiceTests
     {
         var resultId = await publish(item, cancellationToken);
         return new List<(ScheduledMessageDispatchDto Message, Guid ResultMessageId)> { (item, resultId) };
+    }
+
+
+    [Fact]
+    public async Task LogRetentionService_WhenDisabledCompletesWithoutResolvingDatabaseScope()
+    {
+        using var provider = new ServiceCollection().BuildServiceProvider();
+        var service = new LogRetentionService(
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            Options.Create(new LogRetentionOptions { Enabled = false }),
+            NullLogger<LogRetentionService>.Instance);
+
+        await service.StartAsync(CancellationToken.None);
+
+        Assert.NotNull(service.ExecuteTask);
+        Assert.True(service.ExecuteTask!.IsCompleted);
+    }
+
+    [Fact]
+    public async Task PresenceHeartbeatBackgroundService_StopsCleanlyBeforeFirstHeartbeat()
+    {
+        var tracker = new Mock<IUserPresenceTracker>();
+        var service = new PresenceHeartbeatBackgroundService(
+            tracker.Object,
+            NullLogger<PresenceHeartbeatBackgroundService>.Instance);
+
+        await service.StartAsync(CancellationToken.None);
+        await service.StopAsync(CancellationToken.None);
+
+        tracker.Verify(x => x.HeartbeatAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData("123", 123L)]
+    [InlineData("-42", -42L)]
+    [InlineData("invalid", 0L)]
+    [InlineData(null, 0L)]
+    public void RedisMetricsCollector_ParseLongHandlesValidAndInvalidValues(string? value, long expected)
+    {
+        var method = typeof(RedisMetricsCollectorService).GetMethod(
+            "ParseLong", BindingFlags.Static | BindingFlags.NonPublic);
+        Assert.NotNull(method);
+        Assert.Equal(expected, method!.Invoke(null, new object?[] { value }));
+    }
+
+    [Theory]
+    [InlineData("keys=12,expires=3,avg_ttl=4", 12L)]
+    [InlineData("expires=3,keys=7", 7L)]
+    [InlineData("expires=3", 0L)]
+    [InlineData("keys=bad,expires=3", 0L)]
+    public void RedisMetricsCollector_ParseKeyspaceKeysExtractsOnlyKeyCount(string value, long expected)
+    {
+        var method = typeof(RedisMetricsCollectorService).GetMethod(
+            "ParseKeyspaceKeys", BindingFlags.Static | BindingFlags.NonPublic);
+        Assert.NotNull(method);
+        Assert.Equal(expected, method!.Invoke(null, new object[] { value }));
     }
 
     [Fact]
