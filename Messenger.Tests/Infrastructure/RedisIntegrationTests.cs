@@ -237,8 +237,7 @@ public sealed class RedisIntegrationTests(RedisFixture fixture)
 
 public sealed class RedisFixture : IAsyncLifetime
 {
-    private readonly RedisContainer _container = new RedisBuilder()
-        .WithImage("redis:7-alpine")
+    private readonly RedisContainer _container = new RedisBuilder("redis:7-alpine")
         .Build();
 
     public IConnectionMultiplexer Connection { get; private set; } = null!;
