@@ -1,5 +1,6 @@
 ﻿using Messenger.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using System.ComponentModel.DataAnnotations;
 using Microsoft.Extensions.Options;
 
 namespace Messenger.API.Services
@@ -8,8 +9,11 @@ namespace Messenger.API.Services
     {
         public const string SectionName = "LogRetention";
         public bool Enabled { get; set; } = true;
+        [Range(1, 3650)]
         public int RetentionDays { get; set; } = 30;
+        [Range(1, 720)]
         public int RunIntervalHours { get; set; } = 24;
+        [Range(100, 100000)]
         public int BatchSize { get; set; } = 5000;
     }
 
