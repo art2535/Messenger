@@ -3,6 +3,7 @@ using Messenger.Application.DTOs.Users;
 using Messenger.Application.Files;
 using Messenger.Core.Models;
 using Messenger.Infrastructure.Services;
+using UserServiceImplementation = Messenger.Infrastructure.Services.UserService;
 using Messenger.Infrastructure.Files;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -175,7 +176,7 @@ public sealed class UserServiceTests
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(
             new Dictionary<string, string?> { ["URL:API:HTTPS"] = "https://api.example.test" }).Build();
         await using var context = _database.CreateContext();
-        var service = new UserService(context, configuration, CreateFileStorage(), new FileValidationService());
+        var service = new UserServiceImplementation(context, configuration, CreateFileStorage(), new FileValidationService());
 
         await Assert.ThrowsAsync<ArgumentException>(() =>
             service.UploadAvatarAsync(userId, new FakeUploadedFile("avatar.txt", "text/plain", new byte[] { 1 })));
@@ -244,7 +245,7 @@ public sealed class UserServiceTests
         Assert.False(await verify.UserStatuses.AnyAsync(x => x.UserId == userId));
     }
 
-    private UserService CreateUserService(Messenger.Infrastructure.Data.GuapMessengerContext context) =>
+    private UserServiceImplementation CreateUserService(Messenger.Infrastructure.Data.GuapMessengerContext context) =>
         new(context, new ConfigurationBuilder().Build(), CreateFileStorage(), new FileValidationService());
 
     private static LocalFileStorage CreateFileStorage() => new(
