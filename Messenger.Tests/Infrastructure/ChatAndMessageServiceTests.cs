@@ -43,7 +43,8 @@ public sealed class ChatAndMessageServiceTests
         var memberId = Guid.NewGuid();
         var newUserId = Guid.NewGuid();
         var chatId = Guid.NewGuid();
-        await SeedChatAsync(chatId, ownerId, memberId, newUserId);
+        await SeedChatAsync(chatId, ownerId, memberId);
+        await SeedUserAsync(newUserId);
 
         await using var context = _database.CreateContext();
         var service = CreateChatService(context);
@@ -159,6 +160,13 @@ public sealed class ChatAndMessageServiceTests
         cache.Setup(x => x.RemoveAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
         return cache;
+    }
+
+    private async Task SeedUserAsync(Guid userId)
+    {
+        await using var context = _database.CreateContext();
+        context.Users.Add(CreateUser(userId));
+        await context.SaveChangesAsync();
     }
 
     private async Task SeedChatAsync(Guid chatId, Guid ownerId, params Guid[] otherUserIds)
