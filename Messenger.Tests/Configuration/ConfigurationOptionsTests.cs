@@ -39,6 +39,13 @@ public sealed class ConfigurationOptionsTests
     }
 
     [Fact]
+    public void VapidOptions_RequiresKeysAndSubject()
+    {
+        var errors = Validate(new VapidOptions { Subject = "", PublicKey = "short", PrivateKey = "" });
+        Assert.NotEmpty(errors);
+    }
+
+    [Fact]
     public void SessionCleanupOptions_RejectsTooShortIdleTimeout()
     {
         var errors = Validate(new SessionCleanupOptions { IdleMinutes = 1, IntervalMinutes = 5 });

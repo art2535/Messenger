@@ -1,9 +1,10 @@
 using Messenger.Application.Interfaces;
 using Messenger.Core.Models;
+using Messenger.Core.Configuration;
+using Microsoft.Extensions.Options;
 using Messenger.Infrastructure.Data;
 using Messenger.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using WebPush;
@@ -176,20 +177,18 @@ public sealed class PushSubscriptionServiceTests
 
     private static PushSubscriptionService CreateService(GuapMessengerContext context)
     {
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["Vapid:Subject"] = "mailto:tests@example.test",
-                ["Vapid:PublicKey"] = "test-public-key",
-                ["Vapid:PrivateKey"] = "test-private-key"
-            })
-            .Build();
+        var vapidOptions = Options.Create(new VapidOptions
+        {
+            Subject = "mailto:tests@example.test",
+            PublicKey = new string('a', 65),
+            PrivateKey = new string('b', 32)
+        });
 
         return new PushSubscriptionService(
             context,
             Mock.Of<IChatService>(),
             new WebPushClient(),
-            configuration,
+            vapidOptions,
             Mock.Of<INotificationService>(),
             NullLogger<PushSubscriptionService>.Instance,
             Mock.Of<IEncryptionService>(),

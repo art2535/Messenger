@@ -2,6 +2,8 @@ using Messenger.Application.Common;
 using Messenger.Application.DTOs.Push;
 using Messenger.Application.Interfaces;
 using Messenger.Core.Models;
+using Messenger.Core.Configuration;
+using Microsoft.Extensions.Options;
 using Messenger.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -25,7 +27,7 @@ namespace Messenger.Infrastructure.Services
         private readonly INotificationService _notificationService;
 
         public PushSubscriptionService(GuapMessengerContext context, IChatService chatService,
-            WebPushClient webPushClient, IConfiguration configuration, INotificationService notificationService,
+            WebPushClient webPushClient, IOptions<VapidOptions> vapidOptions, INotificationService notificationService,
             ILogger<PushSubscriptionService> logger, IEncryptionService encryptionService, IUserService userService)
         {
             _context = context;
@@ -33,9 +35,8 @@ namespace Messenger.Infrastructure.Services
             _webPushClient = webPushClient;
             _logger = logger;
 
-            var vapidSection = configuration.GetSection("Vapid");
-            _vapidDetails = new VapidDetails(vapidSection["Subject"], vapidSection["PublicKey"]!,
-                vapidSection["PrivateKey"]!);
+            var vapid = vapidOptions.Value;
+            _vapidDetails = new VapidDetails(vapid.Subject, vapid.PublicKey, vapid.PrivateKey);
             _encryptionService = encryptionService;
             _userService = userService;
             _notificationService = notificationService;
