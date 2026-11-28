@@ -146,20 +146,165 @@ public sealed class ChatAndMessageServiceTests
     }
 
     private ChatService CreateChatService(Messenger.Infrastructure.Data.GuapMessengerContext context) =>
-        new(context, CreateEncryptionService(), CreateCacheMock().Object, NullLogger<ChatService>.Instance);
+        new(context, CreateEncryptionService(), new NoOpCacheService(), NullLogger<ChatService>.Instance);
 
     private MessageService CreateMessageService(Messenger.Infrastructure.Data.GuapMessengerContext context) =>
         new(context, CreateEncryptionService(), Mock.Of<MassTransit.IPublishEndpoint>(),
-            CreateCacheMock().Object, NullLogger<MessageService>.Instance);
+            new NoOpCacheService(), NullLogger<MessageService>.Instance);
 
-    private static Mock<Messenger.Application.Interfaces.ICacheService> CreateCacheMock()
+    private sealed class NoOpCacheService : Messenger.Application.Interfaces.ICacheService
     {
-        var cache = new Mock<Messenger.Application.Interfaces.ICacheService>();
-        cache.Setup(x => x.RemoveAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .Returns(Task.CompletedTask);
-        cache.Setup(x => x.RemoveAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
-            .Returns(Task.CompletedTask);
-        return cache;
+        public Task<T?> GetAsync<T>(string key, CancellationToken ct = default) =>
+            Task.FromResult<T?>(default);
+
+        public Task SetAsync<T>(string key, T value, TimeSpan ttl, CancellationToken ct = default) =>
+            Task.CompletedTask;
+
+        public Task RemoveAsync(string key, CancellationToken ct = default) =>
+            Task.CompletedTask;
+
+        public Task RemoveAsync(IEnumerable<string> keys, CancellationToken ct = default) =>
+            Task.CompletedTask;
+    }
+
+
+    [Fact]
+    public async Task MessageService_UpdateAndDeleteMessage_RequireOriginalSender()
+    {
+        var ownerId = Guid.NewGuid();
+        var memberId = Guid.NewGuid();
+        var chatId = Guid.NewGuid();
+        var messageId = Guid.NewGuid();
+        await SeedChatAsync(chatId, ownerId, memberId);
+        await SeedMessagesAsync(chatId, CreateMessage(messageId, chatId, ownerId, 1, "before"));
+
+        await using (var context = _database.CreateContext())
+        {
+            var service = CreateMessageService(context);
+            await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+                service.UpdateMessageContentAsync(messageId, memberId, "not-owner"));
+            await service.UpdateMessageContentAsync(messageId, ownerId, "after");
+        }
+
+        await using (var verify = _database.CreateContext())
+            Assert.Equal("after", (await verify.Messages.SingleAsync(x => x.MessageId == messageId)).MessageText);
+
+        await using (var context = _database.CreateContext())
+        {
+            var service = CreateMessageService(context);
+            await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+                service.DeleteMessagesAsync(new[] { messageId }, chatId, memberId));
+            Assert.Equal(1, await service.DeleteMessagesAsync(new[] { messageId, messageId }, chatId, ownerId));
+        }
+
+        await using var finalVerify = _database.CreateContext();
+        Assert.False(await finalVerify.Messages.AnyAsync(x => x.MessageId == messageId));
+    }
+
+    [Fact]
+    public async Task MessageService_UpdateDeliveryStatusAsync_DoesNotRegressDeliveredOrReadMessagesToFailed()
+    {
+        var ownerId = Guid.NewGuid();
+        var chatId = Guid.NewGuid();
+        var pendingId = Guid.NewGuid();
+        var deliveredId = Guid.NewGuid();
+        var readId = Guid.NewGuid();
+        await SeedChatAsync(chatId, ownerId);
+        await SeedMessagesAsync(chatId,
+            CreateMessage(pendingId, chatId, ownerId, 1),
+            CreateMessage(deliveredId, chatId, ownerId, 2),
+            CreateMessage(readId, chatId, ownerId, 3));
+
+        await using (var seed = _database.CreateContext())
+        {
+            await seed.Messages.Where(x => x.MessageId == deliveredId)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.DeliveryStatus, MessageDeliveryStatus.Delivered));
+            await seed.Messages.Where(x => x.MessageId == readId)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.DeliveryStatus, MessageDeliveryStatus.Read));
+        }
+
+        await using (var context = _database.CreateContext())
+        {
+            var service = CreateMessageService(context);
+            await service.UpdateDeliveryStatusAsync(pendingId, MessageDeliveryStatus.Failed);
+            await service.UpdateDeliveryStatusAsync(deliveredId, MessageDeliveryStatus.Failed);
+            await service.UpdateDeliveryStatusAsync(readId, MessageDeliveryStatus.Failed);
+        }
+
+        await using var verify = _database.CreateContext();
+        Assert.Equal(MessageDeliveryStatus.Failed,
+            (await verify.Messages.SingleAsync(x => x.MessageId == pendingId)).DeliveryStatus);
+        Assert.Equal(MessageDeliveryStatus.Delivered,
+            (await verify.Messages.SingleAsync(x => x.MessageId == deliveredId)).DeliveryStatus);
+        Assert.Equal(MessageDeliveryStatus.Read,
+            (await verify.Messages.SingleAsync(x => x.MessageId == readId)).DeliveryStatus);
+    }
+
+    [Fact]
+    public async Task MessageService_PagedHistory_EnforcesMembershipAndUsesExclusiveSequenceCursor()
+    {
+        var ownerId = Guid.NewGuid();
+        var strangerId = Guid.NewGuid();
+        var chatId = Guid.NewGuid();
+        await SeedChatAsync(chatId, ownerId);
+        await SeedMessagesAsync(chatId,
+            CreateMessage(Guid.NewGuid(), chatId, ownerId, 1),
+            CreateMessage(Guid.NewGuid(), chatId, ownerId, 2),
+            CreateMessage(Guid.NewGuid(), chatId, ownerId, 3));
+
+        await using var context = _database.CreateContext();
+        var service = CreateMessageService(context);
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+            service.GetMessagesPagedAsync(chatId, strangerId, 4, 2, CancellationToken.None));
+
+        var firstPage = await service.GetMessagesPagedAsync(chatId, ownerId, 4, 2, CancellationToken.None);
+        Assert.True(firstPage.HasMore);
+        Assert.Equal(new long[] { 2, 3 }, firstPage.Items.Select(x => x.SequenceNumber));
+
+        var secondPage = await service.GetMessagesPagedAsync(chatId, ownerId, 2, 2, CancellationToken.None);
+        Assert.False(secondPage.HasMore);
+        Assert.Single(secondPage.Items);
+        Assert.Equal(1, secondPage.Items[0].SequenceNumber);
+    }
+
+    [Fact]
+    public async Task MessageService_SearchPinAndExport_ReturnAuthorizedData()
+    {
+        var ownerId = Guid.NewGuid();
+        var strangerId = Guid.NewGuid();
+        var chatId = Guid.NewGuid();
+        var messageId = Guid.NewGuid();
+        await SeedChatAsync(chatId, ownerId);
+        var encrypted = CreateEncryptionService().Encrypt("searchable phrase");
+        await SeedMessagesAsync(chatId, CreateMessage(messageId, chatId, ownerId, 1, encrypted));
+
+        await using var context = _database.CreateContext();
+        var service = CreateMessageService(context);
+        var results = await service.SearchMessagesAsync(chatId, ownerId, "searchable", CancellationToken.None);
+        Assert.Single(results);
+        Assert.Equal("searchable phrase", results[0].MessageText);
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+            service.ExportChatAsync(chatId, strangerId, "json", token: CancellationToken.None));
+
+        var pinned = await service.PinMessageAsync(messageId, ownerId);
+        Assert.NotNull(pinned);
+        Assert.True(pinned.IsPinned);
+        var unpinned = await service.UnpinMessageAsync(messageId, ownerId);
+        Assert.NotNull(unpinned);
+        Assert.False(unpinned.IsPinned);
+
+        var export = await service.ExportChatAsync(chatId, ownerId, "json", "safe/chat", CancellationToken.None);
+        Assert.Equal("json", export.Format);
+        Assert.Equal(1, export.MessageCount);
+        Assert.Contains("searchable phrase", System.Text.Encoding.UTF8.GetString(export.Content));
+    }
+
+    private async Task SeedMessagesAsync(Guid chatId, params Message[] messages)
+    {
+        await using var context = _database.CreateContext();
+        context.Messages.AddRange(messages);
+        await context.SaveChangesAsync();
     }
 
     private async Task SeedUserAsync(Guid userId)
