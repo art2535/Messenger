@@ -1,6 +1,6 @@
-using Messenger.Application.DTOs.Responses;
-﻿using Asp.Versioning;
+using Asp.Versioning;
 using Messenger.API.Extensions;
+using Messenger.Application.DTOs.Responses;
 using Messenger.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
