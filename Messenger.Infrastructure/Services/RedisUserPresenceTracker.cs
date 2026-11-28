@@ -116,10 +116,6 @@ public sealed class RedisUserPresenceTracker : IUserPresenceTracker
                 throw;
             }
         }
-        finally
-        {
-            operationLock.Release();
-        }
     }
 
     public async Task<bool> DisconnectAsync(Guid userId, string connectionId, CancellationToken cancellationToken = default)
@@ -160,10 +156,6 @@ public sealed class RedisUserPresenceTracker : IUserPresenceTracker
                 new RedisKey[] { GetKey(userId) },
                 new RedisValue[] { now, connectionId }).WaitAsync(cancellationToken);
             return count == 0;
-        }
-        finally
-        {
-            operationLock.Release();
         }
     }
 
@@ -235,10 +227,6 @@ public sealed class RedisUserPresenceTracker : IUserPresenceTracker
                     HeartbeatScript,
                     new RedisKey[] { GetKey(user.Key) },
                     args).WaitAsync(cancellationToken);
-            }
-            finally
-            {
-                operationLock.Release();
             }
         }
     }
