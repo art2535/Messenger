@@ -58,15 +58,11 @@ Redis-тесты используют Testcontainers.Redis, PostgreSQL-тест�
 - Consumer проверяется напрямую через MassTransit ConsumeContext mock; реальный RabbitMQ transport и broker redelivery не поднимаются. Проверка транспортного retry остаётся инфраструктурной ответственностью MassTransit.
 - Тесты требуют Docker на GitLab runner; если runner не предоставляет Docker socket, job должен быть настроен на соответствующий runner.
 
-## План этапа 13.5
+## Итог этапа 13.5
 
-1. **13.5.1 — SignalR Hub tests:** добавить тесты авторизации и членства в чатах, typing и ограничения доступа к статусам.
-2. **13.5.2 — HTTP API integration tests:** подключить тестовый ASP.NET Core host и проверить auth, authorization, rate limiting и критические endpoints.
-3. **13.5.3 — Redis failure/recovery:** проверить fail-closed rate limiting, ошибки Presence и восстановление после возврата Redis.
-4. **13.5.4 — Push/consumer integration tests:** проверить успешную доставку, повторную обработку и сбои внешних зависимостей.
-5. **13.5.5 — CI test gate:** добавить запуск сборки и тестов в CI с учётом доступности Docker для Testcontainers.
+Покрытие расширено интеграционными и компонентными тестами HTTP middleware, SignalR Hub, Redis outage/recovery и MassTransit consumer. Существующие PostgreSQL/Redis integration tests сохранены и продолжают проверять работу с реальными контейнерами. GitLab CI теперь включает обязательный запуск полного solution test suite до deployment.
 
-## Правила выполнения
+## Правила тестирования
 
 - Не дублировать уже существующие тесты Redis/PostgreSQL.
 - Для критических сценариев проверять наблюдаемый результат и отсутствие побочных эффектов, а не только вызов метода.

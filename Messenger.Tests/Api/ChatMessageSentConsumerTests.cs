@@ -83,6 +83,6 @@ public sealed class ChatMessageSentConsumerTests
         push.Verify(service => service.SendPushForMessageAsync(
             messageId, It.IsAny<CancellationToken>()), Times.Once);
         proxy.Verify(client => client.SendCoreAsync(
-            "MessageSendingStatus", It.IsAny<object?[]>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
+            "MessageSendingStatus", It.IsAny<object?[]>(), It.IsAny<CancellationToken>()), Times.Exactly(3));
     }
 }
