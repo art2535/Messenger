@@ -1,3 +1,13 @@
+function safeParticipantAvatarUrl(value) {
+    const fallback = 'https://novgorodskij-r49.gosweb.gosuslugi.ru/netcat_files/9/260/user_test.png';
+    if (!value) return fallback;
+    try {
+        const url = new URL(String(value), window.location.origin);
+        return url.protocol === 'https:' || url.protocol === 'http:' ? url.href : fallback;
+    } catch {
+        return fallback;
+    }
+}
 async function startSignalR() {
     if (!token) {
         updateConnectionStatus('Нет токена', 'red');
@@ -533,100 +543,112 @@ async function startSignalR() {
     });
 
     connection.on('ReceiveSearchResults', users => {
-        userSearchResults.innerHTML = "";
-
-        if (!users || users.length === 0) {
-            userSearchResults.innerHTML = "<div class='p-2 text-muted'>Нет пользователей</div>";
+        if (!userSearchResults) return;
+        if (!Array.isArray(users) || users.length === 0) {
+            const emptyState = document.createElement('div');
+            emptyState.className = 'p-2 text-muted';
+            emptyState.textContent = 'Нет пользователей';
+            userSearchResults.replaceChildren(emptyState);
             return;
         }
 
+        const fragment = document.createDocumentFragment();
         users.forEach(user => {
-            const userDiv = document.createElement("div");
-            userDiv.className = "user-search-item p-2 border-bottom";
-            userDiv.style.cursor = "pointer";
-            userDiv.dataset.userId = user.id;
+            const userId = String(user?.id ?? user?.userId ?? '');
+            const fullName = String(user?.fullName ?? user?.name ?? 'Пользователь');
+            const rawAvatarPath = String(user?.avatarPath || 'default.png').replace(/^\\/+/, '');
+            const avatarPath = /^[a-zA-Z0-9._/-]+$/.test(rawAvatarPath) && !rawAvatarPath.split('/').includes('..')
+                ? rawAvatarPath
+                : 'default.png';
 
-            userDiv.innerHTML = `
-                <div class="d-flex align-items-center">
-                    <img src="/avatars/${user.avatarPath || 'default.png'}"
-                            class="rounded-circle me-2" width="32" height="32">
-                    <span>${user.fullName}</span>
-                </div>
-            `;
-
-            userDiv.onclick = () => {
-                toggleUserSelection(user.id, user.fullName);
-            };
-
-            userSearchResults.appendChild(userDiv);
+            const userDiv = document.createElement('div');
+            userDiv.className = 'user-search-item p-2 border-bottom';
+            userDiv.style.cursor = 'pointer';
+            userDiv.dataset.userId = userId;
+            const row = document.createElement('div');
+            row.className = 'd-flex align-items-center';
+            const avatar = document.createElement('img');
+            avatar.src = '/avatars/' + avatarPath;
+            avatar.alt = '';
+            avatar.className = 'rounded-circle me-2';
+            avatar.width = 32;
+            avatar.height = 32;
+            const name = document.createElement('span');
+            name.textContent = fullName;
+            row.append(avatar, name);
+            userDiv.appendChild(row);
+            userDiv.addEventListener('click', () => toggleUserSelection(userId, fullName));
+            fragment.appendChild(userDiv);
         });
+        userSearchResults.replaceChildren(fragment);
     });
-
     connection.on('NewChat', chat => {
         const container = document.getElementById('chats-container');
-        const existing = container.querySelector(`.chat-item[data-chat-id="${chat.chatId}"]`);
+        const chatId = String(chat?.chatId ?? chat?.id ?? '');
+        if (!container || !chatId) return;
+        const existing = container.querySelector('.chat-item[data-chat-id="' + CSS.escape(chatId) + '"]');
+        if (existing) return;
 
-        if (!existing) {
-            let displayName = chat.name || 'Новый чат';
-            let displayAvatar = chat.avatar || 'https://novgorodskij-r49.gosweb.gosuslugi.ru/netcat_files/9/260/user_test.png';
-            let partnerId = null;
-
-            if (chat.type === 'private' || chat.isPrivate) {
-                const currentUserId = (me || "").toLowerCase();
-                if (chat.participants && chat.participants.length > 0) {
-                    const interlocutor = chat.participants.find(p =>
-                        (p.id && p.id.toLowerCase() !== currentUserId) ||
-                        (p.userId && p.userId.toLowerCase() !== currentUserId)
-                    );
-
-                    if (interlocutor) {
-                        displayName = interlocutor.fullName || interlocutor.name || displayName;
-                        displayAvatar = interlocutor.avatar || interlocutor.avatarPath || displayAvatar;
-                        partnerId = interlocutor.id || interlocutor.userId;
-                    }
-                }
+        let displayName = String(chat.name || 'Новый чат');
+        let displayAvatar = chat.avatar || '';
+        let partnerId = null;
+        if (chat.type === 'private' || chat.isPrivate) {
+            const currentUserId = String(me || '').toLowerCase();
+            const interlocutor = (chat.participants || []).find(p =>
+                String(p.id || p.userId || '').toLowerCase() !== currentUserId);
+            if (interlocutor) {
+                displayName = String(interlocutor.fullName || interlocutor.name || displayName);
+                displayAvatar = interlocutor.avatar || interlocutor.avatarPath || displayAvatar;
+                partnerId = interlocutor.id || interlocutor.userId;
             }
-
-            const div = document.createElement('div');
-            div.className = 'p-4 chat-item flex items-center space-x-3 cursor-pointer hover:bg-gray-100 transition rounded-lg mx-2';
-            div.dataset.chatId = chat.chatId;
-            if (partnerId) div.dataset.partnerId = String(partnerId);
-            const newChatMeta = renderChatListMessageMeta('Чат создан', [], new Date(), false);
-
-            div.innerHTML = `
-                <div class="relative flex-shrink-0">
-                    <img src="${displayAvatar}" class="w-12 h-12 rounded-full object-cover">
-                    <span class="chat-online-dot absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white hidden"></span>
-                </div>
-                <div class="flex-1 min-w-0">
-                    <div class="flex items-center gap-2">
-                        <h3 class="font-medium truncate flex-1 min-w-0">${displayName}</h3>
-                        <span class="chat-list-time">${newChatMeta.time}</span>
-                        <span class="unread-badge hidden flex-shrink-0"></span>
-                    </div>
-                    <div class="text-sm text-gray-500 truncate chat-list-message-meta">
-                        ${newChatMeta.previewHTML}
-                    </div>
-                    <div class="typing-in-list hidden text-xs text-blue-600 font-medium mt-0.5">
-                        <span class="typing-name"></span> печатает...
-                    </div>
-                </div>
-            `;
-
-            div.onclick = () => openChat(div);
-
-            container.prepend(div);
-
-            toggleEmptyState();
-
-            cacheChatItems();
-            filterChats();
-            feather.replace();
-
-            connection.invoke("JoinChat", chat.chatId).catch(() => { });
         }
-    });
 
+        const div = document.createElement('div');
+        div.className = 'p-4 chat-item flex items-center space-x-3 cursor-pointer hover:bg-gray-100 transition rounded-lg mx-2';
+        div.dataset.chatId = chatId;
+        if (partnerId) div.dataset.partnerId = String(partnerId);
+        const avatarWrap = document.createElement('div');
+        avatarWrap.className = 'relative flex-shrink-0';
+        const avatar = document.createElement('img');
+        avatar.src = safeParticipantAvatarUrl(displayAvatar);
+        avatar.alt = '';
+        avatar.className = 'w-12 h-12 rounded-full object-cover';
+        const onlineDot = document.createElement('span');
+        onlineDot.className = 'chat-online-dot absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white hidden';
+        avatarWrap.append(avatar, onlineDot);
+
+        const content = document.createElement('div');
+        content.className = 'flex-1 min-w-0';
+        const heading = document.createElement('div');
+        heading.className = 'flex items-center gap-2';
+        const name = document.createElement('h3');
+        name.className = 'font-medium truncate flex-1 min-w-0';
+        name.textContent = displayName;
+        const time = document.createElement('span');
+        time.className = 'chat-list-time';
+        const newChatMeta = renderChatListMessageMeta('Чат создан', [], new Date(), false);
+        time.textContent = newChatMeta.time;
+        const unread = document.createElement('span');
+        unread.className = 'unread-badge hidden flex-shrink-0';
+        heading.append(name, time, unread);
+        const preview = document.createElement('div');
+        preview.className = 'text-sm text-gray-500 truncate chat-list-message-meta';
+        preview.innerHTML = newChatMeta.previewHTML;
+        const typing = document.createElement('div');
+        typing.className = 'typing-in-list hidden text-xs text-blue-600 font-medium mt-0.5';
+        const typingName = document.createElement('span');
+        typingName.className = 'typing-name';
+        typing.append(typingName, document.createTextNode(' печатает...'));
+        content.append(heading, preview, typing);
+        div.append(avatarWrap, content);
+        div.addEventListener('click', () => openChat(div));
+        container.prepend(div);
+        toggleEmptyState();
+        cacheChatItems();
+        filterChats();
+        if (typeof feather !== 'undefined') feather.replace();
+        connection.invoke('JoinChat', chatId).catch(() => { });
+    });
     connection.on('YouWereRemovedFromChat', (data) => {
         chatId = String(data?.chatId || data?.ChatId || data || "").trim();
 
@@ -679,32 +701,41 @@ async function startSignalR() {
         const addedName = user?.name || user?.fullName || user?.login || 'Новый участник';
         showToast(`${addedName} добавлен в чат`, 'success');
 
-        if (document.getElementById('chat-info-modal').classList.contains('show')) {
-            if (currentChatInfo && !currentChatInfo.participants.some(p => p.id === user.id)) {
-                currentChatInfo.participants.push(user);
-
-                const list = document.getElementById('participants-list');
+        const infoModal = document.getElementById('chat-info-modal');
+        if (infoModal?.classList.contains('show') && currentChatInfo
+            && !currentChatInfo.participants.some(p => String(p.id) === String(user.id))) {
+            currentChatInfo.participants.push(user);
+            const list = document.getElementById('participants-list');
+            if (list) {
                 const div = document.createElement('div');
                 div.className = 'flex items-center justify-between p-4 bg-gray-50 rounded-xl';
-                div.dataset.userId = user.id;
-                div.innerHTML = `
-                    <div class="flex items-center gap-4">
-                        <img src="${user.avatar || 'https://novgorodskij-r49.gosweb.gosuslugi.ru/netcat_files/9/260/user_test.png'}"
-                                class="w-12 h-12 rounded-full object-cover">
-                        <div>
-                            <p class="font-semibold">${addedName}</p>
-                        </div>
-                    </div>
-                    <button type="button" class="text-red-600 hover:bg-red-100 rounded-full p-2 transition"
-                            onclick="removeParticipantFromChat('${user.id}', this)">
-                        <i data-feather="x" class="w-5 h-5"></i>
-                    </button>
-                `;
+                div.dataset.userId = String(user.id || '');
+                const identity = document.createElement('div');
+                identity.className = 'flex items-center gap-4';
+                const avatar = document.createElement('img');
+                avatar.src = safeParticipantAvatarUrl(user.avatar);
+                avatar.alt = '';
+                avatar.className = 'w-12 h-12 rounded-full object-cover';
+                const nameWrap = document.createElement('div');
+                const name = document.createElement('p');
+                name.className = 'font-semibold';
+                name.textContent = addedName;
+                nameWrap.appendChild(name);
+                identity.append(avatar, nameWrap);
+                const removeButton = document.createElement('button');
+                removeButton.type = 'button';
+                removeButton.className = 'text-red-600 hover:bg-red-100 rounded-full p-2 transition';
+                removeButton.setAttribute('aria-label', 'Удалить участника');
+                const removeIcon = document.createElement('i');
+                removeIcon.dataset.feather = 'x';
+                removeIcon.className = 'w-5 h-5';
+                removeButton.appendChild(removeIcon);
+                removeButton.addEventListener('click', () => removeParticipantFromChat(String(user.id), removeButton));
+                div.append(identity, removeButton);
                 list.appendChild(div);
-                feather.replace();
-
-                document.getElementById('participants-count').textContent =
-                    `(${currentChatInfo.participants.length})`;
+                if (typeof feather !== 'undefined') feather.replace();
+                const countElement = document.getElementById('participants-count');
+                if (countElement) countElement.textContent = '(' + currentChatInfo.participants.length + ')';
             }
         }
     });
@@ -745,7 +776,7 @@ async function startSignalR() {
     connection.onreconnected(async () => {
         updateConnectionStatus('Онлайн', 'green');
         await rejoinCurrentChat();
-        try { await joinAllMyChats(); } catch (e) { console.warn(e); }
+        try { await joinAllMyChats(); } catch { updateConnectionStatus('Часть чатов не синхронизирована', 'orange'); }
         document.querySelectorAll('.chat-item[data-partner-id]').forEach(el => {
             const pid = el.dataset.partnerId;
             if (pid) requestPartnerStatus(pid);
