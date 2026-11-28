@@ -172,18 +172,9 @@ function showToast(message, type = 'info') {
 
 
 async function initSignalR() {
-    if (typeof signalR === 'undefined') {
-        console.debug('SignalR не загружен на странице — пропускаем');
-        return;
-    }
-
-    if (typeof signalR === 'undefined') {
-        console.debug('SignalR не загружен на странице — пропускаем');
-        return;
-    }
+    if (typeof signalR === 'undefined') return;
     await ensureFreshToken();
     if (!getJwtToken()) {
-        console.warn("⚠️ SignalR: Токен не найден");
         return;
     }
 
@@ -213,7 +204,6 @@ async function initSignalR() {
 
     try {
         await connection.start();
-        console.log("SignalR успешно подключён!");
 
         if (window.__profileJustSaved) {
             const avatarUrl = window.__savedAvatarUrl || null;
@@ -221,14 +211,13 @@ async function initSignalR() {
             try {
                 await connection.invoke("NotifyProfileUpdated", myUserId, avatarUrl, displayName);
                 await connection.invoke("NotifyAvatarUpdated", myUserId, avatarUrl || "");
-                console.log("ProfileUpdated/AvatarUpdated разосланы через SignalR");
             } catch (e) {
-                console.warn("Не удалось разослать ProfileUpdated:", e);
+                showToast('Не удалось обновить профиль в других открытых вкладках', 'warning');
             }
             window.__profileJustSaved = false;
         }
     } catch (err) {
-        console.error("SignalR НЕ подключился:", err);
+        showToast('Не удалось подключиться к обновлениям профиля', 'warning');
     }
 }
 
@@ -417,7 +406,6 @@ async function ensureServiceWorker() {
         try {
             reg = await navigator.serviceWorker.register(path, { scope: '/' });
             await navigator.serviceWorker.ready;
-            console.log('SW зарегистрирован:', path);
             return reg;
         } catch (e) {
             lastError = e;
@@ -457,7 +445,7 @@ async function checkPushStatus() {
         const registration = await ensureServiceWorker();
         currentSubscription = await registration.pushManager.getSubscription();
     } catch (e) {
-        console.error('Ошибка проверки статуса push:', e);
+        showToast('Не удалось проверить статус push-уведомлений', 'error');
     }
 }
 
