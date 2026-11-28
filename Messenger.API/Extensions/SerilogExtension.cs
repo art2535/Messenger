@@ -114,7 +114,10 @@ writeToProviders: true);   // обязательно true
     {
         public IServiceCollection AddLogRetention(IConfiguration configuration)
         {
-            services.Configure<LogRetentionOptions>(configuration.GetSection(LogRetentionOptions.SectionName));
+            services.AddOptions<LogRetentionOptions>()
+                .Bind(configuration.GetSection(LogRetentionOptions.SectionName))
+                .ValidateDataAnnotations()
+                .ValidateOnStart();
             services.AddHostedService<LogRetentionService>();
             return services;
         }
