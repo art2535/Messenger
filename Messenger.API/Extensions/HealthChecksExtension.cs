@@ -36,22 +36,24 @@ namespace Messenger.API.Extensions
         {
             public WebApplication MapMessengerHealthChecks()
             {
-                app.MapHealthChecks("/health", new HealthCheckOptions
-                {
-                    ResponseWriter = WriteJsonResponse
-                });
-
+                // Публичная liveness probe раскрывает только состояние процесса.
                 app.MapHealthChecks("/health/live", new HealthCheckOptions
                 {
                     Predicate = check => check.Tags.Contains("live"),
                     ResponseWriter = WriteJsonResponse
                 });
 
+                // Readiness и агрегированный health раскрывают состояние PostgreSQL/Redis.
                 app.MapHealthChecks("/health/ready", new HealthCheckOptions
                 {
                     Predicate = check => check.Tags.Contains("ready"),
                     ResponseWriter = WriteJsonResponse
-                });
+                }).RequireAuthorization();
+
+                app.MapHealthChecks("/health", new HealthCheckOptions
+                {
+                    ResponseWriter = WriteJsonResponse
+                }).RequireAuthorization();
 
                 return app;
             }

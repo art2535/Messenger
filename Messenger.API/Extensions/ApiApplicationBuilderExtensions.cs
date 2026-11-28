@@ -111,7 +111,10 @@ public static class ApiApplicationBuilderExtensions
         }
 
         app.MapMessengerHealthChecks();
-        app.MapPrometheusScrapingEndpoint("/metrics");
+        // Метрики раскрывают внутренние показатели приложения и инфраструктуры.
+        // Доступ к scraping endpoint разрешён только после проверки JWT.
+        app.MapPrometheusScrapingEndpoint("/metrics")
+            .RequireAuthorization();
         return app;
     }
 
