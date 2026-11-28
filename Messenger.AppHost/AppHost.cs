@@ -49,10 +49,10 @@ var postgres = builder.AddPostgres("postgres", userName: postgresUser, password:
 var messengerDb = postgres.AddDatabase("DefaultConnection", dbName);
 
 var rabbitmq = builder.AddRabbitMQ("RabbitMQ", rabbitUser, rabbitPassword)
-    .WithImageTag("4.3-management")
+    .WithImage("rabbitmq", "4.3-management")
     .WithContainerName("messenger-rabbitmq")
     .WithDataVolume()
-    .WithManagementPlugin(Port(ports, "RabbitMQManagement", 15672))
+    .WithHttpEndpoint(port: Port(ports, "RabbitMQManagement", 15672), targetPort: 15672, name: "management")
     .WithUrlForEndpoint("management", u => u.DisplayText = "RabbitMQ Management");
 
 var redis = builder.AddRedis("Redis")
