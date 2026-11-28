@@ -1,5 +1,6 @@
 using Messenger.Application.DTOs.AccountSettings;
 using Messenger.Core.Models;
+using UserStatusModel = Messenger.Core.Models.UserStatus;
 using Messenger.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
@@ -51,7 +52,7 @@ public sealed class UserStatusServiceTests
         {
             seed.Users.AddRange(CreateUser(onlineId), CreateUser(offlineId), CreateUser(untouchedId));
             seed.UserStatuses.AddRange(
-                new UserStatus { UserId = onlineId, Online = false },
+                new UserStatusModel { UserId = onlineId, Online = false },
                 new UserStatus { UserId = offlineId, Online = true },
                 new UserStatus { UserId = untouchedId, Online = false });
             await seed.SaveChangesAsync();
