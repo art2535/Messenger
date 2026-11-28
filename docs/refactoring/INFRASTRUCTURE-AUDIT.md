@@ -169,7 +169,7 @@
 
 ### Добавлено: интеграционные тесты ChatFolder и Reaction concurrency
 
-Создан `ChatFolderAndReactionTests` на PostgreSQL Testcontainers:
+Разделены `ChatFolderServiceTests` и `ReactionServiceTests` на PostgreSQL Testcontainers:
 - два независимых DbContext одновременно добавляют один чат в одну папку; проверяется успешная идемпотентная обработка и наличие ровно одной связи `ChatFolderChat`;
 - два независимых DbContext одновременно создают разные реакции одного пользователя на одно сообщение; проверяется уникальность пары `MessageId + UserId` и наличие одной итоговой реакции.
 

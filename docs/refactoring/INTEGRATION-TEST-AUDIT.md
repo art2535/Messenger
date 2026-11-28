@@ -72,21 +72,22 @@ Redis-тесты используют Testcontainers.Redis, PostgreSQL-тест�
 
 ## Структура тестового проекта
 
-Тесты сгруппированы по слоям и предметным областям:
+Тесты сгруппированы по слоям, предметным областям и конкретным компонентам:
 
-- Api/ — BackgroundServices, Files, Messaging, RateLimiting.
-- Application/ — Broadcasts, Files.
-- Infrastructure/ — Accounts, Administration, Attachments, Authentication, Caching, Chats, Database/Migrations, Files, Moderation, Notifications, Push, Redis, Scheduling, Security, Users.
+- Api/ — BackgroundServices (SessionCleanup, ScheduledMessages, LogRetention, Presence), Files (Cleanup, Upload), Messaging, Metrics, RateLimiting.
+- Application/ — Broadcasts, Files/Validation.
+- Infrastructure/ — Accounts (AccountSettings, UserStatus), Administration, Attachments, Authentication, Caching, Chats (ChatService, MessageService, Folders, Reactions), Database/Migrations, Files/Local, Moderation, Notifications, Push, Redis, Scheduling, Security, Users (UserService, Broadcasts).
 - Realtime/ — Authorization, RateLimiting.
 - Web/ — Authentication.
 - Shared/Fixtures — PostgreSQL/Redis fixtures и xUnit collections.
 - Shared/TestDoubles — FakeUploadedFile, StubHandler, NoOpCacheService и вспомогательные типы.
 
-Namespaces повторяют структуру каталогов (например, Messenger.Tests.Infrastructure.Redis). Фикстуры и test doubles вынесены из тестовых классов в отдельные файлы. При переносе тестовые сценарии и атрибуты коллекций сохранены.
+Namespaces повторяют структуру каталогов. Смешанные наборы тестов разделены по тестируемым компонентам; каждый тестовый класс, fixture и test double находится в отдельном файле. При переносе тестовые сценарии и атрибуты коллекций сохранены.
 
 ## Дополнительные тесты файлового хранилища
 
-- Application/Files/FileValidationServiceTests проверяет MIME, сигнатуры, допустимые расширения, ограничения и очистку имени.
-- Infrastructure/Files/LocalFileStorageTests проверяет запись, чтение, удаление, изоляцию областей, path traversal, превышение лимита и защиту существующего файла при конфликте имени.
-- Api/Files/UploadOrphanCleanupServiceTests проверяет удаление старых orphan-файлов и сохранение ссылок из вложений, аватаров и pending scheduled messages.
+- Application/Files/Validation/FileValidationServiceTests проверяет MIME, сигнатуры, допустимые расширения, ограничения, пустые файлы и некорректные имена.
+- Infrastructure/Files/Local/LocalFileStorageTests проверяет запись, чтение, удаление, изоляцию областей, path traversal, лимиты, отмену операций и защиту существующего файла при конфликте имени.
+- Api/Files/Cleanup/UploadOrphanCleanupServiceTests проверяет удаление старых orphan-файлов и сохранение ссылок из вложений, аватаров и pending scheduled messages; UploadOrphanCleanupServiceUnitTests проверяет fail-safe сценарии и разбор ссылок.
+- Api/Files/Upload/StoredFileNameTests проверяет генерацию серверного имени с owner prefix.
 
