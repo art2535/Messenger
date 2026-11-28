@@ -300,6 +300,127 @@ public sealed class ChatAndMessageServiceTests
         Assert.Contains("searchable phrase", System.Text.Encoding.UTF8.GetString(export.Content));
     }
 
+
+    [Fact]
+    public async Task ChatService_CreateChatAsync_CreatesOwnerMembershipAndPeerLookupIsScoped()
+    {
+        var ownerId = Guid.NewGuid();
+        var peerId = Guid.NewGuid();
+        await SeedUserAsync(ownerId);
+        await SeedUserAsync(peerId);
+
+        Guid chatId;
+        await using (var context = _database.CreateContext())
+        {
+            var service = CreateChatService(context);
+            var created = await service.CreateChatAsync("new chat", "group", ownerId);
+            chatId = created.ChatId;
+            Assert.Equal(ownerId, created.UserId);
+        }
+
+        await using (var seed = _database.CreateContext())
+        {
+            seed.ChatParticipants.Add(new ChatParticipant
+            {
+                ChatId = chatId,
+                UserId = peerId,
+                Role = "участник",
+                JoinDate = DateTime.UtcNow
+            });
+            await seed.SaveChangesAsync();
+        }
+
+        await using var verify = _database.CreateContext();
+        var chatService = CreateChatService(verify);
+        var participants = await chatService.GetChatParticipantUserIdsAsync(chatId);
+        Assert.Equal(2, participants.Count);
+        Assert.Contains(ownerId, participants);
+        Assert.Contains(peerId, participants);
+
+        var peers = await chatService.GetPeerUserIdsAsync(ownerId);
+        Assert.Contains(ownerId, peers);
+        Assert.Contains(peerId, peers);
+        Assert.DoesNotContain(Guid.NewGuid(), peers);
+    }
+
+    [Fact]
+    public async Task ChatService_UpdateChatAsync_RequiresGroupAdministrator()
+    {
+        var ownerId = Guid.NewGuid();
+        var memberId = Guid.NewGuid();
+        var chatId = Guid.NewGuid();
+        await SeedChatAsync(chatId, ownerId, memberId);
+
+        await using (var context = _database.CreateContext())
+        {
+            var service = CreateChatService(context);
+            await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+                service.UpdateChatAsync(new Messenger.Application.DTOs.Chats.UpdateChatDto
+                {
+                    ChatId = chatId,
+                    Name = "Renamed by member"
+                }, memberId));
+        }
+
+        await using (var context = _database.CreateContext())
+        {
+            var service = CreateChatService(context);
+            await service.UpdateChatAsync(new Messenger.Application.DTOs.Chats.UpdateChatDto
+            {
+                ChatId = chatId,
+                Name = "Renamed by owner"
+            }, ownerId);
+        }
+
+        await using var verify = _database.CreateContext();
+        Assert.Equal("Renamed by owner", (await verify.Chats.SingleAsync(x => x.ChatId == chatId)).Name);
+    }
+
+    [Fact]
+    public async Task ChatService_DeleteParticipantAsync_RejectsSelfRemovalAndRemovesRegularMember()
+    {
+        var ownerId = Guid.NewGuid();
+        var memberId = Guid.NewGuid();
+        var chatId = Guid.NewGuid();
+        await SeedChatAsync(chatId, ownerId, memberId);
+
+        await using (var context = _database.CreateContext())
+        {
+            var service = CreateChatService(context);
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                service.DeleteParticipantFromChatAsync(chatId, ownerId, ownerId));
+            await service.DeleteParticipantFromChatAsync(chatId, ownerId, memberId);
+        }
+
+        await using var verify = _database.CreateContext();
+        Assert.True(await verify.ChatParticipants.AnyAsync(x => x.ChatId == chatId && x.UserId == ownerId));
+        Assert.False(await verify.ChatParticipants.AnyAsync(x => x.ChatId == chatId && x.UserId == memberId));
+    }
+
+    [Fact]
+    public async Task MessageService_SendMessageAsync_ConcurrentDuplicateMessageIdIsIdempotent()
+    {
+        var ownerId = Guid.NewGuid();
+        var chatId = Guid.NewGuid();
+        var messageId = Guid.NewGuid();
+        await SeedChatAsync(chatId, ownerId);
+
+        await using var firstContext = _database.CreateContext();
+        await using var secondContext = _database.CreateContext();
+        var firstService = CreateMessageService(firstContext);
+        var secondService = CreateMessageService(secondContext);
+
+        await Task.WhenAll(
+            firstService.SendMessageAsync(messageId, chatId, ownerId, "same payload", false),
+            secondService.SendMessageAsync(messageId, chatId, ownerId, "same payload", false));
+
+        await using var verify = _database.CreateContext();
+        var saved = await verify.Messages.Where(x => x.MessageId == messageId).ToListAsync();
+        Assert.Single(saved);
+        Assert.Equal(1, saved[0].SequenceNumber);
+        Assert.Equal("same payload", saved[0].MessageText);
+    }
+
     private async Task SeedMessagesAsync(Guid chatId, params Message[] messages)
     {
         await using var context = _database.CreateContext();
