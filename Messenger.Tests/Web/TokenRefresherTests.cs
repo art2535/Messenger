@@ -3,6 +3,7 @@ using System.Text;
 using Messenger.Web.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Xunit;
 
