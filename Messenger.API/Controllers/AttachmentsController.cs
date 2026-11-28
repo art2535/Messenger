@@ -70,15 +70,6 @@ namespace Messenger.API.Controllers
         {
             try
             {
-                var displayFileName = Path.GetFileName(
-                    request.FileName.Replace('\\', '/')).Trim();
-                if (string.IsNullOrWhiteSpace(displayFileName)
-                    || displayFileName.Length > 255
-                    || displayFileName.Any(char.IsControl))
-                {
-                    return BadRequest(ApiResponse.Failure("Некорректное имя файла", "INVALID_REQUEST"));
-                }
-
                 var userId = await User.GetCurrentUserIdAsync(_userService, ct);
                 var message = await _messageService.GetMessageByIdGlobalAsync(messageId, ct);
                 if (message == null)
@@ -275,6 +266,15 @@ namespace Messenger.API.Controllers
                     || request.Url.Length > 2048)
                 {
                     return BadRequest(ApiResponse.Failure("Некорректные метаданные вложения", "INVALID_REQUEST"));
+                }
+
+                var displayFileName = Path.GetFileName(
+                    request.FileName.Replace('\\', '/')).Trim();
+                if (string.IsNullOrWhiteSpace(displayFileName)
+                    || displayFileName.Length > 255
+                    || displayFileName.Any(char.IsControl))
+                {
+                    return BadRequest(ApiResponse.Failure("Некорректное имя файла", "INVALID_REQUEST"));
                 }
 
                 var userId = await User.GetCurrentUserIdAsync(_userService, ct);
