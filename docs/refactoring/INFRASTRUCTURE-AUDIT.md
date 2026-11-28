@@ -129,6 +129,14 @@
 5. API-уровень, не включённый в текущие Infrastructure-коммиты: POST /notifications позволяет аутентифицированному клиенту передать произвольный UserId; требуется отдельная авторизация/перенос endpoint во внутренний flow. POST /push/send также требует отдельной проверки, что payload соответствует реально созданному сообщению, а не только членству отправителя в чате.
 6. RedisDistributedLock при отсутствии Redis использует no-op lock; это допустимо только для single-instance режима. Для multi-instance deployment Redis должен быть обязательным или нужен другой distributed lock provider.
 
+### Добавлено: тесты Admin и Redis fallback
+
+Добавлены тесты для `AdminService`, `RedisUserPresenceTracker`, `RedisCacheService` и `RedisDistributedLock`:
+- проверка системной роли по данным PostgreSQL;
+- локальный presence fallback: несколько подключений, переходы online/offline, защита от подмены владельца connection ID и cancellation;
+- отключённый Redis cache: безопасный miss/no-op и корректная отмена операций;
+- no-op lease распределённой блокировки в single-instance fallback и cancellation.
+
 ### Добавлено: тесты аккаунтов, сессий, статусов и security utilities
 
 Добавлены тесты для `AccountSettingsService`, `UserStatusService`, `LoginService`, `AesGcmEncryptionService` и `ValidationService`:
