@@ -64,14 +64,16 @@ Health checks больше не возвращают exception messages и вн�
 - Контроллеры в основном зависят от Application interfaces, но часть из них содержит повторяющиеся try/catch и transport mapping. Следующий шаг — единый exception-to-HTTP mapping/ProblemDetails и выделение use cases для сложных сценариев.
 - В ApiServiceCollectionExtensions CORS whitelist зафиксирован в коде: localhost и *.dev.localhost.
 - HTTP rate limiter и SignalR rate limiter используют локальные in-memory partitions; при нескольких репликах лимиты не общие.
-- /metrics доступен без пользовательского JWT, чтобы Prometheus мог выполнять scrape стандартным способом. Endpoint необходимо ограничивать на инфраструктурном уровне: внутренней Docker-сетью/network policy или reverse proxy/firewall. Если Prometheus работает вне доверенной сети, на proxy следует настроить отдельную техническую аутентификацию (например, Basic Auth или service Bearer token). Это инфраструктурная настройка и не считается выполненной изменениями приложения.
+- В production Docker Compose API не публикуется на публичном интерфейсе хоста: порт 5245 привязан к 127.0.0.1, а публичный Nginx явно возвращает 404 для /metrics. Nginx продолжает проксировать штатные API и SignalR маршруты к контейнеру API по внутренней Docker-сети.
+- Prometheus на Docker-хосте может скрейпить http://127.0.0.1:5245/metrics. Prometheus в той же Docker-сети должен обращаться к http://api:8080/metrics. Для Prometheus на отдельном хосте loopback-порт недоступен: потребуется отдельный защищённый канал (например, VPN/SSH tunnel) или отдельная allowlist/аутентификация на reverse proxy; не следует открывать API порт всему интернету.
+- Локальный Aspire AppHost и его Prometheus scrape-конфигурация не меняются: локальный мониторинг продолжает использовать Aspire endpoints.
 - Миграции БД запускаются на старте API. Для нескольких реплик нужен отдельный миграционный шаг либо координация/lock.
 - UseStaticAssets публикует только /avatars; вложения /uploads остаются за авторизованным endpoint — это соответствует принятой модели private attachments.
 
 ## Оставшиеся риски и задачи
 
 1. **SignalR stale group membership — исправлено на уровне приложения:** при удалении участника активные connection ID извлекаются из Redis presence tracker и удаляются из chat group; `JoinChat` повторно проверяет членство после вступления, закрывая гонку. Операция не атомарна с транзакцией БД, поэтому уже отправленные события не отзываются; необходимо runtime-тестирование с несколькими соединениями и API-репликами.
-2. Настроить и проверить инфраструктурное ограничение доступа к /metrics (internal network/network policy или reverse proxy; при внешнем Prometheus — техническая аутентификация).
+2. Если production Prometheus расположен вне Docker-хоста, настроить для него защищённый канал до loopback scrape target либо отдельный ограниченный proxy endpoint.
 3. Перенести CORS origins в конфигурацию с безопасной валидацией.
 4. Решить вопрос распределённого rate limiting для нескольких API instances.
 5. Перенести применение EF migrations из каждого API startup в deployment workflow.
@@ -104,7 +106,9 @@ Push теперь запускается только внутренним `Chat
 ### 8. Защита диагностических endpoint'ов
 
 - `/metrics` не требует пользовательский JWT: Prometheus scrape обычно выполняется отдельным сервисом и не отправляет пользовательский access token. Приложение оставляет endpoint совместимым со стандартным scrape.
-- Доступ к `/metrics` должен быть ограничен инфраструктурно: внутренней сетью Docker/Kubernetes network policy, firewall или reverse proxy. Для Prometheus вне доверенной сети на proxy настраивается отдельная техническая аутентификация. В репозитории приложения такая инфраструктурная конфигурация не проверена и не предполагается настроенной.
+- В production Docker Compose API опубликован только на loopback хоста (`127.0.0.1:5245`), а публичный Nginx возвращает `404` на `/metrics`. Прямой доступ к API из интернета через host port закрыт; внутренние контейнеры в `messenger-net` по-прежнему могут обращаться к `api:8080`.
+- Prometheus на том же Docker-хосте должен использовать target `127.0.0.1:5245`. Если Prometheus работает контейнером, подключённым к `messenger-net`, используйте `api:8080`. Для Prometheus на отдельном сервере потребуется VPN/SSH tunnel либо отдельный защищённый reverse-proxy маршрут с allowlist/технической аутентификацией.
+- Локальный Aspire AppHost не меняется: его Prometheus продолжает использовать локальные Aspire HTTPS endpoints.
 - `/health/ready` и агрегированный `/health` требуют JWT, поскольку раскрывают доступность PostgreSQL и Redis.
 - `/health/live` остаётся публичным и проверяет только жизнеспособность процесса; оркестратор может выполнять liveness probe без доступа к внутреннему состоянию зависимостей.
 

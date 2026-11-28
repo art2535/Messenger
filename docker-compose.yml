@@ -51,8 +51,10 @@ services:
     depends_on:
       - postgres
       - rabbitmq
+    # API доступен с хоста только локально; Nginx обращается к нему по Docker-сети.
+    # Prometheus на том же хосте может скрейпить 127.0.0.1:5245/metrics.
     ports:
-      - "5245:8080"
+      - "127.0.0.1:5245:8080"
     networks:
       - messenger-net
 
