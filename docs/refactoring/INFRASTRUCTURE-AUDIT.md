@@ -129,6 +129,15 @@
 5. API-уровень, не включённый в текущие Infrastructure-коммиты: POST /notifications позволяет аутентифицированному клиенту передать произвольный UserId; требуется отдельная авторизация/перенос endpoint во внутренний flow. POST /push/send также требует отдельной проверки, что payload соответствует реально созданному сообщению, а не только членству отправителя в чате.
 6. RedisDistributedLock при отсутствии Redis использует no-op lock; это допустимо только для single-instance режима. Для multi-instance deployment Redis должен быть обязательным или нужен другой distributed lock provider.
 
+### Добавлено: интеграционные тесты ScheduledMessage dispatcher
+
+Создан `ScheduledMessageServiceTests` на PostgreSQL Testcontainers:
+- два параллельных dispatcher используют разные DbContext; первый удерживает блокировку строки внутри callback, второй должен пропустить занятую запись через `FOR UPDATE SKIP LOCKED` и обработать другую;
+- проверяется, что обе записи в итоге имеют статус `Sent` и ResultMessageId;
+- при исключении из publish callback транзакция откатывается, запись остаётся `Pending`, а ResultMessageId не устанавливается.
+
+Тесты проверяют конкурентный захват и транзакционную границу ScheduledMessage. Они не подменяют отдельную проверку фактической доставки MassTransit Bus Outbox: для неё потребуется запуск зарегистрированного outbox dispatcher и проверка OutboxMessages в PostgreSQL.
+
 ## Ограничения проверки
 
 - В рабочей среде нет .NET SDK (dotnet: command not found), поэтому dotnet build и dotnet test не запускались. Наличие Docker runtime для Testcontainers также не подтверждено.
