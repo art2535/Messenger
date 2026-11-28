@@ -228,7 +228,7 @@
 - **API — 6/6:** LogRetentionService, PresenceHeartbeatBackgroundService, RedisMetricsCollectorService, ScheduledMessageDispatcherService, SessionCleanupBackgroundService и UploadOrphanCleanupService.
 - **Web — 1/1:** TokenRefreshBackgroundService; дополнительно покрыты TokenRefresher и UserTokenStore.
 
-Всего создано 22 тестовых файла в Messenger.Tests. Покрытие означает наличие целевых сценариев для каждого сервиса, а не исчерпывающую проверку каждого публичного метода.
+Всего создан 21 тестовый файл в Messenger.Tests. Покрытие означает наличие целевых сценариев для каждого сервиса, а не исчерпывающую проверку каждого публичного метода.
 
 ### Известные ограничения нового покрытия
 
