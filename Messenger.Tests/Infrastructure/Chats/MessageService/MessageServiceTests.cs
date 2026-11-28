@@ -1,6 +1,7 @@
 using Messenger.Core.Enums;
 using Messenger.Core.Models;
 using Messenger.Infrastructure.Services;
+using MessageServiceImplementation = Messenger.Infrastructure.Services.MessageService;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -89,9 +90,9 @@ public sealed class MessageServiceTests
     }
 
 
-    private MessageService CreateMessageService(Messenger.Infrastructure.Data.GuapMessengerContext context) =>
+    private MessageServiceImplementation CreateMessageService(Messenger.Infrastructure.Data.GuapMessengerContext context) =>
         new(context, CreateEncryptionService(), Mock.Of<MassTransit.IPublishEndpoint>(),
-            new NoOpCacheService(), NullLogger<MessageService>.Instance);
+            new NoOpCacheService(), NullLogger<MessageServiceImplementation>.Instance);
 
     [Fact]
     public async Task MessageService_UpdateAndDeleteMessage_RequireOriginalSender()
