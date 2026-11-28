@@ -45,7 +45,7 @@ public sealed class RateLimitingHttpIntegrationTests
 
         var response = await app.GetTestClient().GetAsync("/health");
 
-        Assert.Equal(StatusCodes.Status200OK, response.StatusCode);
+        Assert.Equal(StatusCodes.Status200OK, (int)response.StatusCode);
         limiter.Verify(service => service.TryAcquireAsync(
             It.IsAny<string>(),
             It.IsAny<int>(),
