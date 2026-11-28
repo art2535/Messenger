@@ -135,9 +135,6 @@ public sealed class ChatServiceTests
     private ChatService CreateChatService(Messenger.Infrastructure.Data.GuapMessengerContext context) =>
         new(context, CreateEncryptionService(), new NoOpCacheService(), NullLogger<ChatService>.Instance);
 
-    private MessageService CreateMessageService(Messenger.Infrastructure.Data.GuapMessengerContext context) =>
-        new(context, CreateEncryptionService(), Mock.Of<MassTransit.IPublishEndpoint>(),
-            new NoOpCacheService(), NullLogger<MessageService>.Instance);
 
 
 
@@ -245,12 +242,6 @@ public sealed class ChatServiceTests
 
 
 
-    private async Task SeedMessagesAsync(Guid chatId, params Message[] messages)
-    {
-        await using var context = _database.CreateContext();
-        context.Messages.AddRange(messages);
-        await context.SaveChangesAsync();
-    }
 
     private async Task SeedUserAsync(Guid userId)
     {
@@ -301,16 +292,6 @@ public sealed class ChatServiceTests
         Account = new AccountSetting { AccountId = userId }
     };
 
-    private static Message CreateMessage(Guid messageId, Guid chatId, Guid senderId, long sequence, string text = "message") => new()
-    {
-        MessageId = messageId,
-        ChatId = chatId,
-        SenderId = senderId,
-        MessageText = text,
-        SendTime = DateTime.UtcNow,
-        SequenceNumber = sequence,
-        DeliveryStatus = MessageDeliveryStatus.Sent
-    };
 
     private static AesGcmEncryptionService CreateEncryptionService() =>
         new(Options.Create(new AesGcmEncryptionOptions

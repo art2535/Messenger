@@ -88,8 +88,6 @@ public sealed class MessageServiceTests
             service.PinMessageAsync(messageId, strangerId, CancellationToken.None));
     }
 
-    private ChatService CreateChatService(Messenger.Infrastructure.Data.GuapMessengerContext context) =>
-        new(context, CreateEncryptionService(), new NoOpCacheService(), NullLogger<ChatService>.Instance);
 
     private MessageService CreateMessageService(Messenger.Infrastructure.Data.GuapMessengerContext context) =>
         new(context, CreateEncryptionService(), Mock.Of<MassTransit.IPublishEndpoint>(),
@@ -264,12 +262,6 @@ public sealed class MessageServiceTests
         await context.SaveChangesAsync();
     }
 
-    private async Task SeedUserAsync(Guid userId)
-    {
-        await using var context = _database.CreateContext();
-        context.Users.Add(CreateUser(userId));
-        await context.SaveChangesAsync();
-    }
 
     private async Task SeedChatAsync(Guid chatId, Guid ownerId, params Guid[] otherUserIds)
     {

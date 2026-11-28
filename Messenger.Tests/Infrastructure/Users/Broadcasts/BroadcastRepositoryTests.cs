@@ -84,11 +84,7 @@ public sealed class BroadcastRepositoryTests
 
 
 
-    private UserService CreateUserService(Messenger.Infrastructure.Data.GuapMessengerContext context) =>
-        new(context, new ConfigurationBuilder().Build(), CreateFileStorage(), new FileValidationService());
 
-    private static LocalFileStorage CreateFileStorage() => new(
-        Path.Combine(Path.GetTempPath(), "Messenger.Tests", Guid.NewGuid().ToString("N")));
 
     private async Task SeedUserAsync(Guid userId)
     {
