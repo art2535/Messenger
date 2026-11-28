@@ -1,4 +1,6 @@
 using Messenger.Application.DTOs.Broadcasts;
+using Messenger.Application.DTOs.Users;
+using Messenger.Application.Files;
 using Messenger.Core.Models;
 using Messenger.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
@@ -125,6 +127,135 @@ public sealed class UserAndBroadcastServiceTests
         Assert.NotNull(summary);
         Assert.Equal(1, summary.ReadCount);
         Assert.Equal(2, summary.TotalRecipients);
+    }
+
+
+    [Fact]
+    public async Task UpdateProfileAsync_UpdatesProfileButDoesNotOverwriteAvatarWithoutExplicitAvatarUrl()
+    {
+        var userId = Guid.NewGuid();
+        await SeedUserAsync(userId);
+
+        await using (var seed = _database.CreateContext())
+        {
+            var account = await seed.AccountSettings.SingleAsync(x => x.AccountId == userId);
+            account.Avatar = "https://cdn.example.test/avatar.png";
+            await seed.SaveChangesAsync();
+        }
+
+        await using (var context = _database.CreateContext())
+        {
+            var service = CreateUserService(context);
+            await service.UpdateProfileAsync(userId, new UpdateUserProfileRequest
+            {
+                FirstName = "Updated",
+                LastName = "Profile",
+                Login = "updated@example.test"
+            });
+            await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+                service.UpdateProfileAsync(Guid.NewGuid(), new UpdateUserProfileRequest
+                {
+                    FirstName = "Missing",
+                    LastName = "User",
+                    Login = "missing@example.test"
+                }));
+        }
+
+        await using var verify = _database.CreateContext();
+        var user = await verify.Users.Include(x => x.Account).SingleAsync(x => x.UserId == userId);
+        Assert.Equal("Updated", user.FirstName);
+        Assert.Equal("Profile", user.LastName);
+        Assert.Equal("updated@example.test", user.Login);
+        Assert.Equal("https://cdn.example.test/avatar.png", user.Account.Avatar);
+    }
+
+    [Fact]
+    public async Task SearchUsersAsync_ReturnsMatchingUsersAndEmptyForBlankQuery()
+    {
+        var firstId = Guid.NewGuid();
+        var secondId = Guid.NewGuid();
+        await using (var seed = _database.CreateContext())
+        {
+            seed.Users.AddRange(
+                new User
+                {
+                    UserId = firstId,
+                    FirstName = "Needle",
+                    LastName = "Target",
+                    Login = "needle@example.test",
+                    RegistrationDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                    Account = new AccountSetting { AccountId = firstId }
+                },
+                new User
+                {
+                    UserId = secondId,
+                    FirstName = "Different",
+                    LastName = "Person",
+                    Login = "different@example.test",
+                    RegistrationDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                    Account = new AccountSetting { AccountId = secondId }
+                });
+            await seed.SaveChangesAsync();
+        }
+
+        await using var context = _database.CreateContext();
+        var service = CreateUserService(context);
+        var matches = await service.SearchUsersAsync(" NEEDLE ");
+        Assert.Single(matches);
+        Assert.Equal(firstId, matches.Single().Id);
+        Assert.Empty(await service.SearchUsersAsync("  "));
+    }
+
+    [Fact]
+    public async Task UploadAvatarAsync_RejectsUnsupportedExtensionAndInvalidImageSignature()
+    {
+        var userId = Guid.NewGuid();
+        await SeedUserAsync(userId);
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(
+            new Dictionary<string, string?> { ["URL:API:HTTPS"] = "https://api.example.test" }).Build();
+        await using var context = _database.CreateContext();
+        var service = new UserService(context, configuration);
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.UploadAvatarAsync(userId, new FakeUploadedFile("avatar.txt", "text/plain", new byte[] { 1 })));
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.UploadAvatarAsync(userId, new FakeUploadedFile("avatar.png", "image/png", new byte[] { 1, 2, 3 })));
+    }
+
+    [Fact]
+    public async Task DeleteAccountAsync_RemovesUserAndOwnedOneToOneRecords()
+    {
+        var userId = Guid.NewGuid();
+        await SeedUserAsync(userId);
+
+        await using (var context = _database.CreateContext())
+        {
+            var service = CreateUserService(context);
+            await service.DeleteAccountAsync(userId);
+            await service.DeleteAccountAsync(userId);
+        }
+
+        await using var verify = _database.CreateContext();
+        Assert.False(await verify.Users.AnyAsync(x => x.UserId == userId));
+        Assert.False(await verify.AccountSettings.AnyAsync(x => x.AccountId == userId));
+        Assert.False(await verify.UserStatuses.AnyAsync(x => x.UserId == userId));
+    }
+
+    private sealed class FakeUploadedFile : IUploadedFile
+    {
+        private readonly byte[] _content;
+
+        public FakeUploadedFile(string fileName, string contentType, byte[] content)
+        {
+            FileName = fileName;
+            ContentType = contentType;
+            _content = content;
+        }
+
+        public string FileName { get; }
+        public string ContentType { get; }
+        public long Length => _content.Length;
+        public Stream OpenReadStream() => new MemoryStream(_content, writable: false);
     }
 
     private UserService CreateUserService(Messenger.Infrastructure.Data.GuapMessengerContext context) =>
