@@ -266,6 +266,76 @@ public sealed class BackgroundServiceTests
         await task;
     }
 
+
+    [Fact]
+    public void UploadOrphanCleanup_DeletesOnlyExpiredUnreferencedFiles()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"messenger-cleanup-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        var referencedPath = Path.Combine(directory, "referenced.bin");
+        var orphanPath = Path.Combine(directory, "orphan.bin");
+        var recentPath = Path.Combine(directory, "recent.bin");
+
+        try
+        {
+            File.WriteAllText(referencedPath, "keep");
+            File.WriteAllText(orphanPath, "delete");
+            File.WriteAllText(recentPath, "recent");
+            var expiredAt = DateTime.UtcNow.AddDays(-31);
+            File.SetLastWriteTimeUtc(referencedPath, expiredAt);
+            File.SetLastWriteTimeUtc(orphanPath, expiredAt);
+
+            var cleanup = typeof(UploadOrphanCleanupService).GetMethod(
+                "CleanupDirectory", BindingFlags.Static | BindingFlags.NonPublic);
+            Assert.NotNull(cleanup);
+
+            var deleted = (int)cleanup!.Invoke(null, new object[]
+            {
+                directory,
+                new HashSet<string>(new[] { "referenced.bin" }, StringComparer.Ordinal),
+                NullLogger<UploadOrphanCleanupService>.Instance,
+                CancellationToken.None
+            })!;
+
+            Assert.Equal(1, deleted);
+            Assert.True(File.Exists(referencedPath));
+            Assert.False(File.Exists(orphanPath));
+            Assert.True(File.Exists(recentPath));
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+                Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void UploadOrphanCleanup_CollectsOnlySafeTopLevelNamesUnderExpectedPrefix()
+    {
+        var collect = typeof(UploadOrphanCleanupService).GetMethod(
+            "CollectReferencedFileNames", BindingFlags.Static | BindingFlags.NonPublic);
+        Assert.NotNull(collect);
+
+        var urls = new string?[]
+        {
+            "https://cdn.example.test/uploads/keep.png?version=1",
+            "/uploads/second.pdf",
+            "/uploads/../private.txt",
+            "/avatars/not-an-upload.png",
+            null
+        };
+
+        var result = (HashSet<string>)collect!.Invoke(null, new object[]
+        {
+            urls, "uploads/", StringComparer.Ordinal
+        })!;
+
+        Assert.Contains("keep.png", result);
+        Assert.Contains("second.pdf", result);
+        Assert.DoesNotContain("../private.txt", result);
+        Assert.DoesNotContain("not-an-upload.png", result);
+    }
+
     private static Mock<IHubContext<ChatHub>> CreateHubContext()
     {
         var proxy = new Mock<IClientProxy>();
