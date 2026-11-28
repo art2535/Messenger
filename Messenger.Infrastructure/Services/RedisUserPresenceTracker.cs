@@ -15,6 +15,7 @@ public sealed class RedisUserPresenceTracker : IUserPresenceTracker
     private readonly ILogger<RedisUserPresenceTracker> _logger;
     private readonly ConcurrentDictionary<string, Guid> _localConnections = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<Guid, ConcurrentDictionary<string, byte>> _localUsers = new();
+    private readonly ConcurrentDictionary<Guid, SemaphoreSlim> _userOperationLocks = new();
 
     private const string ConnectScript = """
         local now = tonumber(ARGV[1])
@@ -67,83 +68,101 @@ public sealed class RedisUserPresenceTracker : IUserPresenceTracker
     public async Task<bool> ConnectAsync(Guid userId, string connectionId, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (!_localConnections.TryAdd(connectionId, userId))
-            return false;
-
-        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        var expiry = now + (long)LeaseDuration.TotalMilliseconds;
-        Task<RedisResult>? connectTask = null;
+        var operationLock = GetUserOperationLock(userId);
+        await operationLock.WaitAsync(cancellationToken);
         try
         {
-            bool becameOnline;
-            if (_database is null)
-            {
-                var connections = _localUsers.GetOrAdd(userId, _ => new ConcurrentDictionary<string, byte>());
-                lock (connections)
-                {
-                    becameOnline = connections.IsEmpty;
-                    connections.TryAdd(connectionId, 0);
-                }
-            }
-            else
-            {
-                connectTask = _database.ScriptEvaluateAsync(
-                    ConnectScript,
-                    new RedisKey[] { GetKey(userId) },
-                    new RedisValue[] { now, expiry, connectionId, (long)(LeaseDuration.TotalMilliseconds * 2) });
-                var previous = (long)await connectTask.WaitAsync(cancellationToken);
-                becameOnline = previous == 0;
-                _localUsers.GetOrAdd(userId, _ => new ConcurrentDictionary<string, byte>()).TryAdd(connectionId, 0);
-            }
+            if (!_localConnections.TryAdd(connectionId, userId))
+                return false;
 
-            return becameOnline;
+            var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            var expiry = now + (long)LeaseDuration.TotalMilliseconds;
+            Task<RedisResult>? connectTask = null;
+            try
+            {
+                bool becameOnline;
+                if (_database is null)
+                {
+                    var connections = _localUsers.GetOrAdd(userId, _ => new ConcurrentDictionary<string, byte>());
+                    lock (connections)
+                    {
+                        becameOnline = connections.IsEmpty;
+                        connections.TryAdd(connectionId, 0);
+                    }
+                }
+                else
+                {
+                    connectTask = _database.ScriptEvaluateAsync(
+                        ConnectScript,
+                        new RedisKey[] { GetKey(userId) },
+                        new RedisValue[] { now, expiry, connectionId, (long)(LeaseDuration.TotalMilliseconds * 2) });
+                    var previous = (long)await connectTask.WaitAsync(cancellationToken);
+                    becameOnline = previous == 0;
+                    _localUsers.GetOrAdd(userId, _ => new ConcurrentDictionary<string, byte>()).TryAdd(connectionId, 0);
+                }
+
+                return becameOnline;
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                _localConnections.TryRemove(connectionId, out _);
+                if (connectTask is not null)
+                    _ = CleanupCancelledConnectAsync(connectTask, userId, connectionId);
+                throw;
+            }
+            catch
+            {
+                _localConnections.TryRemove(connectionId, out _);
+                throw;
+            }
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        finally
         {
-            _localConnections.TryRemove(connectionId, out _);
-            if (connectTask is not null)
-                _ = CleanupCancelledConnectAsync(connectTask, userId, connectionId);
-            throw;
-        }
-        catch
-        {
-            _localConnections.TryRemove(connectionId, out _);
-            throw;
+            operationLock.Release();
         }
     }
 
     public async Task<bool> DisconnectAsync(Guid userId, string connectionId, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (!_localConnections.TryRemove(connectionId, out var trackedUserId))
-            return false;
-
-        if (trackedUserId != userId)
+        var operationLock = GetUserOperationLock(userId);
+        await operationLock.WaitAsync(cancellationToken);
+        try
         {
-            _logger.LogWarning("Presence connection {ConnectionId} принадлежит {TrackedUserId}, отключается для {UserId}.",
-                connectionId, trackedUserId, userId);
-            userId = trackedUserId;
-        }
+            if (!_localConnections.TryRemove(connectionId, out var trackedUserId))
+                return false;
 
-        if (_localUsers.TryGetValue(userId, out var localConnections))
-        {
-            lock (localConnections)
+            if (trackedUserId != userId)
             {
-                localConnections.TryRemove(connectionId, out _);
-                if (localConnections.IsEmpty)
-                    _localUsers.TryRemove(userId, out _);
+                _logger.LogWarning("Presence connection {ConnectionId} принадлежит {TrackedUserId}, отключается для {UserId}.",
+                    connectionId, trackedUserId, userId);
+                userId = trackedUserId;
             }
+
+            if (_localUsers.TryGetValue(userId, out var localConnections))
+            {
+                lock (localConnections)
+                {
+                    localConnections.TryRemove(connectionId, out _);
+                    if (localConnections.IsEmpty)
+                        _localUsers.TryRemove(userId, out _);
+                }
+            }
+
+            if (_database is null)
+                return !_localUsers.TryGetValue(userId, out var remaining) || remaining.IsEmpty;
+
+            var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            var count = (long)await _database.ScriptEvaluateAsync(
+                DisconnectScript,
+                new RedisKey[] { GetKey(userId) },
+                new RedisValue[] { now, connectionId }).WaitAsync(cancellationToken);
+            return count == 0;
         }
-
-        if (_database is null)
-            return !_localUsers.TryGetValue(userId, out var remaining) || remaining.IsEmpty;
-
-        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        var count = (long)await _database.ScriptEvaluateAsync(
-            DisconnectScript,
-            new RedisKey[] { GetKey(userId) },
-            new RedisValue[] { now, connectionId }).WaitAsync(cancellationToken);
-        return count == 0;
+        finally
+        {
+            operationLock.Release();
+        }
     }
 
     /// <summary>Возвращает активные connection ID пользователя с учётом lease.</summary>
@@ -194,23 +213,37 @@ public sealed class RedisUserPresenceTracker : IUserPresenceTracker
         foreach (var user in _localUsers)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var connections = user.Value.Keys.ToArray();
-            if (connections.Length == 0)
-                continue;
+            var operationLock = GetUserOperationLock(user.Key);
+            await operationLock.WaitAsync(cancellationToken);
+            try
+            {
+                // Снимок и продление lease сериализованы с DisconnectAsync:
+                // heartbeat не сможет воскресить уже отключённое соединение.
+                var connections = user.Value.Keys.ToArray();
+                if (connections.Length == 0)
+                    continue;
 
-            var args = new RedisValue[connections.Length + 3];
-            args[0] = now;
-            args[1] = expiry;
-            for (var i = 0; i < connections.Length; i++)
-                args[i + 2] = connections[i];
-            args[^1] = ttl;
+                var args = new RedisValue[connections.Length + 3];
+                args[0] = now;
+                args[1] = expiry;
+                for (var i = 0; i < connections.Length; i++)
+                    args[i + 2] = connections[i];
+                args[^1] = ttl;
 
-            await _database.ScriptEvaluateAsync(
-                HeartbeatScript,
-                new RedisKey[] { GetKey(user.Key) },
-                args).WaitAsync(cancellationToken);
+                await _database.ScriptEvaluateAsync(
+                    HeartbeatScript,
+                    new RedisKey[] { GetKey(user.Key) },
+                    args).WaitAsync(cancellationToken);
+            }
+            finally
+            {
+                operationLock.Release();
+            }
         }
     }
+
+    private SemaphoreSlim GetUserOperationLock(Guid userId) =>
+        _userOperationLocks.GetOrAdd(userId, _ => new SemaphoreSlim(1, 1));
 
     private async Task CleanupCancelledConnectAsync(
         Task<RedisResult> connectTask,
