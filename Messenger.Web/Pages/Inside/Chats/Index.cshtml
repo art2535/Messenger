@@ -719,7 +719,6 @@
         const hasClientToken = !!(localStorage.getItem('token') || sessionToken);
 
         if (!isAuthenticated && !hasClientToken) {
-            console.warn("Неавторизованный доступ - редирект на авторизацию");
             window.location.href = "/login";
         }
 

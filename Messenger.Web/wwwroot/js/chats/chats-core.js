@@ -12,7 +12,6 @@ let historyScrollObserver = null;
 
 let lastTypingSentAt = 0;
 const TYPING_THROTTLE_MS = 2500;
-console.log("Access Token:", token.substring(0, 20) + "...");
 
 const chatsList = document.getElementById('chats-list');
 const messagesContainer = document.getElementById('messages-container');

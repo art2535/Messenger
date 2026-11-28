@@ -1,6 +1,5 @@
 async function startSignalR() {
     if (!token) {
-        console.error("Нет токена для SignalR");
         updateConnectionStatus('Нет токена', 'red');
         return;
     }
@@ -8,7 +7,6 @@ async function startSignalR() {
     async function getFreshToken() {
         let freshToken = (typeof token === 'string' && token) ? token : (localStorage.getItem('token') || '');
         if (!freshToken) {
-            console.warn("Токен пропал — редирект");
             window.location.href = "/login";
             return null;
         }
@@ -56,14 +54,12 @@ async function startSignalR() {
 
         if (!chatId) return;
 
-        console.log(`[PARTICIPANT COUNT] Чат ${chatId} → ${newCount} участников`);
-
         if (currentChatId === chatId) {
             const subtitleEl = document.getElementById('chat-subtitle');
             if (subtitleEl && currentChatInfo?.type === 'group') {
                 subtitleEl.textContent = `${newCount} участников`;
             if (typeof updateChatSubtitleMarquee === 'function') updateChatSubtitleMarquee();
-                console.log(`[PARTICIPANT COUNT] Обновлено в шапке чата: ${newCount} участников`);
+
             }
 
             if (document.getElementById('chat-info-modal').classList.contains('show')) {
@@ -84,7 +80,6 @@ async function startSignalR() {
         const uid = uidRaw.toLowerCase();
         const isOnline = !!(data.isOnline ?? data.IsOnline ?? data.online ?? data.Online);
         let lastActivity = data.lastActivity ?? data.LastActivity ?? data.lastSeen ?? data.LastSeen ?? null;
-        console.log(`[STATUS] ${uidRaw} → ${isOnline ? 'ONLINE' : 'OFFLINE'}`, data);
 
         // единый ключ в нижнем регистре + дублируем исходный id
         const prev = userStatuses.get(uid) || userStatuses.get(uidRaw);
@@ -135,10 +130,8 @@ async function startSignalR() {
         const typingUserId = String(data.userId).trim();
         const myId = String(me || "").trim();
 
-        console.log(`[TYPING RECEIVED] chat=${data.chatId}, user=${typingUserId}, isTyping=${data.isTyping}, myId=${myId}`);
-
         if (typingUserId === myId) {
-            console.log(`[TYPING] Игнорируем своё печатание`);
+
             return;
         }
 
@@ -151,7 +144,7 @@ async function startSignalR() {
             if (data.isTyping) {
                 if (isGroupChat) {
                     loadUserName(typingUserId).then(name => {
-                        console.log(`[TYPING] Группа: ${name} печатает...`);
+
                         if (typingNameEl) {
                             typingNameEl.textContent = name || 'Участник';
                             typingNameEl.classList.remove('hidden');
@@ -160,7 +153,7 @@ async function startSignalR() {
                         if (subtitle) subtitle.classList.add('hidden');
                     });
                 } else {
-                    console.log('[TYPING] Личный чат: печатает...');
+
                     if (typingNameEl) {
                         typingNameEl.textContent = '';
                         typingNameEl.classList.add('hidden');
@@ -231,7 +224,7 @@ async function startSignalR() {
     }
 
     function applyUserAvatarUpdate(data) {
-        console.log('[Profile/AvatarUpdated] raw', data);
+
         if (!data) return;
 
         const uid = normId(data.userId ?? data.UserId);
@@ -248,7 +241,6 @@ async function startSignalR() {
 
         const allPartnerIds = Array.from(document.querySelectorAll('.chat-item'))
             .map(el => ({ chatId: el.dataset.chatId, partnerId: el.dataset.partnerId || null }));
-        console.log('[Profile/AvatarUpdated] chat-items', allPartnerIds);
 
         if (uid === meId) {
             const avatarContainer = document.querySelector('.relative.w-10.h-10');
@@ -337,7 +329,6 @@ async function startSignalR() {
             }
         });
 
-        console.log(`[Profile/AvatarUpdated] uid=${uid} me=${meId} listUpdated=${updatedList} url=${absUrl || '(none)'}`);
     }
 
     connection.on('ProfileUpdated', applyUserAvatarUpdate);
@@ -348,14 +339,12 @@ async function startSignalR() {
         let status = (data.Status || data.status || '').toLowerCase();
         const reason = data.Reason || data.reason;
 
-        console.log(`[Status] ${msgId} → ${status}`, data);
-
         let element = document.querySelector(`[data-mid="${msgId}"]`);
         if (!element) {
             for (const [tempId, info] of pendingMessages) {
                 if (info.serverMessageId === msgId) {
                     element = document.querySelector(`[data-mid="${tempId}"]`);
-                    console.log(`[Status] Найдено по pendingMessages: ${tempId} → ${msgId}`);
+
                     break;
                 }
             }
@@ -366,12 +355,12 @@ async function startSignalR() {
                 updateMessageStatus(msgId, 'sent');
                 const statusChatId = element.closest('.chat-item')?.dataset?.chatId || currentChatId;
                 if (statusChatId) updateChatListStatus(statusChatId, status === 'delivered' ? 'sent' : 'sent');
-                console.log(`[Status] Обновлено на Sent для ${msgId}`);
+
             } else if (status === 'failed') {
                 updateMessageStatus(msgId, 'failed', reason || 'Ошибка');
             }
         } else {
-            console.warn(`[Status] Элемент не найден для ${msgId} (уже удалён ReceiveMessage?)`);
+
         }
     });
 
@@ -431,7 +420,7 @@ async function startSignalR() {
         const msgText = msg.messageText ?? msg.MessageText ?? '';
 
         if (seenMessageIds.has(mid) || document.querySelector(`[data-mid="${mid}"]`)) {
-            console.log(`[ReceiveMessage] обновление существующего ${mid}`);
+
             if (msgText !== undefined && msgText !== null) {
                 updateExistingMessageText(mid, msgText);
             }
@@ -460,8 +449,6 @@ async function startSignalR() {
             const first = seenMessageIds.values().next().value;
             seenMessageIds.delete(first);
         }
-
-        console.log(`[ReceiveMessage] ${mid} в чате ${chatId}`);
 
         const isCurrentChat = String(chatId) === String(currentChatId);
 
@@ -510,7 +497,7 @@ async function startSignalR() {
         }
 
         if (document.querySelector(`[data-mid="${mid}"]`)) {
-            console.log(`[ReceiveMessage] Сообщение ${mid} уже показано — обновляем текст`);
+
             if (msgText !== undefined && msgText !== null) {
                 updateExistingMessageText(mid, msgText);
             }
@@ -636,7 +623,7 @@ async function startSignalR() {
             filterChats();
             feather.replace();
 
-            connection.invoke("JoinChat", chat.chatId).catch(err => console.error(err));
+            connection.invoke("JoinChat", chat.chatId).catch(() => { });
         }
     });
 
@@ -644,11 +631,9 @@ async function startSignalR() {
         chatId = String(data?.chatId || data?.ChatId || data || "").trim();
 
         if (!chatId) {
-            console.warn("[YouWereRemovedFromChat] Получен пустой chatId");
+
             return;
         }
-
-        console.log(`[KICKED] Вас удалили из чата ${chatId}`);
 
         const chatItem = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
         if (chatItem) {
@@ -776,7 +761,6 @@ async function startSignalR() {
 
     try {
         await connection.start();
-        console.log("SignalR успешно подключён");
 
         if (window.ScheduledMessages) {
             window.ScheduledMessages.onSignalR(connection);
@@ -786,7 +770,7 @@ async function startSignalR() {
         updateConnectionStatus('Онлайн', 'green');
 
         setTimeout(async () => {
-            console.log("Запуск joinAllMyChats...");
+
             await joinAllMyChats();
 
             if (currentChatId) {
@@ -795,7 +779,6 @@ async function startSignalR() {
         }, 1500);
 
     } catch (err) {
-        console.error("Ошибка подключения SignalR:", err);
         updateConnectionStatus('Ошибка подключения', 'red');
 
         setTimeout(startSignalR, 5000);
@@ -809,7 +792,7 @@ function updateAllOnlineIndicators() {
 
 function updateCurrentChatSubtitle() {
     if (!currentChatId || !currentChatInfo) {
-        console.log("updateCurrentChatSubtitle: пропуск — нет currentChatId или currentChatInfo");
+
         return;
     }
 
@@ -871,8 +854,6 @@ function updateCurrentChatSubtitle() {
 
     const lastActivity = status?.lastActivity || status?.LastActivity || partnerLast || null;
     const isOnline = status?.isOnline === true || status?.IsOnline === true;
-
-    console.log(`[Subtitle Update] Партнёр ${partnerId} → online=${isOnline}, lastActivity=`, lastActivity, status);
 
     if (onlineDot) {
         onlineDot.classList.toggle('hidden', !isOnline);

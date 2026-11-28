@@ -16,7 +16,6 @@
         window.addEventListener('load', function () {
             navigator.serviceWorker.register('/service-worker.js', { scope: '/' })
                 .then(function (reg) {
-                    console.log('[PWA] Service Worker зарегистрирован:', reg.scope);
                     function postConfig() {
                         var api = window.API_BASE_URL || (window.CHATS_CONFIG && window.CHATS_CONFIG.apiBaseUrl);
                         if (!api) return;
@@ -33,7 +32,6 @@
                     setTimeout(postConfig, 800);
                 })
                 .catch(function (err) {
-                    console.warn('[PWA] Ошибка регистрации Service Worker:', err);
                 });
         });
     })();

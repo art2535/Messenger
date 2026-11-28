@@ -1,10 +1,6 @@
 ﻿const API_BASE_URL = window.API_BASE_URL;
 const HUB_URL = window.HUB_URL;
 
-if (!API_BASE_URL) {
-    console.error('❌ API_BASE_URL не задан! Проверьте, что страница передаёт window.API_BASE_URL');
-}
-
 let currentToken = null;
 
 function getAuthToken() {
@@ -27,28 +23,18 @@ function getAuthToken() {
     return token;
 }
 
+// Service Worker регистрируется централизованно в _LayoutPWA.cshtml.
+// Здесь используем уже готовую регистрацию, чтобы не создавать конкурирующие
+// register() вызовы на странице чатов.
 if ('serviceWorker' in navigator) {
-    window.addEventListener('load', async () => {
-        try {
-            const registration = await navigator.serviceWorker.register('/service-worker.js', {
-                scope: '/'
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.ready
+            .then(registration => {
+                window.setTimeout(() => initializePushNotifications(registration), 1500);
+            })
+            .catch(() => {
+                // PWA недоступна; базовые функции чатов продолжают работать.
             });
-            console.log('✅ Service Worker зарегистрирован с scope:', registration.scope);
-
-            if (registration.active) {
-                registration.active.postMessage({
-                    type: 'SET_CONFIG',
-                    apiBaseUrl: API_BASE_URL
-                });
-            }
-
-            setTimeout(() => {
-                initializePushNotifications(registration);
-            }, 1500);
-
-        } catch (err) {
-            console.error('❌ Ошибка регистрации Service Worker:', err);
-        }
     });
 }
 
@@ -145,12 +131,10 @@ async function initializePushNotifications(registration, options) {
     const forceSync = !!(options && options.forceSync);
     const token = getAuthToken();
     if (!token) {
-        if (forceSync) console.warn('⚠️ Push: нет токена, синхронизация отложена');
         return;
     }
 
     if (!API_BASE_URL) {
-        console.error('API_BASE_URL не задан');
         return;
     }
 
@@ -197,13 +181,11 @@ async function initializePushNotifications(registration, options) {
                 userVisibleOnly: true,
                 applicationServerKey: urlBase64ToUint8Array(publicKey)
             });
-            console.log('Новая push-подписка создана');
         }
 
         await postPushSubscribe(subscription, token);
-        console.log('✅ Push-подписка синхронизирована с сервером');
     } catch (err) {
-        console.error('❌ Ошибка при инициализации Push-уведомлений:', err);
+        if (forceSync && typeof showToast === 'function') showToast('Не удалось настроить push-уведомления', 'error');
         try { localStorage.removeItem(PUSH_LS_SUBSCRIBED); } catch (_) { }
     }
 }
@@ -216,7 +198,7 @@ async function syncPushSubscriptionToServer() {
         await initializePushNotifications(registration, { forceSync: true });
         return true;
     } catch (e) {
-        console.error('syncPushSubscriptionToServer:', e);
+        if (typeof showToast === 'function') showToast('Не удалось синхронизировать push-подписку', 'error');
         return false;
     }
 }
@@ -245,11 +227,10 @@ function urlBase64ToUint8Array(base64String) {
     return outputArray;
 }
 
-navigator.serviceWorker.addEventListener('message', async function (event) {
+if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', async function (event) {
     if (event.data && event.data.type === 'OPEN_SPECIFIC_CHAT') {
         const { chatId, notificationId } = event.data;
 
-        console.log(`[Push Click] Получено из SW: chatId=${chatId}, notificationId=${notificationId}`);
 
         if (chatId) {
             setTimeout(async () => {
@@ -268,27 +249,22 @@ navigator.serviceWorker.addEventListener('message', async function (event) {
 async function openChatById(chatId) {
     if (!chatId) return;
 
-    console.log(`Попытка открыть чат: ${chatId}`);
 
     document.querySelectorAll('.chat-item').forEach(item => item.classList.remove('active'));
 
     let chatItem = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
 
     if (chatItem) {
-        console.log('Чат найден в DOM');
         chatItem.click();
         return;
     }
 
-    console.log('Чат не найден, загружаем список...');
     await loadChats();
 
     chatItem = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
     if (chatItem) {
-        console.log('Чат найден после загрузки');
         chatItem.click();
     } else {
-        console.warn(`Чат ${chatId} не найден даже после перезагрузки списка`);
         showToast('Не удалось открыть чат', 'warning');
     }
 }
@@ -297,7 +273,6 @@ async function markNotificationAsRead(notificationId) {
     try {
         const token = getAuthToken();
         if (!token) {
-            console.warn('markNotificationAsRead: токен отсутствует');
             return;
         }
 
@@ -312,11 +287,8 @@ async function markNotificationAsRead(notificationId) {
         });
 
         if (response.ok) {
-            console.log(`Уведомление ${notificationId} помечено как прочитанное`);
         } else {
-            console.warn(`Ошибка отметки: ${response.status}`);
         }
     } catch (err) {
-        console.error('Ошибка markNotificationAsRead:', err);
     }
 }
