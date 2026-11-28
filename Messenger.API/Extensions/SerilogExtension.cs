@@ -18,7 +18,6 @@ public static class SerilogExtension
 {
     private static string? GetConnectionString(IConfiguration configuration) =>
         configuration.GetConnectionString("DefaultConnection")
-        ?? configuration["ConnectionStrings:DefaultConnection"]
         ?? configuration["PostgresConnectionString"];
 
     private static bool IsEfSqlLog(LogEvent e) =>
@@ -30,7 +29,6 @@ public static class SerilogExtension
         public void AddMessengerSerilog(string applicationName)
         {
             var connectionString = GetConnectionString(builder.Configuration);
-
             SelfLog.Enable(msg => Debug.WriteLine(msg));
 
             var columnOptions = new Dictionary<string, ColumnWriterBase>
@@ -47,7 +45,6 @@ public static class SerilogExtension
             };
 
             var hasDb = !string.IsNullOrWhiteSpace(connectionString);
-
             builder.Host.UseSerilog((context, services, configuration) =>
             {
                 configuration
@@ -82,22 +79,18 @@ public static class SerilogExtension
                             period: TimeSpan.FromSeconds(5),
                             batchSizeLimit: 50));
                 }
-            },
-writeToProviders: true);   // обязательно true
+            }, writeToProviders: true);
 
             if (!hasDb)
-            {
-                Console.WriteLine($"[WARN] {applicationName}: строка подключения PostgreSQL не найдена — sink PostgreSQL отключён");
-            }
+                Console.WriteLine($"[WARN] {applicationName}: PostgreSQL connection string отсутствует — sink PostgreSQL отключён.");
         }
 
         public void AddMessengerSerilogUi()
         {
             var connectionString = GetConnectionString(builder.Configuration);
-
             if (string.IsNullOrWhiteSpace(connectionString))
             {
-                Console.WriteLine("[WARN] Serilog.UI не зарегистрирован: нет строки подключения PostgreSQL");
+                Console.WriteLine("[WARN] Serilog.UI не зарегистрирован: нет ConnectionStrings:DefaultConnection.");
                 return;
             }
 

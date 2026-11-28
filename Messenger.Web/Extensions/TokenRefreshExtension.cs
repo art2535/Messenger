@@ -1,4 +1,4 @@
-﻿using Messenger.Web.Services;
+using Messenger.Web.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 
@@ -11,9 +11,12 @@ namespace Messenger.Web.Extensions
             public IServiceCollection AddBackgroundTokenRefresh(IConfiguration configuration)
             {
                 services.AddOptions<TokenRefreshOptions>()
-                    .Bind(configuration.GetSection("TokenRefresh"))
+                    .Bind(configuration.GetSection(TokenRefreshOptions.SectionName))
                     .ValidateDataAnnotations()
+                    .Validate(options => options.RefreshBeforeExpirySeconds < options.IdleTimeoutMinutes * 60,
+                        "TokenRefresh:RefreshBeforeExpirySeconds должен быть меньше IdleTimeoutMinutes.")
                     .ValidateOnStart();
+
                 services.AddHttpClient();
                 services.AddSingleton<UserTokenStore>();
                 services.AddSingleton<TokenRefresher>();
@@ -23,43 +26,31 @@ namespace Messenger.Web.Extensions
                     CookieAuthenticationDefaults.AuthenticationScheme, options =>
                     {
                         var previous = options.Events.OnValidatePrincipal;
-
                         options.Events.OnValidatePrincipal = async context =>
                         {
                             if (previous is not null)
-                            {
                                 await previous(context);
-                            }
-
-                            if (context.Principal is null)
-                            {
-                                return;
-                            }
-
-                            await SyncTokensAsync(context);
+                            if (context.Principal is not null)
+                                await SyncTokensAsync(context);
                         };
                     });
 
                 return services;
             }
-        }        
+        }
 
         private static async Task SyncTokensAsync(CookieValidatePrincipalContext context)
         {
             var properties = context.Properties;
             var accessToken = properties.GetTokenValue("access_token");
             var refreshToken = properties.GetTokenValue("refresh_token");
-
             if (string.IsNullOrEmpty(accessToken) || string.IsNullOrEmpty(refreshToken))
-            {
                 return;
-            }
 
             var services = context.HttpContext.RequestServices;
             var store = services.GetRequiredService<UserTokenStore>();
             var refresher = services.GetRequiredService<TokenRefresher>();
             var logger = services.GetRequiredService<ILoggerFactory>().CreateLogger("Messenger.Web.TokenRefresh");
-
             properties.Items.TryGetValue(UserTokenStore.StoreKeyItem, out var key);
 
             if (store.IsRevoked(key, refreshToken))
@@ -79,16 +70,10 @@ namespace Messenger.Web.Extensions
 
             var entry = store.GetOrAdd(key!, accessToken, refreshToken);
             entry.LastSeenUtc = DateTime.UtcNow;
-
             if (isNewKey)
-            {
-                logger.LogInformation(
-                    "[TokenRefresh] Новая сессия {Key} зарегистрирована, access-токен истекает в {ExpiresAt:HH:mm:ss} UTC",
-                    key, entry.Tokens.ExpiresAtUtc);
-            }
+                logger.LogInformation("[TokenRefresh] Новая сессия {Key} зарегистрирована, access-токен истекает в {ExpiresAt:HH:mm:ss} UTC", key, entry.Tokens.ExpiresAtUtc);
 
             await refresher.RefreshIfNeededAsync(entry, context.HttpContext.RequestAborted);
-
             if (entry.IsRevoked)
             {
                 logger.LogWarning("[TokenRefresh] Сессия {Key}: refresh-токен отклонён — выполняем выход", key);
@@ -105,13 +90,8 @@ namespace Messenger.Web.Extensions
                 properties.UpdateTokenValue("access_token", tokens.AccessToken);
                 properties.UpdateTokenValue("refresh_token", tokens.RefreshToken);
                 context.ShouldRenew = true;
-
                 if (!isNewKey)
-                {
-                    logger.LogInformation(
-                        "[TokenRefresh] Сессия {Key}: cookie обновлена свежими токенами (истекают в {ExpiresAt:HH:mm:ss} UTC)",
-                        key, tokens.ExpiresAtUtc);
-                }
+                    logger.LogInformation("[TokenRefresh] Сессия {Key}: cookie обновлена свежими токенами (истекают в {ExpiresAt:HH:mm:ss} UTC)", key, tokens.ExpiresAtUtc);
             }
         }
     }

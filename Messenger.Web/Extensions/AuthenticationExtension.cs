@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Authentication.Cookies;
+using Messenger.Core.Configuration;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using System.Security.Claims;
 using System.Text;
@@ -12,6 +13,19 @@ namespace Messenger.Web.Extensions
         {
             public IServiceCollection AddEtaWebAuthentication(IConfiguration configuration)
             {
+                var identityProvider = configuration.GetSection(IdentityProviderOptions.SectionName)
+                    .Get<IdentityProviderOptions>() ?? new IdentityProviderOptions();
+
+                services.AddOptions<IdentityProviderOptions>()
+                    .Bind(configuration.GetSection(IdentityProviderOptions.SectionName))
+                    .ValidateDataAnnotations()
+                    .Validate(options => !string.IsNullOrWhiteSpace(options.ClientSecret),
+                        "AzureAd:ClientSecret обязателен для Web OIDC-клиента.")
+                    .Validate(options => Uri.TryCreate(options.Instance, UriKind.Absolute, out var uri)
+                        && uri.Scheme == Uri.UriSchemeHttps,
+                        "AzureAd:Instance должен быть абсолютным HTTPS URL.")
+                    .ValidateOnStart();
+
                 services.AddAuthentication(options =>
                 {
                     options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
@@ -25,37 +39,32 @@ namespace Messenger.Web.Extensions
                     options.LoginPath = "/login";
                     options.ExpireTimeSpan = TimeSpan.FromHours(12);
                     options.SlidingExpiration = true;
-
                     options.Cookie.Name = ".GuapMessenger.Cookie";
                     options.Cookie.SameSite = SameSiteMode.Lax;
                     options.Cookie.HttpOnly = true;
                     options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
                     options.Cookie.IsEssential = true;
-
                     options.Cookie.Path = "/";
                     options.Cookie.MaxAge = TimeSpan.FromHours(12);
                 })
                 .AddOpenIdConnect(options =>
                 {
-                    options.Authority = $"{configuration["AzureAd:Instance"]?.TrimEnd('/')}/{configuration["AzureAd:TenantId"]}";
-                    options.ClientId = configuration["AzureAd:ClientId"];
-                    options.ClientSecret = configuration["AzureAd:ClientSecret"];
-                    options.CallbackPath = configuration["AzureAd:CallbackPath"];
-                    options.SignedOutCallbackPath = configuration["AzureAd:SignedOutCallbackPath"];
+                    options.Authority = identityProvider.Authority;
+                    options.ClientId = identityProvider.ClientId;
+                    options.ClientSecret = identityProvider.ClientSecret;
+                    options.CallbackPath = identityProvider.CallbackPath;
+                    options.SignedOutCallbackPath = identityProvider.SignedOutCallbackPath;
                     options.ResponseType = "code";
                     options.SaveTokens = true;
                     options.GetClaimsFromUserInfoEndpoint = false;
-
                     options.Scope.Add("openid");
                     options.Scope.Add("profile");
                     options.Scope.Add("email");
                     options.Scope.Add("roles");
                     options.Scope.Add("offline_access");
-
                     options.TokenValidationParameters.ValidateIssuer = true;
                     options.TokenValidationParameters.NameClaimType = "name";
                     options.TokenValidationParameters.RoleClaimType = ClaimTypes.Role;
-
                     options.UseTokenLifetime = true;
 
                     options.Events = new OpenIdConnectEvents
@@ -63,17 +72,12 @@ namespace Messenger.Web.Extensions
                         OnMessageReceived = context =>
                         {
                             var accessToken = context.Request.Query["access_token"];
-                            var path = context.HttpContext.Request.Path;
-                            if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/api"))
-                            {
+                            if (!string.IsNullOrEmpty(accessToken) &&
+                                context.HttpContext.Request.Path.StartsWithSegments("/api"))
                                 context.Token = accessToken;
-                            }
                             return Task.CompletedTask;
                         },
-                        OnAuthenticationFailed = context =>
-                        {
-                            return Task.CompletedTask;
-                        },
+                        OnAuthenticationFailed = _ => Task.CompletedTask,
                         OnTokenValidated = context =>
                         {
                             var accessToken = context.TokenEndpointResponse?.AccessToken;
@@ -81,7 +85,7 @@ namespace Messenger.Web.Extensions
                                 return Task.CompletedTask;
 
                             var identity = context.Principal?.Identity as ClaimsIdentity;
-                            if (identity == null)
+                            if (identity is null)
                                 return Task.CompletedTask;
 
                             try
@@ -90,19 +94,9 @@ namespace Messenger.Web.Extensions
                                 if (parts.Length < 2)
                                     return Task.CompletedTask;
 
-                                var payload = parts[1]
-                                    .Replace('-', '+')
-                                    .Replace('_', '/');
-
-                                switch (payload.Length % 4)
-                                {
-                                    case 2: payload += "=="; break;
-                                    case 3: payload += "="; break;
-                                }
-
-                                var jsonBytes = Convert.FromBase64String(payload);
-                                var json = Encoding.UTF8.GetString(jsonBytes);
-
+                                var payload = parts[1].Replace('-', '+').Replace('_', '/');
+                                payload += (payload.Length % 4) switch { 2 => "==", 3 => "=", _ => "" };
+                                var json = Encoding.UTF8.GetString(Convert.FromBase64String(payload));
                                 using var doc = JsonDocument.Parse(json);
 
                                 if (doc.RootElement.TryGetProperty("realm_access", out var realmAccess) &&
@@ -112,17 +106,13 @@ namespace Messenger.Web.Extensions
                                     foreach (var roleElement in rolesElement.EnumerateArray())
                                     {
                                         var role = roleElement.GetString();
-                                        if (string.IsNullOrEmpty(role))
-                                            continue;
-
-                                        if (!identity.HasClaim(ClaimTypes.Role, role))
-                                        {
+                                        if (!string.IsNullOrWhiteSpace(role) && !identity.HasClaim(ClaimTypes.Role, role))
                                             identity.AddClaim(new Claim(ClaimTypes.Role, role));
-                                        }
                                     }
                                 }
                             }
-                            catch { }
+                            catch (JsonException) { }
+                            catch (FormatException) { }
 
                             return Task.CompletedTask;
                         }
