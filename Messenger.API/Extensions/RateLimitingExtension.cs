@@ -15,7 +15,7 @@ public static class RateLimitingExtension
     /// </summary>
     public static WebApplication UseMessengerRateLimiting(this WebApplication app)
     {
-        app.Use(async (context, next) =>
+        app.Use(async (HttpContext context, Func<Task> next) =>
         {
             if (context.GetEndpoint()?.Metadata.GetMetadata<ControllerActionDescriptor>() is null)
             {
@@ -45,7 +45,7 @@ public static class RateLimitingExtension
                 return;
             }
 
-            await next(context);
+            await next();
         });
 
         return app;
