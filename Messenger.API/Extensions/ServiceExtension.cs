@@ -94,7 +94,10 @@ namespace Messenger.API.Extensions
 
             public IServiceCollection AddSessionCleanup(IConfiguration configuration)
             {
-                services.Configure<SessionCleanupOptions>(configuration.GetSection(SessionCleanupOptions.SectionName));
+                services.AddOptions<SessionCleanupOptions>()
+                    .Bind(configuration.GetSection(SessionCleanupOptions.SectionName))
+                    .ValidateDataAnnotations()
+                    .ValidateOnStart();
                 services.AddHostedService<SessionCleanupBackgroundService>();
                 services.AddHostedService<PresenceHeartbeatBackgroundService>();
                 return services;
