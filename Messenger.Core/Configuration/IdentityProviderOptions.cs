@@ -21,6 +21,6 @@ public sealed class IdentityProviderOptions
     public string? ClientSecret { get; set; }
     public string CallbackPath { get; set; } = "/signin-oidc";
     public string SignedOutCallbackPath { get; set; } = "/signout-callback-oidc";
-    public string Authority => $"{Instance.TrimEnd('/')}/{TenantId}";
+    public string Authority => $"{Instance?.TrimEnd('/')}/{TenantId}";
     public string OpenIdConnectBase => $"{Authority}/protocol/openid-connect";
 }
