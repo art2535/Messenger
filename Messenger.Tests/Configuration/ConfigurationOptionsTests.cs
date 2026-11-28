@@ -25,6 +25,13 @@ public sealed class ConfigurationOptionsTests
     }
 
     [Fact]
+    public void ApiEndpointOptions_RequiresAbsoluteApiUrlsAndVersion()
+    {
+        var errors = Validate(new ApiEndpointOptions { Https = "not-a-url", Http = "", Version = "" });
+        Assert.NotEmpty(errors);
+    }
+
+    [Fact]
     public void SignalROptions_RejectsInvalidLimits()
     {
         var options = new SignalROptions

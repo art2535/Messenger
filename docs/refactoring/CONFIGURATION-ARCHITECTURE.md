@@ -23,7 +23,9 @@ ASP.NET Core поддерживает переопределение appsettings
 | AzureAd:Instance | HTTPS URL корня realms OIDC |
 | AzureAd:TenantId | Realm / tenant |
 | AzureAd:Audience | Ожидаемая audience access token |
+| URL:API:HTTPS / HTTP / Version | Адреса API и версия маршрутов; обязательны в API и Web |
 | Encryption:MasterKeyBase64 | Base64 ключ AES-256, ровно 32 байта |
+| Vapid:Subject / PublicKey / PrivateKey | Данные VAPID; ключи проверяются при старте |
 | SignalR:ChannelPrefix | Redis channel prefix |
 | SessionCleanup:IdleMinutes | Порог неактивности |
 | SessionCleanup:IntervalMinutes | Интервал фоновой очистки |
@@ -53,6 +55,7 @@ TokenRefresh:RefreshBeforeExpirySeconds должен быть меньше Token
 dotnet user-secrets set "AzureAd:ClientSecret" "<новый-secret>" --project Messenger.Web
 dotnet user-secrets set "AzureAd:ClientSecret" "<новый-secret>" --project Messenger.API
 dotnet user-secrets set "Encryption:MasterKeyBase64" "<base64-ключ-32-байта>" --project Messenger.API
+dotnet user-secrets set "Vapid:PrivateKey" "<vapid-private-key>" --project Messenger.API
 dotnet user-secrets set "ConnectionStrings:DefaultConnection" "<postgres-connection-string>" --project Messenger.API
 dotnet user-secrets set "ConnectionStrings:RabbitMQ" "<amqp-uri>" --project Messenger.API
 dotnet user-secrets set "ConnectionStrings:Redis" "localhost:6379,abortConnect=false" --project Messenger.API

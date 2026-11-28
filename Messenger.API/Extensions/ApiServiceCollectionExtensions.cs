@@ -40,6 +40,10 @@ public static class ApiServiceCollectionExtensions
         builder.Services.AddRedisCache(builder.Configuration);
         builder.Services.AddScalarApi(builder.Configuration);
         builder.Services.AddPostgreSQL(builder.Configuration);
+        builder.Services.AddOptions<ApiEndpointOptions>()
+            .Bind(builder.Configuration.GetSection(ApiEndpointOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
         builder.Services.AddOptions<VapidOptions>()
             .Bind(builder.Configuration.GetSection(VapidOptions.SectionName))
             .ValidateDataAnnotations()

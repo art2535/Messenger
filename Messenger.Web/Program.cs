@@ -1,6 +1,7 @@
 using Messenger.Web.Extensions;
 using Messenger.Web.Helpers;
 using Messenger.Web.Services;
+using Messenger.Core.Configuration;
 using Microsoft.AspNetCore.ResponseCompression;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
@@ -31,6 +32,11 @@ namespace Messenger.Web
                     o.TimestampFormat = "HH:mm:ss ";
                 });
             });
+
+            builder.Services.AddOptions<ApiEndpointOptions>()
+                .Bind(builder.Configuration.GetSection(ApiEndpointOptions.SectionName))
+                .ValidateDataAnnotations()
+                .ValidateOnStart();
 
             builder.Services.AddRazorPages();
             builder.Services.AddEtaWebAuthentication(builder.Configuration);
