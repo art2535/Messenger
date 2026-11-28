@@ -48,14 +48,15 @@ Redis-тесты используют Testcontainers.Redis, PostgreSQL-тест�
 
 - Добавлены HTTP integration tests на TestServer для HTTP rate limiting: отказ 429 на controller endpoint и обход middleware для non-controller endpoint.
 - Добавлен тест ChatHub: пользователь, не состоящий в чате, не может присоединить SignalR connection к группе.
-- Добавлен тест Redis failure: при настроенном, но недоступном Redis rate limiter отклоняет запрос (fail-closed), не переключаясь на локальный счётчик.
+- Добавлены тесты Redis outage/recovery: rate limiter отклоняет запрос при потере Redis и снова пропускает после восстановления; Presence heartbeat восстанавливает lease локальных подключений после возврата Redis.
+- Добавлен тест consumer: ошибка Push после сохранения сообщения переводит доставку в Failed и повторно выбрасывает исключение для retry брокера.
 - GitLab CI дополнен отдельным test job, запускающим весь solution через .NET 10 SDK container; Docker socket передаётся внутрь для Testcontainers.
 
 ## Остаточные проверки
 
 - Нужен запуск pipeline на runner с Docker socket и доступом к Docker Hub/NuGet. Без результата pipeline этап нельзя считать подтверждённым по сборке.
-- Для полноценного сквозного теста RabbitMQ → consumer → SignalR/Push требуется отдельный RabbitMQ Testcontainer и проверка consumer через MassTransit harness; текущие тесты сервисов Push и PostgreSQL не заменяют этот сценарий.
-- Восстановление Presence после кратковременного Redis outage требует отдельного теста на реальном контейнере с остановкой/запуском Redis; сейчас покрыт fail-closed для rate limiter.
+- Consumer проверяется напрямую через MassTransit ConsumeContext mock; реальный RabbitMQ transport и broker redelivery не поднимаются. Проверка транспортного retry остаётся инфраструктурной ответственностью MassTransit.
+- Тесты требуют Docker на GitLab runner; если runner не предоставляет Docker socket, job должен быть настроен на соответствующий runner.
 
 ## План этапа 13.5
 
