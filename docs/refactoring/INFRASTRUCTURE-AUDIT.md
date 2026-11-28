@@ -190,6 +190,13 @@
 
 Добавлены rate-limiter tests для `TypingRateLimiterService` и `SendMessageRateLimiterService`: лимиты на пользователя, независимые partition и отмена ожидающего запроса при заполненной очереди. `Messenger.Tests` теперь ссылается на `Messenger.Realtime`.
 
+### Добавлено: тесты FK delete behavior
+
+Добавлен `ForeignKeyDeleteBehaviorTests` на PostgreSQL:
+- удаление сообщения каскадно удаляет вложения, реакции и жалобы;
+- удаление чата удаляет сообщения, участников и связи с папками, но сохраняет саму пользовательскую папку;
+- удаление автора рассылки устанавливает `SenderId = NULL`, сохраняя рассылку и её получателей.
+
 ### Добавлено: тесты API background services
 
 Добавлены тесты для `SessionCleanupBackgroundService` и `UploadOrphanCleanupService`:
