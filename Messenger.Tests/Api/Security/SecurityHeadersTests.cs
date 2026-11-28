@@ -1,5 +1,6 @@
 using Messenger.API.Extensions;
 using Microsoft.AspNetCore.Http;
+using Xunit;
 
 namespace Messenger.Tests.Api.Security;
 
@@ -14,7 +15,7 @@ public sealed class SecurityHeadersTests
 
         Assert.Equal("nosniff", context.Response.Headers.XContentTypeOptions.ToString());
         Assert.Equal("DENY", context.Response.Headers.XFrameOptions.ToString());
-        Assert.Equal("no-referrer", context.Response.Headers.ReferrerPolicy.ToString());
+        Assert.Equal("no-referrer", context.Response.Headers["Referrer-Policy"].ToString());
         Assert.Contains("camera=()", context.Response.Headers["Permissions-Policy"].ToString());
         Assert.DoesNotContain("Content-Security-Policy", context.Response.Headers.Keys);
     }
