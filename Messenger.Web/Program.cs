@@ -55,7 +55,7 @@ namespace Messenger.Web
                 });
 
             builder.Services.AddAuthorization();
-            builder.Services.AddSignalRService(builder.Configuration);
+            builder.Services.AddSignalRService(builder.Configuration, builder.Environment.IsDevelopment());
             builder.Services.AddScoped<ApiHelper>();
             builder.Services.AddApiVersioning()
                 .AddApiExplorer(options =>

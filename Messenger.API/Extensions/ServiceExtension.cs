@@ -86,7 +86,7 @@ namespace Messenger.API.Extensions
                 return services;
             }
 
-            public IServiceCollection AddSignalRService(IConfiguration configuration)
+            public IServiceCollection AddSignalRService(IConfiguration configuration, bool isDevelopment = false)
             {
                 var signalROptions = configuration.GetSection(SignalROptions.SectionName)
                     .Get<SignalROptions>() ?? new SignalROptions();
@@ -94,6 +94,8 @@ namespace Messenger.API.Extensions
                 services.AddOptions<SignalROptions>()
                     .Bind(configuration.GetSection(SignalROptions.SectionName))
                     .ValidateDataAnnotations()
+                    .Validate(options => isDevelopment || !options.EnableDetailedErrors,
+                        "SignalR:EnableDetailedErrors разрешён только в Development.")
                     .ValidateOnStart();
 
                 var redisCs = GetRedisConnectionString(configuration);

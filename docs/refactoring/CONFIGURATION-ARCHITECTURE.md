@@ -39,11 +39,11 @@ ASP.NET Core поддерживает переопределение appsettings
 
 Для OIDC-клиента Web обязательны AzureAd:ClientSecret, ClientId, Instance и TenantId. Callback paths по умолчанию: /signin-oidc и /signout-callback-oidc.
 
-TokenRefresh:RefreshBeforeExpirySeconds должен быть меньше TokenRefresh:IdleTimeoutMinutes, переведённого в секунды. Session:IdleTimeoutMinutes задаёт время жизни ASP.NET Core Session.
+TokenRefresh:RefreshBeforeExpirySeconds должен быть меньше TokenRefresh:IdleTimeoutMinutes, переведённого в секунды. Session:IdleTimeoutMinutes задаёт время жизни ASP.NET Core Session. SignalR:EnableDetailedErrors допускается только в Development.
 
 ## Messenger.AppHost
 
-Обязательные ключи: Database:Name, Credentials:Postgres:Password, Credentials:RabbitMQ:Username, Credentials:RabbitMQ:Password, Credentials:Grafana:AdminUser и Credentials:Grafana:AdminPassword.
+Обязательные ключи: Database:Name, Credentials:Postgres:Username, Credentials:Postgres:Password, Credentials:RabbitMQ:Username, Credentials:RabbitMQ:Password, Credentials:Grafana:AdminUser и Credentials:Grafana:AdminPassword.
 
 Порты задаются в Ports. Значения должны быть в диапазоне 1–65535. Aspire передаёт connection strings приложениям через имена ресурсов: DefaultConnection, RabbitMQ, Redis.
 
@@ -53,7 +53,6 @@ TokenRefresh:RefreshBeforeExpirySeconds должен быть меньше Token
 
 ```powershell
 dotnet user-secrets set "AzureAd:ClientSecret" "<новый-secret>" --project Messenger.Web
-dotnet user-secrets set "AzureAd:ClientSecret" "<новый-secret>" --project Messenger.API
 dotnet user-secrets set "Encryption:MasterKeyBase64" "<base64-ключ-32-байта>" --project Messenger.API
 dotnet user-secrets set "Vapid:PrivateKey" "<vapid-private-key>" --project Messenger.API
 dotnet user-secrets set "ConnectionStrings:DefaultConnection" "<postgres-connection-string>" --project Messenger.API

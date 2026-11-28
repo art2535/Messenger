@@ -9,7 +9,7 @@ namespace Messenger.Web.Extensions
     {
         extension(IServiceCollection services)
         {
-            public IServiceCollection AddSignalRService(IConfiguration configuration)
+            public IServiceCollection AddSignalRService(IConfiguration configuration, bool isDevelopment = false)
             {
                 var signalROptions = configuration.GetSection(SignalROptions.SectionName)
                     .Get<SignalROptions>() ?? new SignalROptions();
@@ -17,6 +17,8 @@ namespace Messenger.Web.Extensions
                 services.AddOptions<SignalROptions>()
                     .Bind(configuration.GetSection(SignalROptions.SectionName))
                     .ValidateDataAnnotations()
+                    .Validate(options => isDevelopment || !options.EnableDetailedErrors,
+                        "SignalR:EnableDetailedErrors разрешён только в Development.")
                     .ValidateOnStart();
 
                 var signalR = services.AddSignalR(options =>

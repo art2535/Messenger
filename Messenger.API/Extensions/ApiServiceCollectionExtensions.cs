@@ -36,7 +36,7 @@ public static class ApiServiceCollectionExtensions
         builder.Services.AddSingleton<IFileValidationService, FileValidationService>();
 
         builder.Services.AddValidation();
-        builder.Services.AddSignalRService(builder.Configuration);
+        builder.Services.AddSignalRService(builder.Configuration, builder.Environment.IsDevelopment());
         builder.Services.AddRedisCache(builder.Configuration);
         builder.Services.AddScalarApi(builder.Configuration);
         builder.Services.AddPostgreSQL(builder.Configuration);
