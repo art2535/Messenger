@@ -69,7 +69,7 @@ public sealed class RedisUserPresenceTracker : IUserPresenceTracker
     public async Task<bool> ConnectAsync(Guid userId, string connectionId, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        using var operationLock = await AcquireUserOperationLockAsync(userId, cancellationToken);
+        var operationLock = await AcquireUserOperationLockAsync(userId, cancellationToken);
         try
         {
             if (!_localConnections.TryAdd(connectionId, userId))
@@ -116,6 +116,10 @@ public sealed class RedisUserPresenceTracker : IUserPresenceTracker
                 throw;
             }
         }
+        finally
+        {
+            operationLock.Dispose();
+        }
     }
 
     public async Task<bool> DisconnectAsync(Guid userId, string connectionId, CancellationToken cancellationToken = default)
@@ -124,7 +128,7 @@ public sealed class RedisUserPresenceTracker : IUserPresenceTracker
         if (!_localConnections.TryGetValue(connectionId, out var trackedUserId))
             return false;
 
-        using var operationLock = await AcquireUserOperationLockAsync(trackedUserId, cancellationToken);
+        var operationLock = await AcquireUserOperationLockAsync(trackedUserId, cancellationToken);
         try
         {
             if (!_localConnections.TryRemove(connectionId, out trackedUserId))
@@ -156,6 +160,10 @@ public sealed class RedisUserPresenceTracker : IUserPresenceTracker
                 new RedisKey[] { GetKey(userId) },
                 new RedisValue[] { now, connectionId }).WaitAsync(cancellationToken);
             return count == 0;
+        }
+        finally
+        {
+            operationLock.Dispose();
         }
     }
 
@@ -207,7 +215,7 @@ public sealed class RedisUserPresenceTracker : IUserPresenceTracker
         foreach (var user in _localUsers)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            using var operationLock = await AcquireUserOperationLockAsync(user.Key, cancellationToken);
+            var operationLock = await AcquireUserOperationLockAsync(user.Key, cancellationToken);
             try
             {
                 // Снимок и продление lease сериализованы с DisconnectAsync:
@@ -227,6 +235,10 @@ public sealed class RedisUserPresenceTracker : IUserPresenceTracker
                     HeartbeatScript,
                     new RedisKey[] { GetKey(user.Key) },
                     args).WaitAsync(cancellationToken);
+            }
+            finally
+            {
+                operationLock.Dispose();
             }
         }
     }
