@@ -190,6 +190,15 @@
 
 Добавлены rate-limiter tests для `TypingRateLimiterService` и `SendMessageRateLimiterService`: лимиты на пользователя, независимые partition и отмена ожидающего запроса при заполненной очереди. `Messenger.Tests` теперь ссылается на `Messenger.Realtime`.
 
+### Добавлено: тесты API background services
+
+Добавлены тесты для `SessionCleanupBackgroundService` и `UploadOrphanCleanupService`:
+- неактивный по LastActivity пользователь с живым SignalR presence не переводится Offline и не теряет login-сессию;
+- повторная проверка presence обнаруживает reconnect во время очистки, восстанавливает Online и не отзывает сессии;
+- orphan cleanup безопасно пропускает работу при некорректном URL API до открытия scope/БД.
+
+`Messenger.Tests` теперь ссылается на `Messenger.API` для тестирования фоновых служб.
+
 ## Ограничения проверки
 
 - В рабочей среде нет .NET SDK (dotnet: command not found), поэтому dotnet build и dotnet test не запускались. Наличие Docker runtime для Testcontainers также не подтверждено.
