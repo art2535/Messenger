@@ -29,30 +29,28 @@ public sealed class ChatHubTransportIntegrationTests
                 It.IsAny<CancellationToken>()))
             .Returns(new ValueTask<bool>(true));
 
-        var host = new WebHostBuilder()
-            .ConfigureServices(services =>
-            {
-                services.AddLogging();
-                services.AddAuthentication("Test")
-                    .AddScheme<AuthenticationSchemeOptions, TestAuthenticationHandler>("Test", _ => { });
-                services.AddAuthorization();
-                services.AddSignalR();
-                services.AddSingleton<IUserService>(Mock.Of<IUserService>());
-                services.AddSingleton<IUserStatusService>(Mock.Of<IUserStatusService>());
-                services.AddSingleton<IUserPresenceTracker>(Mock.Of<IUserPresenceTracker>());
-                services.AddSingleton<IChatService>(Mock.Of<IChatService>());
-                services.AddSingleton<IAccountSettingsService>(Mock.Of<IAccountSettingsService>());
-                services.AddSingleton<IRateLimitService>(limiter.Object);
-            })
-            .Configure(app =>
-            {
-                app.UseRouting();
-                app.UseAuthentication();
-                app.UseAuthorization();
-                app.UseEndpoints(endpoints => endpoints.MapHub<ChatHub>("/chat"));
-            });
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Services.AddLogging();
+        builder.Services.AddAuthentication("Test")
+            .AddScheme<AuthenticationSchemeOptions, TestAuthenticationHandler>("Test", _ => { });
+        builder.Services.AddAuthorization();
+        builder.Services.AddSignalR();
+        builder.Services.AddSingleton<IUserService>(Mock.Of<IUserService>());
+        builder.Services.AddSingleton<IUserStatusService>(Mock.Of<IUserStatusService>());
+        builder.Services.AddSingleton<IUserPresenceTracker>(Mock.Of<IUserPresenceTracker>());
+        builder.Services.AddSingleton<IChatService>(Mock.Of<IChatService>());
+        builder.Services.AddSingleton<IAccountSettingsService>(Mock.Of<IAccountSettingsService>());
+        builder.Services.AddSingleton<IRateLimitService>(limiter.Object);
 
-        using var server = new TestServer(host);
+        await using var app = builder.Build();
+        app.UseRouting();
+        app.UseAuthentication();
+        app.UseAuthorization();
+        app.MapHub<ChatHub>("/chat");
+        await app.StartAsync();
+
+        var server = app.GetTestServer();
         await using var connection = new HubConnectionBuilder()
             .WithUrl("http://localhost/chat", options =>
             {
