@@ -251,12 +251,32 @@ namespace Messenger.Infrastructure.Services
             }
         }
 
-        public async Task SendPushToOfflineUsersAsync(Guid chatId, Guid senderId, string senderName,
-            string? messageText, bool hasAttachments, bool isMention = false, CancellationToken cancellationToken = default,
-            Guid? messageId = null)
+        public async Task SendPushForMessageAsync(Guid messageId, CancellationToken cancellationToken = default)
         {
             try
             {
+                var message = await _context.Messages
+                    .AsNoTracking()
+                    .Where(m => m.MessageId == messageId)
+                    .Select(m => new
+                    {
+                        m.ChatId,
+                        m.SenderId,
+                        m.MessageText,
+                        m.HasAttachments
+                    })
+                    .FirstOrDefaultAsync(cancellationToken);
+
+                // Push разрешён только для уже сохранённого сообщения.
+                if (message == null)
+                    return;
+
+                var chatId = message.ChatId;
+                var senderId = message.SenderId;
+                var messageText = message.MessageText;
+                var hasAttachments = message.HasAttachments;
+                const bool isMention = false;
+
                 string body = "Новое сообщение";
 
                 if (!string.IsNullOrWhiteSpace(messageText))
@@ -277,8 +297,7 @@ namespace Messenger.Infrastructure.Services
                     body = "Прикрепил файл";
                 }
 
-                // Не используем внутренние overloads без actor authorization:
-                // даже Infrastructure-сервис должен проверять членство отправителя.
+                // Чат и отправитель дополнительно проверяются через actor-aware API.
                 var chat = await _chatService.GetChatByIdAsync(chatId, senderId, cancellationToken);
                 if (chat == null)
                     return;
@@ -303,7 +322,6 @@ namespace Messenger.Infrastructure.Services
 
                     bool notifyGroup = settings?.NotifyGroupChats ?? true;
                     bool notifyMessages = settings?.NotifyMessages ?? true;
-                    bool notifyMentions = settings?.NotifyMentions ?? true;
                     bool notifyPreview = true;
                     bool notifySound = true;
 
@@ -316,12 +334,6 @@ namespace Messenger.Infrastructure.Services
                     if (!isGroupChat && !notifyMessages)
                     {
                         _logger.LogWarning("Пропуск пользователя {UserId}: Уведомления о сообщениях отключены", participant.UserId);
-                        continue;
-                    }
-
-                    if (isMention && !notifyMentions)
-                    {
-                        _logger.LogWarning("Пропуск пользователя {UserId}: Уведомления об упоминаниях отключены", participant.UserId);
                         continue;
                     }
 

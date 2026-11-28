@@ -37,13 +37,7 @@ public interface IPushSubscriptionService
         UpdatePushSubscriptionDto subscription,
         CancellationToken cancellationToken = default);
 
-    Task SendPushToOfflineUsersAsync(
-        Guid chatId,
-        Guid senderId,
-        string senderName,
-        string? messageText,
-        bool hasAttachments,
-        bool isMention = false,
-        CancellationToken cancellationToken = default,
-        Guid? messageId = null);
+    Task SendPushForMessageAsync(
+        Guid messageId,
+        CancellationToken cancellationToken = default);
 }

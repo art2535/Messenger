@@ -233,58 +233,6 @@ namespace Messenger.API.Controllers
             }
         }
 
-        [HttpPost("send")]
-        [EndpointName("SendPushNotification")]
-        [EndpointSummary("Отправить push-уведомления участникам чата")]
-        [EndpointDescription("Отправляет веб-push уведомления всем участникам чата (кроме отправителя), у которых включены соответствующие настройки. Вызывается после отправки сообщения.")]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> PostSendPushNotificationAsync(
-            [FromBody, Description("Данные для отправки уведомления")] SendPushNotificationDto request,
-            CancellationToken ct = default)
-        {
-            try
-            {
-                if (request == null || request.ChatId == Guid.Empty)
-                {
-                    return BadRequest(ApiResponse.Failure("Некорректные данные запроса", "INVALID_REQUEST"));
-                }
-
-                var senderId = await User.GetCurrentUserIdAsync(_userService, ct);
-
-                await _subscriptionService.SendPushToOfflineUsersAsync(
-                    request.ChatId,
-                    senderId,
-                    request.SenderName ?? "Пользователь",
-                    request.MessageText,
-                    request.HasAttachments,
-                    request.IsMention,
-                    ct);
-
-                return Ok(ApiResponse.Success(message: "Push-уведомления обработаны"));
-            }
-            catch (UnauthorizedAccessException ex)
-            {
-                _logger.LogWarning(ex, "Ошибка авторизации при отправке push-уведомлений");
-                return Unauthorized(ApiResponse.Failure(ex.Message, "UNAUTHORIZED"));
-            }
-            catch (ArgumentException ex)
-            {
-                return BadRequest(ApiResponse.Failure(ex.Message, "INVALID_REQUEST"));
-            }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Ошибка при обработке push-уведомлений для чата {ChatId}", request?.ChatId);
-                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse.Failure(ex.Message, "INTERNAL_ERROR"));
-            }
-        }
-
         [HttpGet("vapid-public-key")]
         [AllowAnonymous]
         [EndpointName("GetVapidPublicKey")]

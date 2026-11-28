@@ -132,9 +132,8 @@ namespace Messenger.API.Consumers
 
                 try
                 {
-                    await _subscriptionService.SendPushToOfflineUsersAsync(
-                        msg.ChatId, msg.SenderId, msg.SenderName ?? "Пользователь",
-                        msg.MessageText, msg.HasAttachments, false, context.CancellationToken);
+                    await _subscriptionService.SendPushForMessageAsync(
+                        savedMessage.MessageId, context.CancellationToken);
                 }
                 catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested)
                 {
