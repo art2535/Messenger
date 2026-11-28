@@ -10,11 +10,9 @@ using Messenger.Application.Interfaces;
 using Messenger.Application.Messages;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
 using System.ComponentModel;
 using System.Security.Claims;
-using Messenger.Realtime.Services;
 
 using Messenger.Application.DTOs.Responses;
 namespace Messenger.API.Controllers
@@ -39,7 +37,7 @@ namespace Messenger.API.Controllers
         private readonly IAttachmentService _attachmentService;
         private readonly IAccountSettingsService _accountSettingsService;
         private readonly ILogger<MessagesController> _logger;
-        private readonly SendMessageRateLimiterService _sendLimiter;
+        private readonly IRateLimitService _rateLimitService;
 
         public MessagesController(
             IMessageService messageService,
@@ -51,7 +49,7 @@ namespace Messenger.API.Controllers
             IAttachmentService attachmentService,
             IAccountSettingsService accountSettingsService,
             ILogger<MessagesController> logger,
-            SendMessageRateLimiterService sendLimiter)
+            IRateLimitService rateLimitService)
         {
             _messageService = messageService;
             _configuration = configuration;
@@ -62,7 +60,7 @@ namespace Messenger.API.Controllers
             _attachmentService = attachmentService;
             _accountSettingsService = accountSettingsService;
             _logger = logger;
-            _sendLimiter = sendLimiter;
+            _rateLimitService = rateLimitService;
         }
 
         /// <summary>
@@ -123,7 +121,6 @@ namespace Messenger.API.Controllers
         /// Отправить сообщение в чат.
         /// </summary>
         [HttpPost("{chatId:guid}")]
-        [DisableRateLimiting]
         [EndpointName("SendMessage")]
         [EndpointSummary("Отправить сообщение в чат")]
         [EndpointDescription("Отправляет текстовое сообщение и/или файлы (вложения) в указанный чат. " +
@@ -153,7 +150,11 @@ namespace Messenger.API.Controllers
                     ?? HttpContext.Connection.RemoteIpAddress?.ToString()
                     ?? "anonymous";
 
-                if (!await _sendLimiter.TryAcquireAsync(rateKey, ct))
+                if (!await _rateLimitService.TryAcquireAsync(
+                    "http:send-message:" + rateKey,
+                    30,
+                    TimeSpan.FromMinutes(1),
+                    ct))
                 {
                     _logger.LogWarning("SendMessage rate limit exceeded for {Key}", rateKey);
                     return StatusCode(StatusCodes.Status429TooManyRequests, ApiResponse.Failure("Слишком много запросов. Подождите немного и попробуйте снова.", "RATE_LIMIT_EXCEEDED"));
