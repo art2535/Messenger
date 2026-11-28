@@ -125,11 +125,14 @@ public sealed class RedisUserPresenceTracker : IUserPresenceTracker
     public async Task<bool> DisconnectAsync(Guid userId, string connectionId, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var operationLock = GetUserOperationLock(userId);
+        if (!_localConnections.TryGetValue(connectionId, out var trackedUserId))
+            return false;
+
+        var operationLock = GetUserOperationLock(trackedUserId);
         await operationLock.WaitAsync(cancellationToken);
         try
         {
-            if (!_localConnections.TryRemove(connectionId, out var trackedUserId))
+            if (!_localConnections.TryRemove(connectionId, out trackedUserId))
                 return false;
 
             if (trackedUserId != userId)

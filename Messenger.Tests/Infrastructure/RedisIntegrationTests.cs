@@ -182,6 +182,26 @@ public sealed class RedisIntegrationTests(RedisFixture fixture)
         Assert.Empty(await tracker.GetActiveConnectionIdsAsync(userId));
     }
 
+    [Fact]
+    public async Task PresenceTracker_HeartbeatCannotResurrectDisconnectedConnection()
+    {
+        var tracker = CreatePresenceTracker();
+        var userId = Guid.NewGuid();
+        const string connectionId = "disconnect-heartbeat-race";
+
+        Assert.True(await tracker.ConnectAsync(userId, connectionId));
+
+        var heartbeatTasks = Enumerable.Range(0, 20)
+            .Select(_ => tracker.HeartbeatAsync())
+            .ToArray();
+        var disconnectTask = tracker.DisconnectAsync(userId, connectionId);
+
+        await Task.WhenAll(heartbeatTasks.Append(disconnectTask));
+
+        Assert.False(await tracker.HasActiveConnectionsAsync(userId));
+        Assert.Empty(await tracker.GetActiveConnectionIdsAsync(userId));
+    }
+
     private RedisDistributedLock CreateLock() =>
         new(fixture.Connection, NullLogger<RedisDistributedLock>.Instance);
 
