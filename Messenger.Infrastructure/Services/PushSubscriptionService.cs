@@ -275,7 +275,6 @@ namespace Messenger.Infrastructure.Services
                 var senderId = message.SenderId;
                 var messageText = message.MessageText;
                 var hasAttachments = message.HasAttachments;
-                const bool isMention = false;
 
                 string body = "Новое сообщение";
 

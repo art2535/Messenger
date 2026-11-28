@@ -42,9 +42,3 @@ public sealed class UpdatePushSettingsDto
     public bool NotifyGroupChats { get; init; } = true;
     public bool NotifyMentions { get; init; } = true;
 }
-
-public string? SenderName { get; init; }
-    public string? MessageText { get; init; }
-    public bool HasAttachments { get; init; }
-    public bool IsMention { get; init; }
-}
