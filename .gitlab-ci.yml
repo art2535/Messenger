@@ -1,5 +1,6 @@
 stages:
   - validate
+  - test
   - deploy
 
 validate-architecture:
@@ -26,3 +27,15 @@ deploy:
     - docker compose up -d web api
   only:
     - main
+
+test-dotnet:
+  stage: test
+  tags:
+    - msg
+  script:
+    # The runner already uses Docker for deployment. Run the SDK in a container
+    # and expose the host Docker socket so Testcontainers can start PostgreSQL/Redis.
+    - docker run --rm --network host -v "$CI_PROJECT_DIR:/src" -v /var/run/docker.sock:/var/run/docker.sock -w /src mcr.microsoft.com/dotnet/sdk:10.0 dotnet test Messenger.sln --configuration Release
+  only:
+    - branches
+    - merge_requests
